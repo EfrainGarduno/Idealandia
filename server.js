@@ -16,25 +16,45 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const chat = ai.chats.create({ model: 'gemini-2.5-flash' });
+const chat = ai.chats.create({ model: 'gemini-3.5-flash' });
 
 app.post('/api/chat', async (req, res) => {
     try {
         const { message } = req.body;
+
         if (!message) {
-            return res.status(400).json({ error: 'Message is required' });
+            return res.status(400).json({
+                error: 'Message is required'
+            });
         }
 
-        const response = await chat.sendMessage({ message: message });
-        const text = response.text;
+        // Preparar respuesta para streaming
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
 
-        res.json({ reply: text });
+        // Enviar respuesta por partes conforme Gemini la genera
+        const stream = await chat.sendMessageStream({
+            message: message
+        });
+
+        for await (const chunk of stream) {
+            if (chunk.text) {
+                res.write(chunk.text);
+            }
+        }
+
+        res.end();
+
     } catch (error) {
         console.error('Error in /api/chat:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
 
-app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
-});
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: 'Internal server error'
+            });
+        } else {
+            res.end();
+        }
+    }
+});app.listen(port, () => { console.log(`Server listening on port ${port}`); });
