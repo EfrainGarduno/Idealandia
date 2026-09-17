@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const htmlPath = path.resolve(__dirname, 'nagualito_chat.html');
+const htmlPath = path.resolve(__dirname, 'index.html');
 const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 
 const dom = new JSDOM(htmlContent, {
@@ -15,18 +15,38 @@ const document = window.document;
 
 // Mock window.fetch for testing the API call
 let fetchCount = 0;
+
+function createMockStream(text) {
+    const encoder = new TextEncoder();
+    const uint8array = encoder.encode(text);
+    return {
+        getReader: () => {
+            let done = false;
+            return {
+                read: async () => {
+                    if (done) {
+                        return { done: true, value: undefined };
+                    }
+                    done = true;
+                    return { done: false, value: uint8array };
+                }
+            };
+        }
+    };
+}
+
 window.fetch = async (url, options) => {
     if (url === '/api/chat' && options.method === 'POST') {
         fetchCount++;
         if (fetchCount === 1) {
             return {
                 ok: true,
-                json: async () => ({ reply: 'Soy Nagualito, tu asistente de IA.' })
+                body: createMockStream('Soy Nagualito, tu asistente de IA.')
             };
         } else {
             return {
                 ok: true,
-                json: async () => ({ reply: 'Entiendo, has enviado otro mensaje.' })
+                body: createMockStream('Entiendo, has enviado otro mensaje.')
             };
         }
     }
