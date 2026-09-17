@@ -16,7 +16,7 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const chat = ai.chats.create({ model: 'gemini-3.5-flash' });
+const chat = ai.chats.create({ model: 'gemini-3.6-flash' });
 
 app.post('/api/chat', async (req, res) => {
     try {
