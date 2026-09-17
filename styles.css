@@ -5,7 +5,28 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #e6e6fa; /* Color pastel (lavender) */
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%); /* Llamativo background gradient */
+        }
+
+        #logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 0;
+            background: transparent;
+        }
+
+        .logo-svg {
+            color: #d81b60; /* A vivid color for the logo */
+            margin-right: 15px;
+        }
+
+        .logo-text {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
 
         #main-menu {
@@ -55,6 +76,104 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .hero-title {
+            font-size: 3em;
+            color: #d81b60;
+            margin-bottom: 10px;
+        }
+
+        .hero-subtitle {
+            font-size: 1.5em;
+            color: #555;
+            font-weight: normal;
+            margin-bottom: 20px;
+        }
+
+        .hero-text {
+            font-size: 1.1em;
+            line-height: 1.6;
+            color: #444;
+        }
+
+        .features {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .feature-item {
+            flex: 1;
+            text-align: center;
+            padding: 20px;
+            background: #fdfbfb;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+
+        .feature-item:hover {
+             transform: translateY(-5px);
+        }
+
+        .feature-item h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .resource-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .resource-category {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .resource-category h3 {
+            margin-top: 0;
+            color: #007bff;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .resource-category ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .resource-category li {
+            margin-bottom: 10px;
+        }
+
+        .resource-category a {
+            text-decoration: none;
+            color: #333;
+            transition: color 0.2s;
+        }
+
+        .resource-category a:hover {
+            color: #d81b60;
         }
 
         #chat-container {

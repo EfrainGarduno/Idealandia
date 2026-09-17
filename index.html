@@ -9,6 +9,24 @@
 </head>
 
 <body>
+    <div id="logo-container">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="logo-svg">
+            <path d="M9 18h6"></path>
+            <path d="M10 22h4"></path>
+            <path d="M12 2v1"></path>
+            <path d="M12 7v1"></path>
+            <path d="M18.36 5.64l-.7.7"></path>
+            <path d="M15.54 8.46l-.7.7"></path>
+            <path d="M5.64 5.64l.7.7"></path>
+            <path d="M8.46 8.46l.7.7"></path>
+            <path d="M22 12h-1"></path>
+            <path d="M17 12h-1"></path>
+            <path d="M2 12h1"></path>
+            <path d="M7 12h1"></path>
+            <path d="M12 11c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"></path>
+        </svg>
+        <span class="logo-text">Idealandia</span>
+    </div>
     <nav id="main-menu">
         <ul>
             <li><a href="#" data-section="inicio">Inicio</a></li>
@@ -22,8 +40,25 @@
 
     <div id="content-area">
         <section id="inicio" class="content-section">
-            <h2>Idealandia</h2>
-            <p>En Idealandia, puedes transformar tus ideas en realidad. Explora tu creatividad, desarrolla proyectos innovadores y comparte tu visión con el mundo. Aquí las ideas toman forma y se convierten en soluciones maravillosas.</p>
+            <div class="hero">
+                <h2 class="hero-title">Idealandia</h2>
+                <h3 class="hero-subtitle">Donde la creatividad cobra vida</h3>
+                <p class="hero-text">En Idealandia, puedes transformar tus ideas en realidad. Explora tu creatividad, desarrolla proyectos innovadores y comparte tu visión con el mundo. Aquí las ideas toman forma y se convierten en soluciones maravillosas.</p>
+            </div>
+            <div class="features">
+                 <div class="feature-item">
+                     <h4>🎨 Diseña sin límites</h4>
+                     <p>Encuentra inspiración y herramientas para tus creaciones visuales.</p>
+                 </div>
+                 <div class="feature-item">
+                     <h4>✍️ Escribe tu historia</h4>
+                     <p>Desarrolla narrativas cautivadoras y dales vida.</p>
+                 </div>
+                 <div class="feature-item">
+                     <h4>💡 Innova y construye</h4>
+                     <p>Lleva tus proyectos tecnológicos y de diseño al siguiente nivel.</p>
+                 </div>
+            </div>
         </section>
 
         <section id="servicios" class="content-section" style="display: none;">
@@ -65,13 +100,64 @@
         </section>
 
         <section id="gratis" class="content-section" style="display: none;">
-            <h2>Temas Gratis</h2>
-            <p>Explora algunas opciones de temas gratis de internet:</p>
-            <ul>
-                <li><a href="https://html5up.net/" target="_blank">HTML5 UP - Temas HTML/CSS</a></li>
-                <li><a href="https://wordpress.org/themes/" target="_blank">WordPress Themes</a></li>
-                <li><a href="https://startbootstrap.com/themes" target="_blank">Start Bootstrap - Temas de Bootstrap</a></li>
-            </ul>
+            <h2>Recursos Gratuitos para Creadores</h2>
+            <p>Explora una amplia variedad de opciones de recursos gratuitos de todos los temas disponibles en internet:</p>
+
+            <div class="resource-grid">
+                <div class="resource-category">
+                    <h3>Plantillas y Temas Web</h3>
+                    <ul>
+                        <li><a href="https://html5up.net/" target="_blank">HTML5 UP - Temas HTML/CSS</a></li>
+                        <li><a href="https://wordpress.org/themes/" target="_blank">WordPress Themes</a></li>
+                        <li><a href="https://startbootstrap.com/themes" target="_blank">Start Bootstrap</a></li>
+                    </ul>
+                </div>
+
+                <div class="resource-category">
+                    <h3>Imágenes y Gráficos</h3>
+                    <ul>
+                        <li><a href="https://unsplash.com/" target="_blank">Unsplash - Fotos de stock</a></li>
+                        <li><a href="https://pixabay.com/" target="_blank">Pixabay - Imágenes y videos</a></li>
+                        <li><a href="https://undraw.co/" target="_blank">unDraw - Ilustraciones SVG</a></li>
+                        <li><a href="https://www.flaticon.com/" target="_blank">Flaticon - Iconos gratuitos</a></li>
+                    </ul>
+                </div>
+
+                <div class="resource-category">
+                    <h3>Tipografía y Fuentes</h3>
+                    <ul>
+                        <li><a href="https://fonts.google.com/" target="_blank">Google Fonts</a></li>
+                        <li><a href="https://www.dafont.com/es/" target="_blank">DaFont</a></li>
+                        <li><a href="https://www.fontsquirrel.com/" target="_blank">Font Squirrel</a></li>
+                    </ul>
+                </div>
+
+                <div class="resource-category">
+                    <h3>Educación y Cursos</h3>
+                    <ul>
+                        <li><a href="https://www.freecodecamp.org/" target="_blank">freeCodeCamp</a></li>
+                        <li><a href="https://es.khanacademy.org/" target="_blank">Khan Academy</a></li>
+                        <li><a href="https://www.edx.org/" target="_blank">edX (Auditar cursos)</a></li>
+                    </ul>
+                </div>
+
+                <div class="resource-category">
+                    <h3>Herramientas de Diseño</h3>
+                    <ul>
+                        <li><a href="https://www.canva.com/" target="_blank">Canva (Plan gratis)</a></li>
+                        <li><a href="https://www.figma.com/" target="_blank">Figma (Plan gratis)</a></li>
+                        <li><a href="https://color.adobe.com/es/create/color-wheel" target="_blank">Adobe Color</a></li>
+                    </ul>
+                </div>
+
+                <div class="resource-category">
+                    <h3>Audio y Efectos de Sonido</h3>
+                    <ul>
+                        <li><a href="https://freesound.org/" target="_blank">Freesound</a></li>
+                        <li><a href="https://incompetech.com/" target="_blank">Incompetech (Música sin copyright)</a></li>
+                    </ul>
+                </div>
+            </div>
         </section>
     </div>
 
