@@ -5,128 +5,88 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat con Nagualito</title>
 
-    <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-
-        #chat-container {
-            width: 400px;
-            height: 500px;
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-
-        #chat-history {
-            flex-grow: 1;
-            padding: 10px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .message {
-            max-width: 80%;
-            padding: 8px 12px;
-            border-radius: 15px;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        }
-
-        .user-message {
-            align-self: flex-end;
-            background-color: #007bff;
-            color: white;
-        }
-
-        .nagualito-message {
-            align-self: flex-start;
-            background-color: #e9ecef;
-            color: black;
-        }
-
-        .thinking-message {
-            align-self: flex-start;
-            background-color: #e9ecef;
-            color: #555;
-            font-style: italic;
-        }
-
-        #input-container {
-            display: flex;
-            padding: 10px;
-            border-top: 1px solid #ccc;
-            background-color: #fafafa;
-        }
-
-        #user-input {
-            flex-grow: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        #send-btn {
-            padding: 10px 20px;
-            margin-left: 10px;
-            border: none;
-            border-radius: 4px;
-            background-color: #28a745;
-            color: white;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        #send-btn:hover {
-            background-color: #218838;
-        }
-
-        #send-btn:disabled {
-            background-color: #999;
-            cursor: not-allowed;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+    <nav id="main-menu">
+        <ul>
+            <li><a href="#" data-section="inicio">Inicio</a></li>
+            <li><a href="#" data-section="servicios">Servicios</a></li>
+            <li><a href="#" data-section="contacto">Contacto</a></li>
+            <li><a href="#" data-section="acerca">Acerca de</a></li>
+            <li><a href="#" data-section="chat">CHAT</a></li>
+        </ul>
+    </nav>
 
-    <div id="chat-container">
+    <div id="content-area">
+        <section id="inicio" class="content-section">
+            <h2>Inicio</h2>
+            <p>Bienvenido a nuestra página principal.</p>
+        </section>
 
-        <div id="chat-history">
-            <div class="message nagualito-message">
-                ¡Hola! Soy Nagualito, tu asistente virtual. ¿En qué puedo ayudarte?
+        <section id="servicios" class="content-section" style="display: none;">
+            <h2>Servicios</h2>
+            <p>Conoce nuestros servicios.</p>
+        </section>
+
+        <section id="contacto" class="content-section" style="display: none;">
+            <h2>Contacto</h2>
+            <p>Ponte en contacto con nosotros.</p>
+        </section>
+
+        <section id="acerca" class="content-section" style="display: none;">
+            <h2>Acerca de</h2>
+            <p>Conoce más acerca de nosotros.</p>
+        </section>
+
+        <section id="chat" class="content-section" style="display: none;">
+            <div id="chat-container">
+
+                <div id="chat-history">
+                    <div class="message nagualito-message">
+                        ¡Hola! Soy Nagualito, tu asistente virtual. ¿En qué puedo ayudarte?
+                    </div>
+                </div>
+
+                <div id="input-container">
+                    <input
+                        type="text"
+                        id="user-input"
+                        placeholder="Escribe tu mensaje..."
+                        aria-label="Escribe tu mensaje"
+                    >
+
+                    <button id="send-btn">Enviar</button>
+                </div>
+
             </div>
-        </div>
-
-        <div id="input-container">
-            <input
-                type="text"
-                id="user-input"
-                placeholder="Escribe tu mensaje..."
-                aria-label="Escribe tu mensaje"
-            >
-
-            <button id="send-btn">Enviar</button>
-        </div>
-
+        </section>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
 
+            // Menu logic
+            const menuLinks = document.querySelectorAll('#main-menu a');
+            const sections = document.querySelectorAll('.content-section');
+
+            menuLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetId = link.getAttribute('data-section');
+
+                    sections.forEach(section => {
+                        if (section.id === targetId) {
+                            section.style.display = 'flex';
+                        } else {
+                            section.style.display = 'none';
+                        }
+                    });
+                });
+            });
+
+            // Chat logic
             const sendBtn = document.getElementById('send-btn');
             const userInput = document.getElementById('user-input');
             const chatHistory = document.getElementById('chat-history');
