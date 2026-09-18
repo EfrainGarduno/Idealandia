@@ -211,7 +211,7 @@
             color: white;
         }
 
-        .nagualito-message {
+        .idealita-message {
             align-self: flex-start;
             background-color: #e9ecef;
             color: black;
@@ -258,3 +258,11 @@
             background-color: #999;
             cursor: not-allowed;
         }
+
+@keyframes slideUpFade {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.animate-chat {
+    animation: slideUpFade 0.5s ease-out forwards;
+}

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat con Nagualito</title>
+    <title>Chat con Idealita</title>
 
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
@@ -82,8 +82,8 @@
             <div id="chat-container">
 
                 <div id="chat-history">
-                    <div class="message nagualito-message">
-                        ¡Hola! Soy Nagualito, tu asistente virtual. ¿En qué puedo ayudarte?
+                    <div class="message idealita-message">
+                        ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
                     </div>
                 </div>
 
@@ -178,6 +178,11 @@
                     sections.forEach(section => {
                         if (section.id === targetId) {
                             section.style.display = 'flex';
+                            if (targetId === 'chat') {
+                                section.classList.remove('animate-chat');
+                                void section.offsetWidth; // trigger reflow
+                                section.classList.add('animate-chat');
+                            }
                         } else {
                             section.style.display = 'none';
                         }
@@ -201,7 +206,7 @@
                 } else if (sender === 'thinking') {
                     messageDiv.classList.add('thinking-message');
                 } else {
-                    messageDiv.classList.add('nagualito-message');
+                    messageDiv.classList.add('idealita-message');
                 }
 
                 messageDiv.textContent = text;
@@ -233,7 +238,7 @@
 
                 // Mostrar indicador inmediatamente
                 const thinkingMessage = addMessage(
-                    'Nagualito está pensando...',
+                    'Idealita está pensando...',
                     'thinking'
                 );
 
@@ -283,20 +288,20 @@
                         if (chunk) {
 
                             // Al llegar la primera parte de la respuesta,
-                            // quitar "Nagualito está pensando..."
+                            // quitar "Idealita está pensando..."
                             if (firstChunk) {
                                 thinkingMessage.remove();
                                 firstChunk = false;
 
                                 // Crear burbuja donde aparecerá la respuesta
-                                addMessage('', 'nagualito');
+                                addMessage('', 'idealita');
                             }
 
                             fullResponse += chunk;
 
                             // Actualizar la última burbuja
                             const messages =
-                                chatHistory.querySelectorAll('.nagualito-message');
+                                chatHistory.querySelectorAll('.idealita-message');
 
                             const responseMessage =
                                 messages[messages.length - 1];
@@ -316,7 +321,7 @@
 
                         addMessage(
                             'No recibí una respuesta del modelo.',
-                            'nagualito'
+                            'idealita'
                         );
                     }
 
@@ -332,7 +337,7 @@
 
                     addMessage(
                         'Lo siento, hubo un error al conectar con el servidor.',
-                        'nagualito'
+                        'idealita'
                     );
 
                 } finally {
