@@ -53,9 +53,9 @@ window.fetch = async (url, options) => {
     return { ok: false, status: 404 };
 };
 
-// We need to wait for DOMContentLoaded, but jsdom parses it synchronously.
-// Let's just wait a small amount of time for the script to attach listeners.
-setTimeout(() => {
+// Ensure fetch works globally for JSDOM scripts if needed, though window.fetch is mocked.
+// Some jsdom configurations might require this or we just wait for the 'load' event.
+window.addEventListener('load', () => {
     const input = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
     const chatHistory = document.getElementById('chat-history');
@@ -122,4 +122,4 @@ setTimeout(() => {
 
     }, 500);
 
-}, 100);
+});
