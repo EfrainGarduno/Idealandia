@@ -34,7 +34,7 @@
             <ul>
                 <li><a href="#" data-section="inicio"><i class="fas fa-home"></i> Inicio</a></li>
                 <li>
-                    <a href="#" data-section="servicios"><i class="fas fa-concierge-bell"></i> Servicios</a>
+                    <a href="#" id="menu-servicios-link"><i class="fas fa-concierge-bell"></i> Servicios</a>
                     <ul id="submenu-servicios" style="display: none; list-style-type: none; padding-left: 20px; font-size: 0.9em;">
                         <li><a href="#" data-submenu="asesorias-financieras">Asesorías Financieras</a></li>
                         <li><a href="#" data-submenu="asesoria-pensiones">Asesoría de Pensiones</a></li>
@@ -45,9 +45,11 @@
                     </ul>
                 </li>
                 <li><a href="#" data-section="contacto"><i class="fas fa-envelope"></i> Contacto</a></li>
-                <li><a href="#" data-section="chat"><i class="fas fa-comments"></i> CHAT</a></li>
                 <li><a href="#" data-section="gratis"><i class="fas fa-gift"></i> Gratis</a></li>
                 <li><a href="#" data-section="acerca"><i class="fas fa-info-circle"></i> Acerca de</a></li>
+            </ul>
+            <ul style="margin-top: auto; padding-top: 20px; list-style-type: none; padding-left: 0; display: flex; flex-direction: column; gap: 10px;">
+                <li><a href="#" data-section="chat"><i class="fas fa-comments"></i> CHAT</a></li>
             </ul>
         </nav>
     </aside>
@@ -76,7 +78,7 @@
         </section>
 
         <section id="servicios" class="content-section" style="display: none;">
-            <h2>Servicios</h2>
+            <h2>Asesoría en Pensiones</h2>
             <p>Conoce nuestros servicios.</p>
             <div class="servicio-item" id="btn-estimacion">
                 <h3>Estimación de Cálculo de pensión</h3>
@@ -199,9 +201,9 @@
         document.addEventListener('DOMContentLoaded', () => {
 
             // Menu logic
-            const menuLinks = document.querySelectorAll('#main-menu > ul > li > a');
+            const menuLinks = document.querySelectorAll('#main-menu a[data-section]');
             const sections = document.querySelectorAll('.content-section');
-            const serviciosLink = document.querySelector('a[data-section="servicios"]');
+            const serviciosLink = document.getElementById('menu-servicios-link');
             const submenuServicios = document.getElementById('submenu-servicios');
 
             if (serviciosLink && submenuServicios) {
