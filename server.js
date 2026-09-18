@@ -16,7 +16,12 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const chat = ai.chats.create({ model: 'gemini-3.6-flash' });
+const chat = ai.chats.create({
+    model: 'gemini-3.6-flash',
+    config: {
+        systemInstruction: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google."
+    }
+});
 
 app.post('/api/chat', async (req, res) => {
     try {
