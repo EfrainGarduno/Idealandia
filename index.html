@@ -68,6 +68,24 @@
         <section id="servicios" class="content-section" style="display: none;">
             <h2>Servicios</h2>
             <p>Conoce nuestros servicios.</p>
+            <div class="servicio-item" id="btn-estimacion">
+                <h3>Estimación de Cálculo de pensión</h3>
+            </div>
+            <div id="form-estimacion" style="display: none;" class="pension-form">
+                <div class="form-group">
+                    <label for="salario-promedio">Promedio salarial últimas 250 semanas:</label>
+                    <input type="number" id="salario-promedio" name="salario-promedio">
+                </div>
+                <div class="form-group">
+                    <label for="edad-jubilacion">Edad a la que se desea Jubilar:</label>
+                    <input type="number" id="edad-jubilacion" name="edad-jubilacion">
+                </div>
+                <div class="form-group">
+                    <label for="semanas-cotizadas">Número de semanas cotizadas:</label>
+                    <input type="number" id="semanas-cotizadas" name="semanas-cotizadas">
+                </div>
+                <button id="btn-calcular-pension">Calcular Pension</button>
+            </div>
         </section>
 
         <section id="contacto" class="content-section" style="display: none;">
@@ -172,6 +190,28 @@
             // Menu logic
             const menuLinks = document.querySelectorAll('#main-menu a');
             const sections = document.querySelectorAll('.content-section');
+
+            // Pension form logic
+            const btnEstimacion = document.getElementById('btn-estimacion');
+            const formEstimacion = document.getElementById('form-estimacion');
+            const btnCalcularPension = document.getElementById('btn-calcular-pension');
+
+            if(btnEstimacion && formEstimacion) {
+                btnEstimacion.addEventListener('click', () => {
+                    if (formEstimacion.style.display === 'none') {
+                        formEstimacion.style.display = 'block';
+                    } else {
+                        formEstimacion.style.display = 'none';
+                    }
+                });
+            }
+
+            if(btnCalcularPension) {
+                btnCalcularPension.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    alert("Cálculo de pensión en desarrollo.");
+                });
+            }
 
             menuLinks.forEach(link => {
                 link.addEventListener('click', (e) => {
