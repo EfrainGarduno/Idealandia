@@ -41,7 +41,7 @@ window.fetch = async (url, options) => {
         if (fetchCount === 1) {
             return {
                 ok: true,
-                body: createMockStream('Soy Nagualito, tu asistente de IA.')
+                body: createMockStream('Soy Idealita, tu asistente de IA.')
             };
         } else {
             return {
@@ -61,7 +61,7 @@ setTimeout(() => {
     const chatHistory = document.getElementById('chat-history');
 
     // Simulate typing
-    input.value = 'Hello Nagualito';
+    input.value = 'Hello Idealita';
 
     // Simulate clicking send
     sendBtn.click();
@@ -70,7 +70,7 @@ setTimeout(() => {
     const messages = chatHistory.querySelectorAll('.message');
     let userMessageFound = false;
     for (let msg of messages) {
-        if (msg.classList.contains('user-message') && msg.textContent === 'Hello Nagualito') {
+        if (msg.classList.contains('user-message') && msg.textContent === 'Hello Idealita') {
             userMessageFound = true;
             break;
         }
@@ -84,16 +84,16 @@ setTimeout(() => {
     // Since fetch is async, we give it a moment to resolve and update the DOM
     setTimeout(() => {
         const messagesAfter = chatHistory.querySelectorAll('.message');
-        let nagualitoMessageFound = false;
+        let idealitaMessageFound = false;
         for (let msg of messagesAfter) {
-            if (msg.classList.contains('nagualito-message') && msg.textContent.includes('Soy Nagualito, tu asistente de IA.')) {
-                nagualitoMessageFound = true;
+            if (msg.classList.contains('idealita-message') && msg.textContent.includes('Soy Idealita, tu asistente de IA.')) {
+                idealitaMessageFound = true;
                 break;
             }
         }
 
-        if (!nagualitoMessageFound) {
-            console.error('Test failed: Nagualito message not found in chat history.');
+        if (!idealitaMessageFound) {
+            console.error('Test failed: Idealita message not found in chat history.');
             process.exit(1);
         }
 
@@ -103,16 +103,16 @@ setTimeout(() => {
 
         setTimeout(() => {
             const messagesAfterSecond = chatHistory.querySelectorAll('.message');
-            let nagualitoSecondMessageFound = false;
+            let idealitaSecondMessageFound = false;
             for (let msg of messagesAfterSecond) {
-                if (msg.classList.contains('nagualito-message') && msg.textContent.includes('Entiendo, has enviado otro mensaje.')) {
-                    nagualitoSecondMessageFound = true;
+                if (msg.classList.contains('idealita-message') && msg.textContent.includes('Entiendo, has enviado otro mensaje.')) {
+                    idealitaSecondMessageFound = true;
                     break;
                 }
             }
 
-            if (!nagualitoSecondMessageFound) {
-                console.error('Test failed: Second Nagualito message not found in chat history.');
+            if (!idealitaSecondMessageFound) {
+                console.error('Test failed: Second Idealita message not found in chat history.');
                 process.exit(1);
             }
 
