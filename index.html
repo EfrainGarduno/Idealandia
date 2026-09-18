@@ -6,38 +6,41 @@
     <title>Chat con Idealita</title>
 
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <div id="logo-container">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="logo-svg">
-            <path d="M9 18h6"></path>
-            <path d="M10 22h4"></path>
-            <path d="M12 2v1"></path>
-            <path d="M12 7v1"></path>
-            <path d="M18.36 5.64l-.7.7"></path>
-            <path d="M15.54 8.46l-.7.7"></path>
-            <path d="M5.64 5.64l.7.7"></path>
-            <path d="M8.46 8.46l.7.7"></path>
-            <path d="M22 12h-1"></path>
-            <path d="M17 12h-1"></path>
-            <path d="M2 12h1"></path>
-            <path d="M7 12h1"></path>
-            <path d="M12 11c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"></path>
-        </svg>
-        <span class="logo-text">Idealandia</span>
-    </div>
-    <nav id="main-menu">
-        <ul>
-            <li><a href="#" data-section="inicio">Inicio</a></li>
-            <li><a href="#" data-section="servicios">Servicios</a></li>
-            <li><a href="#" data-section="contacto">Contacto</a></li>
-            <li><a href="#" data-section="chat">CHAT</a></li>
-            <li><a href="#" data-section="gratis">Gratis</a></li>
-            <li><a href="#" data-section="acerca">Acerca de</a></li>
-        </ul>
-    </nav>
+    <aside id="sidebar">
+        <div id="logo-container">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="logo-svg">
+                <path d="M9 18h6"></path>
+                <path d="M10 22h4"></path>
+                <path d="M12 2v1"></path>
+                <path d="M12 7v1"></path>
+                <path d="M18.36 5.64l-.7.7"></path>
+                <path d="M15.54 8.46l-.7.7"></path>
+                <path d="M5.64 5.64l.7.7"></path>
+                <path d="M8.46 8.46l.7.7"></path>
+                <path d="M22 12h-1"></path>
+                <path d="M17 12h-1"></path>
+                <path d="M2 12h1"></path>
+                <path d="M7 12h1"></path>
+                <path d="M12 11c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"></path>
+            </svg>
+            <span class="logo-text">Idealandia</span>
+        </div>
+        <nav id="main-menu">
+            <ul>
+                <li><a href="#" data-section="inicio"><i class="fas fa-home"></i> Inicio</a></li>
+                <li><a href="#" data-section="servicios"><i class="fas fa-concierge-bell"></i> Servicios</a></li>
+                <li><a href="#" data-section="contacto"><i class="fas fa-envelope"></i> Contacto</a></li>
+                <li><a href="#" data-section="chat"><i class="fas fa-comments"></i> CHAT</a></li>
+                <li><a href="#" data-section="gratis"><i class="fas fa-gift"></i> Gratis</a></li>
+                <li><a href="#" data-section="acerca"><i class="fas fa-info-circle"></i> Acerca de</a></li>
+            </ul>
+        </nav>
+    </aside>
 
     <div id="content-area">
         <section id="inicio" class="content-section">
