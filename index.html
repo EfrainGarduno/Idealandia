@@ -33,7 +33,17 @@
         <nav id="main-menu">
             <ul>
                 <li><a href="#" data-section="inicio"><i class="fas fa-home"></i> Inicio</a></li>
-                <li><a href="#" data-section="servicios"><i class="fas fa-concierge-bell"></i> Servicios</a></li>
+                <li>
+                    <a href="#" data-section="servicios"><i class="fas fa-concierge-bell"></i> Servicios</a>
+                    <ul id="submenu-servicios" style="display: none; list-style-type: none; padding-left: 20px; font-size: 0.9em;">
+                        <li><a href="#" data-submenu="asesorias-financieras">Asesorías Financieras</a></li>
+                        <li><a href="#" data-submenu="asesoria-pensiones">Asesoría de Pensiones</a></li>
+                        <li><a href="#" data-submenu="ideas-innovadoras">Ideas Innovadoras</a></li>
+                        <li><a href="#" data-submenu="emprendimientos">Emprendimientos</a></li>
+                        <li><a href="#" data-submenu="clases-ingles">Clases de Inglés</a></li>
+                        <li><a href="#" data-submenu="perfilamiento">Perfilamiento</a></li>
+                    </ul>
+                </li>
                 <li><a href="#" data-section="contacto"><i class="fas fa-envelope"></i> Contacto</a></li>
                 <li><a href="#" data-section="chat"><i class="fas fa-comments"></i> CHAT</a></li>
                 <li><a href="#" data-section="gratis"><i class="fas fa-gift"></i> Gratis</a></li>
@@ -85,6 +95,7 @@
                     <input type="number" id="semanas-cotizadas" name="semanas-cotizadas">
                 </div>
                 <button id="btn-calcular-pension">Calcular Pension</button>
+                <button type="button" id="btn-limpiar-formulario">Limpiar formulario</button>
             </div>
         </section>
 
@@ -188,13 +199,35 @@
         document.addEventListener('DOMContentLoaded', () => {
 
             // Menu logic
-            const menuLinks = document.querySelectorAll('#main-menu a');
+            const menuLinks = document.querySelectorAll('#main-menu > ul > li > a');
             const sections = document.querySelectorAll('.content-section');
+            const serviciosLink = document.querySelector('a[data-section="servicios"]');
+            const submenuServicios = document.getElementById('submenu-servicios');
+
+            if (serviciosLink && submenuServicios) {
+                serviciosLink.addEventListener('click', (e) => {
+                    // Prevent default action is handled by the loop below but we also want to toggle the submenu
+                    if (submenuServicios.style.display === 'none') {
+                        submenuServicios.style.display = 'block';
+                    } else {
+                        submenuServicios.style.display = 'none';
+                    }
+                });
+            }
 
             // Pension form logic
             const btnEstimacion = document.getElementById('btn-estimacion');
             const formEstimacion = document.getElementById('form-estimacion');
             const btnCalcularPension = document.getElementById('btn-calcular-pension');
+            const btnLimpiarFormulario = document.getElementById('btn-limpiar-formulario');
+
+            if (btnLimpiarFormulario) {
+                btnLimpiarFormulario.addEventListener('click', () => {
+                    document.getElementById('salario-promedio').value = '';
+                    document.getElementById('edad-jubilacion').value = '';
+                    document.getElementById('semanas-cotizadas').value = '';
+                });
+            }
 
             if(btnEstimacion && formEstimacion) {
                 btnEstimacion.addEventListener('click', () => {
@@ -210,6 +243,25 @@
                 btnCalcularPension.addEventListener('click', (e) => {
                     e.preventDefault();
                     alert("Cálculo de pensión en desarrollo.");
+                });
+            }
+
+            const asesoriaPensionesLink = document.querySelector('a[data-submenu="asesoria-pensiones"]');
+            if (asesoriaPensionesLink && formEstimacion) {
+                asesoriaPensionesLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+
+                    // Show 'Servicios' section
+                    sections.forEach(section => {
+                        if (section.id === 'servicios') {
+                            section.style.display = 'flex';
+                        } else {
+                            section.style.display = 'none';
+                        }
+                    });
+
+                    // Show the estimacion form
+                    formEstimacion.style.display = 'block';
                 });
             }
 
