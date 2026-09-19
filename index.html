@@ -6,6 +6,9 @@
     <title>Chat con Idealita</title>
 
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -55,25 +58,44 @@
     </aside>
 
     <div id="content-area">
-        <section id="inicio" class="content-section">
-            <div class="hero">
-                <h2 class="hero-title">Idealandia</h2>
-                <h3 class="hero-subtitle">Donde la creatividad cobra vida</h3>
-                <p class="hero-text">En Idealandia, puedes transformar tus ideas en realidad. Explora tu creatividad, desarrolla proyectos innovadores y comparte tu visión con el mundo. Aquí las ideas toman forma y se convierten en soluciones maravillosas.</p>
-            </div>
-            <div class="features">
-                 <div class="feature-item">
-                     <h4>🎨 Diseña sin límites</h4>
-                     <p>Encuentra inspiración y herramientas para tus creaciones visuales.</p>
-                 </div>
-                 <div class="feature-item">
-                     <h4>✍️ Escribe tu historia</h4>
-                     <p>Desarrolla narrativas cautivadoras y dales vida.</p>
-                 </div>
-                 <div class="feature-item">
-                     <h4>💡 Innova y construye</h4>
-                     <p>Lleva tus proyectos tecnológicos y de diseño al siguiente nivel.</p>
-                 </div>
+        <section id="inicio" class="content-section new-home-section">
+            <div class="home-layout">
+                <div class="home-text">
+                    <p class="home-subtitle">BIENVENIDA A TU ESPACIO</p>
+                    <h1 class="home-title">Donde las ideas<br><span style="color: #6c40f7;">cobran vida.</span></h1>
+                    <p class="home-description">Explora, aprende y transforma tus mejores ideas en<br>algo extraordinario.</p>
+                    <div class="home-buttons">
+                        <a href="#" class="btn btn-primary" data-section="chat">Hablar con Idealita <i class="fas fa-arrow-right" style="margin-left: 8px;"></i></a>
+                        <a href="#" class="btn btn-secondary" data-section="gratis">Explorar recursos</a>
+                    </div>
+                </div>
+                <div class="home-visual">
+                    <div class="visual-container">
+                        <div class="speech-bubble">¿Qué creamos hoy?</div>
+
+                        <svg class="orbits" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+                            <ellipse cx="200" cy="150" rx="160" ry="80" transform="rotate(-20 200 150)" fill="none" stroke="#b3a1f9" stroke-width="1.5"/>
+                            <ellipse cx="200" cy="150" rx="140" ry="100" transform="rotate(40 200 150)" fill="none" stroke="#b3a1f9" stroke-width="1.5"/>
+                        </svg>
+
+                        <!-- Sparkles -->
+                        <div class="sparkle sparkle-1">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0L13.5 10.5L24 12L13.5 13.5L12 24L10.5 13.5L0 12L10.5 10.5L12 0Z" fill="#6c40f7"/></svg>
+                        </div>
+                        <div class="sparkle sparkle-2">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0L13.5 10.5L24 12L13.5 13.5L12 24L10.5 13.5L0 12L10.5 10.5L12 0Z" fill="#6c40f7"/></svg>
+                        </div>
+                        <div class="sparkle sparkle-3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L13.5 10.5L22 12L13.5 13.5L12 22L10.5 13.5L2 12L10.5 10.5L12 2Z" stroke="#6c40f7" stroke-width="1.5"/></svg>
+                        </div>
+
+                        <div class="sphere">
+                            <div class="eye left"></div>
+                            <div class="eye right"></div>
+                            <div class="smile"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -201,7 +223,7 @@
         document.addEventListener('DOMContentLoaded', () => {
 
             // Menu logic
-            const menuLinks = document.querySelectorAll('#main-menu a[data-section]');
+            const menuLinks = document.querySelectorAll('a[data-section]');
             const sections = document.querySelectorAll('.content-section');
             const serviciosLink = document.getElementById('menu-servicios-link');
             const submenuServicios = document.getElementById('submenu-servicios');
