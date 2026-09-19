@@ -47,8 +47,8 @@
                         <li><a href="#" data-submenu="perfilamiento">Perfilamiento</a></li>
                     </ul>
                 </li>
-                <li><a href="#" data-section="contacto"><i class="fas fa-envelope"></i> Contacto</a></li>
                 <li><a href="#" data-section="gratis"><i class="fas fa-gift"></i> Gratis</a></li>
+                <li><a href="#" data-section="contacto"><i class="fas fa-envelope"></i> Contáctanos</a></li>
                 <li><a href="#" data-section="acerca"><i class="fas fa-info-circle"></i> Acerca de</a></li>
             </ul>
             <ul style="margin-top: auto; padding-top: 20px; list-style-type: none; padding-left: 0; display: flex; flex-direction: column; gap: 10px;">
@@ -124,9 +124,25 @@
         </section>
 
         <section id="contacto" class="content-section" style="display: none;">
-            <h2>Contacto</h2>
+            <h2>Contáctanos</h2>
             <p>Creado por Efrain Garduño Flores</p>
             <p>Contáctame por whatsapp: <a href="https://wa.link/lzv33g">https://wa.link/lzv33g</a></p>
+            <button id="btn-registrarse">Registrarse</button>
+            <div id="form-registro" style="display: none; margin-top: 20px;">
+                <div class="form-group">
+                    <label for="registro-nombre">Nombre:</label>
+                    <input type="text" id="registro-nombre" name="registro-nombre">
+                </div>
+                <div class="form-group">
+                    <label for="registro-correo">Correo:</label>
+                    <input type="email" id="registro-correo" name="registro-correo">
+                </div>
+                <div class="form-group">
+                    <label for="registro-telefono">Teléfono:</label>
+                    <input type="tel" id="registro-telefono" name="registro-telefono">
+                </div>
+                <button id="btn-enviar-registro">Enviar Datos</button>
+            </div>
         </section>
 
         <section id="acerca" class="content-section" style="display: none;">
@@ -267,6 +283,28 @@
                 btnCalcularPension.addEventListener('click', (e) => {
                     e.preventDefault();
                     alert("Cálculo de pensión en desarrollo.");
+                });
+            }
+
+            // Registro form logic
+            const btnRegistrarse = document.getElementById('btn-registrarse');
+            const formRegistro = document.getElementById('form-registro');
+            const btnEnviarRegistro = document.getElementById('btn-enviar-registro');
+
+            if(btnRegistrarse && formRegistro) {
+                btnRegistrarse.addEventListener('click', () => {
+                    if (formRegistro.style.display === 'none') {
+                        formRegistro.style.display = 'block';
+                    } else {
+                        formRegistro.style.display = 'none';
+                    }
+                });
+            }
+
+            if(btnEnviarRegistro) {
+                btnEnviarRegistro.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    alert("Datos enviados con éxito.");
                 });
             }
 
