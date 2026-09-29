@@ -58,6 +58,11 @@
     </aside>
 
     <div id="content-area">
+        <div class="top-auth-container">
+            <a href="#" data-section="login" class="auth-btn">Login</a>
+            <a href="#" data-section="register" class="auth-btn">Register</a>
+        </div>
+
         <section id="inicio" class="content-section new-home-section">
             <div class="home-layout">
                 <div class="home-text">
@@ -96,6 +101,52 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <section id="login" class="content-section" style="display: none;">
+            <h2>Iniciar Sesión</h2>
+            <div class="pension-form">
+                <div class="form-group">
+                    <label for="login-usuario">Usuario:</label>
+                    <input type="text" id="login-usuario" name="login-usuario">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Contraseña:</label>
+                    <input type="password" id="login-password" name="login-password">
+                </div>
+                <button id="btn-login" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #007bff; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Login</button>
+            </div>
+        </section>
+
+        <section id="register" class="content-section" style="display: none;">
+            <h2>Registrarse</h2>
+            <div class="pension-form">
+                <div class="form-group">
+                    <label for="reg-usuario">Usuario:</label>
+                    <input type="text" id="reg-usuario" name="reg-usuario">
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">Contraseña:</label>
+                    <input type="password" id="reg-password" name="reg-password">
+                </div>
+                <div class="form-group">
+                    <label for="reg-password-rep">Repetir contraseña:</label>
+                    <input type="password" id="reg-password-rep" name="reg-password-rep">
+                </div>
+                <div class="form-group">
+                    <label for="reg-nombre">Nombre:</label>
+                    <input type="text" id="reg-nombre" name="reg-nombre">
+                </div>
+                <div class="form-group">
+                    <label for="reg-correo">Correo:</label>
+                    <input type="email" id="reg-correo" name="reg-correo">
+                </div>
+                <div class="form-group">
+                    <label for="reg-telefono">Teléfono:</label>
+                    <input type="tel" id="reg-telefono" name="reg-telefono">
+                </div>
+                <button id="btn-register" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Registrarse</button>
             </div>
         </section>
 
