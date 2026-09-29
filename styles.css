@@ -562,6 +562,38 @@
     right: 40%;
 }
 
+/* TOP AUTH BUTTONS */
+.top-auth-container {
+    position: absolute;
+    top: 20px;
+    right: 40px;
+    display: flex;
+    gap: 15px;
+    z-index: 1000;
+}
+
+.auth-btn {
+    background-color: #e5f1fa;
+    color: #1a1a1a;
+    font-weight: 700;
+    font-size: 16px;
+    padding: 10px 25px;
+    border-radius: 20px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.auth-btn:hover {
+    transform: translateY(-2px);
+    background-color: #d0e7f9;
+}
+
 /* FLOATING SOCIAL MEDIA ICONS */
 .floating-social {
     position: fixed;
