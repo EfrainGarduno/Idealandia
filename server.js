@@ -237,4 +237,88 @@ app.post('/api/logout', (req, res) => {
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
 
+app.get('/api/ideas', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const usuario_id = decoded.id;
+
+        const [ideas] = await pool.execute(
+            'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
+            [usuario_id]
+        );
+
+        res.status(200).json({ ideas });
+    } catch (error) {
+        console.error('Error in /api/ideas (GET):', error);
+        res.status(401).json({ error: 'Token inválido o error al obtener ideas.' });
+    }
+});
+
+app.post('/api/ideas', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const usuario_id = decoded.id;
+
+        let { titulo, descripcion, estado } = req.body;
+
+        if (!titulo || typeof titulo !== 'string' || titulo.trim() === '') {
+            return res.status(400).json({ error: 'El título es obligatorio y no puede estar vacío.' });
+        }
+
+        titulo = titulo.trim();
+        if (titulo.length > 200) {
+            return res.status(400).json({ error: 'El título no puede exceder los 200 caracteres.' });
+        }
+
+        if (descripcion !== undefined && descripcion !== null) {
+            if (typeof descripcion !== 'string') {
+                return res.status(400).json({ error: 'La descripción debe ser texto.' });
+            }
+            descripcion = descripcion.trim();
+        } else {
+            descripcion = null;
+        }
+
+        const validStates = ['pendiente', 'en progreso', 'completada', 'descartada'];
+        if (!estado || typeof estado !== 'string' || estado.trim() === '') {
+            estado = 'pendiente';
+        } else {
+            estado = estado.trim().toLowerCase();
+            if (!validStates.includes(estado)) {
+                return res.status(400).json({ error: 'Estado inválido.' });
+            }
+            if (estado.length > 50) {
+                return res.status(400).json({ error: 'El estado no puede exceder los 50 caracteres.' });
+            }
+        }
+
+        const [result] = await pool.execute(
+            'INSERT INTO ideas (usuario_id, titulo, descripcion, estado) VALUES (?, ?, ?, ?)',
+            [usuario_id, titulo, descripcion, estado]
+        );
+
+        res.status(201).json({ message: 'Idea creada exitosamente.', id: result.insertId });
+
+    } catch (error) {
+        console.error('Error in /api/ideas (POST):', error);
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             res.status(401).json({ error: 'Token inválido o expirado.' });
+        } else {
+             res.status(500).json({ error: 'Error interno del servidor al crear la idea.' });
+        }
+    }
+});
+
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });

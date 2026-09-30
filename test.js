@@ -126,6 +126,32 @@ window.fetch = async (url, options) => {
             ok: true,
             json: async () => ({ message: 'Sesión cerrada exitosamente.' })
         };
+    } else if (url === '/api/ideas' && (!options || options.method === 'GET')) {
+        if (globalAuthState) {
+            return {
+                ok: true,
+                json: async () => ({ ideas: [{ id: 1, usuario_id: 1, titulo: 'Test Idea', descripcion: 'Desc', estado: 'pendiente', fecha: new Date().toISOString() }] })
+            };
+        } else {
+             return {
+                 ok: false,
+                 status: 401,
+                 json: async () => ({ error: 'No autorizado' })
+             };
+        }
+    } else if (url === '/api/ideas' && options.method === 'POST') {
+        if (globalAuthState) {
+            return {
+                ok: true,
+                json: async () => ({ message: 'Idea creada exitosamente.', id: 2 })
+            };
+        } else {
+             return {
+                 ok: false,
+                 status: 401,
+                 json: async () => ({ error: 'No autorizado' })
+             };
+        }
     }
     return { ok: false, status: 404 };
 };

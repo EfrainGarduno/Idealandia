@@ -291,38 +291,41 @@
         </section>
 
         <section id="ideas" class="content-section" style="display: none;">
-            <h2>Ideas Creativas</h2>
-            <p>Explora clasificaciones de ideas de todo tipo:</p>
-            <div class="resource-grid">
-                <div class="resource-category">
-                    <h3>Tecnología</h3>
-                    <ul>
-                        <li><a href="#" onclick="alert('Desarrollar una app para monitorizar el gasto de energía del hogar'); return false;">App de Ahorro Energético</a></li>
-                        <li><a href="#" onclick="alert('Gafas que traduzcan lenguaje de señas a texto'); return false;">Gafas AR Traductoras</a></li>
-                    </ul>
-                </div>
-                <div class="resource-category">
-                    <h3>Sostenibilidad</h3>
-                    <ul>
-                        <li><a href="#" onclick="alert('Crear macetas biodegradables que nutran la tierra al deshacerse'); return false;">Macetas Biodegradables</a></li>
-                        <li><a href="#" onclick="alert('Sistema comunitario de recolección y compostaje'); return false;">Compostaje Comunitario</a></li>
-                    </ul>
-                </div>
-                <div class="resource-category">
-                    <h3>Arte y Diseño</h3>
-                    <ul>
-                        <li><a href="#" onclick="alert('Lienzos digitales interactivos que cambian según el clima'); return false;">Lienzos Reactivos al Clima</a></li>
-                        <li><a href="#" onclick="alert('Joyería hecha con residuos electrónicos reciclados'); return false;">Joyería de E-Waste</a></li>
-                    </ul>
-                </div>
-                <div class="resource-category">
-                    <h3>Salud y Bienestar</h3>
-                    <ul>
-                        <li><a href="#" onclick="alert('Plataforma que empareja compañeros para hacer ejercicio por niveles'); return false;">Fitness Match</a></li>
-                        <li><a href="#" onclick="alert('Almohadas inteligentes que adaptan su temperatura según el sueño'); return false;">Almohada Termo-inteligente</a></li>
-                    </ul>
-                </div>
+            <h2>Mis Ideas</h2>
+
+            <div id="ideas-guest-message" style="display: none; background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                Para guardar tus ideas necesitas iniciar sesión. <a href="#" onclick="document.querySelector('a[data-section=\'login\']').click(); return false;" style="color: #721c24; font-weight: bold; text-decoration: underline;">Ir a Login</a>
             </div>
+
+            <div class="idea-form pension-form" style="margin-bottom: 30px;">
+                <h3>Crear Nueva Idea</h3>
+                <form id="form-crear-idea">
+                    <div class="form-group">
+                        <label for="idea-titulo">Título (máximo 200 caracteres): <span style="color:red;">*</span></label>
+                        <input type="text" id="idea-titulo" name="idea-titulo" maxlength="200" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="idea-descripcion">Descripción:</label>
+                        <textarea id="idea-descripcion" name="idea-descripcion" rows="4" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: 'Poppins', sans-serif; resize: vertical;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="idea-estado">Estado:</label>
+                        <select id="idea-estado" name="idea-estado" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: 'Poppins', sans-serif;">
+                            <option value="pendiente" selected>Pendiente</option>
+                            <option value="en progreso">En Progreso</option>
+                            <option value="completada">Completada</option>
+                            <option value="descartada">Descartada</option>
+                        </select>
+                    </div>
+                    <button type="button" id="btn-agregar-idea" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #6c40f7; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Agregar idea</button>
+                </form>
+            </div>
+
+            <h3>Lista de Ideas</h3>
+            <div id="lista-ideas">
+                <!-- Ideas will be dynamically populated here -->
+            </div>
+            <div id="ideas-message" style="display: none; padding: 15px; background-color: #e9ecef; border-radius: 5px; margin-top: 10px;"></div>
         </section>
     </div>
 
@@ -558,6 +561,153 @@
                 });
             }
 
+            async function fetchAndDisplayIdeas() {
+                const listaIdeas = document.getElementById('lista-ideas');
+                const ideasMessage = document.getElementById('ideas-message');
+                const ideasGuestMessage = document.getElementById('ideas-guest-message');
+                const authUserContainer = document.getElementById('auth-container-user');
+
+                listaIdeas.innerHTML = '';
+                ideasMessage.style.display = 'none';
+
+                if (authUserContainer.style.display === 'none') {
+                    // Not authenticated
+                    ideasGuestMessage.style.display = 'block';
+                    return;
+                }
+
+                // Authenticated
+                ideasGuestMessage.style.display = 'none';
+
+                try {
+                    const response = await fetch('/api/ideas');
+                    if (response.ok) {
+                        const data = await response.json();
+                        const ideas = data.ideas;
+
+                        if (ideas.length === 0) {
+                            ideasMessage.textContent = 'Aún no tienes ideas guardadas.';
+                            ideasMessage.style.display = 'block';
+                        } else {
+                            ideas.forEach(idea => {
+                                const ideaDiv = document.createElement('div');
+                                ideaDiv.style.border = '1px solid #ccc';
+                                ideaDiv.style.borderRadius = '5px';
+                                ideaDiv.style.padding = '15px';
+                                ideaDiv.style.marginBottom = '10px';
+                                ideaDiv.style.backgroundColor = '#fff';
+
+                                const fecha = new Date(idea.fecha).toLocaleString('es-ES');
+
+                                const h4 = document.createElement('h4');
+                                h4.style.marginTop = '0';
+                                h4.style.color = '#6c40f7';
+                                h4.textContent = idea.titulo;
+
+                                const p = document.createElement('p');
+                                p.style.fontSize = '0.9em';
+                                p.style.color = '#555';
+                                p.textContent = idea.descripcion || 'Sin descripción';
+
+                                const footerDiv = document.createElement('div');
+                                footerDiv.style.display = 'flex';
+                                footerDiv.style.justifyContent = 'space-between';
+                                footerDiv.style.fontSize = '0.8em';
+                                footerDiv.style.color = '#888';
+                                footerDiv.style.marginTop = '10px';
+                                footerDiv.style.paddingTop = '10px';
+                                footerDiv.style.borderTop = '1px solid #eee';
+
+                                const statusSpan = document.createElement('span');
+                                statusSpan.textContent = 'Estado: ';
+                                const strongStatus = document.createElement('strong');
+                                strongStatus.textContent = idea.estado;
+                                statusSpan.appendChild(strongStatus);
+
+                                const dateSpan = document.createElement('span');
+                                dateSpan.textContent = fecha;
+
+                                footerDiv.appendChild(statusSpan);
+                                footerDiv.appendChild(dateSpan);
+
+                                ideaDiv.appendChild(h4);
+                                ideaDiv.appendChild(p);
+                                ideaDiv.appendChild(footerDiv);
+
+                                listaIdeas.appendChild(ideaDiv);
+                            });
+                        }
+                    } else if (response.status === 401) {
+                         ideasGuestMessage.style.display = 'block';
+                    } else {
+                         ideasMessage.textContent = 'Error al cargar las ideas.';
+                         ideasMessage.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('Error fetching ideas:', error);
+                    ideasMessage.textContent = 'Error al cargar las ideas.';
+                    ideasMessage.style.display = 'block';
+                }
+            }
+
+            const btnAgregarIdea = document.getElementById('btn-agregar-idea');
+            if (btnAgregarIdea) {
+                btnAgregarIdea.addEventListener('click', async (e) => {
+                    e.preventDefault();
+
+                    const authUserContainer = document.getElementById('auth-container-user');
+                    const ideasGuestMessage = document.getElementById('ideas-guest-message');
+                    const ideasMessage = document.getElementById('ideas-message');
+
+                    if (authUserContainer.style.display === 'none') {
+                        ideasGuestMessage.style.display = 'block';
+                        // Add a small shake animation or visual cue if desired
+                        ideasGuestMessage.scrollIntoView({ behavior: 'smooth' });
+                        return;
+                    }
+
+                    const titulo = document.getElementById('idea-titulo').value.trim();
+                    const descripcion = document.getElementById('idea-descripcion').value.trim();
+                    const estado = document.getElementById('idea-estado').value;
+
+                    if (!titulo) {
+                        alert('El título es obligatorio.');
+                        return;
+                    }
+
+                    if (titulo.length > 200) {
+                        alert('El título no puede exceder los 200 caracteres.');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/ideas', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ titulo, descripcion, estado })
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            alert(data.message);
+                            document.getElementById('idea-titulo').value = '';
+                            document.getElementById('idea-descripcion').value = '';
+                            document.getElementById('idea-estado').value = 'pendiente';
+
+                            fetchAndDisplayIdeas();
+                        } else {
+                            alert(`Error: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error creando idea:', error);
+                        alert('Error al intentar guardar la idea.');
+                    }
+                });
+            }
+
             menuLinks.forEach(link => {
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -570,6 +720,9 @@
                                 section.classList.remove('animate-chat');
                                 void section.offsetWidth; // trigger reflow
                                 section.classList.add('animate-chat');
+                            }
+                            if (targetId === 'ideas') {
+                                fetchAndDisplayIdeas();
                             }
                         } else {
                             section.style.display = 'none';
