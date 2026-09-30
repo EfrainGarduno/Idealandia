@@ -1,6 +1,31 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
+const { execSync } = require('child_process');
+
+// Test that server requires AUTH_SECRET
+try {
+    execSync('node server.js', {
+        env: { ...process.env, AUTH_SECRET: '' },
+        stdio: 'pipe'
+    });
+    console.error('Test failed: server.js should fail without AUTH_SECRET.');
+    process.exit(1);
+} catch (error) {
+    if (error.status !== 1) {
+        console.error('Test failed: server.js failed with unexpected status code:', error.status);
+        process.exit(1);
+    }
+    const stdout = error.stdout ? error.stdout.toString() : '';
+    const stderr = error.stderr ? error.stderr.toString() : '';
+    const output = stdout + stderr;
+    if (!output.includes('FATAL ERROR: AUTH_SECRET environment variable not set.')) {
+        console.error('Test failed: server.js did not print the expected error message.');
+        console.error('Output was:', output);
+        process.exit(1);
+    }
+    console.log('Test passed: Server correctly refuses to start without AUTH_SECRET.');
+}
 
 const htmlPath = path.resolve(__dirname, 'index.html');
 const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
@@ -61,10 +86,51 @@ window.fetch = async (url, options) => {
             ok: false,
             json: async () => ({ error: 'Error mock' })
         };
+    } else if (url === '/api/login' && options.method === 'POST') {
+        const body = JSON.parse(options.body);
+        if (body.usuario === 'testuser' && body.password === 'testpass') {
+            globalAuthState = true;
+            return {
+                ok: true,
+                json: async () => ({ message: 'Login exitoso.', user: { id: 1, usuario: 'testuser', nombre: 'Test User' } })
+            };
+        }
+        if (!body.usuario || !body.password) {
+            return {
+                ok: false,
+                status: 400,
+                json: async () => ({ error: 'Usuario y contraseña son requeridos.' })
+            };
+        }
+        return {
+            ok: false,
+            status: 401,
+            json: async () => ({ error: 'Credenciales inválidas.' })
+        };
+    } else if (url === '/api/me' && (!options || options.method === 'GET')) {
+        if (globalAuthState) {
+            return {
+                ok: true,
+                json: async () => ({ user: { id: 1, usuario: 'testuser', nombre: 'Test User' } })
+            };
+        } else {
+            return {
+                ok: false,
+                status: 401,
+                json: async () => ({ error: 'No autorizado.' })
+            };
+        }
+    } else if (url === '/api/logout' && options.method === 'POST') {
+        globalAuthState = false;
+        return {
+            ok: true,
+            json: async () => ({ message: 'Sesión cerrada exitosamente.' })
+        };
     }
     return { ok: false, status: 404 };
 };
 
+let globalAuthState = false;
 let alertMessage = null;
 window.alert = (msg) => { alertMessage = msg; };
 
@@ -147,8 +213,83 @@ window.addEventListener('load', () => {
                     process.exit(1);
                 }
 
-                console.log('Test passed successfully: Context, multiple messages, and registration form worked.');
-                process.exit(0);
+                // Test Auth Flow
+                const testAuthFlow = async () => {
+                    alertMessage = null;
+
+                    // Initial /me should be 401 (guest)
+                    const resInitial = await window.fetch('/api/me');
+                    if (resInitial.ok) {
+                        console.error('Test failed: Initial /api/me should be 401.');
+                        process.exit(1);
+                    }
+
+                    // Login Empty
+                    document.getElementById('login-usuario').value = '';
+                    document.getElementById('login-password').value = '';
+                    document.getElementById('btn-login').click();
+
+                    setTimeout(async () => {
+                        if (alertMessage !== 'Por favor, ingresa tu usuario y contraseña.') {
+                            console.error('Test failed: Login empty validation failed.', alertMessage);
+                            process.exit(1);
+                        }
+
+                        // Login Invalid
+                        document.getElementById('login-usuario').value = 'wrong';
+                        document.getElementById('login-password').value = 'wrong';
+                        document.getElementById('btn-login').click();
+
+                        setTimeout(async () => {
+                            if (alertMessage !== 'Error: Credenciales inválidas.') {
+                                console.error('Test failed: Login invalid validation failed.', alertMessage);
+                                process.exit(1);
+                            }
+
+                            // Login Valid
+                            document.getElementById('login-usuario').value = 'testuser';
+                            document.getElementById('login-password').value = 'testpass';
+                            document.getElementById('btn-login').click();
+
+                            setTimeout(async () => {
+                                if (alertMessage !== 'Login exitoso.') {
+                                    console.error('Test failed: Login valid failed.', alertMessage);
+                                    process.exit(1);
+                                }
+
+                                // /me should now return ok (handled by mock globalAuthState)
+                                const resAuth = await window.fetch('/api/me');
+                                if (!resAuth.ok) {
+                                    console.error('Test failed: /api/me after login should be 200.');
+                                    process.exit(1);
+                                }
+
+                                // Test UI update via checkAuthStatus (called in login button click logic)
+                                if (document.getElementById('auth-container-user').style.display === 'none') {
+                                    console.error('Test failed: UI not updated after login.');
+                                    process.exit(1);
+                                }
+
+                                // Logout
+                                document.getElementById('btn-logout').click();
+
+                                setTimeout(async () => {
+                                    const resLoggedOut = await window.fetch('/api/me');
+                                    if (resLoggedOut.ok) {
+                                        console.error('Test failed: /api/me after logout should be 401.');
+                                        process.exit(1);
+                                    }
+
+                                    console.log('Test passed successfully: Context, multiple messages, registration form, and auth flow worked.');
+                                    process.exit(0);
+                                }, 500);
+
+                            }, 500);
+                        }, 500);
+                    }, 500);
+                };
+
+                testAuthFlow();
             }, 500);
 
         }, 500);
