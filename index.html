@@ -59,9 +59,13 @@
     </aside>
 
     <div id="content-area">
-        <div class="top-auth-container">
+        <div class="top-auth-container" id="auth-container-guest">
             <a href="#" data-section="login" class="auth-btn">Login</a>
             <a href="#" data-section="register" class="auth-btn">Register</a>
+        </div>
+        <div class="top-auth-container" id="auth-container-user" style="display: none;">
+            <span id="user-greeting" style="margin-right: 15px; font-weight: 500; color: #333;"></span>
+            <a href="#" id="btn-logout" class="auth-btn" style="background-color: #dc3545; color: white;">Logout</a>
         </div>
 
         <section id="inicio" class="content-section new-home-section">
@@ -333,6 +337,45 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
 
+            async function checkAuthStatus() {
+                try {
+                    const response = await fetch('/api/me');
+                    if (response.ok) {
+                        const data = await response.json();
+                        const user = data.user;
+                        document.getElementById('auth-container-guest').style.display = 'none';
+                        document.getElementById('auth-container-user').style.display = 'flex';
+                        document.getElementById('user-greeting').textContent = `Bienvenido, ${user.nombre || user.usuario}`;
+                    } else {
+                        document.getElementById('auth-container-guest').style.display = 'flex';
+                        document.getElementById('auth-container-user').style.display = 'none';
+                        document.getElementById('user-greeting').textContent = '';
+                    }
+                } catch (error) {
+                    console.error('Error checking auth status:', error);
+                }
+            }
+
+            // Check auth status on load
+            checkAuthStatus();
+
+            // Logout logic
+            const btnLogout = document.getElementById('btn-logout');
+            if (btnLogout) {
+                btnLogout.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        const response = await fetch('/api/logout', { method: 'POST' });
+                        if (response.ok) {
+                            checkAuthStatus();
+                            document.querySelector('a[data-section="inicio"]').click();
+                        }
+                    } catch (error) {
+                        console.error('Error logging out:', error);
+                    }
+                });
+            }
+
             // Menu logic
             const menuLinks = document.querySelectorAll('a[data-section]');
             const sections = document.querySelectorAll('.content-section');
@@ -400,6 +443,48 @@
                 btnEnviarRegistro.addEventListener('click', (e) => {
                     e.preventDefault();
                     alert("Datos enviados con éxito.");
+                });
+            }
+
+            // Login logic
+            const btnLogin = document.getElementById('btn-login');
+            if (btnLogin) {
+                btnLogin.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const usuario = document.getElementById('login-usuario').value;
+                    const password = document.getElementById('login-password').value;
+
+                    if (!usuario || !password) {
+                        alert('Por favor, ingresa tu usuario y contraseña.');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ usuario, password })
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            alert(data.message);
+                            document.getElementById('login-usuario').value = '';
+                            document.getElementById('login-password').value = '';
+
+                            // Switch view to home or chat, and update UI
+                            checkAuthStatus();
+                            document.querySelector('a[data-section="inicio"]').click();
+                        } else {
+                            alert(`Error: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error durante el login:', error);
+                        alert('Error al intentar iniciar sesión.');
+                    }
                 });
             }
 
