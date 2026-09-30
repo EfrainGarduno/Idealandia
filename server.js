@@ -5,12 +5,15 @@ const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use(cookieParser());
 app.use(express.static(__dirname));
 
 // Check if API key is provided
@@ -138,6 +141,94 @@ app.post('/api/register', async (req, res) => {
         console.error('Error in /api/register:', error);
         res.status(500).json({ error: 'Error interno del servidor durante el registro.' });
     }
+});
+
+app.post('/api/login', async (req, res) => {
+    try {
+        const { usuario, password } = req.body;
+
+        if (!usuario || !password) {
+            return res.status(400).json({ error: 'Usuario y contraseña son requeridos.' });
+        }
+
+        const [users] = await pool.execute(
+            'SELECT id, usuario, password_hash, nombre, telefono, email FROM usuarios WHERE usuario = ?',
+            [usuario]
+        );
+
+        if (users.length === 0) {
+            return res.status(401).json({ error: 'Credenciales inválidas.' });
+        }
+
+        const user = users[0];
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+
+        if (!isMatch) {
+            return res.status(401).json({ error: 'Credenciales inválidas.' });
+        }
+
+        const payload = {
+            id: user.id,
+            usuario: user.usuario
+        };
+
+        const secret = process.env.AUTH_SECRET || 'super-secret-fallback-for-dev';
+        const token = jwt.sign(payload, secret, { expiresIn: '24h' });
+
+        res.cookie('auth_token', token, {
+            httpOnly: true,
+            secure: false, // Since it's HTTP port 3000
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+
+        // Return user data (excluding password_hash)
+        const { password_hash, ...userData } = user;
+        res.status(200).json({ user: userData, message: 'Login exitoso.' });
+
+    } catch (error) {
+        console.error('Error in /api/login:', error);
+        res.status(500).json({ error: 'Error interno del servidor durante el inicio de sesión.' });
+    }
+});
+
+app.get('/api/me', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+        }
+
+        const secret = process.env.AUTH_SECRET || 'super-secret-fallback-for-dev';
+        const decoded = jwt.verify(token, secret);
+
+        const [users] = await pool.execute(
+            'SELECT id, usuario, nombre, telefono, email FROM usuarios WHERE id = ?',
+            [decoded.id]
+        );
+
+        if (users.length === 0) {
+             return res.status(401).json({ error: 'Usuario no encontrado.' });
+        }
+
+        res.status(200).json({ user: users[0] });
+
+    } catch (error) {
+        console.error('Error in /api/me:', error);
+        // Error mostly thrown by jwt.verify when invalid or expired
+        res.status(401).json({ error: 'Token inválido o expirado.' });
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    res.cookie('auth_token', '', {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        expires: new Date(0) // Expire immediately
+    });
+    res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
 
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });
