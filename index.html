@@ -403,6 +403,57 @@
                 });
             }
 
+            const btnRegisterNewUser = document.getElementById('btn-register');
+            if (btnRegisterNewUser) {
+                btnRegisterNewUser.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const usuario = document.getElementById('reg-usuario').value;
+                    const password = document.getElementById('reg-password').value;
+                    const passwordRep = document.getElementById('reg-password-rep').value;
+                    const nombre = document.getElementById('reg-nombre').value;
+                    const correo = document.getElementById('reg-correo').value;
+                    const telefono = document.getElementById('reg-telefono').value;
+
+                    if (!usuario || !password || !passwordRep || !nombre || !correo) {
+                        alert('Por favor, completa todos los campos obligatorios.');
+                        return;
+                    }
+
+                    if (password !== passwordRep) {
+                        alert('Las contraseñas no coinciden.');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/register', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ usuario, password, 'password-rep': passwordRep, nombre, correo, telefono })
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            alert(data.message);
+                            // Clear form
+                            document.getElementById('reg-usuario').value = '';
+                            document.getElementById('reg-password').value = '';
+                            document.getElementById('reg-password-rep').value = '';
+                            document.getElementById('reg-nombre').value = '';
+                            document.getElementById('reg-correo').value = '';
+                            document.getElementById('reg-telefono').value = '';
+                        } else {
+                            alert(`Error: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error durante el registro:', error);
+                        alert('Ocurrió un error al intentar registrarse. Inténtalo de nuevo más tarde.');
+                    }
+                });
+            }
+
             const asesoriaPensionesLink = document.querySelector('a[data-submenu="asesoria-pensiones"]');
             if (asesoriaPensionesLink && formEstimacion) {
                 asesoriaPensionesLink.addEventListener('click', (e) => {

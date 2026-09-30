@@ -49,9 +49,24 @@ window.fetch = async (url, options) => {
                 body: createMockStream('Entiendo, has enviado otro mensaje.')
             };
         }
+    } else if (url === '/api/register' && options.method === 'POST') {
+        const body = JSON.parse(options.body);
+        if (body.usuario === 'testuser' && body.password === 'testpass') {
+             return {
+                 ok: true,
+                 json: async () => ({ message: 'Registro exitoso.' })
+             };
+        }
+        return {
+            ok: false,
+            json: async () => ({ error: 'Error mock' })
+        };
     }
     return { ok: false, status: 404 };
 };
+
+let alertMessage = null;
+window.alert = (msg) => { alertMessage = msg; };
 
 // Ensure fetch works globally for JSDOM scripts if needed, though window.fetch is mocked.
 // Some jsdom configurations might require this or we just wait for the 'load' event.
@@ -116,8 +131,26 @@ window.addEventListener('load', () => {
                 process.exit(1);
             }
 
-            console.log('Test passed successfully: Context and multiple messages worked.');
-            process.exit(0);
+            // Test Registration Form
+            const btnRegisterNewUser = document.getElementById('btn-register');
+            document.getElementById('reg-usuario').value = 'testuser';
+            document.getElementById('reg-password').value = 'testpass';
+            document.getElementById('reg-password-rep').value = 'testpass';
+            document.getElementById('reg-nombre').value = 'Test User';
+            document.getElementById('reg-correo').value = 'test@example.com';
+
+            btnRegisterNewUser.click();
+
+            setTimeout(() => {
+                if (alertMessage !== 'Registro exitoso.') {
+                    console.error('Test failed: Registration form did not mock success correctly.', alertMessage);
+                    process.exit(1);
+                }
+
+                console.log('Test passed successfully: Context, multiple messages, and registration form worked.');
+                process.exit(0);
+            }, 500);
+
         }, 500);
 
     }, 500);
