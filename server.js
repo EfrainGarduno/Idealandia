@@ -321,4 +321,41 @@ app.post('/api/ideas', async (req, res) => {
     }
 });
 
+
+app.delete('/api/ideas/:id', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const usuario_id = decoded.id;
+        const idea_id = req.params.id;
+
+        if (!idea_id || isNaN(idea_id)) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        const [result] = await pool.execute(
+            'DELETE FROM ideas WHERE id = ? AND usuario_id = ? AND estado = ?',
+            [idea_id, usuario_id, 'pendiente']
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(403).json({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' });
+        }
+
+        res.status(200).json({ message: 'Idea eliminada correctamente.' });
+
+    } catch (error) {
+        console.error('Error in /api/ideas/:id (DELETE):', error);
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             res.status(401).json({ error: 'Token inválido o expirado.' });
+        } else {
+             res.status(500).json({ error: 'Error interno del servidor al eliminar la idea.' });
+        }
+    }
+});
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });

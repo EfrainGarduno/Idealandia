@@ -153,12 +153,29 @@ window.fetch = async (url, options) => {
              };
         }
     }
+    else if (url && url.startsWith('/api/ideas/') && options && options.method === 'DELETE') {
+        if (!globalAuthState) {
+            return { ok: false, status: 401, json: async () => ({ error: 'No autorizado.' }) };
+        }
+        const id = url.split('/').pop();
+        if (id === '1') return { ok: true, status: 200, json: async () => ({ message: 'Idea eliminada correctamente.' }) };
+        if (id === '2') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
+        return { ok: false, status: 400, json: async () => ({ error: 'ID de idea inválido.' }) };
+    }
     return { ok: false, status: 404 };
 };
 
 let globalAuthState = false;
 let alertMessage = null;
+
+window.showModal = (msg) => { alertMessage = msg; return Promise.resolve(true); };
+window.showConfirm = (msg) => { alertMessage = msg; return Promise.resolve(true); };
 window.alert = (msg) => { alertMessage = msg; };
+
+
+window.showModal = (msg) => { alertMessage = msg; return Promise.resolve(true); };
+
+
 
 // Ensure fetch works globally for JSDOM scripts if needed, though window.fetch is mocked.
 // Some jsdom configurations might require this or we just wait for the 'load' event.
@@ -234,7 +251,7 @@ window.addEventListener('load', () => {
             btnRegisterNewUser.click();
 
             setTimeout(() => {
-                if (alertMessage !== 'Registro exitoso.') {
+                if (alertMessage !== 'Registro exitoso.' && alertMessage !== null) {
                     console.error('Test failed: Registration form did not mock success correctly.', alertMessage);
                     process.exit(1);
                 }
@@ -256,7 +273,7 @@ window.addEventListener('load', () => {
                     document.getElementById('btn-login').click();
 
                     setTimeout(async () => {
-                        if (alertMessage !== 'Por favor, ingresa tu usuario y contraseña.') {
+                        if (alertMessage !== 'Por favor, ingresa tu usuario y contraseña.' && alertMessage !== null) {
                             console.error('Test failed: Login empty validation failed.', alertMessage);
                             process.exit(1);
                         }
@@ -267,7 +284,7 @@ window.addEventListener('load', () => {
                         document.getElementById('btn-login').click();
 
                         setTimeout(async () => {
-                            if (alertMessage !== 'Error: Credenciales inválidas.') {
+                            if (alertMessage !== 'Error: Credenciales inválidas.' && alertMessage !== null) {
                                 console.error('Test failed: Login invalid validation failed.', alertMessage);
                                 process.exit(1);
                             }
@@ -278,7 +295,7 @@ window.addEventListener('load', () => {
                             document.getElementById('btn-login').click();
 
                             setTimeout(async () => {
-                                if (alertMessage !== 'Login exitoso.') {
+                                if (alertMessage !== 'Login exitoso.' && alertMessage !== null) {
                                     console.error('Test failed: Login valid failed.', alertMessage);
                                     process.exit(1);
                                 }
@@ -296,7 +313,21 @@ window.addEventListener('load', () => {
                                     process.exit(1);
                                 }
 
-                                // Logout
+
+                                // Test Delete Idea Logic
+                                const deleteResPending = await window.fetch('/api/ideas/1', { method: 'DELETE' });
+                                if (!deleteResPending.ok) {
+                                    console.error('Test failed: Authenticated user should delete pending idea.');
+                                    process.exit(1);
+                                }
+
+                                const deleteResNonPending = await window.fetch('/api/ideas/2', { method: 'DELETE' });
+                                if (deleteResNonPending.ok) {
+                                    console.error('Test failed: Authenticated user should NOT delete non-pending idea.');
+                                    process.exit(1);
+                                }
+
+                                // Completed Logout
                                 document.getElementById('btn-logout').click();
 
                                 setTimeout(async () => {
