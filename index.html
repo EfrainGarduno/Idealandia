@@ -59,6 +59,7 @@
     </aside>
 
     <div id="content-area">
+        <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Abrir menú"><i class="fas fa-bars"></i></button>
         <div class="top-auth-container" id="auth-container-guest">
             <a href="#" data-section="login" class="auth-btn">Login</a>
             <a href="#" data-section="register" class="auth-btn">Register</a>
@@ -991,6 +992,25 @@
                     handleSend();
                 }
 
+            });
+
+            // Mobile menu logic
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const sidebar = document.getElementById('sidebar');
+
+            if (mobileMenuBtn && sidebar) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    sidebar.classList.toggle('sidebar-open');
+                });
+            }
+
+            // Close sidebar when a menu link is clicked on mobile
+            menuLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 768) {
+                        sidebar.classList.remove('sidebar-open');
+                    }
+                });
             });
 
         });
