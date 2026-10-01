@@ -154,12 +154,32 @@ window.fetch = async (url, options) => {
         }
     }
     else if (url && url.startsWith('/api/ideas/') && options && options.method === 'DELETE') {
+        const id = url.split('/').pop();
+
+        // Unauthenticated test
         if (!globalAuthState) {
             return { ok: false, status: 401, json: async () => ({ error: 'No autorizado.' }) };
         }
-        const id = url.split('/').pop();
+
+        // Invalid ID test
+        if (id === 'invalid') {
+             return { ok: false, status: 400, json: async () => ({ error: 'ID de idea inválido.' }) };
+        }
+
+        // Own pending idea -> success
         if (id === '1') return { ok: true, status: 200, json: async () => ({ message: 'Idea eliminada correctamente.' }) };
+
+        // Other user's idea -> rejected (direct backend security test)
         if (id === '2') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
+
+        // Own idea in progress -> rejected
+        if (id === '3') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
+
+        // Own completed idea -> rejected
+        if (id === '4') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
+
+        // Own discarded idea -> rejected
+        if (id === '5') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
         return { ok: false, status: 400, json: async () => ({ error: 'ID de idea inválido.' }) };
     }
     return { ok: false, status: 404 };
@@ -173,7 +193,7 @@ window.showConfirm = (msg) => { alertMessage = msg; return Promise.resolve(true)
 window.alert = (msg) => { alertMessage = msg; };
 
 
-window.showModal = (msg) => { alertMessage = msg; return Promise.resolve(true); };
+
 
 
 
@@ -315,15 +335,45 @@ window.addEventListener('load', () => {
 
 
                                 // Test Delete Idea Logic
+                                // Test 1: Authenticated user deleting own pending idea -> success
                                 const deleteResPending = await window.fetch('/api/ideas/1', { method: 'DELETE' });
                                 if (!deleteResPending.ok) {
                                     console.error('Test failed: Authenticated user should delete pending idea.');
                                     process.exit(1);
                                 }
 
-                                const deleteResNonPending = await window.fetch('/api/ideas/2', { method: 'DELETE' });
-                                if (deleteResNonPending.ok) {
-                                    console.error('Test failed: Authenticated user should NOT delete non-pending idea.');
+                                // Test 2: Authenticated user deleting another user's idea -> reject (security test)
+                                const deleteResOtherUser = await window.fetch('/api/ideas/2', { method: 'DELETE' });
+                                if (deleteResOtherUser.ok) {
+                                    console.error('Test failed: Authenticated user should NOT delete another user idea.');
+                                    process.exit(1);
+                                }
+
+                                // Test 3: Authenticated user deleting own idea 'en progreso' -> reject
+                                const deleteResInProgress = await window.fetch('/api/ideas/3', { method: 'DELETE' });
+                                if (deleteResInProgress.ok) {
+                                    console.error('Test failed: Authenticated user should NOT delete an idea in progress.');
+                                    process.exit(1);
+                                }
+
+                                // Test 4: Authenticated user deleting own idea 'completada' -> reject
+                                const deleteResCompleted = await window.fetch('/api/ideas/4', { method: 'DELETE' });
+                                if (deleteResCompleted.ok) {
+                                    console.error('Test failed: Authenticated user should NOT delete a completed idea.');
+                                    process.exit(1);
+                                }
+
+                                // Test 5: Authenticated user deleting own idea 'descartada' -> reject
+                                const deleteResDiscarded = await window.fetch('/api/ideas/5', { method: 'DELETE' });
+                                if (deleteResDiscarded.ok) {
+                                    console.error('Test failed: Authenticated user should NOT delete a discarded idea.');
+                                    process.exit(1);
+                                }
+
+                                // Test 6: Invalid ID -> 400
+                                const deleteResInvalidId = await window.fetch('/api/ideas/invalid', { method: 'DELETE' });
+                                if (deleteResInvalidId.status !== 400) {
+                                    console.error('Test failed: Invalid ID should return 400.');
                                     process.exit(1);
                                 }
 
@@ -337,7 +387,14 @@ window.addEventListener('load', () => {
                                         process.exit(1);
                                     }
 
-                                    console.log('Test passed successfully: Context, multiple messages, registration form, and auth flow worked.');
+                                    // Test 7: Unauthenticated DELETE -> 401
+                                    const deleteResUnauth = await window.fetch('/api/ideas/1', { method: 'DELETE' });
+                                    if (deleteResUnauth.status !== 401) {
+                                        console.error('Test failed: Unauthenticated user should NOT be able to delete ideas.');
+                                        process.exit(1);
+                                    }
+
+                                    console.log('Test passed successfully: Context, multiple messages, registration form, and auth flow worked. Delete logic fully tested.');
                                     process.exit(0);
                                 }, 500);
 
