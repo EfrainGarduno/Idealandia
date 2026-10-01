@@ -340,6 +340,62 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
 
+        // Custom Modal Logic
+        window.showModal = function(message) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('custom-modal');
+                const textElement = document.getElementById('custom-modal-message');
+                const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+                textElement.textContent = message;
+                buttonsContainer.innerHTML = '';
+
+                const okBtn = document.createElement('button');
+                okBtn.className = 'custom-modal-btn primary';
+                okBtn.textContent = 'Aceptar';
+
+                okBtn.onclick = () => {
+                    overlay.classList.remove('active');
+                    resolve(true);
+                };
+
+                buttonsContainer.appendChild(okBtn);
+                overlay.classList.add('active');
+            });
+        };
+
+        window.showConfirm = function(message) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('custom-modal');
+                const textElement = document.getElementById('custom-modal-message');
+                const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+                textElement.textContent = message;
+                buttonsContainer.innerHTML = '';
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'custom-modal-btn secondary';
+                cancelBtn.textContent = 'Cancelar';
+                cancelBtn.onclick = () => {
+                    overlay.classList.remove('active');
+                    resolve(false);
+                };
+
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = 'custom-modal-btn primary';
+                confirmBtn.textContent = 'Eliminar';
+                confirmBtn.onclick = () => {
+                    overlay.classList.remove('active');
+                    resolve(true);
+                };
+
+                buttonsContainer.appendChild(cancelBtn);
+                buttonsContainer.appendChild(confirmBtn);
+                overlay.classList.add('active');
+            });
+        };
+
+
             async function checkAuthStatus() {
                 try {
                     const response = await fetch('/api/me');
@@ -423,7 +479,7 @@
             if(btnCalcularPension) {
                 btnCalcularPension.addEventListener('click', (e) => {
                     e.preventDefault();
-                    alert("Cálculo de pensión en desarrollo.");
+                    showModal("Cálculo de pensión en desarrollo.");
                 });
             }
 
@@ -445,7 +501,7 @@
             if(btnEnviarRegistro) {
                 btnEnviarRegistro.addEventListener('click', (e) => {
                     e.preventDefault();
-                    alert("Datos enviados con éxito.");
+                    showModal("Datos enviados con éxito.");
                 });
             }
 
@@ -458,7 +514,7 @@
                     const password = document.getElementById('login-password').value;
 
                     if (!usuario || !password) {
-                        alert('Por favor, ingresa tu usuario y contraseña.');
+                        showModal('Por favor, ingresa tu usuario y contraseña.');
                         return;
                     }
 
@@ -474,7 +530,7 @@
                         const data = await response.json();
 
                         if (response.ok) {
-                            alert(data.message);
+                            showModal(data.message);
                             document.getElementById('login-usuario').value = '';
                             document.getElementById('login-password').value = '';
 
@@ -482,11 +538,11 @@
                             checkAuthStatus();
                             document.querySelector('a[data-section="inicio"]').click();
                         } else {
-                            alert(`Error: ${data.error}`);
+                            showModal(`Error: ${data.error}`);
                         }
                     } catch (error) {
                         console.error('Error durante el login:', error);
-                        alert('Error al intentar iniciar sesión.');
+                        showModal('Error al intentar iniciar sesión.');
                     }
                 });
             }
@@ -503,12 +559,12 @@
                     const telefono = document.getElementById('reg-telefono').value;
 
                     if (!usuario || !password || !passwordRep || !nombre || !correo) {
-                        alert('Por favor, completa todos los campos obligatorios.');
+                        showModal('Por favor, completa todos los campos obligatorios.');
                         return;
                     }
 
                     if (password !== passwordRep) {
-                        alert('Las contraseñas no coinciden.');
+                        showModal('Las contraseñas no coinciden.');
                         return;
                     }
 
@@ -524,7 +580,7 @@
                         const data = await response.json();
 
                         if (response.ok) {
-                            alert(data.message);
+                            showModal(data.message);
                             // Clear form
                             document.getElementById('reg-usuario').value = '';
                             document.getElementById('reg-password').value = '';
@@ -533,11 +589,11 @@
                             document.getElementById('reg-correo').value = '';
                             document.getElementById('reg-telefono').value = '';
                         } else {
-                            alert(`Error: ${data.error}`);
+                            showModal(`Error: ${data.error}`);
                         }
                     } catch (error) {
                         console.error('Error durante el registro:', error);
-                        alert('Ocurrió un error al intentar registrarse. Inténtalo de nuevo más tarde.');
+                        showModal('Ocurrió un error al intentar registrarse. Inténtalo de nuevo más tarde.');
                     }
                 });
             }
@@ -634,6 +690,40 @@
                                 ideaDiv.appendChild(p);
                                 ideaDiv.appendChild(footerDiv);
 
+                                if (idea.estado === 'pendiente') {
+                                    const deleteBtn = document.createElement('button');
+                                    deleteBtn.textContent = 'Eliminar';
+                                    deleteBtn.style.marginTop = '10px';
+                                    deleteBtn.style.backgroundColor = '#dc3545';
+                                    deleteBtn.style.color = 'white';
+                                    deleteBtn.style.border = 'none';
+                                    deleteBtn.style.padding = '5px 10px';
+                                    deleteBtn.style.borderRadius = '3px';
+                                    deleteBtn.style.cursor = 'pointer';
+
+                                    deleteBtn.addEventListener('click', async () => {
+                                        const confirmed = await showConfirm('¿Estás seguro de que deseas eliminar esta idea?');
+                                        if (confirmed) {
+                                            try {
+                                                const res = await fetch(`/api/ideas/${idea.id}`, {
+                                                    method: 'DELETE'
+                                                });
+                                                const data = await res.json();
+                                                if (res.ok) {
+                                                    showModal('Idea eliminada correctamente.');
+                                                    fetchAndDisplayIdeas();
+                                                } else {
+                                                    showModal(`Error: ${data.error}`);
+                                                }
+                                            } catch (err) {
+                                                console.error('Error eliminando idea:', err);
+                                                showModal('Ocurrió un error al intentar eliminar la idea.');
+                                            }
+                                        }
+                                    });
+                                    ideaDiv.appendChild(deleteBtn);
+                                }
+
                                 listaIdeas.appendChild(ideaDiv);
                             });
                         }
@@ -671,12 +761,12 @@
                     const estado = document.getElementById('idea-estado').value;
 
                     if (!titulo) {
-                        alert('El título es obligatorio.');
+                        showModal('El título es obligatorio.');
                         return;
                     }
 
                     if (titulo.length > 200) {
-                        alert('El título no puede exceder los 200 caracteres.');
+                        showModal('El título no puede exceder los 200 caracteres.');
                         return;
                     }
 
@@ -692,18 +782,18 @@
                         const data = await response.json();
 
                         if (response.ok) {
-                            alert(data.message);
+                            showModal(data.message);
                             document.getElementById('idea-titulo').value = '';
                             document.getElementById('idea-descripcion').value = '';
                             document.getElementById('idea-estado').value = 'pendiente';
 
                             fetchAndDisplayIdeas();
                         } else {
-                            alert(`Error: ${data.error}`);
+                            showModal(`Error: ${data.error}`);
                         }
                     } catch (error) {
                         console.error('Error creando idea:', error);
-                        alert('Error al intentar guardar la idea.');
+                        showModal('Error al intentar guardar la idea.');
                     }
                 });
             }
@@ -905,6 +995,16 @@
 
         });
     </script>
+
+
+    <!-- Custom Modal -->
+    <div id="custom-modal" class="custom-modal-overlay">
+        <div class="custom-modal-content">
+            <p id="custom-modal-message" class="custom-modal-text"></p>
+            <div id="custom-modal-buttons" class="custom-modal-buttons">
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>
