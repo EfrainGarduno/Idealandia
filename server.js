@@ -65,7 +65,7 @@ app.get('/api/live-token', async (req, res) => {
                 uses: 1,
                 expireTime: expireTime,
                 liveConnectConstraints: {
-                    model: 'models/gemini-3.6-flash',
+                    model: 'models/gemini-3.8-live',
                     config: {
                         responseModalities: ['AUDIO']
                     }

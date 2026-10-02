@@ -9,7 +9,7 @@ async function test() {
                 uses: 1,
                 expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
                 liveConnectConstraints: {
-                    model: 'models/gemini-2.0-flash-exp', // Note: Live API typically uses 2.0-flash-exp for live currently in typical setups, but let's check standard
+                    model: 'models/gemini-3.8-live',
                     config: {
                         responseModalities: ['AUDIO']
                     }
