@@ -802,7 +802,6 @@
         overflow-y: visible; /* Let body handle vertical scroll */
         overflow-x: hidden;
         flex-direction: column;
-        justify-content: flex-start;
         align-items: center;
     }
 
@@ -815,6 +814,7 @@
         justify-content: flex-end;
         margin-bottom: 20px;
         width: 100%;
+        padding-right: 0;
     }
 
     .home-layout {
@@ -899,6 +899,7 @@
         right: 10px;
         flex-direction: column;
         gap: 8px;
+        z-index: 50;
     }
 
     .social-icon {
