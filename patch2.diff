@@ -1,0 +1,11 @@
+--- styles.css
++++ styles.css
+@@ -866,7 +866,7 @@
+
+     #chat-container {
+         width: 100%;
+-        max-width: 100%;
++        max-width: 90vw;
+         height: 400px;
+         box-sizing: border-box;
+     }
