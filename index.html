@@ -1010,8 +1010,7 @@
             let audioWorkletNode = null;
             let micStream = null;
             let pcmPlaybackContext = null;
-            let playbackQueue = [];
-            let isPlaying = false;
+            let activeAudioSources = [];
             let nextPlayTime = 0;
 
             const btnStartLive = document.getElementById('btn-start-live');
@@ -1130,6 +1129,21 @@
                                     }
                                 }
                             }
+
+                            if (content.interrupted === true) {
+                                // Stop all currently playing or scheduled audio
+                                activeAudioSources.forEach(source => {
+                                    try { source.stop(); } catch (e) {}
+                                });
+                                activeAudioSources = [];
+
+                                // Reset the scheduling time to now so new audio plays immediately
+                                if (pcmPlaybackContext) {
+                                    nextPlayTime = pcmPlaybackContext.currentTime;
+                                }
+
+                                updateLiveStatus("Escuchando...");
+                            }
                         }
                     };
 
@@ -1176,8 +1190,16 @@
                 source.start(nextPlayTime);
                 nextPlayTime += audioBuffer.duration;
 
+                activeAudioSources.push(source);
+
                 source.onended = () => {
-                     if(pcmPlaybackContext && pcmPlaybackContext.currentTime >= nextPlayTime) {
+                     // Remove source from active array
+                     const index = activeAudioSources.indexOf(source);
+                     if (index > -1) {
+                         activeAudioSources.splice(index, 1);
+                     }
+
+                     if(pcmPlaybackContext && activeAudioSources.length === 0 && pcmPlaybackContext.currentTime >= nextPlayTime) {
                           updateLiveStatus("Escuchando...");
                      }
                 };
