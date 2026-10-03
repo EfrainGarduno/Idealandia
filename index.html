@@ -1115,8 +1115,19 @@
                         btnStopLive.style.display = 'inline-block';
                     };
 
-                    liveWebSocket.onmessage = (event) => {
-                        const response = JSON.parse(event.data);
+                    liveWebSocket.onmessage = async (event) => {
+                        console.log("WebSocket message received, type:", event.data instanceof Blob ? 'Blob' : (event.data instanceof ArrayBuffer ? 'ArrayBuffer' : typeof event.data));
+
+                        let textData;
+                        if (event.data instanceof Blob) {
+                            textData = await event.data.text();
+                        } else if (event.data instanceof ArrayBuffer) {
+                            textData = new TextDecoder().decode(event.data);
+                        } else {
+                            textData = event.data;
+                        }
+
+                        const response = JSON.parse(textData);
 
                         // Debug log for all incoming messages for diagnostics
                         console.log("Gemini Live API response received:", Object.keys(response));
