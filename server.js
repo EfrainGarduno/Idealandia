@@ -57,6 +57,29 @@ const chat = ai.chats.create({
     }
 });
 
+app.get('/api/live-token', async (req, res) => {
+    try {
+        const expireTime = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
+        const token = await ai.authTokens.create({
+            config: {
+                uses: 1,
+                expireTime: expireTime,
+                liveConnectConstraints: {
+                    model: 'models/gemini-3.8-live',
+                    config: {
+                        responseModalities: ['AUDIO']
+                    }
+                }
+            }
+        });
+
+        res.status(200).json({ token: token.name });
+    } catch (error) {
+        console.error('Error generating live token:', error);
+        res.status(500).json({ error: 'Failed to generate live token' });
+    }
+});
+
 app.post('/api/chat', async (req, res) => {
     try {
         const { message } = req.body;

@@ -227,6 +227,16 @@
                     <button id="send-btn">Enviar</button>
                 </div>
 
+                <div id="live-controls" style="margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #f0f0f0; padding: 10px; border-radius: 8px;">
+                    <button id="btn-start-live" class="btn btn-primary" style="background-color: #6c40f7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                        🎙️ Hablar con Idealita
+                    </button>
+                    <button id="btn-stop-live" class="btn btn-secondary" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none;">
+                        Terminar Live
+                    </button>
+                    <span id="live-status" style="font-weight: 500; color: #555;">Desconectado</span>
+                </div>
+
             </div>
         </section>
 
@@ -993,6 +1003,238 @@
                 }
 
             });
+
+            // --- Idealita Live Logic ---
+            let liveWebSocket = null;
+            let audioContext = null;
+            let audioWorkletNode = null;
+            let micStream = null;
+            let pcmPlaybackContext = null;
+            let activeAudioSources = [];
+            let nextPlayTime = 0;
+
+            const btnStartLive = document.getElementById('btn-start-live');
+            const btnStopLive = document.getElementById('btn-stop-live');
+            const liveStatus = document.getElementById('live-status');
+
+            function updateLiveStatus(status) {
+                if (liveStatus) liveStatus.textContent = status;
+            }
+
+            // Function to base64 encode ArrayBuffer
+            function bufferToBase64(buffer) {
+                let binary = '';
+                const bytes = new Uint8Array(buffer);
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return window.btoa(binary);
+            }
+
+            function base64ToArrayBuffer(base64) {
+                const binaryString = window.atob(base64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            }
+
+            async function startLive() {
+                try {
+                    updateLiveStatus("Obteniendo credenciales...");
+                    const res = await fetch('/api/live-token');
+                    if (!res.ok) {
+                        throw new Error("No se pudo obtener el token.");
+                    }
+                    const data = await res.json();
+                    const token = data.token;
+
+                    updateLiveStatus("Conectando con Gemini...");
+                    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
+                    liveWebSocket = new WebSocket(wsUrl);
+
+                    liveWebSocket.onopen = async () => {
+                        updateLiveStatus("Configurando audio...");
+
+                        // Send initial setup
+                        const setupMessage = {
+                            setup: {
+                                model: "models/gemini-3.8-live",
+                                systemInstruction: {
+                                    parts: [{ text: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Mantén tus respuestas conversacionales, breves y amigables. Habla en español." }]
+                                }
+                            }
+                        };
+                        liveWebSocket.send(JSON.stringify(setupMessage));
+
+                        // Setup audio recording
+                        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+
+                        await audioContext.audioWorklet.addModule('audio-worklet-processor.js');
+
+                        const source = audioContext.createMediaStreamSource(micStream);
+                        audioWorkletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
+
+                        audioWorkletNode.port.onmessage = (event) => {
+                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN) {
+                                const pcmBuffer = event.data;
+                                const base64Data = bufferToBase64(pcmBuffer);
+
+                                const msg = {
+                                    realtimeInput: {
+                                        mediaChunks: [{
+                                            mimeType: "audio/pcm;rate=16000",
+                                            data: base64Data
+                                        }]
+                                    }
+                                };
+                                liveWebSocket.send(JSON.stringify(msg));
+                            }
+                        };
+
+                        source.connect(audioWorkletNode);
+                        audioWorkletNode.connect(audioContext.destination);
+
+                        // Setup audio playback context (24kHz for Gemini output)
+                        pcmPlaybackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                        nextPlayTime = pcmPlaybackContext.currentTime;
+
+                        updateLiveStatus("Escuchando...");
+                        btnStartLive.style.display = 'none';
+                        btnStopLive.style.display = 'inline-block';
+                    };
+
+                    liveWebSocket.onmessage = (event) => {
+                        const response = JSON.parse(event.data);
+
+                        if (response.serverContent) {
+                            const content = response.serverContent;
+
+                            if (content.modelTurn && content.modelTurn.parts) {
+                                for (const part of content.modelTurn.parts) {
+                                    if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
+                                        updateLiveStatus("Hablando...");
+                                        playPcmAudio(part.inlineData.data);
+                                    }
+                                }
+                            }
+
+                            // Handling transcriptions
+                            if (content.modelTurn && content.modelTurn.parts) {
+                                for(const part of content.modelTurn.parts){
+                                    if(part.text){
+                                         addMessage(part.text, 'idealita');
+                                    }
+                                }
+                            }
+
+                            if (content.interrupted === true) {
+                                // Stop all currently playing or scheduled audio
+                                activeAudioSources.forEach(source => {
+                                    try { source.stop(); } catch (e) {}
+                                });
+                                activeAudioSources = [];
+
+                                // Reset the scheduling time to now so new audio plays immediately
+                                if (pcmPlaybackContext) {
+                                    nextPlayTime = pcmPlaybackContext.currentTime;
+                                }
+
+                                updateLiveStatus("Escuchando...");
+                            }
+                        }
+                    };
+
+                    liveWebSocket.onerror = (err) => {
+                        console.error("Live API WS Error:", err);
+                        updateLiveStatus("Error en la conexión.");
+                        stopLive();
+                    };
+
+                    liveWebSocket.onclose = () => {
+                        console.log("Live API WS Closed.");
+                        stopLive();
+                    };
+
+                } catch (err) {
+                    console.error("Failed to start live:", err);
+                    showModal("No se pudo iniciar Idealita Live. Revisa los permisos de micrófono o tu conexión.");
+                    updateLiveStatus("Desconectado");
+                }
+            }
+
+            function playPcmAudio(base64Data) {
+                if (!pcmPlaybackContext) return;
+
+                const buffer = base64ToArrayBuffer(base64Data);
+                const int16Array = new Int16Array(buffer);
+                const float32Array = new Float32Array(int16Array.length);
+
+                for (let i = 0; i < int16Array.length; i++) {
+                    float32Array[i] = int16Array[i] / 32768.0;
+                }
+
+                const audioBuffer = pcmPlaybackContext.createBuffer(1, float32Array.length, 24000);
+                audioBuffer.getChannelData(0).set(float32Array);
+
+                const source = pcmPlaybackContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(pcmPlaybackContext.destination);
+
+                if (nextPlayTime < pcmPlaybackContext.currentTime) {
+                    nextPlayTime = pcmPlaybackContext.currentTime;
+                }
+
+                source.start(nextPlayTime);
+                nextPlayTime += audioBuffer.duration;
+
+                activeAudioSources.push(source);
+
+                source.onended = () => {
+                     // Remove source from active array
+                     const index = activeAudioSources.indexOf(source);
+                     if (index > -1) {
+                         activeAudioSources.splice(index, 1);
+                     }
+
+                     if(pcmPlaybackContext && activeAudioSources.length === 0 && pcmPlaybackContext.currentTime >= nextPlayTime) {
+                          updateLiveStatus("Escuchando...");
+                     }
+                };
+            }
+
+            function stopLive() {
+                if (liveWebSocket) {
+                    liveWebSocket.close();
+                    liveWebSocket = null;
+                }
+                if (audioWorkletNode) {
+                    audioWorkletNode.disconnect();
+                    audioWorkletNode = null;
+                }
+                if (audioContext) {
+                    audioContext.close();
+                    audioContext = null;
+                }
+                if (micStream) {
+                    micStream.getTracks().forEach(track => track.stop());
+                    micStream = null;
+                }
+                if (pcmPlaybackContext) {
+                    pcmPlaybackContext.close();
+                    pcmPlaybackContext = null;
+                }
+
+                updateLiveStatus("Desconectado");
+                btnStartLive.style.display = 'inline-block';
+                btnStopLive.style.display = 'none';
+            }
+
+            if (btnStartLive) btnStartLive.addEventListener('click', startLive);
+            if (btnStopLive) btnStopLive.addEventListener('click', stopLive);
+
 
             // Mobile menu logic
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
