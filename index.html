@@ -1012,6 +1012,8 @@
             let pcmPlaybackContext = null;
             let activeAudioSources = [];
             let nextPlayTime = 0;
+            let isSetupComplete = false;
+            let chunkCount = 0;
 
             const btnStartLive = document.getElementById('btn-start-live');
             const btnStopLive = document.getElementById('btn-stop-live');
@@ -1078,18 +1080,25 @@
                         audioWorkletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
 
                         audioWorkletNode.port.onmessage = (event) => {
-                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN) {
+                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && isSetupComplete) {
                                 const pcmBuffer = event.data;
                                 const base64Data = bufferToBase64(pcmBuffer);
 
                                 const msg = {
                                     realtimeInput: {
-                                        mediaChunks: [{
+                                        audio: {
                                             mimeType: "audio/pcm;rate=16000",
                                             data: base64Data
-                                        }]
+                                        }
                                     }
                                 };
+
+                                // To avoid spamming, only log one in every 50 chunks
+                                chunkCount++;
+                                if (chunkCount % 50 === 0) {
+                                    console.log("Sending PCM audio chunk... (logged 1 every 50)");
+                                }
+
                                 liveWebSocket.send(JSON.stringify(msg));
                             }
                         };
@@ -1101,13 +1110,23 @@
                         pcmPlaybackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
                         nextPlayTime = pcmPlaybackContext.currentTime;
 
-                        updateLiveStatus("Escuchando...");
+                        updateLiveStatus("Esperando setup...");
                         btnStartLive.style.display = 'none';
                         btnStopLive.style.display = 'inline-block';
                     };
 
                     liveWebSocket.onmessage = (event) => {
                         const response = JSON.parse(event.data);
+
+                        // Debug log for all incoming messages for diagnostics
+                        console.log("Gemini Live API response received:", Object.keys(response));
+
+                        // Debug log for incoming messages
+                        if (response.setupComplete) {
+                            console.log("Gemini Live Setup Complete:", response.setupComplete);
+                            isSetupComplete = true;
+                            updateLiveStatus("Escuchando...");
+                        }
 
                         if (response.serverContent) {
                             const content = response.serverContent;
@@ -1206,6 +1225,7 @@
             }
 
             function stopLive() {
+                isSetupComplete = false;
                 if (liveWebSocket) {
                     liveWebSocket.close();
                     liveWebSocket = null;
