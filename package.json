@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test.js",
+    "test:responsive": "node verify_viewports.js",
     "start:prod": "./scripts/start-idealandia.sh"
   },
   "repository": {

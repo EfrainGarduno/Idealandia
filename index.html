@@ -1014,13 +1014,23 @@
             let nextPlayTime = 0;
             let isSetupComplete = false;
             let chunkCount = 0;
+            let currentLiveTranscriptionDiv = null;
+            let liveTranscriptionText = '';
 
             const btnStartLive = document.getElementById('btn-start-live');
             const btnStopLive = document.getElementById('btn-stop-live');
             const liveStatus = document.getElementById('live-status');
 
             function updateLiveStatus(status) {
-                if (liveStatus) liveStatus.textContent = status;
+                if (!liveStatus) return;
+
+                if (status === "Hablando...") {
+                    liveStatus.innerHTML = 'Idealita <span class="idealita-talking-anim"><span>•</span><span>•</span><span>•</span></span>';
+                } else if (status === "Escuchando...") {
+                    liveStatus.textContent = status;
+                } else {
+                    liveStatus.textContent = status;
+                }
             }
 
             // Function to base64 encode ArrayBuffer
@@ -1065,6 +1075,17 @@
                                 model: "models/gemini-3.8-live",
                                 systemInstruction: {
                                     parts: [{ text: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Mantén tus respuestas conversacionales, breves y amigables. Habla en español." }]
+                                },
+                                generationConfig: {
+                                    responseModalities: ["AUDIO"],
+                                    speechConfig: {
+                                        voiceConfig: {
+                                            prebuiltVoiceConfig: {
+                                                voiceName: "Aoede"
+                                            }
+                                        }
+                                    },
+                                    outputAudioTranscription: {}
                                 }
                             }
                         };
@@ -1155,9 +1176,22 @@
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for(const part of content.modelTurn.parts){
                                     if(part.text){
-                                         addMessage(part.text, 'idealita');
+                                        if (!currentLiveTranscriptionDiv) {
+                                            currentLiveTranscriptionDiv = addMessage('', 'idealita');
+                                            currentLiveTranscriptionDiv.innerHTML = 'Idealita está escribiendo<span class="idealita-talking-anim"><span>.</span><span>.</span><span>.</span></span>';
+                                            liveTranscriptionText = '';
+                                        }
+                                        liveTranscriptionText += part.text;
+                                        currentLiveTranscriptionDiv.textContent = liveTranscriptionText;
+                                        chatHistory.scrollTop = chatHistory.scrollHeight;
                                     }
                                 }
+                            }
+
+                            // If it's a turn complete, we can finalize the current bubble
+                            if (content.turnComplete) {
+                                currentLiveTranscriptionDiv = null;
+                                liveTranscriptionText = '';
                             }
 
                             if (content.interrupted === true) {
@@ -1171,6 +1205,10 @@
                                 if (pcmPlaybackContext) {
                                     nextPlayTime = pcmPlaybackContext.currentTime;
                                 }
+
+                                // Interrupt transcription
+                                currentLiveTranscriptionDiv = null;
+                                liveTranscriptionText = '';
 
                                 updateLiveStatus("Escuchando...");
                             }
