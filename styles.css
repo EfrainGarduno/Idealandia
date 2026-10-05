@@ -909,3 +909,32 @@
         font-size: 16px;
     }
 }
+
+.idealita-talking-anim {
+    display: inline-block;
+    margin-left: 5px;
+}
+
+.idealita-talking-anim span {
+    display: inline-block;
+    animation: talk-dots 1.4s infinite ease-in-out both;
+}
+
+.idealita-talking-anim span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.idealita-talking-anim span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes talk-dots {
+    0%, 80%, 100% {
+        transform: scale(0);
+        opacity: 0.3;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
