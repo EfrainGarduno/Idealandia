@@ -67,7 +67,8 @@ app.get('/api/live-token', async (req, res) => {
                 liveConnectConstraints: {
                     model: 'models/gemini-3.8-live',
                     config: {
-                        responseModalities: ['AUDIO']
+                        responseModalities: ['AUDIO'],
+                        outputAudioTranscription: {}
                     }
                 }
             }
