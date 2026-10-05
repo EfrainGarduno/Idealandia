@@ -414,7 +414,11 @@ app.get('/api/tools/contar_mis_ideas', async (req, res) => {
         });
     } catch (error) {
         console.error('Error in /api/tools/contar_mis_ideas:', error);
-        res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+        } else {
+             res.json({ error: true, error_message: "No pude consultar tus ideas en este momento." });
+        }
     }
 });
 
@@ -451,7 +455,11 @@ app.get('/api/tools/buscar_mis_ideas', async (req, res) => {
         });
     } catch (error) {
         console.error('Error in /api/tools/buscar_mis_ideas:', error);
-        res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+        } else {
+             res.json({ error: true, error_message: "No pude consultar tus ideas en este momento." });
+        }
     }
 });
 

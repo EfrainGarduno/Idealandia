@@ -155,28 +155,20 @@ window.fetch = async (url, options) => {
     }
     else if (url && url.startsWith('/api/tools/contar_mis_ideas')) {
         if (globalAuthState) {
-            return {
-                ok: true,
-                json: async () => ({ total: 7, por_estado: { pendiente: 5, completada: 2 } })
-            };
-        } else {
-            return {
-                ok: true,
-                json: async () => ({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." })
-            };
+            if (url.includes('error=mysql')) {
+                return { ok: true, json: async () => ({ error: true, error_message: "No pude consultar tus ideas en este momento." }) };
+            }
+            return { ok: true, json: async () => ({ total: 7, por_estado: { pendiente: 5, completada: 2 } }) };
         }
+        return { ok: true, json: async () => ({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." }) };
     } else if (url && url.startsWith('/api/tools/buscar_mis_ideas')) {
         if (globalAuthState) {
-            return {
-                ok: true,
-                json: async () => ({ found: true, count: 2, results: [{ id: 12, titulo: 'Idea progreso', descripcion: '...', estado: 'pendiente' }] })
-            };
-        } else {
-            return {
-                ok: true,
-                json: async () => ({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." })
-            };
+            if (url.includes('error=mysql')) {
+                return { ok: true, json: async () => ({ error: true, error_message: "No pude consultar tus ideas en este momento." }) };
+            }
+            return { ok: true, json: async () => ({ found: true, count: 2, results: [{ id: 12, titulo: 'Idea progreso', descripcion: '...', estado: 'pendiente' }] }) };
         }
+        return { ok: true, json: async () => ({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." }) };
     } else if (url && url.startsWith('/api/ideas/') && options && options.method === 'DELETE') {
         const id = url.split('/').pop();
 
@@ -437,6 +429,14 @@ window.addEventListener('load', () => {
                                         const dataSearch = resSearch.ok ? await resSearch.json() : await resSearch.json();
                                         if (dataSearch.found === undefined) {
                                             console.error('Test failed: buscar_mis_ideas did not return found status.');
+                                            process.exit(1);
+                                        }
+
+                                        // Tool test 2.5: generic error test
+                                        const resError = await window.fetch('/api/tools/contar_mis_ideas?error=mysql');
+                                        const dataError = await resError.json();
+                                        if (!dataError.error || dataError.require_auth) {
+                                            console.error('Test failed: generic error returned wrong format.', dataError);
                                             process.exit(1);
                                         }
 
