@@ -1073,8 +1073,32 @@
                         const setupMessage = {
                             setup: {
                                 model: "models/gemini-3.8-live",
+                                tools: [
+                                    {
+                                        functionDeclarations: [
+                                            {
+                                                name: "contar_mis_ideas",
+                                                description: "Cuenta la cantidad total de ideas que tiene el usuario autenticado y las agrupa por estado (pendiente, completada, etc.)."
+                                            },
+                                            {
+                                                name: "buscar_mis_ideas",
+                                                description: "Busca en las ideas del usuario autenticado aquellas que coincidan con un texto de búsqueda (query) en su título o descripción.",
+                                                parameters: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        query: {
+                                                            type: "STRING",
+                                                            description: "El texto o palabra clave para buscar en el título o descripción de las ideas."
+                                                        }
+                                                    },
+                                                    required: ["query"]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
                                 systemInstruction: {
-                                    parts: [{ text: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Mantén tus respuestas conversacionales, breves y amigables. Habla en español." }]
+                                    parts: [{ text: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando el usuario pregunte por sus ideas, utiliza las herramientas 'contar_mis_ideas' y 'buscar_mis_ideas' para obtener la información directamente de la base de datos." }]
                                 },
                                 generationConfig: {
                                     responseModalities: ["AUDIO"]
@@ -1177,6 +1201,49 @@
                                 liveTranscriptionText += text;
                                 currentLiveTranscriptionDiv.textContent = liveTranscriptionText;
                                 chatHistory.scrollTop = chatHistory.scrollHeight;
+                            }
+
+                            // Handling tool calls
+                            if (content.modelTurn && content.modelTurn.parts) {
+                                for (const part of content.modelTurn.parts) {
+                                    if (part.functionCall) {
+                                        const call = part.functionCall;
+                                        console.log("Function call received:", call.name, call.args);
+
+                                        let toolResponse = {
+                                            functionResponses: [
+                                                {
+                                                    name: call.name,
+                                                    id: call.id,
+                                                    response: {
+                                                        error: "Función no implementada o error interno."
+                                                    }
+                                                }
+                                            ]
+                                        };
+
+                                        try {
+                                            if (call.name === "contar_mis_ideas") {
+                                                const res = await fetch('/api/tools/contar_mis_ideas');
+                                                const data = await res.json();
+                                                toolResponse.functionResponses[0].response = data;
+                                            } else if (call.name === "buscar_mis_ideas") {
+                                                const query = call.args && call.args.query ? call.args.query : "";
+                                                const res = await fetch(`/api/tools/buscar_mis_ideas?query=${encodeURIComponent(query)}`);
+                                                const data = await res.json();
+                                                toolResponse.functionResponses[0].response = data;
+                                            }
+                                        } catch (error) {
+                                            console.error("Error executing tool:", error);
+                                            toolResponse.functionResponses[0].response = { error: "Error de red o de servidor al ejecutar la herramienta." };
+                                        }
+
+                                        console.log("Sending tool response:", toolResponse);
+                                        if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN) {
+                                            liveWebSocket.send(JSON.stringify({ toolResponse: toolResponse }));
+                                        }
+                                    }
+                                }
                             }
 
                             // If it's a turn complete, we can finalize the current bubble

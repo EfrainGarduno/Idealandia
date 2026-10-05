@@ -153,7 +153,31 @@ window.fetch = async (url, options) => {
              };
         }
     }
-    else if (url && url.startsWith('/api/ideas/') && options && options.method === 'DELETE') {
+    else if (url && url.startsWith('/api/tools/contar_mis_ideas')) {
+        if (globalAuthState) {
+            return {
+                ok: true,
+                json: async () => ({ total: 7, por_estado: { pendiente: 5, completada: 2 } })
+            };
+        } else {
+            return {
+                ok: true,
+                json: async () => ({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." })
+            };
+        }
+    } else if (url && url.startsWith('/api/tools/buscar_mis_ideas')) {
+        if (globalAuthState) {
+            return {
+                ok: true,
+                json: async () => ({ found: true, count: 2, results: [{ id: 12, titulo: 'Idea progreso', descripcion: '...', estado: 'pendiente' }] })
+            };
+        } else {
+            return {
+                ok: true,
+                json: async () => ({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." })
+            };
+        }
+    } else if (url && url.startsWith('/api/ideas/') && options && options.method === 'DELETE') {
         const id = url.split('/').pop();
 
         // Unauthenticated test
@@ -394,8 +418,52 @@ window.addEventListener('load', () => {
                                         process.exit(1);
                                     }
 
-                                    console.log('Test passed successfully: Context, multiple messages, registration form, and auth flow worked. Delete logic fully tested.');
-                                    process.exit(0);
+                                    // Login again to test tools
+                                    document.getElementById('login-usuario').value = 'testuser';
+                                    document.getElementById('login-password').value = 'testpass';
+                                    document.getElementById('btn-login').click();
+
+                                    setTimeout(async () => {
+                                        // Tool test 1: contar_mis_ideas
+                                        const resCount = await window.fetch('/api/tools/contar_mis_ideas');
+                                        const dataCount = resCount.ok ? await resCount.json() : await resCount.json();
+                                        if (dataCount.total === undefined) {
+                                            console.error('Test failed: contar_mis_ideas did not return total.');
+                                            process.exit(1);
+                                        }
+
+                                        // Tool test 2: buscar_mis_ideas
+                                        const resSearch = await window.fetch('/api/tools/buscar_mis_ideas?query=progreso');
+                                        const dataSearch = resSearch.ok ? await resSearch.json() : await resSearch.json();
+                                        if (dataSearch.found === undefined) {
+                                            console.error('Test failed: buscar_mis_ideas did not return found status.');
+                                            process.exit(1);
+                                        }
+
+                                        // Logout again
+                                        document.getElementById('btn-logout').click();
+
+                                        setTimeout(async () => {
+                                            // Tool test 3: unauthenticated tools
+                                            const resCountUnauth = await window.fetch('/api/tools/contar_mis_ideas');
+                                            const dataCountUnauth = resCountUnauth.ok ? await resCountUnauth.json() : await resCountUnauth.json();
+                                            if (!dataCountUnauth.require_auth) {
+                                                 console.error('Test failed: unauthenticated contar_mis_ideas did not return require_auth.');
+                                                 process.exit(1);
+                                            }
+
+                                            const resSearchUnauth = await window.fetch('/api/tools/buscar_mis_ideas?query=test');
+                                            const dataSearchUnauth = resSearchUnauth.ok ? await resSearchUnauth.json() : await resSearchUnauth.json();
+                                            if (!dataSearchUnauth.require_auth) {
+                                                 console.error('Test failed: unauthenticated buscar_mis_ideas did not return require_auth.');
+                                                 process.exit(1);
+                                            }
+
+                                            console.log('Test passed successfully: Tools logic tested correctly.');
+                                            process.exit(0);
+                                        }, 500);
+                                    }, 500);
+
                                 }, 500);
 
                             }, 500);

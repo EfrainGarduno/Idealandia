@@ -382,4 +382,77 @@ app.delete('/api/ideas/:id', async (req, res) => {
         }
     }
 });
+
+app.get('/api/tools/contar_mis_ideas', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const usuario_id = decoded.id;
+
+        const [results] = await pool.execute(
+            'SELECT estado, COUNT(*) as count FROM ideas WHERE usuario_id = ? GROUP BY estado',
+            [usuario_id]
+        );
+
+        let total = 0;
+        let por_estado = {};
+
+        for (const row of results) {
+            const countValue = parseInt(row.count, 10);
+            total += countValue;
+            por_estado[row.estado] = countValue;
+        }
+
+        res.json({
+            total,
+            por_estado
+        });
+    } catch (error) {
+        console.error('Error in /api/tools/contar_mis_ideas:', error);
+        res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+    }
+});
+
+app.get('/api/tools/buscar_mis_ideas', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const usuario_id = decoded.id;
+
+        let query = req.query.query || "";
+
+        const [results] = await pool.execute(
+            'SELECT id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? AND (titulo LIKE ? OR descripcion LIKE ?) LIMIT 10',
+            [usuario_id, `%${query}%`, `%${query}%`]
+        );
+
+        if (results.length === 0) {
+            return res.json({
+                found: false,
+                count: 0,
+                results: []
+            });
+        }
+
+        res.json({
+            found: true,
+            count: results.length,
+            results: results
+        });
+    } catch (error) {
+        console.error('Error in /api/tools/buscar_mis_ideas:', error);
+        res.json({ require_auth: true, error_message: "Para consultar tus ideas necesitas registrarte e iniciar sesión en Idealandia." });
+    }
+});
+
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });
