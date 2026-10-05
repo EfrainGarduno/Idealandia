@@ -1078,13 +1078,6 @@
                                 },
                                 generationConfig: {
                                     responseModalities: ["AUDIO"],
-                                    speechConfig: {
-                                        voiceConfig: {
-                                            prebuiltVoiceConfig: {
-                                                voiceName: "Aoede"
-                                            }
-                                        }
-                                    },
                                     outputAudioTranscription: {}
                                 }
                             }
@@ -1166,6 +1159,11 @@
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for (const part of content.modelTurn.parts) {
                                     if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
+                                        if (!currentLiveTranscriptionDiv) {
+                                            currentLiveTranscriptionDiv = addMessage('', 'idealita');
+                                            currentLiveTranscriptionDiv.innerHTML = 'Idealita está escribiendo<span class="idealita-talking-anim"><span>.</span><span>.</span><span>.</span></span>';
+                                            liveTranscriptionText = '';
+                                        }
                                         updateLiveStatus("Hablando...");
                                         playPcmAudio(part.inlineData.data);
                                     }
@@ -1173,19 +1171,15 @@
                             }
 
                             // Handling transcriptions
-                            if (content.modelTurn && content.modelTurn.parts) {
-                                for(const part of content.modelTurn.parts){
-                                    if(part.text){
-                                        if (!currentLiveTranscriptionDiv) {
-                                            currentLiveTranscriptionDiv = addMessage('', 'idealita');
-                                            currentLiveTranscriptionDiv.innerHTML = 'Idealita está escribiendo<span class="idealita-talking-anim"><span>.</span><span>.</span><span>.</span></span>';
-                                            liveTranscriptionText = '';
-                                        }
-                                        liveTranscriptionText += part.text;
-                                        currentLiveTranscriptionDiv.textContent = liveTranscriptionText;
-                                        chatHistory.scrollTop = chatHistory.scrollHeight;
-                                    }
+                            if (content.outputTranscription && content.outputTranscription.text) {
+                                const text = content.outputTranscription.text;
+                                if (!currentLiveTranscriptionDiv) {
+                                    currentLiveTranscriptionDiv = addMessage('', 'idealita');
+                                    liveTranscriptionText = '';
                                 }
+                                liveTranscriptionText += text;
+                                currentLiveTranscriptionDiv.textContent = liveTranscriptionText;
+                                chatHistory.scrollTop = chatHistory.scrollHeight;
                             }
 
                             // If it's a turn complete, we can finalize the current bubble
