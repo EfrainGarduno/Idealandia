@@ -1159,11 +1159,6 @@
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for (const part of content.modelTurn.parts) {
                                     if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
-                                        if (!currentLiveTranscriptionDiv) {
-                                            currentLiveTranscriptionDiv = addMessage('', 'idealita');
-                                            currentLiveTranscriptionDiv.innerHTML = 'Idealita está escribiendo<span class="idealita-talking-anim"><span>.</span><span>.</span><span>.</span></span>';
-                                            liveTranscriptionText = '';
-                                        }
                                         updateLiveStatus("Hablando...");
                                         playPcmAudio(part.inlineData.data);
                                     }
@@ -1175,6 +1170,7 @@
                                 const text = content.outputTranscription.text;
                                 if (!currentLiveTranscriptionDiv) {
                                     currentLiveTranscriptionDiv = addMessage('', 'idealita');
+                                    currentLiveTranscriptionDiv.innerHTML = 'Idealita está escribiendo<span class="idealita-talking-anim"><span>.</span><span>.</span><span>.</span></span>';
                                     liveTranscriptionText = '';
                                 }
                                 liveTranscriptionText += text;
@@ -1200,7 +1196,6 @@
                                     nextPlayTime = pcmPlaybackContext.currentTime;
                                 }
 
-                                // Interrupt transcription
                                 currentLiveTranscriptionDiv = null;
                                 liveTranscriptionText = '';
 
