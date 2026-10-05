@@ -1077,9 +1077,10 @@
                                     parts: [{ text: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Mantén tus respuestas conversacionales, breves y amigables. Habla en español." }]
                                 },
                                 generationConfig: {
-                                    responseModalities: ["AUDIO"],
+                                    responseModalities: ["AUDIO"]
+                                    },
                                     outputAudioTranscription: {}
-                                }
+                                
                             }
                         };
                         liveWebSocket.send(JSON.stringify(setupMessage));
@@ -1210,8 +1211,12 @@
                         stopLive();
                     };
 
-                    liveWebSocket.onclose = () => {
+ 
+                    liveWebSocket.onclose = (event) => {
                         console.log("Live API WS Closed.");
+                        console.log("Close code:", event.code);
+                        console.log("Close reason:", event.reason);
+                        console.log("Was clean:", event.wasClean);
                         stopLive();
                     };
 
