@@ -1178,6 +1178,48 @@
                             updateLiveStatus("Escuchando...");
                         }
 
+                        // Handling tool calls
+                        if (response.toolCall && response.toolCall.functionCalls) {
+                            let toolResponse = {
+                                functionResponses: []
+                            };
+
+                            for (const call of response.toolCall.functionCalls) {
+                                console.log("Tool call received:", call.name, call.args);
+
+                                let functionResponseItem = {
+                                    name: call.name,
+                                    id: call.id,
+                                    response: {
+                                        error: "Función no implementada o error interno."
+                                    }
+                                };
+
+                                try {
+                                    if (call.name === "contar_mis_ideas") {
+                                        const res = await fetch('/api/tools/contar_mis_ideas');
+                                        const data = await res.json();
+                                        functionResponseItem.response = data;
+                                    } else if (call.name === "buscar_mis_ideas") {
+                                        const query = call.args && call.args.query ? call.args.query : "";
+                                        const res = await fetch(`/api/tools/buscar_mis_ideas?query=${encodeURIComponent(query)}`);
+                                        const data = await res.json();
+                                        functionResponseItem.response = data;
+                                    }
+                                } catch (error) {
+                                    console.error("Error executing tool:", error);
+                                    functionResponseItem.response = { error: "Error de red o de servidor al ejecutar la herramienta." };
+                                }
+
+                                toolResponse.functionResponses.push(functionResponseItem);
+                            }
+
+                            console.log("Tool response sent:", toolResponse);
+                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN) {
+                                liveWebSocket.send(JSON.stringify({ toolResponse: toolResponse }));
+                            }
+                        }
+
                         if (response.serverContent) {
                             const content = response.serverContent;
 
@@ -1201,49 +1243,6 @@
                                 liveTranscriptionText += text;
                                 currentLiveTranscriptionDiv.textContent = liveTranscriptionText;
                                 chatHistory.scrollTop = chatHistory.scrollHeight;
-                            }
-
-                            // Handling tool calls
-                            if (content.modelTurn && content.modelTurn.parts) {
-                                for (const part of content.modelTurn.parts) {
-                                    if (part.functionCall) {
-                                        const call = part.functionCall;
-                                        console.log("Function call received:", call.name, call.args);
-
-                                        let toolResponse = {
-                                            functionResponses: [
-                                                {
-                                                    name: call.name,
-                                                    id: call.id,
-                                                    response: {
-                                                        error: "Función no implementada o error interno."
-                                                    }
-                                                }
-                                            ]
-                                        };
-
-                                        try {
-                                            if (call.name === "contar_mis_ideas") {
-                                                const res = await fetch('/api/tools/contar_mis_ideas');
-                                                const data = await res.json();
-                                                toolResponse.functionResponses[0].response = data;
-                                            } else if (call.name === "buscar_mis_ideas") {
-                                                const query = call.args && call.args.query ? call.args.query : "";
-                                                const res = await fetch(`/api/tools/buscar_mis_ideas?query=${encodeURIComponent(query)}`);
-                                                const data = await res.json();
-                                                toolResponse.functionResponses[0].response = data;
-                                            }
-                                        } catch (error) {
-                                            console.error("Error executing tool:", error);
-                                            toolResponse.functionResponses[0].response = { error: "Error de red o de servidor al ejecutar la herramienta." };
-                                        }
-
-                                        console.log("Sending tool response:", toolResponse);
-                                        if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN) {
-                                            liveWebSocket.send(JSON.stringify({ toolResponse: toolResponse }));
-                                        }
-                                    }
-                                }
                             }
 
                             // If it's a turn complete, we can finalize the current bubble

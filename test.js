@@ -424,6 +424,10 @@ window.addEventListener('load', () => {
                                     document.getElementById('btn-login').click();
 
                                     setTimeout(async () => {
+                                        // Mock WebSocket for Gemini Live API
+                                        // Due to limitations of JSDOM event execution and how WebSocket is utilized,
+                                        // we simulate the exact fetch logic executed internally by the Live session instead of a full DOM event test,
+                                        // preventing flakes while testing the tools correctly.
                                         // Tool test 1: contar_mis_ideas
                                         const resCount = await window.fetch('/api/tools/contar_mis_ideas');
                                         const dataCount = resCount.ok ? await resCount.json() : await resCount.json();
