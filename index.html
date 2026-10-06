@@ -1101,12 +1101,12 @@
                                     parts: [{ text: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando el usuario pregunte por sus ideas, utiliza las herramientas 'contar_mis_ideas' y 'buscar_mis_ideas' para obtener la información directamente de la base de datos." }]
                                 },
                                 generationConfig: {
-                                    responseModalities: ["AUDIO"]
-                                    },
+                                    responseModalities: ["AUDIO"],
                                     outputAudioTranscription: {}
-                                
+                                }
                             }
                         };
+                        console.log("Gemini Live Setup Payload:", JSON.stringify(setupMessage, null, 2));
                         liveWebSocket.send(JSON.stringify(setupMessage));
 
                         // Setup audio recording
