@@ -1102,11 +1102,11 @@
                                 },
                                 generationConfig: {
                                     responseModalities: ["AUDIO"]
-                                    },
-                                    outputAudioTranscription: {}
-                                
+                                },
+                                outputAudioTranscription: {}
                             }
                         };
+                        console.log("Payload de configuración:", JSON.stringify(setupMessage, null, 2));
                         liveWebSocket.send(JSON.stringify(setupMessage));
 
                         // Setup audio recording
