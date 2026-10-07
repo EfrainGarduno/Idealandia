@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js",
+    "test": "node test.js && node test_pension.js",
+    "test:responsive": "node verify_viewports.js",
     "start:prod": "./scripts/start-idealandia.sh"
   },
   "repository": {

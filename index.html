@@ -163,20 +163,68 @@
                 <h3>Estimación de Cálculo de pensión</h3>
             </div>
             <div id="form-estimacion" style="display: none;" class="pension-form">
-                <div class="form-group">
-                    <label for="salario-promedio">Promedio salarial últimas 250 semanas:</label>
-                    <input type="number" id="salario-promedio" name="salario-promedio">
+                <fieldset>
+                    <legend>Datos generales</legend>
+                    <div class="form-group">
+                        <label for="salario-minimo">Salario mínimo general vigente:</label>
+                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo">
+                    </div>
+                    <div class="form-group">
+                        <label for="salario-promedio">Salario diario promedio últimas 250 semanas:</label>
+                        <input type="number" step="0.01" id="salario-promedio" name="salario-promedio">
+                    </div>
+                    <div class="form-group">
+                        <label for="semanas-cotizadas">Semanas cotizadas:</label>
+                        <input type="number" id="semanas-cotizadas" name="semanas-cotizadas">
+                    </div>
+                    <div class="form-group">
+                        <label for="edad-jubilacion">Edad al solicitar la pensión:</label>
+                        <input type="number" id="edad-jubilacion" name="edad-jubilacion">
+                    </div>
+                </fieldset>
+                <fieldset style="margin-top: 15px;">
+                    <legend>Datos familiares (Asignaciones y Ayuda Asistencial)</legend>
+                    <div class="form-group">
+                        <label for="tiene-esposa">¿Tiene esposa o concubina?</label>
+                        <select id="tiene-esposa" name="tiene-esposa">
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="numero-hijos">Número de hijos aplicables (menores de 16, o menores de 25 estudiando):</label>
+                        <input type="number" id="numero-hijos" name="numero-hijos" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="tiene-padres">¿Tiene padres que dependan económicamente de usted?</label>
+                        <select id="tiene-padres" name="tiene-padres">
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="esta-soledad">¿Se encuentra en condición de soledad?</label>
+                        <select id="esta-soledad" name="esta-soledad">
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="tiene-incapacidad">¿Tiene alguna incapacidad física que genere ayuda asistencial?</label>
+                        <select id="tiene-incapacidad" name="tiene-incapacidad">
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                        </select>
+                    </div>
+                </fieldset>
+                <div style="margin-top: 15px;">
+                    <button id="btn-calcular-pension">Calcular Pension</button>
+                    <button type="button" id="btn-limpiar-formulario">Limpiar formulario</button>
                 </div>
-                <div class="form-group">
-                    <label for="edad-jubilacion">Edad a la que se desea Jubilar:</label>
-                    <input type="number" id="edad-jubilacion" name="edad-jubilacion">
+
+                <div id="resultado-pension" style="display: none; margin-top: 20px; padding: 15px; border: 1px solid #ccc; background-color: #f9f9f9; border-radius: 5px;">
+                    <!-- Results will be injected here -->
                 </div>
-                <div class="form-group">
-                    <label for="semanas-cotizadas">Número de semanas cotizadas:</label>
-                    <input type="number" id="semanas-cotizadas" name="semanas-cotizadas">
-                </div>
-                <button id="btn-calcular-pension">Calcular Pension</button>
-                <button type="button" id="btn-limpiar-formulario">Limpiar formulario</button>
             </div>
         </section>
 
@@ -348,6 +396,7 @@
         <a href="https://wa.link/lzv33g" target="_blank" class="social-icon whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
     </div>
 
+    <script src="pension.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
 
@@ -467,15 +516,6 @@
             const btnEstimacion = document.getElementById('btn-estimacion');
             const formEstimacion = document.getElementById('form-estimacion');
             const btnCalcularPension = document.getElementById('btn-calcular-pension');
-            const btnLimpiarFormulario = document.getElementById('btn-limpiar-formulario');
-
-            if (btnLimpiarFormulario) {
-                btnLimpiarFormulario.addEventListener('click', () => {
-                    document.getElementById('salario-promedio').value = '';
-                    document.getElementById('edad-jubilacion').value = '';
-                    document.getElementById('semanas-cotizadas').value = '';
-                });
-            }
 
             if(btnEstimacion && formEstimacion) {
                 btnEstimacion.addEventListener('click', () => {
@@ -490,7 +530,89 @@
             if(btnCalcularPension) {
                 btnCalcularPension.addEventListener('click', (e) => {
                     e.preventDefault();
-                    showModal("Cálculo de pensión en desarrollo.");
+
+                    const salarioMinimo = parseFloat(document.getElementById('salario-minimo').value);
+                    const salarioDiarioPromedio = parseFloat(document.getElementById('salario-promedio').value);
+                    const semanasCotizadas = parseInt(document.getElementById('semanas-cotizadas').value, 10);
+                    const edad = parseInt(document.getElementById('edad-jubilacion').value, 10);
+
+                    if (isNaN(salarioMinimo) || isNaN(salarioDiarioPromedio) || isNaN(semanasCotizadas) || isNaN(edad)) {
+                        showModal("Por favor ingresa todos los campos de Datos Generales correctamente.");
+                        return;
+                    }
+
+                    const tieneEsposa = document.getElementById('tiene-esposa').value === 'si';
+                    const numeroHijos = parseInt(document.getElementById('numero-hijos').value, 10) || 0;
+                    const tienePadresDependientes = document.getElementById('tiene-padres').value === 'si';
+                    const estaEnSoledad = document.getElementById('esta-soledad').value === 'si';
+                    const tieneIncapacidad = document.getElementById('tiene-incapacidad').value === 'si';
+
+                    const data = {
+                        salarioMinimo,
+                        salarioDiarioPromedio,
+                        semanasCotizadas,
+                        edad,
+                        tieneEsposa,
+                        numeroHijos,
+                        tienePadresDependientes,
+                        estaEnSoledad,
+                        tieneIncapacidad
+                    };
+
+                    const result = calculateIMSSLey73Pension(data);
+
+                    const formatter = new Intl.NumberFormat('es-MX', {
+                        style: 'currency',
+                        currency: 'MXN'
+                    });
+
+                    const formatPorcentaje = (val) => (val * 100).toFixed(0) + ' %';
+
+                    const resultContainer = document.getElementById('resultado-pension');
+                    resultContainer.style.display = 'block';
+                    resultContainer.innerHTML = `
+                        <h3 style="text-align: center; color: #004085;">Pensión mensual estimada: ${formatter.format(result.pensionFinalMensual)}</h3>
+                        <hr style="margin: 15px 0;">
+                        <h4>Desglose:</h4>
+                        <ul style="list-style-type: none; padding-left: 0; line-height: 1.6;">
+                            <li><strong>Salario diario promedio:</strong> ${formatter.format(result.salarioDiario)}</li>
+                            <li><strong>Salario mensual considerado:</strong> ${formatter.format(result.salarioMensual)}</li>
+                            <li><strong>Veces salario mínimo:</strong> ${result.vecesSalarioMinimo}</li>
+                            <li><strong>Grupo salarial:</strong> ${result.grupoSalarial}</li>
+                            <li><strong>Cuantía básica:</strong> ${(result.cuantiaBasica * 100).toFixed(2)} %</li>
+                            <li><strong>Incrementos completos:</strong> ${result.incrementosCompletos}</li>
+                            <li><strong>Semanas pendientes:</strong> ${result.semanasPendientes}</li>
+                            <li><strong>Incremento adicional:</strong> ${result.incrementoAdicional}</li>
+                            <li><strong>Incrementos totales:</strong> ${result.incrementosTotales}</li>
+                            <li><strong>Porcentaje por edad:</strong> ${formatPorcentaje(result.porcentajeEdad)}</li>
+                            <li><strong>Pensión base mensual:</strong> ${formatter.format(result.pensionBaseMensual)}</li>
+                            <li><strong>Asignaciones familiares (mensual):</strong> ${formatter.format(result.asignacionesFamiliaresAnuales / 12)}</li>
+                            <li><strong>Ayuda asistencial (mensual):</strong> ${formatter.format(result.ayudaAsistencialAnual / 12)}</li>
+                            <li><strong>Factor adicional:</strong> ${result.factorAdicional}</li>
+                            <li><strong>Pensión mensual final:</strong> ${formatter.format(result.pensionFinalMensual)}</li>
+                        </ul>
+                    `;
+                });
+            }
+
+            const btnLimpiarFormulario = document.getElementById('btn-limpiar-formulario');
+            if (btnLimpiarFormulario) {
+                btnLimpiarFormulario.addEventListener('click', () => {
+                    document.getElementById('salario-minimo').value = '';
+                    document.getElementById('salario-promedio').value = '';
+                    document.getElementById('edad-jubilacion').value = '';
+                    document.getElementById('semanas-cotizadas').value = '';
+                    document.getElementById('tiene-esposa').value = 'no';
+                    document.getElementById('numero-hijos').value = '0';
+                    document.getElementById('tiene-padres').value = 'no';
+                    document.getElementById('esta-soledad').value = 'no';
+                    document.getElementById('tiene-incapacidad').value = 'no';
+
+                    const resultContainer = document.getElementById('resultado-pension');
+                    if(resultContainer) {
+                        resultContainer.style.display = 'none';
+                        resultContainer.innerHTML = '';
+                    }
                 });
             }
 
