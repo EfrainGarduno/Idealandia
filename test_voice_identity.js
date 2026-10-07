@@ -117,6 +117,9 @@ setTimeout(() => {
 
             assert.ok(instructionText.includes('Idealita, la asistente virtual de Idealandia'), 'Should contain correct identity intro');
             assert.ok(instructionText.includes('acompañarlos dentro de Idealandia'), 'Should contain specific purpose');
+            assert.ok(instructionText.includes('NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje'), 'Should contain strict negative command');
+            assert.ok(parsed.setup.generationConfig, 'Setup should have generationConfig');
+            assert.ok(parsed.setup.generationConfig.responseModalities.includes("TEXT"), 'Should request TEXT modality');
 
             console.log('Voice identity test passed successfully.');
             process.exit(0);
