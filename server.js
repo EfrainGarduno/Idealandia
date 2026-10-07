@@ -221,6 +221,106 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+app.get('/api/menu', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        let userId = null;
+
+        if (token) {
+            try {
+                const secret = process.env.AUTH_SECRET;
+                const decoded = jwt.verify(token, secret);
+                userId = decoded.id;
+            } catch (err) {
+                // Invalid or expired token: treat as unauthenticated
+            }
+        }
+
+        // 1. Get all active menu items
+        const [menuItems] = await pool.execute(
+            'SELECT id, nombre, ruta, funcionalidad_id, parent_id, publico, orden, icono FROM menu_items WHERE activo = TRUE ORDER BY parent_id, orden'
+        );
+
+        let allowedFunctionalityIds = new Set();
+
+        // 2. If authenticated, get allowed functionalities based on roles and permissions
+        if (userId) {
+            const query = `
+                SELECT DISTINCT f.id
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id
+                JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
+                JOIN funcionalidades f ON fp.funcionalidad_id = f.id
+                WHERE ur.usuario_id = ?
+            `;
+            const [functionalities] = await pool.execute(query, [userId]);
+            functionalities.forEach(f => allowedFunctionalityIds.add(f.id));
+        }
+
+        // 3. Filter items that user is authorized to see
+        const visibleItemsMap = new Map();
+
+        // First pass: mark explicitly allowed items
+        menuItems.forEach(item => {
+            const isPublic = Boolean(item.publico);
+            const isAuthorizedProtected = !isPublic && item.funcionalidad_id && allowedFunctionalityIds.has(item.funcionalidad_id);
+            const isContainer = item.funcionalidad_id === null;
+
+            if (isPublic || isAuthorizedProtected || isContainer) {
+                visibleItemsMap.set(item.id, { ...item, hijos: [] });
+            }
+        });
+
+        // Second pass: build hierarchy and keep containers only if they have visible children
+        const menuTree = [];
+
+        // Ensure child items are added to parents
+        menuItems.forEach(item => {
+            if (visibleItemsMap.has(item.id)) {
+                const node = visibleItemsMap.get(item.id);
+                if (item.parent_id === null) {
+                    menuTree.push(node);
+                } else {
+                    const parentNode = visibleItemsMap.get(item.parent_id);
+                    if (parentNode) {
+                        parentNode.hijos.push(node);
+                    }
+                }
+            }
+        });
+
+        // Helper function to recursively filter empty containers
+        const filterEmptyContainers = (items) => {
+            return items.filter(item => {
+                if (item.hijos && item.hijos.length > 0) {
+                    item.hijos = filterEmptyContainers(item.hijos);
+                }
+
+                // Keep if it's explicitly public or allowed, OR if it's a container with visible children
+                const isContainer = item.funcionalidad_id === null;
+                const hasVisibleChildren = item.hijos && item.hijos.length > 0;
+
+                // If it's a container, it must have children to be visible
+                if (isContainer) {
+                    return hasVisibleChildren;
+                }
+
+                return true; // Non-containers already passed the explicit check
+            });
+        };
+
+        const finalMenuTree = filterEmptyContainers(menuTree);
+
+        res.status(200).json(finalMenuTree);
+
+    } catch (error) {
+        console.error('Error in /api/menu:', error);
+        res.status(500).json({ error: 'Error interno del servidor al obtener el menú.' });
+    }
+});
+
 app.get('/api/me', async (req, res) => {
     try {
         const token = req.cookies.auth_token;
@@ -258,6 +358,44 @@ app.post('/api/logout', (req, res) => {
         expires: new Date(0) // Expire immediately
     });
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
+});
+
+app.get('/api/admin/check', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const userId = decoded.id;
+
+        // Verify if user has the admin.access permission
+        const query = `
+            SELECT p.nombre
+            FROM usuario_roles ur
+            JOIN roles r ON ur.rol_id = r.id
+            JOIN rol_permisos rp ON r.id = rp.rol_id
+            JOIN permisos p ON rp.permiso_id = p.id
+            WHERE ur.usuario_id = ? AND p.nombre = 'admin.access'
+        `;
+        const [permissions] = await pool.execute(query, [userId]);
+
+        if (permissions.length === 0) {
+            return res.status(403).json({ error: 'Forbidden. No tienes permisos de administrador.' });
+        }
+
+        res.status(200).json({ message: 'Acceso de administrador concedido.' });
+
+    } catch (error) {
+        console.error('Error in /api/admin/check:', error);
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             res.status(401).json({ error: 'Token inválido o expirado.' });
+        } else {
+             res.status(500).json({ error: 'Error interno del servidor.' });
+        }
+    }
 });
 
 app.get('/api/ideas', async (req, res) => {
