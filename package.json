@@ -1,8 +1,7 @@
 {
-  "name": "app",
+  "name": "idealandia",
   "version": "1.0.0",
-  "description": "Proyecto para la creación de un Challenge de Alura Latam, para convertir Monedas con Java",
-  "main": "index.js",
+  "description": "Plataforma Idealandia con asistente Idealita y servicios digitales",
   "scripts": {
     "start": "node server.js",
     "test": "node test.js && node test_pension.js",
@@ -11,16 +10,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EfrainGarduno/ConvertirMonedas.git"
+    "url": "git+https://github.com/EfrainGarduno/Idealandia.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/EfrainGarduno/ConvertirMonedas/issues"
+    "url": "https://github.com/EfrainGarduno/Idealandia/issues"
   },
-  "homepage": "https://github.com/EfrainGarduno/ConvertirMonedas#readme",
+  "homepage": "https://github.com/EfrainGarduno/Idealandia#readme",
   "dependencies": {
     "@google/genai": "^2.22.0",
     "bcrypt": "^6.0.0",
