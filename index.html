@@ -632,6 +632,40 @@
 
                     newLink.addEventListener('click', (e) => {
                          e.preventDefault();
+
+                         const submenuId = newLink.getAttribute('data-submenu');
+
+                         if (submenuId === 'asesoria-pensiones') {
+                             // Show 'Servicios' section
+                             sections.forEach(section => {
+                                 if (section.id === 'servicios') {
+                                     section.style.display = 'flex';
+                                 } else {
+                                     section.style.display = 'none';
+                                 }
+                             });
+
+                             // Show the estimacion form
+                             const formEstimacionLocal = document.getElementById('form-estimacion');
+                             if (formEstimacionLocal) {
+                                 formEstimacionLocal.style.display = 'block';
+                             }
+                         } else {
+                             // For other elements, check if section exists
+                             const targetSection = document.getElementById(submenuId);
+                             if (targetSection && targetSection.classList.contains('content-section')) {
+                                 sections.forEach(section => {
+                                     if (section.id === submenuId) {
+                                         section.style.display = 'flex';
+                                     } else {
+                                         section.style.display = 'none';
+                                     }
+                                 });
+                             } else {
+                                 console.warn('Sección no encontrada para:', submenuId);
+                             }
+                         }
+
                          // Just close sidebar if mobile
                          if (window.innerWidth <= 768 && sidebar) {
                             sidebar.classList.remove('sidebar-open');
@@ -859,25 +893,6 @@
                         console.error('Error durante el registro:', error);
                         showModal('Ocurrió un error al intentar registrarse. Inténtalo de nuevo más tarde.');
                     }
-                });
-            }
-
-            const asesoriaPensionesLink = document.querySelector('a[data-submenu="asesoria-pensiones"]');
-            if (asesoriaPensionesLink && formEstimacion) {
-                asesoriaPensionesLink.addEventListener('click', (e) => {
-                    e.preventDefault();
-
-                    // Show 'Servicios' section
-                    sections.forEach(section => {
-                        if (section.id === 'servicios') {
-                            section.style.display = 'flex';
-                        } else {
-                            section.style.display = 'none';
-                        }
-                    });
-
-                    // Show the estimacion form
-                    formEstimacion.style.display = 'block';
                 });
             }
 
