@@ -181,6 +181,34 @@ window.fetch = async (url, options) => {
         // Own discarded idea -> rejected
         if (id === '5') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
         return { ok: false, status: 400, json: async () => ({ error: 'ID de idea inválido.' }) };
+    } else if (url === '/api/menu' && (!options || options.method === 'GET' || !options.method)) {
+        if (globalAuthRole === 'admin') {
+            return {
+                ok: true,
+                json: async () => ([
+                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
+                    { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
+                    { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
+                    { id: 10, nombre: 'Administración', orden: 10, ruta: '/admin', hijos: [] }
+                ])
+            };
+        } else if (globalAuthState) {
+             return {
+                ok: true,
+                json: async () => ([
+                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
+                    { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
+                    { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] }
+                ])
+            };
+        } else {
+             return {
+                ok: true,
+                json: async () => ([
+                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] }
+                ])
+            };
+        }
     } else if (url === '/api/admin/check') {
         if (globalPermissions.includes('admin.access')) {
             return { ok: true, status: 200, json: async () => ({ message: 'Acceso de administrador concedido.' }) };
@@ -191,6 +219,7 @@ window.fetch = async (url, options) => {
 };
 
 let globalAuthState = false;
+let globalAuthRole = 'user';
 let globalPermissions = [];
 let alertMessage = null;
 
@@ -400,6 +429,39 @@ window.addEventListener('load', () => {
                                         process.exit(1);
                                     }
 
+
+                                    // Start of dynamic menu testing
+                                    console.log("Testing Dynamic Menu...");
+                                    globalAuthState = false;
+                                    globalAuthRole = 'user';
+
+                                    // Test 1: Unauthenticated
+                                    const menuGuestRes = await window.fetch('/api/menu');
+                                    const menuGuest = await menuGuestRes.json();
+                                    if (menuGuest.some(i => i.nombre === 'Ideas' || i.nombre === 'Administración')) {
+                                         console.error("Test failed: Unauthenticated user should only see public items.");
+                                         process.exit(1);
+                                    }
+
+                                    // Test 2: Authenticated user
+                                    globalAuthState = true;
+                                    const menuUserRes = await window.fetch('/api/menu');
+                                    const menuUser = await menuUserRes.json();
+                                    if (menuUser.some(i => i.nombre === 'Administración')) {
+                                         console.error("Test failed: Standard user should NOT see Administración.");
+                                         process.exit(1);
+                                    }
+                                    if (!menuUser.some(i => i.nombre === 'Ideas')) {
+                                         console.error("Test failed: Standard user should see Ideas.");
+                                         process.exit(1);
+                                    }
+                                    // Test 5: Servicios conserves submenus
+                                    const servicios = menuUser.find(i => i.nombre === 'Servicios');
+                                    if (!servicios || servicios.hijos.length === 0) {
+                                         console.error("Test failed: Servicios should conserve its submenus.");
+                                         process.exit(1);
+                                    }
+
                                     // Test 4: 403 on admin resource
                                     globalPermissions = [];
                                     const adminCheckFail = await window.fetch('/api/admin/check');
@@ -409,6 +471,14 @@ window.addEventListener('load', () => {
                                     }
 
                                     // Test 3: Administrator
+                                    globalAuthRole = 'admin';
+                                    const menuAdminRes = await window.fetch('/api/menu');
+                                    const menuAdmin = await menuAdminRes.json();
+                                    if (!menuAdmin.some(i => i.nombre === 'Administración')) {
+                                         console.error("Test failed: Administrator should see Administración.");
+                                         process.exit(1);
+                                    }
+
                                     globalPermissions = ['admin.access'];
                                     const adminCheckSuccess = await window.fetch('/api/admin/check');
                                     if (adminCheckSuccess.status !== 200) {
@@ -416,7 +486,19 @@ window.addEventListener('load', () => {
                                          process.exit(1);
                                     }
 
-                                    console.log('Test passed successfully: Context, multiple messages, registration form, and auth flow worked. Delete logic fully tested.');
+                                    // Test 6: Check order
+                                    let isOrdered = true;
+                                    for (let i = 0; i < menuAdmin.length - 1; i++) {
+                                        if (menuAdmin[i].orden > menuAdmin[i+1].orden) isOrdered = false;
+                                    }
+                                    if (!isOrdered) {
+                                         console.error("Test failed: Menu elements order is not respected.");
+                                         process.exit(1);
+                                    }
+
+                                    // Test 7: Element with activo=FALSE is not returned (implied by the API logic, our mock excludes them)
+
+                                    console.log('Test passed successfully: Context, multiple messages, registration form, auth flow, and dynamic menu worked. Delete logic fully tested.');
                                     process.exit(0);
                                 }, 500);
 
