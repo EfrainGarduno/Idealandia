@@ -221,7 +221,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-
 app.get('/api/menu', async (req, res) => {
     try {
         const token = req.cookies.auth_token;
@@ -322,8 +321,6 @@ app.get('/api/menu', async (req, res) => {
     }
 });
 
-
-
 app.get('/api/me', async (req, res) => {
     try {
         const token = req.cookies.auth_token;
@@ -382,10 +379,7 @@ app.get('/api/admin/check', async (req, res) => {
             JOIN rol_permisos rp ON r.id = rp.rol_id
             JOIN permisos p ON rp.permiso_id = p.id
 
-
-
             WHERE ur.usuario_id = ? AND p.codigo = 'admin.access'
-
         `;
         const [permissions] = await pool.execute(query, [userId]);
 
