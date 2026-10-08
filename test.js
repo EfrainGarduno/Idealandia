@@ -181,11 +181,17 @@ window.fetch = async (url, options) => {
         // Own discarded idea -> rejected
         if (id === '5') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
         return { ok: false, status: 400, json: async () => ({ error: 'ID de idea inválido.' }) };
+    } else if (url === '/api/admin/check') {
+        if (globalPermissions.includes('admin.access')) {
+            return { ok: true, status: 200, json: async () => ({ message: 'Acceso de administrador concedido.' }) };
+        }
+        return { ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) };
     }
     return { ok: false, status: 404 };
 };
 
 let globalAuthState = false;
+let globalPermissions = [];
 let alertMessage = null;
 
 window.showModal = (msg) => { alertMessage = msg; return Promise.resolve(true); };
@@ -392,6 +398,22 @@ window.addEventListener('load', () => {
                                     if (deleteResUnauth.status !== 401) {
                                         console.error('Test failed: Unauthenticated user should NOT be able to delete ideas.');
                                         process.exit(1);
+                                    }
+
+                                    // Test 4: 403 on admin resource
+                                    globalPermissions = [];
+                                    const adminCheckFail = await window.fetch('/api/admin/check');
+                                    if (adminCheckFail.status !== 403) {
+                                         console.error("Test failed: User without admin.access should get 403 on admin resource.");
+                                         process.exit(1);
+                                    }
+
+                                    // Test 3: Administrator
+                                    globalPermissions = ['admin.access'];
+                                    const adminCheckSuccess = await window.fetch('/api/admin/check');
+                                    if (adminCheckSuccess.status !== 200) {
+                                         console.error("Test failed: User with admin.access should get 200 on admin resource.");
+                                         process.exit(1);
                                     }
 
                                     console.log('Test passed successfully: Context, multiple messages, registration form, and auth flow worked. Delete logic fully tested.');

@@ -260,6 +260,44 @@ app.post('/api/logout', (req, res) => {
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
 
+app.get('/api/admin/check', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const userId = decoded.id;
+
+        // Verify if user has the admin.access permission
+        const query = `
+            SELECT p.nombre
+            FROM usuario_roles ur
+            JOIN roles r ON ur.rol_id = r.id
+            JOIN rol_permisos rp ON r.id = rp.rol_id
+            JOIN permisos p ON rp.permiso_id = p.id
+            WHERE ur.usuario_id = ? AND p.codigo = 'admin.access'
+        `;
+        const [permissions] = await pool.execute(query, [userId]);
+
+        if (permissions.length === 0) {
+            return res.status(403).json({ error: 'Forbidden. No tienes permisos de administrador.' });
+        }
+
+        res.status(200).json({ message: 'Acceso de administrador concedido.' });
+
+    } catch (error) {
+        console.error('Error in /api/admin/check:', error);
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+             res.status(401).json({ error: 'Token inválido o expirado.' });
+        } else {
+             res.status(500).json({ error: 'Error interno del servidor.' });
+        }
+    }
+});
+
 app.get('/api/ideas', async (req, res) => {
     try {
         const token = req.cookies.auth_token;
