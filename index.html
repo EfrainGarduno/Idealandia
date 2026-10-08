@@ -34,23 +34,8 @@
             <span class="logo-text">Idealandia</span>
         </div>
         <nav id="main-menu">
-            <ul>
-                <li><a href="#" data-section="inicio"><i class="fas fa-home"></i> Inicio</a></li>
-                <li><a href="#" data-section="ideas"><i class="fas fa-lightbulb"></i> Ideas</a></li>
-                <li>
-                    <a href="#" id="menu-servicios-link"><i class="fas fa-concierge-bell"></i> Servicios</a>
-                    <ul id="submenu-servicios" style="display: none; list-style-type: none; padding-left: 20px; font-size: 0.9em;">
-                        <li><a href="#" data-submenu="asesorias-financieras">Asesorías Financieras</a></li>
-                        <li><a href="#" data-submenu="asesoria-pensiones">Asesoría de Pensiones</a></li>
-                        <li><a href="#" data-submenu="ideas-innovadoras">Ideas Innovadoras</a></li>
-                        <li><a href="#" data-submenu="emprendimientos">Emprendimientos</a></li>
-                        <li><a href="#" data-submenu="clases-ingles">Clases de Inglés</a></li>
-                        <li><a href="#" data-submenu="perfilamiento">Perfilamiento</a></li>
-                    </ul>
-                </li>
-                <li><a href="#" data-section="gratis"><i class="fas fa-gift"></i> Recursos Gratis</a></li>
-                <li><a href="#" data-section="contacto"><i class="fas fa-envelope"></i> Contáctanos</a></li>
-                <li><a href="#" data-section="acerca"><i class="fas fa-info-circle"></i> Acerca de</a></li>
+            <ul id="dynamic-menu-list">
+                <!-- Menu will be generated here -->
             </ul>
             <ul style="margin-top: auto; padding-top: 20px; list-style-type: none; padding-left: 0; display: flex; flex-direction: column; gap: 10px;">
                 <li><a href="#" data-section="chat"><i class="fas fa-comments"></i> CHAT</a></li>
@@ -456,6 +441,86 @@
         };
 
 
+            async function buildMenu() {
+                try {
+                    const response = await fetch('/api/menu');
+                    if (!response.ok) throw new Error('Error al obtener el menú');
+                    const menuData = await response.json();
+
+                    const menuList = document.getElementById('dynamic-menu-list');
+                    if (!menuList) return;
+
+                    menuList.innerHTML = '';
+
+                    const iconsMap = {
+                        'Inicio': 'fa-home',
+                        'Ideas': 'fa-lightbulb',
+                        'Servicios': 'fa-concierge-bell',
+                        'Recursos Gratis': 'fa-gift',
+                        'Contáctanos': 'fa-envelope',
+                        'Acerca de': 'fa-info-circle',
+                        'Administración': 'fa-cogs'
+                    };
+
+                    // Maps exact names from DB to old data-section names to preserve functionality
+                    const sectionMap = {
+                        'Inicio': 'inicio',
+                        'Ideas': 'ideas',
+                        'Recursos Gratis': 'gratis',
+                        'Contáctanos': 'contacto',
+                        'Acerca de': 'acerca',
+                        'Administración': 'admin',
+                        'Asesorías Financieras': 'asesorias-financieras',
+                        'Asesoría de Pensiones': 'asesoria-pensiones',
+                        'Ideas Innovadoras': 'ideas-innovadoras',
+                        'Emprendimientos': 'emprendimientos',
+                        'Clases de Inglés': 'clases-ingles',
+                        'Perfilamiento': 'perfilamiento'
+                    };
+
+                    menuData.forEach(item => {
+                        const li = document.createElement('li');
+                        const a = document.createElement('a');
+                        a.href = '#';
+
+                        const iconClass = iconsMap[item.nombre] || 'fa-circle';
+                        a.innerHTML = `<i class="fas ${iconClass}"></i> ${item.nombre}`;
+
+                        if (item.hijos && item.hijos.length > 0) {
+                            a.id = `menu-${item.nombre.toLowerCase().replace(/\s+/g, '-')}-link`;
+                            li.appendChild(a);
+
+                            const ul = document.createElement('ul');
+                            ul.id = `submenu-${item.nombre.toLowerCase().replace(/\s+/g, '-')}`;
+                            ul.style.display = 'none';
+                            ul.style.listStyleType = 'none';
+                            ul.style.paddingLeft = '20px';
+                            ul.style.fontSize = '0.9em';
+
+                            item.hijos.forEach(hijo => {
+                                const subLi = document.createElement('li');
+                                const subA = document.createElement('a');
+                                subA.href = '#';
+                                subA.textContent = hijo.nombre;
+                                subA.dataset.submenu = sectionMap[hijo.nombre] || hijo.nombre.toLowerCase().replace(/\s+/g, '-');
+                                subLi.appendChild(subA);
+                                ul.appendChild(subLi);
+                            });
+                            li.appendChild(ul);
+                        } else {
+                            a.dataset.section = sectionMap[item.nombre] || item.nombre.toLowerCase().replace(/\s+/g, '-');
+                            li.appendChild(a);
+                        }
+                        menuList.appendChild(li);
+                    });
+
+                    // Re-attach menu event listeners after rebuilding the DOM
+                    attachMenuEvents();
+                } catch (error) {
+                    console.error('Error al construir el menú:', error);
+                }
+            }
+
             async function checkAuthStatus() {
                 try {
                     const response = await fetch('/api/me');
@@ -470,6 +535,10 @@
                         document.getElementById('auth-container-user').style.display = 'none';
                         document.getElementById('user-greeting').textContent = '';
                     }
+
+                    // Build menu after determining auth status
+                    await buildMenu();
+
                 } catch (error) {
                     console.error('Error checking auth status:', error);
                 }
@@ -495,22 +564,84 @@
                 });
             }
 
-            // Menu logic
-            const menuLinks = document.querySelectorAll('a[data-section]');
-            const sections = document.querySelectorAll('.content-section');
-            const serviciosLink = document.getElementById('menu-servicios-link');
-            const submenuServicios = document.getElementById('submenu-servicios');
+            // Menu logic wrapped in a function to re-attach after dynamic render
+            function attachMenuEvents() {
+                const menuLinks = document.querySelectorAll('a[data-section]');
+                const sections = document.querySelectorAll('.content-section');
+                const serviciosLink = document.getElementById('menu-servicios-link');
+                const submenuServicios = document.getElementById('submenu-servicios');
+                const sidebar = document.getElementById('sidebar');
 
-            if (serviciosLink && submenuServicios) {
-                serviciosLink.addEventListener('click', (e) => {
-                    // Prevent default action is handled by the loop below but we also want to toggle the submenu
-                    if (submenuServicios.style.display === 'none') {
-                        submenuServicios.style.display = 'block';
-                    } else {
-                        submenuServicios.style.display = 'none';
+                if (serviciosLink && submenuServicios) {
+                    // Remove existing listeners if any (simplistic approach: cloning)
+                    const newServiciosLink = serviciosLink.cloneNode(true);
+                    if (serviciosLink.parentNode) {
+                        serviciosLink.parentNode.replaceChild(newServiciosLink, serviciosLink);
                     }
+
+                    newServiciosLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (submenuServicios.style.display === 'none') {
+                            submenuServicios.style.display = 'block';
+                        } else {
+                            submenuServicios.style.display = 'none';
+                        }
+                    });
+                }
+
+                menuLinks.forEach(link => {
+                    // Remove existing listeners
+                    const newLink = link.cloneNode(true);
+                    if (link.parentNode) {
+                        link.parentNode.replaceChild(newLink, link);
+                    }
+
+                    newLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const targetId = newLink.getAttribute('data-section');
+
+                        sections.forEach(section => {
+                            if (section.id === targetId) {
+                                section.style.display = 'flex';
+                                if (targetId === 'chat') {
+                                    section.classList.remove('animate-chat');
+                                    void section.offsetWidth; // trigger reflow
+                                    section.classList.add('animate-chat');
+                                }
+                                if (targetId === 'ideas') {
+                                    if (typeof fetchAndDisplayIdeas === 'function') fetchAndDisplayIdeas();
+                                }
+                            } else {
+                                section.style.display = 'none';
+                            }
+                        });
+
+                        // Close sidebar on mobile after clicking a link
+                        if (window.innerWidth <= 768 && sidebar) {
+                            sidebar.classList.remove('sidebar-open');
+                        }
+                    });
+                });
+
+                const submenuLinks = document.querySelectorAll('a[data-submenu]');
+                submenuLinks.forEach(link => {
+                    const newLink = link.cloneNode(true);
+                    if (link.parentNode) {
+                        link.parentNode.replaceChild(newLink, link);
+                    }
+
+                    newLink.addEventListener('click', (e) => {
+                         e.preventDefault();
+                         // Just close sidebar if mobile
+                         if (window.innerWidth <= 768 && sidebar) {
+                            sidebar.classList.remove('sidebar-open');
+                         }
+                    });
                 });
             }
+
+            // Attach initially for any static elements (like chat)
+            attachMenuEvents();
 
             // Pension form logic
             const btnEstimacion = document.getElementById('btn-estimacion');
@@ -930,29 +1061,6 @@
                     }
                 });
             }
-
-            menuLinks.forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const targetId = link.getAttribute('data-section');
-
-                    sections.forEach(section => {
-                        if (section.id === targetId) {
-                            section.style.display = 'flex';
-                            if (targetId === 'chat') {
-                                section.classList.remove('animate-chat');
-                                void section.offsetWidth; // trigger reflow
-                                section.classList.add('animate-chat');
-                            }
-                            if (targetId === 'ideas') {
-                                fetchAndDisplayIdeas();
-                            }
-                        } else {
-                            section.style.display = 'none';
-                        }
-                    });
-                });
-            });
 
             // Chat logic
             const sendBtn = document.getElementById('send-btn');
@@ -1402,14 +1510,6 @@
                 });
             }
 
-            // Close sidebar when a menu link is clicked on mobile
-            menuLinks.forEach(link => {
-                link.addEventListener('click', () => {
-                    if (window.innerWidth <= 768) {
-                        sidebar.classList.remove('sidebar-open');
-                    }
-                });
-            });
 
         });
     </script>
