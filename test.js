@@ -189,6 +189,9 @@ window.fetch = async (url, options) => {
                     { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
                     { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
                     { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
+                    { id: 4, nombre: 'Recursos Gratis', orden: 4, hijos: [] },
+                    { id: 5, nombre: 'Contáctanos', orden: 5, hijos: [] },
+                    { id: 14, nombre: 'Acerca de', orden: 6, hijos: [] },
                     { id: 10, nombre: 'Administración', orden: 10, ruta: '/admin', hijos: [] }
                 ])
             };
@@ -198,14 +201,20 @@ window.fetch = async (url, options) => {
                 json: async () => ([
                     { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
                     { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                    { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] }
+                    { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
+                    { id: 4, nombre: 'Recursos Gratis', orden: 4, hijos: [] },
+                    { id: 5, nombre: 'Contáctanos', orden: 5, hijos: [] },
+                    { id: 14, nombre: 'Acerca de', orden: 6, hijos: [] }
                 ])
             };
         } else {
              return {
                 ok: true,
                 json: async () => ([
-                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] }
+                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
+                    { id: 4, nombre: 'Recursos Gratis', orden: 4, hijos: [] },
+                    { id: 5, nombre: 'Contáctanos', orden: 5, hijos: [] },
+                    { id: 14, nombre: 'Acerca de', orden: 6, hijos: [] }
                 ])
             };
         }
@@ -456,17 +465,26 @@ window.addEventListener('load', () => {
                                                         { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
                                                         { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
                                                         { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
+                                                        { id: 4, nombre: 'Recursos Gratis', orden: 4, hijos: [] },
+                                                        { id: 5, nombre: 'Contáctanos', orden: 5, hijos: [] },
+                                                        { id: 14, nombre: 'Acerca de', orden: 6, hijos: [] },
                                                         { id: 10, nombre: 'Administración', orden: 10, ruta: '/admin', hijos: [] }
                                                     ])};
                                                 } else if (authState) {
                                                     return { ok: true, json: async () => ([
                                                         { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
                                                         { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                                                        { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] }
+                                                        { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
+                                                        { id: 4, nombre: 'Recursos Gratis', orden: 4, hijos: [] },
+                                                        { id: 5, nombre: 'Contáctanos', orden: 5, hijos: [] },
+                                                        { id: 14, nombre: 'Acerca de', orden: 6, hijos: [] }
                                                     ])};
                                                 } else {
                                                     return { ok: true, json: async () => ([
-                                                        { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] }
+                                                        { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
+                                                        { id: 4, nombre: 'Recursos Gratis', orden: 4, hijos: [] },
+                                                        { id: 5, nombre: 'Contáctanos', orden: 5, hijos: [] },
+                                                        { id: 14, nombre: 'Acerca de', orden: 6, hijos: [] }
                                                     ])};
                                                 }
                                             }
@@ -508,7 +526,7 @@ window.addEventListener('load', () => {
 
                                     // Test 1b: Unauthenticated JSDOM
                                     const guestLinks = await testJSDOM(false, []);
-                                    assertLinks(guestLinks, ['Inicio'], ['Ideas', 'Administración'], 'Unauthenticated JSDOM');
+                                    assertLinks(guestLinks, ['Inicio', 'Acerca de'], ['Ideas', 'Administración', 'Idealita'], 'Unauthenticated JSDOM');
 
                                     // Test 2: Authenticated user Backend
                                     globalAuthState = true;
@@ -531,7 +549,7 @@ window.addEventListener('load', () => {
 
                                     // Test 2b: Authenticated user JSDOM
                                     const userLinks = await testJSDOM(true, []);
-                                    assertLinks(userLinks, ['Inicio', 'Ideas'], ['Administración'], 'Standard User JSDOM');
+                                    assertLinks(userLinks, ['Inicio', 'Ideas', 'Acerca de'], ['Administración', 'Idealita'], 'Standard User JSDOM');
 
                                     // Test 4: 403 on admin resource
                                     globalPermissions = [];
@@ -552,7 +570,7 @@ window.addEventListener('load', () => {
 
                                     // Test 3b: Administrator JSDOM
                                     const adminLinks = await testJSDOM(true, ['admin.access']);
-                                    assertLinks(adminLinks, ['Inicio', 'Ideas', 'Administración'], [], 'Administrator JSDOM');
+                                    assertLinks(adminLinks, ['Inicio', 'Ideas', 'Acerca de', 'Administración'], ['Idealita'], 'Administrator JSDOM');
 
                                     // Verify DOM hierarchy structure directly for Servicios
                                     if (!userLinks.some(link => link.includes('Servicios'))) {

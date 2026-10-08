@@ -221,6 +221,80 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+
+app.get('/api/menu', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        let userId = null;
+
+        if (token) {
+            try {
+                const secret = process.env.AUTH_SECRET;
+                const decoded = jwt.verify(token, secret);
+                userId = decoded.id;
+            } catch (err) {
+                // Invalid or expired token: treat as unauthenticated
+            }
+        }
+
+        const [menuItems] = await pool.execute(
+            'SELECT id, nombre, funcionalidad_id, parent_id, publico, orden FROM menu_items WHERE activo = TRUE ORDER BY parent_id, orden'
+        );
+
+        let allowedFunctionalityIds = new Set();
+        if (userId) {
+            const query = `
+                SELECT fp.funcionalidad_id
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id
+                JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
+                WHERE ur.usuario_id = ?
+            `;
+            const [allowed] = await pool.execute(query, [userId]);
+            allowed.forEach(row => allowedFunctionalityIds.add(row.funcionalidad_id));
+        }
+
+        const buildTree = (parentId = null) => {
+            return menuItems
+                .filter(item => item.parent_id === parentId)
+                .map(item => ({
+                    ...item,
+                    hijos: buildTree(item.id)
+                }));
+        };
+        const menuTree = buildTree();
+
+        const filterEmptyContainers = (nodes) => {
+            return nodes.filter(item => {
+                if (item.hijos && item.hijos.length > 0) {
+                    item.hijos = filterEmptyContainers(item.hijos);
+                }
+
+                if (item.publico === 1) return true;
+
+                if (item.funcionalidad_id !== null) {
+                    return allowedFunctionalityIds.has(item.funcionalidad_id);
+                }
+
+                const isContainer = item.funcionalidad_id === null;
+                const hasVisibleChildren = item.hijos && item.hijos.length > 0;
+                if (isContainer) return hasVisibleChildren;
+
+                return false;
+            });
+        };
+
+        const finalMenuTree = filterEmptyContainers(menuTree);
+        res.status(200).json(finalMenuTree);
+
+    } catch (error) {
+        console.error('Error in /api/menu:', error);
+        res.status(500).json({ error: 'Error interno del servidor al obtener el menú.' });
+    }
+});
+
 app.get('/api/me', async (req, res) => {
     try {
         const token = req.cookies.auth_token;
