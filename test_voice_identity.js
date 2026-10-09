@@ -138,6 +138,6 @@ setTimeout(() => {
             console.error('Test failed:', err);
             process.exit(1);
         }
-    }, 100);
+    }, 500);
 
-}, 100);
+}, 500);

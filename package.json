@@ -4,7 +4,7 @@
   "description": "Plataforma Idealandia con asistente Idealita y servicios digitales",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js && node test_pension.js && node test_voice_identity.js",
+    "test": "node test.js && node test_pension.js && node test_voice_identity.js && node test_menu_api_integration.js",
     "test:responsive": "node verify_viewports.js",
     "start:prod": "./scripts/start-idealandia.sh"
   },

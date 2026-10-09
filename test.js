@@ -531,7 +531,7 @@ window.addEventListener('load', () => {
 
                                     // Test 1b: Unauthenticated JSDOM
                                     const guestLinks = await testJSDOM(false, []);
-                                    assertLinks(guestLinks, ['Inicio', 'Ideas', 'Acerca de'], ['Administración', 'Idealita'], 'Unauthenticated JSDOM');
+                                    assertLinks(guestLinks, ['Inicio', 'Ideas', 'Servicios', 'Recursos Gratis', 'Contáctanos', 'Acerca de'], ['Administración', 'Idealita'], 'Unauthenticated JSDOM');
 
                                     // Test 2: Authenticated user Backend
                                     globalAuthState = true;
@@ -554,7 +554,7 @@ window.addEventListener('load', () => {
 
                                     // Test 2b: Authenticated user JSDOM
                                     const userLinks = await testJSDOM(true, []);
-                                    assertLinks(userLinks, ['Inicio', 'Ideas', 'Acerca de'], ['Administración', 'Idealita'], 'Standard User JSDOM');
+                                    assertLinks(userLinks, ['Inicio', 'Ideas', 'Servicios', 'Recursos Gratis', 'Contáctanos', 'Acerca de'], ['Administración', 'Idealita'], 'Standard User JSDOM');
 
                                     // Test 4: 403 on admin resource
                                     globalPermissions = [];
@@ -575,7 +575,7 @@ window.addEventListener('load', () => {
 
                                     // Test 3b: Administrator JSDOM
                                     const adminLinks = await testJSDOM(true, ['admin.access']);
-                                    assertLinks(adminLinks, ['Inicio', 'Ideas', 'Administración', 'Acerca de'], ['Idealita'], 'Administrator JSDOM');
+                                    assertLinks(adminLinks, ['Inicio', 'Ideas', 'Servicios', 'Recursos Gratis', 'Contáctanos', 'Acerca de', 'Administración'], ['Idealita'], 'Administrator JSDOM');
 
                                     // Verify DOM hierarchy structure directly for Servicios
                                     if (!userLinks.some(link => link.includes('Servicios'))) {
