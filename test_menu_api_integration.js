@@ -32,6 +32,11 @@ mysql.createPool = () => ({
         if (query.includes('FROM menu_items')) {
             return [mockMenuItems];
         } else if (query.includes('FROM usuario_roles')) {
+
+        if (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE') || !query.includes('f.activo = TRUE')) {
+            throw new Error("Security SQL constraint missing: The authorization query must validate that roles, permissions and functionalities are active.");
+        }
+
             // return allowed permissions
             return [mockAllowedFunctionalities.map(id => ({ funcionalidad_id: id }))];
         } else if (query.includes('FROM usuarios')) {
@@ -92,6 +97,33 @@ async function testMenuAPI() {
         console.log("Unauthenticated check passed: Initial public items, Servicios and submenus present. Restricted items hidden.");
 
 
+        // Test 1b: Invalid Token
+        let invalidTokenRes = await makeRequest('invalid-token.string');
+        let invalidMenu = invalidTokenRes.data;
+        if (!invalidMenu.some(i => i.nombre === 'Inicio') || invalidMenu.some(i => i.nombre === 'Administración')) {
+            throw new Error("Invalid token should be treated as guest");
+        }
+        console.log("Invalid token check passed.");
+
+        // Test 1c: Expired Token
+        const expiredToken = jwt.sign({ id: 1, usuario: 'test' }, process.env.AUTH_SECRET, { expiresIn: '-1s' });
+        let expiredTokenRes = await makeRequest(expiredToken);
+        let expiredMenu = expiredTokenRes.data;
+        if (!expiredMenu.some(i => i.nombre === 'Inicio') || expiredMenu.some(i => i.nombre === 'Administración')) {
+            throw new Error("Expired token should be treated as guest");
+        }
+        console.log("Expired token check passed.");
+
+        // Test 1d: Unauthenticated doesn't get inactive permissions
+        mockAllowedFunctionalities = [8]; // Simulating DB returned a permission, but no token provided
+        let unauthTokenRes = await makeRequest(null);
+        let unauthMenu = unauthTokenRes.data;
+        if (unauthMenu.some(i => i.nombre === 'Administración')) {
+            throw new Error("Guest with empty token should not use DB permissions");
+        }
+        console.log("Unauthenticated permission isolation check passed.");
+
+
         // Test 2: Authenticated with specific permission
         const token = jwt.sign({ id: 1, usuario: 'test' }, process.env.AUTH_SECRET);
         mockAllowedFunctionalities = [999]; // Give access to Hijo Privado
@@ -116,6 +148,17 @@ async function testMenuAPI() {
         if (!menu.some(i => i.nombre === 'Administración')) throw new Error("Should see Administración with permission");
 
         console.log("Admin check passed.");
+
+        // Test 4: Inactive Roles/Permissions/Functionalities
+        // This is tested by the mock verifying the SQL query string for 'activo = TRUE' clauses.
+        // If the query has them, the DB naturally filters them out.
+        // We simulate the DB returning nothing because the item was inactive.
+        mockAllowedFunctionalities = [];
+        res = await makeRequest(token);
+        menu = res.data;
+        if (menu.some(i => i.nombre === 'Administración')) throw new Error("Inactive functionality should not be visible.");
+        console.log("Inactive permissions SQL and visibility check passed.");
+
         console.log("All integration tests passed successfully.");
         // Terminate the process to close the server
         process.exit(0);

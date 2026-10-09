@@ -246,10 +246,11 @@ app.get('/api/menu', async (req, res) => {
             const query = `
                 SELECT fp.funcionalidad_id
                 FROM usuario_roles ur
-                JOIN roles r ON ur.rol_id = r.id
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
                 JOIN rol_permisos rp ON r.id = rp.rol_id
-                JOIN permisos p ON rp.permiso_id = p.id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
                 JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
+                JOIN funcionalidades f ON fp.funcionalidad_id = f.id AND f.activo = TRUE
                 WHERE ur.usuario_id = ?
             `;
             const [allowed] = await pool.execute(query, [userId]);
