@@ -266,21 +266,25 @@ app.get('/api/menu', async (req, res) => {
         };
         const menuTree = buildTree();
 
-        const filterEmptyContainers = (nodes) => {
+        const containerIds = new Set(menuItems.filter(item => item.parent_id !== null).map(item => item.parent_id));
+
+                const filterEmptyContainers = (nodes) => {
             return nodes.filter(item => {
                 if (item.hijos && item.hijos.length > 0) {
                     item.hijos = filterEmptyContainers(item.hijos);
                 }
+
+                const isContainer = containerIds.has(item.id);
+                const hasVisibleChildren = item.hijos && item.hijos.length > 0;
+
+                // If it's a container, it must have visible children, even if publico = 1
+                if (isContainer) return hasVisibleChildren;
 
                 if (item.publico === 1) return true;
 
                 if (item.funcionalidad_id !== null) {
                     return allowedFunctionalityIds.has(item.funcionalidad_id);
                 }
-
-                const isContainer = item.funcionalidad_id === null;
-                const hasVisibleChildren = item.hijos && item.hijos.length > 0;
-                if (isContainer) return hasVisibleChildren;
 
                 return false;
             });
