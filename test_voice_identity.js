@@ -26,6 +26,17 @@ window.fetch = async (url) => {
             json: async () => ({ token: 'mock-token' })
         };
     }
+    if (url === '/api/menu') {
+        return {
+            ok: true,
+            json: async () => ([
+                { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] }
+            ])
+        };
+    }
+    if (url === '/api/me') {
+        return { ok: false, status: 401 };
+    }
     return { ok: false, status: 404 };
 };
 
@@ -127,6 +138,6 @@ setTimeout(() => {
             console.error('Test failed:', err);
             process.exit(1);
         }
-    }, 100);
+    }, 500);
 
-}, 100);
+}, 500);

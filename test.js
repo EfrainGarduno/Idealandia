@@ -182,33 +182,7 @@ window.fetch = async (url, options) => {
         if (id === '5') return { ok: false, status: 403, json: async () => ({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' }) };
         return { ok: false, status: 400, json: async () => ({ error: 'ID de idea inválido.' }) };
     } else if (url === '/api/menu' && (!options || options.method === 'GET' || !options.method)) {
-        if (globalPermissions.includes('admin.access')) {
-            return {
-                ok: true,
-                json: async () => ([
-                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
-                    { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                    { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
-                    { id: 10, nombre: 'Administración', orden: 10, ruta: '/admin', hijos: [] }
-                ])
-            };
-        } else if (globalAuthState) {
-             return {
-                ok: true,
-                json: async () => ([
-                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
-                    { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                    { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] }
-                ])
-            };
-        } else {
-             return {
-                ok: true,
-                json: async () => ([
-                    { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] }
-                ])
-            };
-        }
+        return { ok: true, json: async () => simulateBackendMenuApi(globalPermissions, globalAuthState) };
     } else if (url === '/api/admin/check') {
         if (globalPermissions.includes('admin.access')) {
             return { ok: true, status: 200, json: async () => ({ message: 'Acceso de administrador concedido.' }) };
@@ -216,6 +190,72 @@ window.fetch = async (url, options) => {
         return { ok: false, status: 403, json: async () => ({ error: 'Forbidden' }) };
     }
     return { ok: false, status: 404 };
+};
+
+
+const simulateBackendMenuApi = (permissions, authState) => {
+    const menuItems = [
+        { id: 1, nombre: 'Inicio', funcionalidad_id: 1, parent_id: null, publico: 1, orden: 1 },
+        { id: 2, nombre: 'Ideas', funcionalidad_id: 2, parent_id: null, publico: 1, orden: 2 },
+        { id: 3, nombre: 'Servicios', funcionalidad_id: null, parent_id: null, publico: 1, orden: 3 },
+        { id: 16, nombre: 'Asesorías Financieras', funcionalidad_id: 9, parent_id: 3, publico: 1, orden: 1 },
+        { id: 17, nombre: 'Asesoría de Pensiones', funcionalidad_id: 10, parent_id: 3, publico: 1, orden: 2 },
+        { id: 18, nombre: 'Ideas Innovadoras', funcionalidad_id: 11, parent_id: 3, publico: 1, orden: 3 },
+        { id: 19, nombre: 'Emprendimientos', funcionalidad_id: 12, parent_id: 3, publico: 1, orden: 4 },
+        { id: 20, nombre: 'Clases de Inglés', funcionalidad_id: 13, parent_id: 3, publico: 1, orden: 5 },
+        { id: 21, nombre: 'Perfilamiento', funcionalidad_id: 14, parent_id: 3, publico: 1, orden: 6 },
+        { id: 12, nombre: 'Recursos Gratis', funcionalidad_id: 15, parent_id: null, publico: 1, orden: 4 },
+        { id: 13, nombre: 'Contáctanos', funcionalidad_id: 16, parent_id: null, publico: 1, orden: 5 },
+        { id: 14, nombre: 'Acerca de', funcionalidad_id: null, parent_id: null, publico: 1, orden: 6 },
+        { id: 15, nombre: 'Administración', funcionalidad_id: 8, parent_id: null, publico: 0, orden: 7 },
+        { id: 99, nombre: 'Contenedor Privado Test', funcionalidad_id: null, parent_id: null, publico: 1, orden: 8 },
+        { id: 100, nombre: 'Hijo Privado', funcionalidad_id: 999, parent_id: 99, publico: 0, orden: 1 }
+    ];
+
+    let allowedFunctionalityIds = new Set();
+    if (authState) {
+        if (permissions.includes('admin.access')) {
+            allowedFunctionalityIds.add(8);
+        }
+        if (permissions.includes('test.access')) {
+            allowedFunctionalityIds.add(999);
+        }
+    }
+
+    const buildTree = (parentId = null) => {
+        return menuItems
+            .filter(item => item.parent_id === parentId)
+            .map(item => ({
+                ...item,
+                hijos: buildTree(item.id)
+            }));
+    };
+    const menuTree = buildTree();
+
+    const containerIds = new Set(menuItems.filter(item => item.parent_id !== null).map(item => item.parent_id));
+
+    const filterEmptyContainers = (nodes) => {
+        return nodes.filter(item => {
+            if (item.hijos && item.hijos.length > 0) {
+                item.hijos = filterEmptyContainers(item.hijos);
+            }
+
+            const isContainer = containerIds.has(item.id);
+            const hasVisibleChildren = item.hijos && item.hijos.length > 0;
+
+            if (isContainer) return hasVisibleChildren;
+
+            if (item.publico === 1) return true;
+
+            if (item.funcionalidad_id !== null) {
+                return allowedFunctionalityIds.has(item.funcionalidad_id);
+            }
+
+            return false;
+        });
+    };
+
+    return filterEmptyContainers(menuTree);
 };
 
 let globalAuthState = false;
@@ -451,24 +491,7 @@ window.addEventListener('load', () => {
                                                 if (authState) return { ok: true, json: async () => ({ user: { id: 1 } }) };
                                                 return { ok: false, status: 401 };
                                             } else if (url === '/api/menu') {
-                                                if (permissions.includes('admin.access')) {
-                                                    return { ok: true, json: async () => ([
-                                                        { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
-                                                        { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                                                        { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
-                                                        { id: 10, nombre: 'Administración', orden: 10, ruta: '/admin', hijos: [] }
-                                                    ])};
-                                                } else if (authState) {
-                                                    return { ok: true, json: async () => ([
-                                                        { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
-                                                        { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                                                        { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] }
-                                                    ])};
-                                                } else {
-                                                    return { ok: true, json: async () => ([
-                                                        { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] }
-                                                    ])};
-                                                }
+                                                return { ok: true, json: async () => simulateBackendMenuApi(permissions, authState) };
                                             }
                                             return { ok: false };
                                         };
@@ -501,14 +524,14 @@ window.addEventListener('load', () => {
                                     // Test 1: Unauthenticated Backend
                                     const menuGuestRes = await window.fetch('/api/menu');
                                     const menuGuest = await menuGuestRes.json();
-                                    if (menuGuest.some(i => i.nombre === 'Ideas' || i.nombre === 'Administración')) {
-                                         console.error("Test failed: Unauthenticated user should only see public items.");
+                                    if (menuGuest.some(i => i.nombre === 'Administración')) {
+                                         console.error("Test failed: Unauthenticated user should NOT see Administración.");
                                          process.exit(1);
                                     }
 
                                     // Test 1b: Unauthenticated JSDOM
                                     const guestLinks = await testJSDOM(false, []);
-                                    assertLinks(guestLinks, ['Inicio'], ['Ideas', 'Administración'], 'Unauthenticated JSDOM');
+                                    assertLinks(guestLinks, ['Inicio', 'Ideas', 'Servicios', 'Recursos Gratis', 'Contáctanos', 'Acerca de'], ['Administración', 'Idealita'], 'Unauthenticated JSDOM');
 
                                     // Test 2: Authenticated user Backend
                                     globalAuthState = true;
@@ -531,7 +554,7 @@ window.addEventListener('load', () => {
 
                                     // Test 2b: Authenticated user JSDOM
                                     const userLinks = await testJSDOM(true, []);
-                                    assertLinks(userLinks, ['Inicio', 'Ideas'], ['Administración'], 'Standard User JSDOM');
+                                    assertLinks(userLinks, ['Inicio', 'Ideas', 'Servicios', 'Recursos Gratis', 'Contáctanos', 'Acerca de'], ['Administración', 'Idealita'], 'Standard User JSDOM');
 
                                     // Test 4: 403 on admin resource
                                     globalPermissions = [];
@@ -552,7 +575,7 @@ window.addEventListener('load', () => {
 
                                     // Test 3b: Administrator JSDOM
                                     const adminLinks = await testJSDOM(true, ['admin.access']);
-                                    assertLinks(adminLinks, ['Inicio', 'Ideas', 'Administración'], [], 'Administrator JSDOM');
+                                    assertLinks(adminLinks, ['Inicio', 'Ideas', 'Servicios', 'Recursos Gratis', 'Contáctanos', 'Acerca de', 'Administración'], ['Idealita'], 'Administrator JSDOM');
 
                                     // Verify DOM hierarchy structure directly for Servicios
                                     if (!userLinks.some(link => link.includes('Servicios'))) {
@@ -564,6 +587,26 @@ window.addEventListener('load', () => {
                                         process.exit(1);
                                     }
 
+
+                                    // Test 8: Container with private child logic
+                                    globalAuthState = true;
+                                    globalPermissions = ['test.access'];
+                                    const menuContainerTestRes = await window.fetch('/api/menu');
+                                    const menuContainerTest = await menuContainerTestRes.json();
+                                    const containerItem = menuContainerTest.find(i => i.nombre === 'Contenedor Privado Test');
+                                    if (!containerItem || containerItem.hijos.length === 0 || containerItem.hijos[0].nombre !== 'Hijo Privado') {
+                                         console.error("Test failed: Container with private child should appear when user has permissions.");
+                                         process.exit(1);
+                                    }
+                                    globalPermissions = [];
+                                    const menuContainerTestHiddenRes = await window.fetch('/api/menu');
+                                    const menuContainerTestHidden = await menuContainerTestHiddenRes.json();
+                                    if (menuContainerTestHidden.some(i => i.nombre === 'Contenedor Privado Test')) {
+                                         console.error("Test failed: Container should be hidden if its private child is not accessible to the user, even if container is publico=1.");
+                                         process.exit(1);
+                                    }
+
+                                    globalPermissions = ['admin.access'];
                                     const adminCheckSuccess = await window.fetch('/api/admin/check');
                                     if (adminCheckSuccess.status !== 200) {
                                          console.error("Test failed: User with admin.access should get 200 on admin resource.");
