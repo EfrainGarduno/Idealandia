@@ -235,9 +235,48 @@
             </div>
         </section>
 
-        <section id="acerca" class="content-section" style="display: none;">
-            <h2>Acerca de</h2>
-            <p>Somos mentes creadoras y estamos buscando crear un espacio para que el visitante pueda desarrollar sus innovaciones y emprendimientos.</p>
+                <section id="acerca" class="content-section" style="display: none;">
+            <h2>¿Qué debería incluir «Acerca de»?</h2>
+
+            <div class="acerca-item">
+                <img src="img/acerca_1.png" alt="¿Qué es Idealandia?">
+                <div class="acerca-text">
+                    <h3>1. ¿Qué es Idealandia?</h3>
+                    <p>La presentación del proyecto: un espacio para transformar ideas en conocimientos, soluciones y oportunidades reales.</p>
+                </div>
+            </div>
+
+            <div class="acerca-item">
+                <img src="img/acerca_2.png" alt="Nuestra filosofía y propósito">
+                <div class="acerca-text">
+                    <h3>2. Nuestra filosofía y propósito</h3>
+                    <p>Por qué nació Idealandia, qué problema busca resolver y cómo impulsa la creatividad, el aprendizaje y la innovación.</p>
+                </div>
+            </div>
+
+            <div class="acerca-item">
+                <img src="img/acerca_3.png" alt="Servicios y soluciones">
+                <div class="acerca-text">
+                    <h3>3. Servicios y soluciones</h3>
+                    <p>Asesorías financieras y de pensiones, ideas innovadoras, emprendimientos, clases de inglés y perfilamiento.</p>
+                </div>
+            </div>
+
+            <div class="acerca-item">
+                <img src="img/acerca_4.png" alt="Idealita, nuestra asistente virtual">
+                <div class="acerca-text">
+                    <h3>4. Idealita, nuestra asistente virtual</h3>
+                    <p>Presentarla como la compañera digital para explorar ideas, resolver dudas y ayudar a los usuarios. El chat seguirá en su opción «CHAT».</p>
+                </div>
+            </div>
+
+            <div class="acerca-item">
+                <img src="img/acerca_5.png" alt="Recursos gratuitos y comunidad">
+                <div class="acerca-text">
+                    <h3>5. Recursos gratuitos y comunidad</h3>
+                    <p>Explicar el acceso a recursos útiles de Internet y la posibilidad de aprender, compartir ideas y descubrir nuevas oportunidades.</p>
+                </div>
+            </div>
         </section>
 
         <section id="chat" class="content-section" style="display: none;">
@@ -1403,9 +1442,19 @@
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for(const part of content.modelTurn.parts){
                                     if(part.text){
-                                         addMessage(part.text, 'idealita');
+                                         if (!window.currentLiveMessageDiv) {
+                                             window.currentLiveMessageDiv = addMessage('', 'idealita');
+                                         }
+                                         window.currentLiveMessageDiv.textContent += part.text;
+
+                                         const chatHistory = document.getElementById('chat-history');
+                                         if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
                                     }
                                 }
+                            }
+
+                            if (content.turnComplete) {
+                                window.currentLiveMessageDiv = null;
                             }
 
                             if (content.interrupted === true) {
