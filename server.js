@@ -339,7 +339,7 @@ app.post('/api/logout', (req, res) => {
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
 
-app.get('/api/admin/check', async (req, res) => {
+const requireAdmin = async (req, res, next) => {
     try {
         const token = req.cookies.auth_token;
         if (!token) {
@@ -354,9 +354,9 @@ app.get('/api/admin/check', async (req, res) => {
         const query = `
             SELECT p.nombre
             FROM usuario_roles ur
-            JOIN roles r ON ur.rol_id = r.id
+            JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
             JOIN rol_permisos rp ON r.id = rp.rol_id
-            JOIN permisos p ON rp.permiso_id = p.id
+            JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
             WHERE ur.usuario_id = ? AND p.codigo = 'admin.access'
         `;
         const [permissions] = await pool.execute(query, [userId]);
@@ -365,15 +365,314 @@ app.get('/api/admin/check', async (req, res) => {
             return res.status(403).json({ error: 'Forbidden. No tienes permisos de administrador.' });
         }
 
-        res.status(200).json({ message: 'Acceso de administrador concedido.' });
-
+        req.userId = userId;
+        next();
     } catch (error) {
-        console.error('Error in /api/admin/check:', error);
+        console.error('Error in admin middleware:', error);
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
              res.status(401).json({ error: 'Token inválido o expirado.' });
         } else {
              res.status(500).json({ error: 'Error interno del servidor.' });
         }
+    }
+};
+
+app.get('/api/admin/check', requireAdmin, async (req, res) => {
+    res.status(200).json({ message: 'Acceso de administrador concedido.' });
+});
+
+// --- ADMIN ENDPOINTS ---
+
+app.get('/api/admin/usuarios', requireAdmin, async (req, res) => {
+    try {
+        const [usuarios] = await pool.execute('SELECT id, usuario, nombre, telefono, email FROM usuarios');
+        res.status(200).json(usuarios);
+    } catch (error) {
+        console.error('Error in GET /api/admin/usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, res) => {
+    try {
+        const { funcId } = req.params;
+        const [permisos] = await pool.execute('SELECT permiso_id FROM funcionalidad_permisos WHERE funcionalidad_id = ?', [funcId]);
+        res.status(200).json(permisos.map(p => p.permiso_id));
+    } catch (error) {
+        console.error('Error in GET /api/admin/funcionalidad_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, res) => {
+    try {
+        const { funcId } = req.params;
+        const { permisos } = req.body; // Array of permission IDs
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            await connection.execute('DELETE FROM funcionalidad_permisos WHERE funcionalidad_id = ?', [funcId]);
+            if (permisos && permisos.length > 0) {
+                const placeholders = permisos.map(() => '(?, ?)').join(',');
+                const values = permisos.flatMap(permisoId => [funcId, permisoId]);
+                await connection.execute(`INSERT INTO funcionalidad_permisos (funcionalidad_id, permiso_id) VALUES ${placeholders}`, values);
+            }
+            await connection.commit();
+            res.status(200).json({ message: 'Permisos de funcionalidad actualizados.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/funcionalidad_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/usuarios', requireAdmin, async (req, res) => {
+    try {
+        const { usuario, password, nombre, telefono, email } = req.body;
+        if (!usuario || !password || !nombre || !email) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+        const [existing] = await pool.execute('SELECT id FROM usuarios WHERE usuario = ? OR email = ?', [usuario, email]);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'El usuario o correo electrónico ya existe.' });
+        }
+
+        const bcrypt = require('bcrypt');
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const [result] = await pool.execute(
+            'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email) VALUES (?, ?, ?, ?, ?)',
+            [usuario, passwordHash, nombre, telefono || null, email]
+        );
+        res.status(201).json({ message: 'Usuario creado exitosamente.', id: result.insertId });
+    } catch (error) {
+        console.error('Error in POST /api/admin/usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, telefono, email } = req.body;
+
+        // Verificar si el email ya existe para otro usuario
+        const [existing] = await pool.execute('SELECT id FROM usuarios WHERE email = ? AND id != ?', [email, id]);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'El correo electrónico ya está en uso por otro usuario.' });
+        }
+
+        await pool.execute(
+            'UPDATE usuarios SET nombre = ?, telefono = ?, email = ? WHERE id = ?',
+            [nombre, telefono || null, email, id]
+        );
+        res.status(200).json({ message: 'Usuario actualizado exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/roles', requireAdmin, async (req, res) => {
+    try {
+        const [roles] = await pool.execute('SELECT id, nombre, descripcion, activo FROM roles');
+        res.status(200).json(roles);
+    } catch (error) {
+        console.error('Error in GET /api/admin/roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/roles', requireAdmin, async (req, res) => {
+    try {
+        const { nombre, descripcion, activo } = req.body;
+        const [result] = await pool.execute(
+            'INSERT INTO roles (nombre, descripcion, activo) VALUES (?, ?, ?)',
+            [nombre, descripcion, activo ? 1 : 0]
+        );
+        res.status(201).json({ message: 'Rol creado exitosamente.', id: result.insertId });
+    } catch (error) {
+        console.error('Error in POST /api/admin/roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, descripcion, activo } = req.body;
+        await pool.execute(
+            'UPDATE roles SET nombre = ?, descripcion = ?, activo = ? WHERE id = ?',
+            [nombre, descripcion, activo ? 1 : 0, id]
+        );
+        res.status(200).json({ message: 'Rol actualizado exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/permisos', requireAdmin, async (req, res) => {
+    try {
+        const [permisos] = await pool.execute('SELECT id, codigo, nombre, descripcion, activo FROM permisos');
+        res.status(200).json(permisos);
+    } catch (error) {
+        console.error('Error in GET /api/admin/permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
+    try {
+        const [funcionalidades] = await pool.execute('SELECT id, codigo, nombre, descripcion, ruta, activo FROM funcionalidades');
+        res.status(200).json(funcionalidades);
+    } catch (error) {
+        console.error('Error in GET /api/admin/funcionalidades:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { codigo, nombre, descripcion, ruta, activo } = req.body;
+        await pool.execute(
+            'UPDATE funcionalidades SET codigo = ?, nombre = ?, descripcion = ?, ruta = ?, activo = ? WHERE id = ?',
+            [codigo, nombre, descripcion, ruta, activo ? 1 : 0, id]
+        );
+        res.status(200).json({ message: 'Funcionalidad actualizada exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/funcionalidades:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/menus', requireAdmin, async (req, res) => {
+    try {
+        const [menus] = await pool.execute('SELECT id, nombre, funcionalidad_id, parent_id, orden, publico, activo FROM menu_items ORDER BY parent_id, orden');
+        res.status(200).json(menus);
+    } catch (error) {
+        console.error('Error in GET /api/admin/menus:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/menus/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, funcionalidad_id, parent_id, orden, publico, activo } = req.body;
+        await pool.execute(
+            'UPDATE menu_items SET nombre = ?, funcionalidad_id = ?, parent_id = ?, orden = ?, publico = ?, activo = ? WHERE id = ?',
+            [nombre, funcionalidad_id || null, parent_id || null, orden, publico ? 1 : 0, activo ? 1 : 0, id]
+        );
+        res.status(200).json({ message: 'Menú actualizado exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/menus:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const [roles] = await pool.execute('SELECT rol_id FROM usuario_roles WHERE usuario_id = ?', [userId]);
+        res.status(200).json(roles.map(r => r.rol_id));
+    } catch (error) {
+        console.error('Error in GET /api/admin/usuario_roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { roles } = req.body; // Array of role IDs
+
+        // Check if removing admin.access from self
+        if (req.userId === parseInt(userId)) {
+             // Let's verify if the new roles still grant admin.access
+             if (roles.length > 0) {
+                 const placeholders = roles.map(() => '?').join(',');
+                 const query = `
+                     SELECT COUNT(*) as count
+                     FROM rol_permisos rp
+                     JOIN permisos p ON rp.permiso_id = p.id
+                     WHERE rp.rol_id IN (${placeholders}) AND p.codigo = 'admin.access'
+                 `;
+                 const [result] = await pool.execute(query, roles);
+                 if (parseInt(result[0].count) === 0) {
+                     return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador.' });
+                 }
+             } else {
+                 return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador.' });
+             }
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            await connection.execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [userId]);
+            if (roles && roles.length > 0) {
+                const placeholders = roles.map(() => '(?, ?)').join(',');
+                const values = roles.flatMap(roleId => [userId, roleId]);
+                await connection.execute(`INSERT INTO usuario_roles (usuario_id, rol_id) VALUES ${placeholders}`, values);
+            }
+            await connection.commit();
+            res.status(200).json({ message: 'Roles de usuario actualizados.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/usuario_roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
+    try {
+        const { rolId } = req.params;
+        const [permisos] = await pool.execute('SELECT permiso_id FROM rol_permisos WHERE rol_id = ?', [rolId]);
+        res.status(200).json(permisos.map(p => p.permiso_id));
+    } catch (error) {
+        console.error('Error in GET /api/admin/rol_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
+    try {
+        const { rolId } = req.params;
+        const { permisos } = req.body; // Array of permission IDs
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            await connection.execute('DELETE FROM rol_permisos WHERE rol_id = ?', [rolId]);
+            if (permisos && permisos.length > 0) {
+                const placeholders = permisos.map(() => '(?, ?)').join(',');
+                const values = permisos.flatMap(permisoId => [rolId, permisoId]);
+                await connection.execute(`INSERT INTO rol_permisos (rol_id, permiso_id) VALUES ${placeholders}`, values);
+            }
+            await connection.commit();
+            res.status(200).json({ message: 'Permisos de rol actualizados.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/rol_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 

@@ -33,8 +33,11 @@ mysql.createPool = () => ({
             return [mockMenuItems];
         } else if (query.includes('FROM usuario_roles')) {
 
-        if (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE') || !query.includes('f.activo = TRUE')) {
-            throw new Error("Security SQL constraint missing: The authorization query must validate that roles, permissions and functionalities are active.");
+        if (query.includes('f.funcionalidad_id') && (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE') || !query.includes('f.activo = TRUE') || !query.includes('JOIN funcionalidades'))) {
+             // For the /api/menu check which requires functionality active checking too
+             throw new Error("Security SQL constraint missing: The authorization query must validate that roles, permissions and functionalities are active.");
+        } else if (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE')) {
+             throw new Error("Security SQL constraint missing: The authorization query must validate that roles and permissions are active.");
         }
 
             // return allowed permissions
@@ -158,6 +161,21 @@ async function testMenuAPI() {
         menu = res.data;
         if (menu.some(i => i.nombre === 'Administración')) throw new Error("Inactive functionality should not be visible.");
         console.log("Inactive permissions SQL and visibility check passed.");
+
+        // Test 5: Check that usuarios.rol doesn't grant admin access
+        // We will make a direct request to /api/admin/check with a user that has NO effective permissions in DB.
+        mockAllowedFunctionalities = []; // No permissions effectively
+        const adminCheckRolFailRes = await fetch(`http://localhost:3001/api/admin/check`, {
+            headers: {
+                'Cookie': `auth_token=${token}`
+            }
+        });
+
+        if (adminCheckRolFailRes.status !== 403) {
+            console.error(`Integration test failed: usuarios.rol check bypasses real authorization. Expected 403, got ${adminCheckRolFailRes.status}`);
+            process.exit(1);
+        }
+        console.log("Obsolete usuarios.rol fallback check passed (unauthorized when missing effective permissions).");
 
         console.log("All integration tests passed successfully.");
         // Terminate the process to close the server
