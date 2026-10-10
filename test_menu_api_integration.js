@@ -31,6 +31,12 @@ const dbExecuteMock = async (query, params) => {
     if (query.includes('COUNT(DISTINCT ur.usuario_id)')) {
         return [[{ count: mockNextAdminCount }]];
     }
+    if (query.includes('GET_LOCK')) {
+        return [[{ acquired: 1 }]];
+    }
+    if (query.includes('RELEASE_LOCK')) {
+        return [[{ released: 1 }]];
+    }
     if (query.includes('FROM menu_items')) {
         return [mockMenuItems];
     } else if (query.includes('FROM usuario_roles') && !query.includes('DELETE FROM') && !query.includes('INSERT INTO')) {

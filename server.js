@@ -533,6 +533,12 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
 
         const connection = await pool.getConnection();
         try {
+            // Serialize concurrent modifications using a user-level lock
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+            if (!lockResult[0].acquired) {
+                return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+
             await connection.beginTransaction();
 
             await connection.execute(
@@ -540,7 +546,8 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
                 [nombre, descripcion, activo ? 1 : 0, id]
             );
 
-            // Global minimum admin check
+            // Global minimum admin check. The GET_LOCK above ensures true serialization,
+            // preventing the need for an invalid aggregate FOR UPDATE.
             const adminQuery = `
                 SELECT COUNT(DISTINCT ur.usuario_id) as count
                 FROM usuario_roles ur
@@ -561,6 +568,7 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
             await connection.rollback();
             throw error;
         } finally {
+            await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
             connection.release();
         }
     } catch (error) {
@@ -663,6 +671,12 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
 
         const connection = await pool.getConnection();
         try {
+            // Serialize concurrent modifications using a user-level lock
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+            if (!lockResult[0].acquired) {
+                return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+
             await connection.beginTransaction();
 
             await connection.execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [userId]);
@@ -672,7 +686,8 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
                 await connection.execute(`INSERT INTO usuario_roles (usuario_id, rol_id) VALUES ${placeholders}`, values);
             }
 
-            // Global minimum admin check
+            // Global minimum admin check. The GET_LOCK above ensures true serialization,
+            // preventing the need for an invalid aggregate FOR UPDATE.
             const adminQuery = `
                 SELECT COUNT(DISTINCT ur.usuario_id) as count
                 FROM usuario_roles ur
@@ -693,6 +708,7 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
             await connection.rollback();
             throw error;
         } finally {
+            await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
             connection.release();
         }
     } catch (error) {
@@ -723,6 +739,12 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
 
         const connection = await pool.getConnection();
         try {
+            // Serialize concurrent modifications using a user-level lock
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+            if (!lockResult[0].acquired) {
+                return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+
             await connection.beginTransaction();
 
             const [rolCheck] = await connection.execute('SELECT id FROM roles WHERE id = ?', [rolId]);
@@ -750,7 +772,8 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
                 await connection.execute(`INSERT INTO rol_permisos (rol_id, permiso_id) VALUES ${placeholders}`, values);
             }
 
-            // Global minimum admin check
+            // Global minimum admin check. The GET_LOCK above ensures true serialization,
+            // preventing the need for an invalid aggregate FOR UPDATE.
             const adminQuery = `
                 SELECT COUNT(DISTINCT ur.usuario_id) as count
                 FROM usuario_roles ur
@@ -771,6 +794,7 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
             await connection.rollback();
             throw error;
         } finally {
+            await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
             connection.release();
         }
     } catch (error) {
