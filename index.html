@@ -413,6 +413,7 @@
                     <button id="btn-start-live" class="btn btn-primary" style="background-color: #6c40f7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
                         🎙️ Hablar con Idealita
                     </button>
+                    <button id="btn-mute-mic" class="btn btn-secondary" style="background-color: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none; margin-right: 10px;" aria-label="Silenciar micrófono" title="Silenciar micrófono"><i class="fas fa-microphone"></i></button>
                     <button id="btn-stop-live" class="btn btn-secondary" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none;">
                         Terminar Live
                     </button>
@@ -1413,6 +1414,31 @@
             const btnStopLive = document.getElementById('btn-stop-live');
             const liveStatus = document.getElementById('live-status');
 
+            const btnMuteMic = document.getElementById('btn-mute-mic');
+            let isMicMuted = false;
+
+            if (btnMuteMic) {
+                btnMuteMic.addEventListener('click', () => {
+                    isMicMuted = !isMicMuted;
+                    if (isMicMuted) {
+                        btnMuteMic.style.backgroundColor = '#dc3545';
+                        btnMuteMic.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+                        btnMuteMic.setAttribute('aria-label', 'Activar micrófono');
+                        btnMuteMic.setAttribute('title', 'Activar micrófono');
+                        const img = document.getElementById('avatar-img');
+                        if (img) img.style.filter = 'grayscale(100%)';
+                    } else {
+                        btnMuteMic.style.backgroundColor = '#6c757d';
+                        btnMuteMic.innerHTML = '<i class="fas fa-microphone"></i>';
+                        btnMuteMic.setAttribute('aria-label', 'Silenciar micrófono');
+                        btnMuteMic.setAttribute('title', 'Silenciar micrófono');
+                        const img = document.getElementById('avatar-img');
+                        if (img) img.style.filter = 'none';
+                    }
+                });
+            }
+
+
             function updateLiveStatus(status) {
                 if (liveStatus) liveStatus.textContent = status;
             }
@@ -1462,7 +1488,8 @@
                                 },
                                 generationConfig: {
                                     responseModalities: ["AUDIO", "TEXT"]
-                                }
+                                },
+                                outputAudioTranscription: {}
                             }
                         };
                         liveWebSocket.send(JSON.stringify(setupMessage));
@@ -1477,7 +1504,7 @@
                         audioWorkletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
 
                         audioWorkletNode.port.onmessage = (event) => {
-                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && isSetupComplete) {
+                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && isSetupComplete && !isMicMuted) {
                                 const pcmBuffer = event.data;
                                 const base64Data = bufferToBase64(pcmBuffer);
 
@@ -1504,12 +1531,51 @@
                         audioWorkletNode.connect(audioContext.destination);
 
                         // Setup audio playback context (24kHz for Gemini output)
+
                         pcmPlaybackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
                         nextPlayTime = pcmPlaybackContext.currentTime;
+
+                        // Setup global analyser for avatar mouth
+                        window.avatarAnalyser = pcmPlaybackContext.createAnalyser();
+                        window.avatarAnalyser.fftSize = 256;
+                        window.avatarAnalyser.connect(pcmPlaybackContext.destination);
+
+                        const dataArray = new Uint8Array(window.avatarAnalyser.frequencyBinCount);
+
+                        function globalAnimateMouth() {
+                            if (!window.avatarAnalyser) return;
+                            window.avatarAnalyser.getByteFrequencyData(dataArray);
+                            let sum = 0;
+                            for (let i = 0; i < dataArray.length; i++) {
+                                sum += dataArray[i];
+                            }
+                            let average = sum / dataArray.length;
+
+                            const avatarMouth = document.getElementById('avatar-mouth');
+                            if (avatarMouth) {
+                                if (average > 2) {
+                                    avatarMouth.style.display = 'block';
+                                    avatarMouth.style.height = (5 + (average / 8)) + 'px';
+                                } else {
+                                    avatarMouth.style.display = 'none';
+                                }
+                            }
+
+                            if (window.requestAnimationFrame) {
+                                window.currentMouthAnimId = window.requestAnimationFrame(globalAnimateMouth);
+                            }
+                        }
+
+                        // Start global loop
+                        globalAnimateMouth();
 
                         updateLiveStatus("Esperando setup...");
                         btnStartLive.style.display = 'none';
                         btnStopLive.style.display = 'inline-block';
+                        if(btnMuteMic) btnMuteMic.style.display = 'inline-block';
+                        const avatarContainer = document.getElementById('avatar-container');
+                        if(avatarContainer) avatarContainer.style.display = 'flex';
+
                     };
 
                     liveWebSocket.onmessage = async (event) => {
@@ -1616,9 +1682,16 @@
                 const audioBuffer = pcmPlaybackContext.createBuffer(1, float32Array.length, 24000);
                 audioBuffer.getChannelData(0).set(float32Array);
 
+
                 const source = pcmPlaybackContext.createBufferSource();
                 source.buffer = audioBuffer;
-                source.connect(pcmPlaybackContext.destination);
+
+                if (window.avatarAnalyser) {
+                    source.connect(window.avatarAnalyser);
+                } else {
+                    source.connect(pcmPlaybackContext.destination);
+                }
+
 
                 if (nextPlayTime < pcmPlaybackContext.currentTime) {
                     nextPlayTime = pcmPlaybackContext.currentTime;
@@ -1668,6 +1741,22 @@
                 updateLiveStatus("Desconectado");
                 btnStartLive.style.display = 'inline-block';
                 btnStopLive.style.display = 'none';
+
+                if (window.currentMouthAnimId && window.cancelAnimationFrame) {
+                    window.cancelAnimationFrame(window.currentMouthAnimId);
+                    window.currentMouthAnimId = null;
+                }
+                if (window.avatarAnalyser) {
+                    try { window.avatarAnalyser.disconnect(); } catch(e){}
+                    window.avatarAnalyser = null;
+                }
+                const avatarMouth = document.getElementById('avatar-mouth');
+                if (avatarMouth) avatarMouth.style.display = 'none';
+
+                if(btnMuteMic) btnMuteMic.style.display = 'none';
+                const avatarContainer = document.getElementById('avatar-container');
+                if(avatarContainer) avatarContainer.style.display = 'none';
+
             }
 
             if (btnStartLive) btnStartLive.addEventListener('click', startLive);
