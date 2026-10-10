@@ -26,15 +26,20 @@ const mockMenuItems = [
 
 let mockAllowedFunctionalities = [];
 let mockNextAdminCount = 1; // By default, simulate 1 active admin left
+let simulateGetLockFailure = false;
+let simulateReleaseLockError = false;
 
 const dbExecuteMock = async (query, params) => {
     if (query.includes('COUNT(DISTINCT ur.usuario_id)')) {
         return [[{ count: mockNextAdminCount }]];
     }
     if (query.includes('GET_LOCK')) {
-        return [[{ acquired: 1 }]];
+        return [[{ acquired: simulateGetLockFailure ? 0 : 1 }]];
     }
     if (query.includes('RELEASE_LOCK')) {
+        if (simulateReleaseLockError) {
+            throw new Error("Simulated release lock error");
+        }
         return [[{ released: 1 }]];
     }
     if (query.includes('FROM menu_items')) {
@@ -299,6 +304,35 @@ async function testMenuAPI() {
         }
 
         console.log("Administrative lockout prevention check passed.");
+
+        // Test 7: GET_LOCK failure
+        simulateGetLockFailure = true;
+        const lockFailureRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [1] })
+        });
+        if (lockFailureRes.status !== 503) {
+            console.error(`Integration test failed: GET_LOCK failure should return 503. Expected 503, got ${lockFailureRes.status}`);
+            process.exit(1);
+        }
+        simulateGetLockFailure = false;
+        console.log("Concurrency GET_LOCK failure check passed.");
+
+        // Test 8: RELEASE_LOCK exception resilience
+        // If RELEASE_LOCK throws, the operation itself should still succeed because it happens in finally block.
+        simulateReleaseLockError = true;
+        const releaseErrorRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [1] })
+        });
+        if (releaseErrorRes.status !== 200) {
+            console.error(`Integration test failed: RELEASE_LOCK exception should not shadow successful response. Expected 200, got ${releaseErrorRes.status}`);
+            process.exit(1);
+        }
+        simulateReleaseLockError = false;
+        console.log("Concurrency RELEASE_LOCK error resilience check passed.");
 
         console.log("All integration tests passed successfully.");
         // Terminate the process to close the server

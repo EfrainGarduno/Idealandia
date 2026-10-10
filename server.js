@@ -485,6 +485,15 @@ app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { nombre, telefono, email } = req.body;
 
+        if (!nombre || !email) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        const [userCheck] = await pool.execute('SELECT id FROM usuarios WHERE id = ?', [id]);
+        if (userCheck.length === 0) {
+            return res.status(404).json({ error: 'El usuario proporcionado no existe.' });
+        }
+
         // Verificar si el email ya existe para otro usuario
         const [existing] = await pool.execute('SELECT id FROM usuarios WHERE email = ? AND id != ?', [email, id]);
         if (existing.length > 0) {
@@ -515,6 +524,9 @@ app.get('/api/admin/roles', requireAdmin, async (req, res) => {
 app.post('/api/admin/roles', requireAdmin, async (req, res) => {
     try {
         const { nombre, descripcion, activo } = req.body;
+        if (!nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
         const [result] = await pool.execute(
             'INSERT INTO roles (nombre, descripcion, activo) VALUES (?, ?, ?)',
             [nombre, descripcion, activo ? 1 : 0]
@@ -531,13 +543,25 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { nombre, descripcion, activo } = req.body;
 
+        if (!nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        // Validate existence before attempting updates
+        const [rolCheck] = await pool.execute('SELECT id FROM roles WHERE id = ?', [id]);
+        if (rolCheck.length === 0) {
+            return res.status(404).json({ error: 'El rol proporcionado no existe.' });
+        }
+
         const connection = await pool.getConnection();
+        let lockAcquired = false;
         try {
             // Serialize concurrent modifications using a user-level lock
             const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
             if (!lockResult[0].acquired) {
                 return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
             }
+            lockAcquired = true;
 
             await connection.beginTransaction();
 
@@ -568,7 +592,13 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
             await connection.rollback();
             throw error;
         } finally {
-            await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+            if (lockAcquired) {
+                try {
+                    await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                } catch (releaseErr) {
+                    console.error('Error releasing lock admin_auth_update:', releaseErr);
+                }
+            }
             connection.release();
         }
     } catch (error) {
@@ -601,9 +631,19 @@ app.put('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { codigo, nombre, descripcion, ruta, activo } = req.body;
+
+        if (!codigo || !nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        const [funcCheck] = await pool.execute('SELECT id FROM funcionalidades WHERE id = ?', [id]);
+        if (funcCheck.length === 0) {
+            return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
+        }
+
         await pool.execute(
             'UPDATE funcionalidades SET codigo = ?, nombre = ?, descripcion = ?, ruta = ?, activo = ? WHERE id = ?',
-            [codigo, nombre, descripcion, ruta, activo ? 1 : 0, id]
+            [codigo, nombre, descripcion, ruta || null, activo ? 1 : 0, id]
         );
         res.status(200).json({ message: 'Funcionalidad actualizada exitosamente.' });
     } catch (error) {
@@ -626,6 +666,30 @@ app.put('/api/admin/menus/:id', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre, funcionalidad_id, parent_id, orden, publico, activo } = req.body;
+
+        if (!nombre || orden === undefined || orden === null) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios (nombre, orden).' });
+        }
+
+        const [menuCheck] = await pool.execute('SELECT id FROM menu_items WHERE id = ?', [id]);
+        if (menuCheck.length === 0) {
+            return res.status(404).json({ error: 'El menú proporcionado no existe.' });
+        }
+
+        if (funcionalidad_id) {
+            const [funcCheck] = await pool.execute('SELECT id FROM funcionalidades WHERE id = ?', [funcionalidad_id]);
+            if (funcCheck.length === 0) {
+                return res.status(400).json({ error: 'La funcionalidad_id proporcionada no existe.' });
+            }
+        }
+
+        if (parent_id) {
+            const [parentCheck] = await pool.execute('SELECT id FROM menu_items WHERE id = ?', [parent_id]);
+            if (parentCheck.length === 0) {
+                return res.status(400).json({ error: 'El parent_id proporcionado no existe.' });
+            }
+        }
+
         await pool.execute(
             'UPDATE menu_items SET nombre = ?, funcionalidad_id = ?, parent_id = ?, orden = ?, publico = ?, activo = ? WHERE id = ?',
             [nombre, funcionalidad_id || null, parent_id || null, orden, publico ? 1 : 0, activo ? 1 : 0, id]
@@ -657,24 +721,26 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'El campo roles debe ser un arreglo válido.' });
         }
 
-        // Verify all provided roles exist and are active
-        if (roles.length > 0) {
-            const placeholders = roles.map(() => '?').join(',');
-            const [rolesCheck] = await pool.execute(
-                `SELECT COUNT(*) as count FROM roles WHERE id IN (${placeholders}) AND activo = TRUE`,
-                roles
-            );
-            if (parseInt(rolesCheck[0].count) !== roles.length) {
-                return res.status(400).json({ error: 'Uno o más roles proporcionados no existen o están inactivos.' });
-            }
-        }
-
         const connection = await pool.getConnection();
+        let lockAcquired = false;
         try {
             // Serialize concurrent modifications using a user-level lock
             const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
             if (!lockResult[0].acquired) {
                 return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+            lockAcquired = true;
+
+            // Verify all provided roles exist and are active (inside lock to prevent concurrent invalidation)
+            if (roles.length > 0) {
+                const placeholders = roles.map(() => '?').join(',');
+                const [rolesCheck] = await connection.execute(
+                    `SELECT COUNT(*) as count FROM roles WHERE id IN (${placeholders}) AND activo = TRUE`,
+                    roles
+                );
+                if (parseInt(rolesCheck[0].count) !== roles.length) {
+                    return res.status(400).json({ error: 'Uno o más roles proporcionados no existen o están inactivos.' });
+                }
             }
 
             await connection.beginTransaction();
@@ -708,7 +774,13 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
             await connection.rollback();
             throw error;
         } finally {
-            await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+            if (lockAcquired) {
+                try {
+                    await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                } catch (releaseErr) {
+                    console.error('Error releasing lock admin_auth_update:', releaseErr);
+                }
+            }
             connection.release();
         }
     } catch (error) {
@@ -738,12 +810,14 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
         }
 
         const connection = await pool.getConnection();
+        let lockAcquired = false;
         try {
             // Serialize concurrent modifications using a user-level lock
             const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
             if (!lockResult[0].acquired) {
                 return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
             }
+            lockAcquired = true;
 
             await connection.beginTransaction();
 
@@ -794,7 +868,13 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
             await connection.rollback();
             throw error;
         } finally {
-            await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+            if (lockAcquired) {
+                try {
+                    await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                } catch (releaseErr) {
+                    console.error('Error releasing lock admin_auth_update:', releaseErr);
+                }
+            }
             connection.release();
         }
     } catch (error) {
