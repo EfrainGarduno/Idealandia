@@ -279,6 +279,116 @@
             </div>
         </section>
 
+        <section id="admin" class="content-section" style="display: none;">
+            <h2>Administración de Idealandia</h2>
+            <div class="admin-tabs">
+                <button class="admin-tab-btn active" data-tab="admin-usuarios">Usuarios</button>
+                <button class="admin-tab-btn" data-tab="admin-roles">Roles</button>
+                <button class="admin-tab-btn" data-tab="admin-permisos">Permisos</button>
+                <button class="admin-tab-btn" data-tab="admin-funcionalidades">Funcionalidades</button>
+                <button class="admin-tab-btn" data-tab="admin-menus">Menús</button>
+            </div>
+
+            <div class="admin-tab-content active" id="admin-usuarios">
+                <h3>Gestión de Usuarios</h3>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuario</th>
+                                <th>Nombre</th>
+                                <th>Teléfono</th>
+                                <th>Email</th>
+                                <th>Roles</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-usuarios-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="admin-tab-content" id="admin-roles">
+                <h3>Gestión de Roles</h3>
+                <button id="admin-btn-create-rol" class="btn btn-primary" style="margin-bottom: 1rem;">Crear Rol</button>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Activo</th>
+                                <th>Permisos</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-roles-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="admin-tab-content" id="admin-permisos">
+                <h3>Permisos Existentes</h3>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Activo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-permisos-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="admin-tab-content" id="admin-funcionalidades">
+                <h3>Gestión de Funcionalidades</h3>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Ruta</th>
+                                <th>Activo</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-funcionalidades-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="admin-tab-content" id="admin-menus">
+                <h3>Gestión de Menús</h3>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Funcionalidad ID</th>
+                                <th>Parent ID</th>
+                                <th>Orden</th>
+                                <th>Público</th>
+                                <th>Activo</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-menus-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
         <section id="chat" class="content-section" style="display: none;">
             <div id="chat-container">
 
@@ -1588,5 +1698,6 @@
         </div>
     </div>
 
+    <script src="admin.js"></script>
 </body>
 </html>

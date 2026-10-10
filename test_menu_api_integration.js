@@ -25,25 +25,103 @@ const mockMenuItems = [
 ];
 
 let mockAllowedFunctionalities = [];
+let mockNextAdminCount = 1; // By default, simulate 1 active admin left
+let simulateGetLockFailure = false;
+let simulateReleaseLockError = false;
+
+const dbExecuteMock = async (query, params) => {
+    if (query.includes('COUNT(DISTINCT ur.usuario_id)')) {
+        return [[{ count: mockNextAdminCount }]];
+    }
+    if (query.includes('GET_LOCK')) {
+        return [[{ acquired: simulateGetLockFailure ? 0 : 1 }]];
+    }
+    if (query.includes('RELEASE_LOCK')) {
+        if (simulateReleaseLockError) {
+            throw new Error("Simulated release lock error");
+        }
+        return [[{ released: 1 }]];
+    }
+    if (query.includes('FROM menu_items')) {
+        return [mockMenuItems];
+    } else if (query.includes('FROM usuario_roles') && !query.includes('DELETE FROM') && !query.includes('INSERT INTO')) {
+    // Only check constraints on SELECT statements for usuario_roles, skip INSERT/DELETE
+    if (query.includes('f.funcionalidad_id') && (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE') || !query.includes('f.activo = TRUE') || !query.includes('JOIN funcionalidades'))) {
+         // For the /api/menu check which requires functionality active checking too
+         throw new Error("Security SQL constraint missing: The authorization query must validate that roles, permissions and functionalities are active.");
+    } else if (query.includes('SELECT') && (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE'))) {
+         throw new Error("Security SQL constraint missing: The authorization query must validate that roles and permissions are active.");
+    }
+
+        // return allowed permissions
+        return [mockAllowedFunctionalities.map(id => ({ funcionalidad_id: id }))];
+    } else if (query.includes('FROM roles') && query.includes('COUNT(*)')) {
+        // Simulate that roles 1, 2, 3, 99 exist and are active (if requested).
+        // We return 0 for role 9999 so it fails validation
+        let count = 0;
+        if (params && Array.isArray(params)) {
+            for (const roleId of params) {
+                if ([1, 2, 3, 99].includes(roleId)) {
+                     // wait, role 2 was previously "inactive" in mockRolesState! Let's match it!
+                     // In mockRolesState: 1 is active, 2 is inactive, 3 is active, 99 is active
+                     if (roleId === 2 && query.includes('activo = TRUE')) {
+                         continue;
+                     }
+                     count++;
+                }
+            }
+        }
+        return [[{ count: count }]];
+    } else if (query.includes('FROM permisos') && query.includes('COUNT(*)')) {
+        // Simulate permission existence check
+        let count = 0;
+        if (params && Array.isArray(params)) {
+            count = params.length; // Just simulate all requested permissions exist for simplicity
+        }
+        return [[{ count: count }]];
+    } else if (query.includes('FROM roles') && query.includes('SELECT id')) {
+        return [[{ id: params ? params[0] : 1 }]];
+    } else if (query.includes('FROM funcionalidades') && query.includes('SELECT id')) {
+        return [[{ id: params ? params[0] : 1 }]];
+    } else if (query.includes('FROM usuarios')) {
+        return [[{ id: 1, usuario: 'testuser', rol: 'admin' }]];
+    } else if (query.includes('FROM rol_permisos') && query.includes('COUNT(*)')) {
+        // Explicitly simulate database state for roles and permissions via an object map
+        const mockRolesState = {
+            1: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: true },
+            2: { rolActivo: false, adminAccessActivo: true, hasAdminAccess: true },
+            3: { rolActivo: true, adminAccessActivo: false, hasAdminAccess: true },
+            99: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: false }
+        };
+
+        let count = 0;
+        if (params && Array.isArray(params)) {
+            for (const roleId of params) {
+                const roleState = mockRolesState[roleId];
+                if (roleState && roleState.hasAdminAccess) {
+                    const rolActivoConditionMet = query.includes('r.activo = TRUE') ? roleState.rolActivo : true;
+                    const permActivoConditionMet = query.includes('p.activo = TRUE') ? roleState.adminAccessActivo : true;
+
+                    if (rolActivoConditionMet && permActivoConditionMet) {
+                        count++;
+                    }
+                }
+            }
+        }
+        return [[{ count: count }]];
+    }
+    return [[]];
+};
 
 mysql.createPool = () => ({
-    getConnection: async () => ({ release: () => {} }),
-    execute: async (query, params) => {
-        if (query.includes('FROM menu_items')) {
-            return [mockMenuItems];
-        } else if (query.includes('FROM usuario_roles')) {
-
-        if (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE') || !query.includes('f.activo = TRUE')) {
-            throw new Error("Security SQL constraint missing: The authorization query must validate that roles, permissions and functionalities are active.");
-        }
-
-            // return allowed permissions
-            return [mockAllowedFunctionalities.map(id => ({ funcionalidad_id: id }))];
-        } else if (query.includes('FROM usuarios')) {
-            return [[{ id: 1, usuario: 'testuser' }]];
-        }
-        return [[]];
-    }
+    getConnection: async () => ({
+        release: () => {},
+        beginTransaction: async () => {},
+        commit: async () => {},
+        rollback: async () => {},
+        execute: dbExecuteMock // Use the same mock executor for transaction connections
+    }),
+    execute: dbExecuteMock
 });
 
 process.env.AUTH_SECRET = 'test_secret_integration';
@@ -158,6 +236,103 @@ async function testMenuAPI() {
         menu = res.data;
         if (menu.some(i => i.nombre === 'Administración')) throw new Error("Inactive functionality should not be visible.");
         console.log("Inactive permissions SQL and visibility check passed.");
+
+        // Test 5: Check that usuarios.rol doesn't grant admin access
+        // We will make a direct request to /api/admin/check with a user that has NO effective permissions in DB.
+        mockAllowedFunctionalities = []; // No permissions effectively
+        const adminCheckRolFailRes = await fetch(`http://localhost:3001/api/admin/check`, {
+            headers: {
+                'Cookie': `auth_token=${token}`
+            }
+        });
+
+        if (adminCheckRolFailRes.status !== 403) {
+            console.error(`Integration test failed: usuarios.rol check bypasses real authorization. Expected 403, got ${adminCheckRolFailRes.status}`);
+            process.exit(1);
+        }
+        console.log("Obsolete usuarios.rol fallback check passed (unauthorized when missing effective permissions).");
+
+        // Test 6: Prevent administrative lockout
+        mockAllowedFunctionalities = ['admin.access']; // Allow requireAdmin middleware to pass
+
+        // Test global admin count dropping to 0
+        mockNextAdminCount = 0;
+
+        // Attempt 1: Empty array (drops admin count to 0)
+        const lockoutFailRes1 = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [] })
+        });
+        if (lockoutFailRes1.status !== 400) {
+            console.error(`Integration test failed: Global lockout prevention failed for empty array. Expected 400, got ${lockoutFailRes1.status}`);
+            process.exit(1);
+        }
+
+        // Attempt 2: Assigning a role that leaves global admins at 0 (e.g., removing admin role from last admin)
+        const lockoutFailRes2 = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [99] }) // Valid role, but leaves admin count at 0
+        });
+        if (lockoutFailRes2.status !== 400) {
+            console.error(`Integration test failed: Global lockout prevention failed when assigning non-admin roles. Expected 400, got ${lockoutFailRes2.status}`);
+            process.exit(1);
+        }
+
+        // Attempt 3: Valid active assignment where global count remains >= 1
+        mockNextAdminCount = 1;
+        const lockoutSuccessRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [1] }) // Simulating assigning an active admin role
+        });
+        if (lockoutSuccessRes.status !== 200) {
+            console.error(`Integration test failed: Valid role assignment should pass lockout check. Expected 200, got ${lockoutSuccessRes.status}`);
+            process.exit(1);
+        }
+
+        // Attempt 4: Non-existent roles trigger 400
+        const nonExistentRolesRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [9999] }) // 9999 is not in the mock list
+        });
+        if (nonExistentRolesRes.status !== 400) {
+            console.error(`Integration test failed: Non-existent role assignment should return 400. Expected 400, got ${nonExistentRolesRes.status}`);
+            process.exit(1);
+        }
+
+        console.log("Administrative lockout prevention check passed.");
+
+        // Test 7: GET_LOCK failure
+        simulateGetLockFailure = true;
+        const lockFailureRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [1] })
+        });
+        if (lockFailureRes.status !== 503) {
+            console.error(`Integration test failed: GET_LOCK failure should return 503. Expected 503, got ${lockFailureRes.status}`);
+            process.exit(1);
+        }
+        simulateGetLockFailure = false;
+        console.log("Concurrency GET_LOCK failure check passed.");
+
+        // Test 8: RELEASE_LOCK exception resilience
+        // If RELEASE_LOCK throws, the operation itself should still succeed because it happens in finally block.
+        simulateReleaseLockError = true;
+        const releaseErrorRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [1] })
+        });
+        if (releaseErrorRes.status !== 200) {
+            console.error(`Integration test failed: RELEASE_LOCK exception should not shadow successful response. Expected 200, got ${releaseErrorRes.status}`);
+            process.exit(1);
+        }
+        simulateReleaseLockError = false;
+        console.log("Concurrency RELEASE_LOCK error resilience check passed.");
 
         console.log("All integration tests passed successfully.");
         // Terminate the process to close the server

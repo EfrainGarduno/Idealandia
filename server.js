@@ -206,7 +206,7 @@ app.post('/api/login', async (req, res) => {
 
         res.cookie('auth_token', token, {
             httpOnly: true,
-            secure: false, // Since it's HTTP port 3000
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: 24 * 60 * 60 * 1000 // 24 hours
         });
@@ -332,14 +332,14 @@ app.get('/api/me', async (req, res) => {
 app.post('/api/logout', (req, res) => {
     res.cookie('auth_token', '', {
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         expires: new Date(0) // Expire immediately
     });
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
 
-app.get('/api/admin/check', async (req, res) => {
+const requireAdmin = async (req, res, next) => {
     try {
         const token = req.cookies.auth_token;
         if (!token) {
@@ -354,9 +354,9 @@ app.get('/api/admin/check', async (req, res) => {
         const query = `
             SELECT p.nombre
             FROM usuario_roles ur
-            JOIN roles r ON ur.rol_id = r.id
+            JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
             JOIN rol_permisos rp ON r.id = rp.rol_id
-            JOIN permisos p ON rp.permiso_id = p.id
+            JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
             WHERE ur.usuario_id = ? AND p.codigo = 'admin.access'
         `;
         const [permissions] = await pool.execute(query, [userId]);
@@ -365,15 +365,521 @@ app.get('/api/admin/check', async (req, res) => {
             return res.status(403).json({ error: 'Forbidden. No tienes permisos de administrador.' });
         }
 
-        res.status(200).json({ message: 'Acceso de administrador concedido.' });
-
+        req.userId = userId;
+        next();
     } catch (error) {
-        console.error('Error in /api/admin/check:', error);
+        console.error('Error in admin middleware:', error);
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
              res.status(401).json({ error: 'Token inválido o expirado.' });
         } else {
              res.status(500).json({ error: 'Error interno del servidor.' });
         }
+    }
+};
+
+app.get('/api/admin/check', requireAdmin, async (req, res) => {
+    res.status(200).json({ message: 'Acceso de administrador concedido.' });
+});
+
+// --- ADMIN ENDPOINTS ---
+
+app.get('/api/admin/usuarios', requireAdmin, async (req, res) => {
+    try {
+        const [usuarios] = await pool.execute('SELECT id, usuario, nombre, telefono, email FROM usuarios');
+        res.status(200).json(usuarios);
+    } catch (error) {
+        console.error('Error in GET /api/admin/usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, res) => {
+    try {
+        const { funcId } = req.params;
+        const [permisos] = await pool.execute('SELECT permiso_id FROM funcionalidad_permisos WHERE funcionalidad_id = ?', [funcId]);
+        res.status(200).json(permisos.map(p => p.permiso_id));
+    } catch (error) {
+        console.error('Error in GET /api/admin/funcionalidad_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, res) => {
+    try {
+        const { funcId } = req.params;
+        const { permisos } = req.body; // Array of permission IDs
+
+        if (!Array.isArray(permisos)) {
+            return res.status(400).json({ error: 'El campo permisos debe ser un arreglo válido.' });
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            const [funcCheck] = await connection.execute('SELECT id FROM funcionalidades WHERE id = ?', [funcId]);
+            if (funcCheck.length === 0) {
+                await connection.rollback();
+                return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
+            }
+
+            if (permisos.length > 0) {
+                const placeholders = permisos.map(() => '?').join(',');
+                const [permisosCheck] = await connection.execute(
+                    `SELECT COUNT(*) as count FROM permisos WHERE id IN (${placeholders})`,
+                    permisos
+                );
+                if (parseInt(permisosCheck[0].count) !== permisos.length) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: 'Uno o más permisos proporcionados no existen.' });
+                }
+            }
+
+            await connection.execute('DELETE FROM funcionalidad_permisos WHERE funcionalidad_id = ?', [funcId]);
+            if (permisos.length > 0) {
+                const placeholders = permisos.map(() => '(?, ?)').join(',');
+                const values = permisos.flatMap(permisoId => [funcId, permisoId]);
+                await connection.execute(`INSERT INTO funcionalidad_permisos (funcionalidad_id, permiso_id) VALUES ${placeholders}`, values);
+            }
+            await connection.commit();
+            res.status(200).json({ message: 'Permisos de funcionalidad actualizados.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/funcionalidad_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/usuarios', requireAdmin, async (req, res) => {
+    try {
+        const { usuario, password, nombre, telefono, email } = req.body;
+        if (!usuario || !password || !nombre || !email) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+        const [existing] = await pool.execute('SELECT id FROM usuarios WHERE usuario = ? OR email = ?', [usuario, email]);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'El usuario o correo electrónico ya existe.' });
+        }
+
+        const bcrypt = require('bcrypt');
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const [result] = await pool.execute(
+            'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email) VALUES (?, ?, ?, ?, ?)',
+            [usuario, passwordHash, nombre, telefono || null, email]
+        );
+        res.status(201).json({ message: 'Usuario creado exitosamente.', id: result.insertId });
+    } catch (error) {
+        console.error('Error in POST /api/admin/usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, telefono, email } = req.body;
+
+        if (!nombre || !email) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        const [userCheck] = await pool.execute('SELECT id FROM usuarios WHERE id = ?', [id]);
+        if (userCheck.length === 0) {
+            return res.status(404).json({ error: 'El usuario proporcionado no existe.' });
+        }
+
+        // Verificar si el email ya existe para otro usuario
+        const [existing] = await pool.execute('SELECT id FROM usuarios WHERE email = ? AND id != ?', [email, id]);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'El correo electrónico ya está en uso por otro usuario.' });
+        }
+
+        await pool.execute(
+            'UPDATE usuarios SET nombre = ?, telefono = ?, email = ? WHERE id = ?',
+            [nombre, telefono || null, email, id]
+        );
+        res.status(200).json({ message: 'Usuario actualizado exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/roles', requireAdmin, async (req, res) => {
+    try {
+        const [roles] = await pool.execute('SELECT id, nombre, descripcion, activo FROM roles');
+        res.status(200).json(roles);
+    } catch (error) {
+        console.error('Error in GET /api/admin/roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/roles', requireAdmin, async (req, res) => {
+    try {
+        const { nombre, descripcion, activo } = req.body;
+        if (!nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+        const [result] = await pool.execute(
+            'INSERT INTO roles (nombre, descripcion, activo) VALUES (?, ?, ?)',
+            [nombre, descripcion, activo ? 1 : 0]
+        );
+        res.status(201).json({ message: 'Rol creado exitosamente.', id: result.insertId });
+    } catch (error) {
+        console.error('Error in POST /api/admin/roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, descripcion, activo } = req.body;
+
+        if (!nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        // Validate existence before attempting updates
+        const [rolCheck] = await pool.execute('SELECT id FROM roles WHERE id = ?', [id]);
+        if (rolCheck.length === 0) {
+            return res.status(404).json({ error: 'El rol proporcionado no existe.' });
+        }
+
+        const connection = await pool.getConnection();
+        let lockAcquired = false;
+        try {
+            // Serialize concurrent modifications using a user-level lock
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+            if (!lockResult[0].acquired) {
+                return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+            lockAcquired = true;
+
+            await connection.beginTransaction();
+
+            await connection.execute(
+                'UPDATE roles SET nombre = ?, descripcion = ?, activo = ? WHERE id = ?',
+                [nombre, descripcion, activo ? 1 : 0, id]
+            );
+
+            // Global minimum admin check. The GET_LOCK above ensures true serialization,
+            // preventing the need for an invalid aggregate FOR UPDATE.
+            const adminQuery = `
+                SELECT COUNT(DISTINCT ur.usuario_id) as count
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                WHERE p.codigo = 'admin.access'
+            `;
+            const [adminCheck] = await connection.execute(adminQuery);
+            if (parseInt(adminCheck[0].count) === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+            }
+
+            await connection.commit();
+            res.status(200).json({ message: 'Rol actualizado exitosamente.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            if (lockAcquired) {
+                try {
+                    await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                } catch (releaseErr) {
+                    console.error('Error releasing lock admin_auth_update:', releaseErr);
+                }
+            }
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in PUT /api/admin/roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/permisos', requireAdmin, async (req, res) => {
+    try {
+        const [permisos] = await pool.execute('SELECT id, codigo, nombre, descripcion, activo FROM permisos');
+        res.status(200).json(permisos);
+    } catch (error) {
+        console.error('Error in GET /api/admin/permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
+    try {
+        const [funcionalidades] = await pool.execute('SELECT id, codigo, nombre, descripcion, ruta, activo FROM funcionalidades');
+        res.status(200).json(funcionalidades);
+    } catch (error) {
+        console.error('Error in GET /api/admin/funcionalidades:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { codigo, nombre, descripcion, ruta, activo } = req.body;
+
+        if (!codigo || !nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        const [funcCheck] = await pool.execute('SELECT id FROM funcionalidades WHERE id = ?', [id]);
+        if (funcCheck.length === 0) {
+            return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
+        }
+
+        await pool.execute(
+            'UPDATE funcionalidades SET codigo = ?, nombre = ?, descripcion = ?, ruta = ?, activo = ? WHERE id = ?',
+            [codigo, nombre, descripcion, ruta || null, activo ? 1 : 0, id]
+        );
+        res.status(200).json({ message: 'Funcionalidad actualizada exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/funcionalidades:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/menus', requireAdmin, async (req, res) => {
+    try {
+        const [menus] = await pool.execute('SELECT id, nombre, funcionalidad_id, parent_id, orden, publico, activo FROM menu_items ORDER BY parent_id, orden');
+        res.status(200).json(menus);
+    } catch (error) {
+        console.error('Error in GET /api/admin/menus:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/menus/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, funcionalidad_id, parent_id, orden, publico, activo } = req.body;
+
+        if (!nombre || orden === undefined || orden === null) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios (nombre, orden).' });
+        }
+
+        const [menuCheck] = await pool.execute('SELECT id FROM menu_items WHERE id = ?', [id]);
+        if (menuCheck.length === 0) {
+            return res.status(404).json({ error: 'El menú proporcionado no existe.' });
+        }
+
+        if (funcionalidad_id) {
+            const [funcCheck] = await pool.execute('SELECT id FROM funcionalidades WHERE id = ?', [funcionalidad_id]);
+            if (funcCheck.length === 0) {
+                return res.status(400).json({ error: 'La funcionalidad_id proporcionada no existe.' });
+            }
+        }
+
+        if (parent_id) {
+            const [parentCheck] = await pool.execute('SELECT id FROM menu_items WHERE id = ?', [parent_id]);
+            if (parentCheck.length === 0) {
+                return res.status(400).json({ error: 'El parent_id proporcionado no existe.' });
+            }
+        }
+
+        await pool.execute(
+            'UPDATE menu_items SET nombre = ?, funcionalidad_id = ?, parent_id = ?, orden = ?, publico = ?, activo = ? WHERE id = ?',
+            [nombre, funcionalidad_id || null, parent_id || null, orden, publico ? 1 : 0, activo ? 1 : 0, id]
+        );
+        res.status(200).json({ message: 'Menú actualizado exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/menus:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const [roles] = await pool.execute('SELECT rol_id FROM usuario_roles WHERE usuario_id = ?', [userId]);
+        res.status(200).json(roles.map(r => r.rol_id));
+    } catch (error) {
+        console.error('Error in GET /api/admin/usuario_roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { roles } = req.body; // Array of role IDs
+
+        if (!Array.isArray(roles)) {
+            return res.status(400).json({ error: 'El campo roles debe ser un arreglo válido.' });
+        }
+
+        const connection = await pool.getConnection();
+        let lockAcquired = false;
+        try {
+            // Serialize concurrent modifications using a user-level lock
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+            if (!lockResult[0].acquired) {
+                return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+            lockAcquired = true;
+
+            // Verify all provided roles exist and are active (inside lock to prevent concurrent invalidation)
+            if (roles.length > 0) {
+                const placeholders = roles.map(() => '?').join(',');
+                const [rolesCheck] = await connection.execute(
+                    `SELECT COUNT(*) as count FROM roles WHERE id IN (${placeholders}) AND activo = TRUE`,
+                    roles
+                );
+                if (parseInt(rolesCheck[0].count) !== roles.length) {
+                    return res.status(400).json({ error: 'Uno o más roles proporcionados no existen o están inactivos.' });
+                }
+            }
+
+            await connection.beginTransaction();
+
+            await connection.execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [userId]);
+            if (roles.length > 0) {
+                const placeholders = roles.map(() => '(?, ?)').join(',');
+                const values = roles.flatMap(roleId => [userId, roleId]);
+                await connection.execute(`INSERT INTO usuario_roles (usuario_id, rol_id) VALUES ${placeholders}`, values);
+            }
+
+            // Global minimum admin check. The GET_LOCK above ensures true serialization,
+            // preventing the need for an invalid aggregate FOR UPDATE.
+            const adminQuery = `
+                SELECT COUNT(DISTINCT ur.usuario_id) as count
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                WHERE p.codigo = 'admin.access'
+            `;
+            const [adminCheck] = await connection.execute(adminQuery);
+            if (parseInt(adminCheck[0].count) === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+            }
+
+            await connection.commit();
+            res.status(200).json({ message: 'Roles de usuario actualizados.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            if (lockAcquired) {
+                try {
+                    await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                } catch (releaseErr) {
+                    console.error('Error releasing lock admin_auth_update:', releaseErr);
+                }
+            }
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/usuario_roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
+    try {
+        const { rolId } = req.params;
+        const [permisos] = await pool.execute('SELECT permiso_id FROM rol_permisos WHERE rol_id = ?', [rolId]);
+        res.status(200).json(permisos.map(p => p.permiso_id));
+    } catch (error) {
+        console.error('Error in GET /api/admin/rol_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
+    try {
+        const { rolId } = req.params;
+        const { permisos } = req.body; // Array of permission IDs
+
+        if (!Array.isArray(permisos)) {
+            return res.status(400).json({ error: 'El campo permisos debe ser un arreglo válido.' });
+        }
+
+        const connection = await pool.getConnection();
+        let lockAcquired = false;
+        try {
+            // Serialize concurrent modifications using a user-level lock
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+            if (!lockResult[0].acquired) {
+                return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+            lockAcquired = true;
+
+            await connection.beginTransaction();
+
+            const [rolCheck] = await connection.execute('SELECT id FROM roles WHERE id = ?', [rolId]);
+            if (rolCheck.length === 0) {
+                await connection.rollback();
+                return res.status(404).json({ error: 'El rol proporcionado no existe.' });
+            }
+
+            if (permisos.length > 0) {
+                const placeholders = permisos.map(() => '?').join(',');
+                const [permisosCheck] = await connection.execute(
+                    `SELECT COUNT(*) as count FROM permisos WHERE id IN (${placeholders})`,
+                    permisos
+                );
+                if (parseInt(permisosCheck[0].count) !== permisos.length) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: 'Uno o más permisos proporcionados no existen.' });
+                }
+            }
+
+            await connection.execute('DELETE FROM rol_permisos WHERE rol_id = ?', [rolId]);
+            if (permisos.length > 0) {
+                const placeholders = permisos.map(() => '(?, ?)').join(',');
+                const values = permisos.flatMap(permisoId => [rolId, permisoId]);
+                await connection.execute(`INSERT INTO rol_permisos (rol_id, permiso_id) VALUES ${placeholders}`, values);
+            }
+
+            // Global minimum admin check. The GET_LOCK above ensures true serialization,
+            // preventing the need for an invalid aggregate FOR UPDATE.
+            const adminQuery = `
+                SELECT COUNT(DISTINCT ur.usuario_id) as count
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                WHERE p.codigo = 'admin.access'
+            `;
+            const [adminCheck] = await connection.execute(adminQuery);
+            if (parseInt(adminCheck[0].count) === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+            }
+
+            await connection.commit();
+            res.status(200).json({ message: 'Permisos de rol actualizados.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            if (lockAcquired) {
+                try {
+                    await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                } catch (releaseErr) {
+                    console.error('Error releasing lock admin_auth_update:', releaseErr);
+                }
+            }
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/rol_permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 
