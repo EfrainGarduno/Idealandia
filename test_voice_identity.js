@@ -71,6 +71,15 @@ window.AudioContext = class {
         };
         this.destination = {};
     }
+    createAnalyser() {
+        return {
+            fftSize: 256,
+            frequencyBinCount: 128,
+            connect: () => {},
+            disconnect: () => {},
+            getByteFrequencyData: () => {}
+        };
+    }
     createMediaStreamSource() {
         return {
             connect: () => {}
@@ -92,6 +101,11 @@ window.AudioWorkletNode = class {
 if (!window.navigator) {
     window.navigator = {};
 }
+window.requestAnimationFrame = (cb) => setTimeout(cb, 16);
+window.cancelAnimationFrame = (id) => clearTimeout(id);
+global.requestAnimationFrame = window.requestAnimationFrame;
+global.cancelAnimationFrame = window.cancelAnimationFrame;
+
 window.navigator.mediaDevices = {
     getUserMedia: async () => {
         return {
