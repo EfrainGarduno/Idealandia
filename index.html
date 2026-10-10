@@ -1615,18 +1615,28 @@
                             }
 
                             // Handling transcriptions
+                            // The model might return text in outputTranscription or directly in modelTurn.parts
+                            let newText = '';
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for(const part of content.modelTurn.parts){
                                     if(part.text){
-                                         if (!window.currentLiveMessageDiv) {
-                                             window.currentLiveMessageDiv = addMessage('', 'idealita');
-                                         }
-                                         window.currentLiveMessageDiv.textContent += part.text;
-
-                                         const chatHistory = document.getElementById('chat-history');
-                                         if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
+                                        newText += part.text;
                                     }
                                 }
+                            }
+                            if (newText === '' && content.outputTranscription && content.outputTranscription.text) {
+                                // Fallback to outputTranscription if modelTurn was empty for text
+                                newText += content.outputTranscription.text;
+                            }
+
+                            if (newText !== '') {
+                                 if (!window.currentLiveMessageDiv) {
+                                     window.currentLiveMessageDiv = addMessage('', 'idealita');
+                                 }
+                                 window.currentLiveMessageDiv.textContent += newText;
+
+                                 const chatHistory = document.getElementById('chat-history');
+                                 if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
                             }
 
                             if (content.turnComplete) {
