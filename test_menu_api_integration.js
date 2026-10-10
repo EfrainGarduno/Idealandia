@@ -27,7 +27,13 @@ const mockMenuItems = [
 let mockAllowedFunctionalities = [];
 
 mysql.createPool = () => ({
-    getConnection: async () => ({ release: () => {} }),
+    getConnection: async () => ({
+        release: () => {},
+        beginTransaction: async () => {},
+        commit: async () => {},
+        rollback: async () => {},
+        execute: async () => {} // Mock execute within transaction
+    }),
     execute: async (query, params) => {
         if (query.includes('FROM menu_items')) {
             return [mockMenuItems];
@@ -43,7 +49,31 @@ mysql.createPool = () => ({
             // return allowed permissions
             return [mockAllowedFunctionalities.map(id => ({ funcionalidad_id: id }))];
         } else if (query.includes('FROM usuarios')) {
-            return [[{ id: 1, usuario: 'testuser' }]];
+            return [[{ id: 1, usuario: 'testuser', rol: 'admin' }]];
+        } else if (query.includes('FROM rol_permisos') && query.includes('COUNT(*)')) {
+            // Explicitly simulate database state for roles and permissions via an object map
+            const mockRolesState = {
+                1: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: true },
+                2: { rolActivo: false, adminAccessActivo: true, hasAdminAccess: true },
+                3: { rolActivo: true, adminAccessActivo: false, hasAdminAccess: true },
+                99: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: false }
+            };
+
+            let count = 0;
+            if (params && Array.isArray(params)) {
+                for (const roleId of params) {
+                    const roleState = mockRolesState[roleId];
+                    if (roleState && roleState.hasAdminAccess) {
+                        const rolActivoConditionMet = query.includes('r.activo = TRUE') ? roleState.rolActivo : true;
+                        const permActivoConditionMet = query.includes('p.activo = TRUE') ? roleState.adminAccessActivo : true;
+
+                        if (rolActivoConditionMet && permActivoConditionMet) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            return [[{ count: count }]];
         }
         return [[]];
     }
@@ -176,6 +206,73 @@ async function testMenuAPI() {
             process.exit(1);
         }
         console.log("Obsolete usuarios.rol fallback check passed (unauthorized when missing effective permissions).");
+
+        // Test 6: Prevent administrative lockout
+        // A user with valid admin.access (via requireAdmin mock) trying to remove their own access via empty roles
+        mockAllowedFunctionalities = ['admin.access']; // Allow requireAdmin middleware to pass
+
+        // Attempt 1: Empty array
+        const lockoutFailRes1 = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `auth_token=${token}`
+            },
+            body: JSON.stringify({ roles: [] })
+        });
+        if (lockoutFailRes1.status !== 400) {
+            console.error(`Integration test failed: Lockout prevention failed for empty array. Expected 400, got ${lockoutFailRes1.status}`);
+            process.exit(1);
+        }
+
+        // Attempt 2: Missing roles field
+        const lockoutFailRes2 = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `auth_token=${token}`
+            },
+            body: JSON.stringify({})
+        });
+        if (lockoutFailRes2.status !== 400) {
+            console.error(`Integration test failed: Lockout prevention failed for missing roles field. Expected 400, got ${lockoutFailRes2.status}`);
+            process.exit(1);
+        }
+
+        // Attempt 3: Inactive roles/permissions simulate DB returning count 0
+        // Role ID 2 is treated as inactive, Role 3 has inactive permissions, Role 99 lacks permissions.
+        const inactiveRolesToTest = [2, 3, 99];
+        for (const roleId of inactiveRolesToTest) {
+            const lockoutFailRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cookie': `auth_token=${token}` // Note: token sets userId=1
+                },
+                body: JSON.stringify({ roles: [roleId] })
+            });
+            if (lockoutFailRes.status !== 400) {
+                console.error(`Integration test failed: Lockout prevention failed for inactive role/permission (${roleId}). Expected 400, got ${lockoutFailRes.status}`);
+                process.exit(1);
+            }
+        }
+
+        // Attempt 4: Valid active roles/permissions simulate DB returning count 1
+        // Role ID 1 is treated as active with admin permissions by the mock.
+        const lockoutSuccessRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `auth_token=${token}`
+            },
+            body: JSON.stringify({ roles: [1] }) // Simulating assigning an active admin role
+        });
+        if (lockoutSuccessRes.status !== 200) {
+            console.error(`Integration test failed: Valid role assignment should pass lockout check. Expected 200, got ${lockoutSuccessRes.status}`);
+            process.exit(1);
+        }
+
+        console.log("Administrative lockout prevention check passed.");
 
         console.log("All integration tests passed successfully.");
         // Terminate the process to close the server

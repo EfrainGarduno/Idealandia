@@ -1,7 +1,24 @@
 const fs = require('fs');
 const path = require('path');
-const { JSDOM } = require('jsdom');
+const { JSDOM, VirtualConsole } = require('jsdom');
 const { execSync } = require('child_process');
+
+// Silence the specific "Could not load link/script" warnings from JSDOM
+// as we are testing offline without a static server running.
+const virtualConsole = new VirtualConsole();
+virtualConsole.on("jsdomError", (e) => {
+    if (e && e.message && e.message.includes("Could not load")) {
+        return; // Ignore these expected offline warnings
+    }
+    console.error(e);
+});
+// Forward specific console events to avoid unsupported sendTo polyfills
+const methods = ['log', 'info', 'warn', 'dir', 'error'];
+for (const method of methods) {
+    if (typeof console[method] === "function") {
+        virtualConsole.on(method, console[method].bind(console));
+    }
+}
 
 // Test that server requires AUTH_SECRET
 try {
@@ -32,7 +49,8 @@ const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 
 const dom = new JSDOM(htmlContent, {
   runScripts: "dangerously",
-  resources: "usable"
+  resources: "usable",
+  virtualConsole
 });
 
 const window = dom.window;
@@ -482,7 +500,8 @@ window.addEventListener('load', () => {
 
                                         const dom = new JSDOM(htmlContent, {
                                             runScripts: "dangerously",
-                                            resources: "usable"
+                                            resources: "usable",
+                                            virtualConsole
                                         });
                                         const win = dom.window;
 

@@ -594,15 +594,20 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
         const { userId } = req.params;
         const { roles } = req.body; // Array of role IDs
 
+        if (!Array.isArray(roles)) {
+            return res.status(400).json({ error: 'El campo roles debe ser un arreglo válido.' });
+        }
+
         // Check if removing admin.access from self
         if (req.userId === parseInt(userId)) {
-             // Let's verify if the new roles still grant admin.access
+             // Let's verify if the new roles still grant admin.access via active permissions and active roles
              if (roles.length > 0) {
                  const placeholders = roles.map(() => '?').join(',');
                  const query = `
                      SELECT COUNT(*) as count
                      FROM rol_permisos rp
-                     JOIN permisos p ON rp.permiso_id = p.id
+                     JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                     JOIN roles r ON rp.rol_id = r.id AND r.activo = TRUE
                      WHERE rp.rol_id IN (${placeholders}) AND p.codigo = 'admin.access'
                  `;
                  const [result] = await pool.execute(query, roles);
