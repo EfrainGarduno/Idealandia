@@ -26,57 +26,87 @@ const mockMenuItems = [
 
 let mockAllowedFunctionalities = [];
 
+const dbExecuteMock = async (query, params) => {
+    if (query.includes('FROM menu_items')) {
+        return [mockMenuItems];
+    } else if (query.includes('FROM usuario_roles') && !query.includes('DELETE FROM') && !query.includes('INSERT INTO')) {
+    // Only check constraints on SELECT statements for usuario_roles, skip INSERT/DELETE
+    if (query.includes('f.funcionalidad_id') && (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE') || !query.includes('f.activo = TRUE') || !query.includes('JOIN funcionalidades'))) {
+         // For the /api/menu check which requires functionality active checking too
+         throw new Error("Security SQL constraint missing: The authorization query must validate that roles, permissions and functionalities are active.");
+    } else if (query.includes('SELECT') && (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE'))) {
+         throw new Error("Security SQL constraint missing: The authorization query must validate that roles and permissions are active.");
+    }
+
+        // return allowed permissions
+        return [mockAllowedFunctionalities.map(id => ({ funcionalidad_id: id }))];
+    } else if (query.includes('FROM roles') && query.includes('COUNT(*)')) {
+        // Simulate that roles 1, 2, 3, 99 exist and are active (if requested).
+        // We return 0 for role 9999 so it fails validation
+        let count = 0;
+        if (params && Array.isArray(params)) {
+            for (const roleId of params) {
+                if ([1, 2, 3, 99].includes(roleId)) {
+                     // wait, role 2 was previously "inactive" in mockRolesState! Let's match it!
+                     // In mockRolesState: 1 is active, 2 is inactive, 3 is active, 99 is active
+                     if (roleId === 2 && query.includes('activo = TRUE')) {
+                         continue;
+                     }
+                     count++;
+                }
+            }
+        }
+        return [[{ count: count }]];
+    } else if (query.includes('FROM permisos') && query.includes('COUNT(*)')) {
+        // Simulate permission existence check
+        let count = 0;
+        if (params && Array.isArray(params)) {
+            count = params.length; // Just simulate all requested permissions exist for simplicity
+        }
+        return [[{ count: count }]];
+    } else if (query.includes('FROM roles') && query.includes('SELECT id')) {
+        return [[{ id: params ? params[0] : 1 }]];
+    } else if (query.includes('FROM funcionalidades') && query.includes('SELECT id')) {
+        return [[{ id: params ? params[0] : 1 }]];
+    } else if (query.includes('FROM usuarios')) {
+        return [[{ id: 1, usuario: 'testuser', rol: 'admin' }]];
+    } else if (query.includes('FROM rol_permisos') && query.includes('COUNT(*)')) {
+        // Explicitly simulate database state for roles and permissions via an object map
+        const mockRolesState = {
+            1: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: true },
+            2: { rolActivo: false, adminAccessActivo: true, hasAdminAccess: true },
+            3: { rolActivo: true, adminAccessActivo: false, hasAdminAccess: true },
+            99: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: false }
+        };
+
+        let count = 0;
+        if (params && Array.isArray(params)) {
+            for (const roleId of params) {
+                const roleState = mockRolesState[roleId];
+                if (roleState && roleState.hasAdminAccess) {
+                    const rolActivoConditionMet = query.includes('r.activo = TRUE') ? roleState.rolActivo : true;
+                    const permActivoConditionMet = query.includes('p.activo = TRUE') ? roleState.adminAccessActivo : true;
+
+                    if (rolActivoConditionMet && permActivoConditionMet) {
+                        count++;
+                    }
+                }
+            }
+        }
+        return [[{ count: count }]];
+    }
+    return [[]];
+};
+
 mysql.createPool = () => ({
     getConnection: async () => ({
         release: () => {},
         beginTransaction: async () => {},
         commit: async () => {},
         rollback: async () => {},
-        execute: async () => {} // Mock execute within transaction
+        execute: dbExecuteMock // Use the same mock executor for transaction connections
     }),
-    execute: async (query, params) => {
-        if (query.includes('FROM menu_items')) {
-            return [mockMenuItems];
-        } else if (query.includes('FROM usuario_roles')) {
-
-        if (query.includes('f.funcionalidad_id') && (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE') || !query.includes('f.activo = TRUE') || !query.includes('JOIN funcionalidades'))) {
-             // For the /api/menu check which requires functionality active checking too
-             throw new Error("Security SQL constraint missing: The authorization query must validate that roles, permissions and functionalities are active.");
-        } else if (!query.includes('r.activo = TRUE') || !query.includes('p.activo = TRUE')) {
-             throw new Error("Security SQL constraint missing: The authorization query must validate that roles and permissions are active.");
-        }
-
-            // return allowed permissions
-            return [mockAllowedFunctionalities.map(id => ({ funcionalidad_id: id }))];
-        } else if (query.includes('FROM usuarios')) {
-            return [[{ id: 1, usuario: 'testuser', rol: 'admin' }]];
-        } else if (query.includes('FROM rol_permisos') && query.includes('COUNT(*)')) {
-            // Explicitly simulate database state for roles and permissions via an object map
-            const mockRolesState = {
-                1: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: true },
-                2: { rolActivo: false, adminAccessActivo: true, hasAdminAccess: true },
-                3: { rolActivo: true, adminAccessActivo: false, hasAdminAccess: true },
-                99: { rolActivo: true, adminAccessActivo: true, hasAdminAccess: false }
-            };
-
-            let count = 0;
-            if (params && Array.isArray(params)) {
-                for (const roleId of params) {
-                    const roleState = mockRolesState[roleId];
-                    if (roleState && roleState.hasAdminAccess) {
-                        const rolActivoConditionMet = query.includes('r.activo = TRUE') ? roleState.rolActivo : true;
-                        const permActivoConditionMet = query.includes('p.activo = TRUE') ? roleState.adminAccessActivo : true;
-
-                        if (rolActivoConditionMet && permActivoConditionMet) {
-                            count++;
-                        }
-                    }
-                }
-            }
-            return [[{ count: count }]];
-        }
-        return [[]];
-    }
+    execute: dbExecuteMock
 });
 
 process.env.AUTH_SECRET = 'test_secret_integration';
@@ -269,6 +299,20 @@ async function testMenuAPI() {
         });
         if (lockoutSuccessRes.status !== 200) {
             console.error(`Integration test failed: Valid role assignment should pass lockout check. Expected 200, got ${lockoutSuccessRes.status}`);
+            process.exit(1);
+        }
+
+        // Attempt 5: Non-existent roles trigger 400
+        const nonExistentRolesRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `auth_token=${token}`
+            },
+            body: JSON.stringify({ roles: [9999] }) // 9999 is not in the mock list
+        });
+        if (nonExistentRolesRes.status !== 400) {
+            console.error(`Integration test failed: Non-existent role assignment should return 400. Expected 400, got ${nonExistentRolesRes.status}`);
             process.exit(1);
         }
 

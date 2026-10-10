@@ -206,7 +206,7 @@ app.post('/api/login', async (req, res) => {
 
         res.cookie('auth_token', token, {
             httpOnly: true,
-            secure: false, // Since it's HTTP port 3000
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: 24 * 60 * 60 * 1000 // 24 hours
         });
@@ -332,7 +332,7 @@ app.get('/api/me', async (req, res) => {
 app.post('/api/logout', (req, res) => {
     res.cookie('auth_token', '', {
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         expires: new Date(0) // Expire immediately
     });
@@ -409,11 +409,34 @@ app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, 
         const { funcId } = req.params;
         const { permisos } = req.body; // Array of permission IDs
 
+        if (!Array.isArray(permisos)) {
+            return res.status(400).json({ error: 'El campo permisos debe ser un arreglo válido.' });
+        }
+
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
+
+            const [funcCheck] = await connection.execute('SELECT id FROM funcionalidades WHERE id = ?', [funcId]);
+            if (funcCheck.length === 0) {
+                await connection.rollback();
+                return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
+            }
+
+            if (permisos.length > 0) {
+                const placeholders = permisos.map(() => '?').join(',');
+                const [permisosCheck] = await connection.execute(
+                    `SELECT COUNT(*) as count FROM permisos WHERE id IN (${placeholders})`,
+                    permisos
+                );
+                if (parseInt(permisosCheck[0].count) !== permisos.length) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: 'Uno o más permisos proporcionados no existen.' });
+                }
+            }
+
             await connection.execute('DELETE FROM funcionalidad_permisos WHERE funcionalidad_id = ?', [funcId]);
-            if (permisos && permisos.length > 0) {
+            if (permisos.length > 0) {
                 const placeholders = permisos.map(() => '(?, ?)').join(',');
                 const values = permisos.flatMap(permisoId => [funcId, permisoId]);
                 await connection.execute(`INSERT INTO funcionalidad_permisos (funcionalidad_id, permiso_id) VALUES ${placeholders}`, values);
@@ -598,32 +621,46 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'El campo roles debe ser un arreglo válido.' });
         }
 
-        // Check if removing admin.access from self
-        if (req.userId === parseInt(userId)) {
-             // Let's verify if the new roles still grant admin.access via active permissions and active roles
-             if (roles.length > 0) {
-                 const placeholders = roles.map(() => '?').join(',');
-                 const query = `
-                     SELECT COUNT(*) as count
-                     FROM rol_permisos rp
-                     JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
-                     JOIN roles r ON rp.rol_id = r.id AND r.activo = TRUE
-                     WHERE rp.rol_id IN (${placeholders}) AND p.codigo = 'admin.access'
-                 `;
-                 const [result] = await pool.execute(query, roles);
-                 if (parseInt(result[0].count) === 0) {
-                     return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador.' });
-                 }
-             } else {
-                 return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador.' });
-             }
+        // Verify all provided roles exist and are active
+        if (roles.length > 0) {
+            const placeholders = roles.map(() => '?').join(',');
+            const [rolesCheck] = await pool.execute(
+                `SELECT COUNT(*) as count FROM roles WHERE id IN (${placeholders}) AND activo = TRUE`,
+                roles
+            );
+            if (parseInt(rolesCheck[0].count) !== roles.length) {
+                return res.status(400).json({ error: 'Uno o más roles proporcionados no existen o están inactivos.' });
+            }
         }
 
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
+
+            // Check if removing admin.access from self securely inside transaction
+            if (req.userId === parseInt(userId)) {
+                 if (roles.length > 0) {
+                     const placeholders = roles.map(() => '?').join(',');
+                     const query = `
+                         SELECT COUNT(*) as count
+                         FROM rol_permisos rp
+                         JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                         JOIN roles r ON rp.rol_id = r.id AND r.activo = TRUE
+                         WHERE rp.rol_id IN (${placeholders}) AND p.codigo = 'admin.access'
+                     `;
+                     const [result] = await connection.execute(query, roles);
+                     if (parseInt(result[0].count) === 0) {
+                         await connection.rollback();
+                         return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador efectivos.' });
+                     }
+                 } else {
+                     await connection.rollback();
+                     return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador efectivos.' });
+                 }
+            }
+
             await connection.execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [userId]);
-            if (roles && roles.length > 0) {
+            if (roles.length > 0) {
                 const placeholders = roles.map(() => '(?, ?)').join(',');
                 const values = roles.flatMap(roleId => [userId, roleId]);
                 await connection.execute(`INSERT INTO usuario_roles (usuario_id, rol_id) VALUES ${placeholders}`, values);
@@ -658,11 +695,34 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
         const { rolId } = req.params;
         const { permisos } = req.body; // Array of permission IDs
 
+        if (!Array.isArray(permisos)) {
+            return res.status(400).json({ error: 'El campo permisos debe ser un arreglo válido.' });
+        }
+
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
+
+            const [rolCheck] = await connection.execute('SELECT id FROM roles WHERE id = ?', [rolId]);
+            if (rolCheck.length === 0) {
+                await connection.rollback();
+                return res.status(404).json({ error: 'El rol proporcionado no existe.' });
+            }
+
+            if (permisos.length > 0) {
+                const placeholders = permisos.map(() => '?').join(',');
+                const [permisosCheck] = await connection.execute(
+                    `SELECT COUNT(*) as count FROM permisos WHERE id IN (${placeholders})`,
+                    permisos
+                );
+                if (parseInt(permisosCheck[0].count) !== permisos.length) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: 'Uno o más permisos proporcionados no existen.' });
+                }
+            }
+
             await connection.execute('DELETE FROM rol_permisos WHERE rol_id = ?', [rolId]);
-            if (permisos && permisos.length > 0) {
+            if (permisos.length > 0) {
                 const placeholders = permisos.map(() => '(?, ?)').join(',');
                 const values = permisos.flatMap(permisoId => [rolId, permisoId]);
                 await connection.execute(`INSERT INTO rol_permisos (rol_id, permiso_id) VALUES ${placeholders}`, values);
