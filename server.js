@@ -530,11 +530,39 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre, descripcion, activo } = req.body;
-        await pool.execute(
-            'UPDATE roles SET nombre = ?, descripcion = ?, activo = ? WHERE id = ?',
-            [nombre, descripcion, activo ? 1 : 0, id]
-        );
-        res.status(200).json({ message: 'Rol actualizado exitosamente.' });
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            await connection.execute(
+                'UPDATE roles SET nombre = ?, descripcion = ?, activo = ? WHERE id = ?',
+                [nombre, descripcion, activo ? 1 : 0, id]
+            );
+
+            // Global minimum admin check
+            const adminQuery = `
+                SELECT COUNT(DISTINCT ur.usuario_id) as count
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                WHERE p.codigo = 'admin.access'
+            `;
+            const [adminCheck] = await connection.execute(adminQuery);
+            if (parseInt(adminCheck[0].count) === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+            }
+
+            await connection.commit();
+            res.status(200).json({ message: 'Rol actualizado exitosamente.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
     } catch (error) {
         console.error('Error in PUT /api/admin/roles:', error);
         res.status(500).json({ error: 'Error interno del servidor.' });
@@ -637,34 +665,28 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
         try {
             await connection.beginTransaction();
 
-            // Check if removing admin.access from self securely inside transaction
-            if (req.userId === parseInt(userId)) {
-                 if (roles.length > 0) {
-                     const placeholders = roles.map(() => '?').join(',');
-                     const query = `
-                         SELECT COUNT(*) as count
-                         FROM rol_permisos rp
-                         JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
-                         JOIN roles r ON rp.rol_id = r.id AND r.activo = TRUE
-                         WHERE rp.rol_id IN (${placeholders}) AND p.codigo = 'admin.access'
-                     `;
-                     const [result] = await connection.execute(query, roles);
-                     if (parseInt(result[0].count) === 0) {
-                         await connection.rollback();
-                         return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador efectivos.' });
-                     }
-                 } else {
-                     await connection.rollback();
-                     return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de administrador efectivos.' });
-                 }
-            }
-
             await connection.execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [userId]);
             if (roles.length > 0) {
                 const placeholders = roles.map(() => '(?, ?)').join(',');
                 const values = roles.flatMap(roleId => [userId, roleId]);
                 await connection.execute(`INSERT INTO usuario_roles (usuario_id, rol_id) VALUES ${placeholders}`, values);
             }
+
+            // Global minimum admin check
+            const adminQuery = `
+                SELECT COUNT(DISTINCT ur.usuario_id) as count
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                WHERE p.codigo = 'admin.access'
+            `;
+            const [adminCheck] = await connection.execute(adminQuery);
+            if (parseInt(adminCheck[0].count) === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+            }
+
             await connection.commit();
             res.status(200).json({ message: 'Roles de usuario actualizados.' });
         } catch (error) {
@@ -727,6 +749,22 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
                 const values = permisos.flatMap(permisoId => [rolId, permisoId]);
                 await connection.execute(`INSERT INTO rol_permisos (rol_id, permiso_id) VALUES ${placeholders}`, values);
             }
+
+            // Global minimum admin check
+            const adminQuery = `
+                SELECT COUNT(DISTINCT ur.usuario_id) as count
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                WHERE p.codigo = 'admin.access'
+            `;
+            const [adminCheck] = await connection.execute(adminQuery);
+            if (parseInt(adminCheck[0].count) === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+            }
+
             await connection.commit();
             res.status(200).json({ message: 'Permisos de rol actualizados.' });
         } catch (error) {

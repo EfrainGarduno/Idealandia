@@ -25,8 +25,12 @@ const mockMenuItems = [
 ];
 
 let mockAllowedFunctionalities = [];
+let mockNextAdminCount = 1; // By default, simulate 1 active admin left
 
 const dbExecuteMock = async (query, params) => {
+    if (query.includes('COUNT(DISTINCT ur.usuario_id)')) {
+        return [[{ count: mockNextAdminCount }]];
+    }
     if (query.includes('FROM menu_items')) {
         return [mockMenuItems];
     } else if (query.includes('FROM usuario_roles') && !query.includes('DELETE FROM') && !query.includes('INSERT INTO')) {
@@ -238,63 +242,38 @@ async function testMenuAPI() {
         console.log("Obsolete usuarios.rol fallback check passed (unauthorized when missing effective permissions).");
 
         // Test 6: Prevent administrative lockout
-        // A user with valid admin.access (via requireAdmin mock) trying to remove their own access via empty roles
         mockAllowedFunctionalities = ['admin.access']; // Allow requireAdmin middleware to pass
 
-        // Attempt 1: Empty array
+        // Test global admin count dropping to 0
+        mockNextAdminCount = 0;
+
+        // Attempt 1: Empty array (drops admin count to 0)
         const lockoutFailRes1 = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Cookie': `auth_token=${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
             body: JSON.stringify({ roles: [] })
         });
         if (lockoutFailRes1.status !== 400) {
-            console.error(`Integration test failed: Lockout prevention failed for empty array. Expected 400, got ${lockoutFailRes1.status}`);
+            console.error(`Integration test failed: Global lockout prevention failed for empty array. Expected 400, got ${lockoutFailRes1.status}`);
             process.exit(1);
         }
 
-        // Attempt 2: Missing roles field
+        // Attempt 2: Assigning a role that leaves global admins at 0 (e.g., removing admin role from last admin)
         const lockoutFailRes2 = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Cookie': `auth_token=${token}`
-            },
-            body: JSON.stringify({})
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
+            body: JSON.stringify({ roles: [99] }) // Valid role, but leaves admin count at 0
         });
         if (lockoutFailRes2.status !== 400) {
-            console.error(`Integration test failed: Lockout prevention failed for missing roles field. Expected 400, got ${lockoutFailRes2.status}`);
+            console.error(`Integration test failed: Global lockout prevention failed when assigning non-admin roles. Expected 400, got ${lockoutFailRes2.status}`);
             process.exit(1);
         }
 
-        // Attempt 3: Inactive roles/permissions simulate DB returning count 0
-        // Role ID 2 is treated as inactive, Role 3 has inactive permissions, Role 99 lacks permissions.
-        const inactiveRolesToTest = [2, 3, 99];
-        for (const roleId of inactiveRolesToTest) {
-            const lockoutFailRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cookie': `auth_token=${token}` // Note: token sets userId=1
-                },
-                body: JSON.stringify({ roles: [roleId] })
-            });
-            if (lockoutFailRes.status !== 400) {
-                console.error(`Integration test failed: Lockout prevention failed for inactive role/permission (${roleId}). Expected 400, got ${lockoutFailRes.status}`);
-                process.exit(1);
-            }
-        }
-
-        // Attempt 4: Valid active roles/permissions simulate DB returning count 1
-        // Role ID 1 is treated as active with admin permissions by the mock.
+        // Attempt 3: Valid active assignment where global count remains >= 1
+        mockNextAdminCount = 1;
         const lockoutSuccessRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Cookie': `auth_token=${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
             body: JSON.stringify({ roles: [1] }) // Simulating assigning an active admin role
         });
         if (lockoutSuccessRes.status !== 200) {
@@ -302,13 +281,10 @@ async function testMenuAPI() {
             process.exit(1);
         }
 
-        // Attempt 5: Non-existent roles trigger 400
+        // Attempt 4: Non-existent roles trigger 400
         const nonExistentRolesRes = await fetch(`http://localhost:3001/api/admin/usuario_roles/1`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Cookie': `auth_token=${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Cookie': `auth_token=${token}` },
             body: JSON.stringify({ roles: [9999] }) // 9999 is not in the mock list
         });
         if (nonExistentRolesRes.status !== 400) {
