@@ -389,42 +389,94 @@
             </div>
         </section>
 
-        <section id="chat" class="content-section" style="display: none;">
+        <section id="chat" class="content-section chat-section-override" style="display: none;">
             <div id="chat-container">
 
-                <div id="avatar-container" style="display: none; justify-content: center; align-items: center; padding: 20px; background-color: #f8f9fa; border-bottom: 1px solid #eee;">
-                    <div style="position: relative; width: 100px; height: 100px;">
-                        <img id="avatar-img" src="img/idealita-avatar.jpg" alt="Idealita Avatar" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid #6c40f7;">
-                        <div id="avatar-mouth" style="position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); width: 20px; height: 5px; background-color: #333; border-radius: 10px; display: none; transition: height 0.1s ease-in-out;"></div>
+                <div id="avatar-container" style="display: none;">
+                    <button id="btn-toggle-avatar" class="mobile-toggle-btn" aria-label="Minimizar Avatar" style="display: none;">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div id="avatar-visual-wrapper">
+                        <!-- Nivel 1: Avatar Holográfico SVG -->
+                        <svg id="idealita-hologram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+                            <defs>
+                                <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="rgba(108, 64, 247, 0.4)" />
+                                    <stop offset="100%" stop-color="rgba(108, 64, 247, 0)" />
+                                </radialGradient>
+                                <linearGradient id="body-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#4db8ff" />
+                                    <stop offset="100%" stop-color="#6c40f7" />
+                                </linearGradient>
+                            </defs>
+                            <!-- Glow trasero -->
+                            <circle cx="200" cy="200" r="180" fill="url(#glow)" class="hologram-glow" />
+
+                            <!-- Torso / Hombros -->
+                            <path class="avatar-torso" d="M120 400 C120 300, 150 260, 200 260 C250 260, 280 300, 280 400 Z" fill="url(#body-grad)" opacity="0.85"/>
+
+                            <!-- Brazos (animables para explicar) -->
+                            <g class="avatar-arms">
+                                <path class="arm-left" d="M140 280 Q100 320, 110 380" fill="none" stroke="#4db8ff" stroke-width="15" stroke-linecap="round" />
+                                <path class="arm-right" d="M260 280 Q300 320, 290 380" fill="none" stroke="#4db8ff" stroke-width="15" stroke-linecap="round" />
+                            </g>
+
+                            <!-- Cabeza y rostro -->
+                            <g class="avatar-head">
+                                <!-- Base de la cabeza -->
+                                <circle cx="200" cy="180" r="70" fill="#e0f7fa" stroke="#4db8ff" stroke-width="3"/>
+                                <!-- Cabello/Detalle tecnológico -->
+                                <path d="M130 180 C130 100, 270 100, 270 180 C280 140, 120 140, 130 180 Z" fill="#6c40f7" opacity="0.9"/>
+
+                                <!-- Ojos (Parpadeo) -->
+                                <g class="avatar-eyes">
+                                    <ellipse cx="175" cy="170" rx="8" ry="12" fill="#6c40f7" />
+                                    <ellipse cx="225" cy="170" rx="8" ry="12" fill="#6c40f7" />
+                                    <!-- Brillo -->
+                                    <circle cx="177" cy="166" r="3" fill="#fff" />
+                                    <circle cx="227" cy="166" r="3" fill="#fff" />
+                                </g>
+
+                                <!-- Boca (Analizador de amplitud) -->
+                                <g id="avatar-mouth-container" transform="translate(200, 210)">
+                                    <path id="avatar-mouth" d="M -15 0 Q 0 0 15 0" fill="none" stroke="#6c40f7" stroke-width="4" stroke-linecap="round" />
+                                    <path id="avatar-mouth-open" d="M -15 0 Q 0 10 15 0 Q 0 0 -15 0" fill="#6c40f7" style="display: none;" />
+                                </g>
+                            </g>
+                        </svg>
                     </div>
                 </div>
 
-                <div id="chat-history">
-                    <div class="message idealita-message">
-                        ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
+                <div id="chat-main-area">
+                    <div id="chat-history">
+                        <div class="message idealita-message">
+                            ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
+                        </div>
                     </div>
-                </div>
 
-                <div id="input-container">
-                    <input
-                        type="text"
-                        id="user-input"
-                        placeholder="Escribe tu mensaje..."
-                        aria-label="Escribe tu mensaje"
-                    >
+                    <div id="chat-controls-wrapper">
+                        <div id="input-container">
+                            <input
+                                type="text"
+                                id="user-input"
+                                placeholder="Escribe tu mensaje..."
+                                aria-label="Escribe tu mensaje"
+                            >
 
-                    <button id="send-btn">Enviar</button>
-                </div>
+                            <button id="send-btn">Enviar</button>
+                        </div>
 
-                <div id="live-controls" style="margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #f0f0f0; padding: 10px; border-radius: 8px;">
-                    <button id="btn-start-live" class="btn btn-primary" style="background-color: #6c40f7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
-                        🎙️ Hablar con Idealita
-                    </button>
-                    <button id="btn-mute-mic" class="btn btn-secondary" style="background-color: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none; margin-right: 10px;" aria-label="Silenciar micrófono" title="Silenciar micrófono"><i class="fas fa-microphone"></i></button>
-                    <button id="btn-stop-live" class="btn btn-secondary" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none;">
-                        Terminar Live
-                    </button>
-                    <span id="live-status" style="font-weight: 500; color: #555;">Desconectado</span>
+                        <div id="live-controls" style="margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #f0f0f0; padding: 10px; border-radius: 8px;">
+                            <button id="btn-start-live" class="btn btn-primary" style="background-color: #6c40f7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                🎙️ Hablar con Idealita
+                            </button>
+                            <button id="btn-mute-mic" class="btn btn-secondary" style="background-color: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none; margin-right: 10px;" aria-label="Silenciar micrófono" title="Silenciar micrófono"><i class="fas fa-microphone"></i></button>
+                            <button id="btn-stop-live" class="btn btn-secondary" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none;">
+                                Terminar Live
+                            </button>
+                            <span id="live-status" style="font-weight: 500; color: #555;">Desconectado</span>
+                        </div>
+                    </div>
                 </div>
 
             </div>
@@ -1448,6 +1500,18 @@
 
             function updateLiveStatus(status) {
                 if (liveStatus) liveStatus.textContent = status;
+
+                const hologram = document.getElementById('idealita-hologram');
+                if (!hologram) return;
+
+                // Limpiar estados previos
+                hologram.classList.remove('state-listening', 'state-speaking');
+
+                if (status === "Escuchando...") {
+                    hologram.classList.add('state-listening');
+                } else if (status === "Hablando...") {
+                    hologram.classList.add('state-speaking');
+                }
             }
 
             // Function to base64 encode ArrayBuffer
@@ -1558,13 +1622,19 @@
                             }
                             let average = sum / dataArray.length;
 
-                            const avatarMouth = document.getElementById('avatar-mouth');
-                            if (avatarMouth) {
+                            const mouthClosed = document.getElementById('avatar-mouth');
+                            const mouthOpen = document.getElementById('avatar-mouth-open');
+
+                            if (mouthClosed && mouthOpen) {
                                 if (average > 2) {
-                                    avatarMouth.style.display = 'block';
-                                    avatarMouth.style.height = (5 + (average / 8)) + 'px';
+                                    mouthClosed.style.display = 'none';
+                                    mouthOpen.style.display = 'block';
+                                    // Scale the open mouth on Y axis based on amplitude for lip-sync effect
+                                    const scaleY = Math.min(1 + (average / 15), 3.5);
+                                    mouthOpen.setAttribute('transform', `scale(1, ${scaleY})`);
                                 } else {
-                                    avatarMouth.style.display = 'none';
+                                    mouthClosed.style.display = 'block';
+                                    mouthOpen.style.display = 'none';
                                 }
                             }
 
@@ -1670,6 +1740,11 @@
                                 }
 
                                 updateLiveStatus("Escuchando...");
+
+                                const mouthClosed = document.getElementById('avatar-mouth');
+                                const mouthOpen = document.getElementById('avatar-mouth-open');
+                                if (mouthClosed) mouthClosed.style.display = 'block';
+                                if (mouthOpen) mouthOpen.style.display = 'none';
 
                                 // Close the transcription bubble immediately without waiting for turnComplete
                                 window.currentLiveMessageDiv = null;
@@ -1778,8 +1853,10 @@
                     try { window.avatarAnalyser.disconnect(); } catch(e){}
                     window.avatarAnalyser = null;
                 }
-                const avatarMouth = document.getElementById('avatar-mouth');
-                if (avatarMouth) avatarMouth.style.display = 'none';
+                const mouthClosed = document.getElementById('avatar-mouth');
+                const mouthOpen = document.getElementById('avatar-mouth-open');
+                if (mouthClosed) mouthClosed.style.display = 'block';
+                if (mouthOpen) mouthOpen.style.display = 'none';
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';
                 const avatarContainer = document.getElementById('avatar-container');
@@ -1790,6 +1867,23 @@
             if (btnStartLive) btnStartLive.addEventListener('click', startLive);
             if (btnStopLive) btnStopLive.addEventListener('click', stopLive);
 
+            // Toggle Mobile Avatar
+            const btnToggleAvatar = document.getElementById('btn-toggle-avatar');
+            const avatarContainer = document.getElementById('avatar-container');
+            let isAvatarMinimized = false;
+
+            if (btnToggleAvatar) {
+                btnToggleAvatar.addEventListener('click', () => {
+                    isAvatarMinimized = !isAvatarMinimized;
+                    if (isAvatarMinimized) {
+                        avatarContainer.classList.add('minimized');
+                        btnToggleAvatar.innerHTML = '<i class="fas fa-chevron-down"></i>';
+                    } else {
+                        avatarContainer.classList.remove('minimized');
+                        btnToggleAvatar.innerHTML = '<i class="fas fa-chevron-up"></i>';
+                    }
+                });
+            }
 
             // Mobile menu logic
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
