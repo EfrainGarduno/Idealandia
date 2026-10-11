@@ -211,14 +211,16 @@
         .chat-section-override {
             max-width: 900px !important;
             width: 90% !important;
-            height: 80vh;
+            flex: 1;
+            min-height: 0;
             display: flex;
             flex-direction: column;
         }
 
         #chat-container {
             width: 100%;
-            height: 100%;
+            flex: 1;
+            min-height: 0;
             background-color: white;
             border: 1px solid #ccc;
             border-radius: 8px;
@@ -252,7 +254,8 @@
         }
 
         #chat-main-area {
-            flex-grow: 1;
+            flex: 1;
+            min-height: 0;
             display: flex;
             flex-direction: column;
             min-width: 0; /* allows flex children to shrink below content size if needed */
@@ -273,7 +276,7 @@
             background: #fafafa;
         }
 
-        /* Avatar Animation States */
+        /* Avatar Animation States - Realistic Edition */
         @keyframes blink {
             0%, 96%, 98%, 100% { transform: scaleY(1); }
             97%, 99% { transform: scaleY(0.1); }
@@ -281,41 +284,64 @@
 
         @keyframes head-bob {
             0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-3px) rotate(1deg); }
+            50% { transform: translateY(-2px) rotate(0.5deg); }
+        }
+
+        @keyframes subtle-breath {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-2px) scaleY(1.02); }
         }
 
         @keyframes arm-gesture-left {
-            0%, 100% { d: path("M140 280 Q100 320, 110 380"); }
-            50% { d: path("M140 280 Q70 280, 80 340"); }
+            0%, 100% { transform: rotate(0deg) translateX(0); }
+            50% { transform: rotate(5deg) translateX(-5px); }
         }
 
         @keyframes arm-gesture-right {
-            0%, 100% { d: path("M260 280 Q300 320, 290 380"); }
-            50% { d: path("M260 280 Q330 280, 320 340"); }
+            0%, 100% { transform: rotate(0deg) translateX(0); }
+            50% { transform: rotate(-5deg) translateX(5px); }
         }
 
         .avatar-eyes {
-            transform-origin: 200px 170px;
+            transform-origin: 200px 165px;
             animation: blink 4s infinite;
         }
 
         .avatar-head {
-            transform-origin: 200px 180px;
-            animation: head-bob 5s infinite ease-in-out;
+            transform-origin: 200px 250px;
+            animation: head-bob 6s infinite ease-in-out;
+        }
+
+        .avatar-torso {
+            transform-origin: 200px 400px;
+            animation: subtle-breath 4s infinite ease-in-out;
+        }
+
+        .arm-left {
+            transform-origin: 110px 320px;
+        }
+
+        .arm-right {
+            transform-origin: 290px 320px;
         }
 
         /* Listening State */
         .state-listening .avatar-head {
-            transform: rotate(3deg) translateY(2px);
+            transform: rotate(2deg) translateY(2px) translateX(2px);
             animation: none;
+            transition: transform 0.5s ease;
         }
 
         .state-listening .hologram-glow {
-            fill: rgba(108, 64, 247, 0.6);
-            transition: fill 0.3s ease;
+            fill: rgba(108, 64, 247, 0.7);
+            transition: fill 0.5s ease;
         }
 
         /* Speaking / Explaining State */
+        .state-speaking .avatar-head {
+            animation: head-bob 3s infinite ease-in-out;
+        }
+
         .state-speaking .arm-left {
             animation: arm-gesture-left 3s infinite ease-in-out;
         }
@@ -325,8 +351,14 @@
         }
 
         .state-speaking .hologram-glow {
-            fill: rgba(77, 184, 255, 0.5);
-            transition: fill 0.3s ease;
+            fill: rgba(162, 127, 255, 0.6);
+            transition: fill 0.5s ease;
+            animation: pulse-glow 2s infinite ease-in-out alternate;
+        }
+
+        @keyframes pulse-glow {
+            from { opacity: 0.8; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1.02); }
         }
 
         .message {
@@ -709,6 +741,7 @@
 
 /* FLOATING SOCIAL MEDIA ICONS */
 .floating-social {
+    pointer-events: none;
     position: fixed;
     bottom: 20px;
     right: 20px;
@@ -718,6 +751,7 @@
 }
 
 .social-icon {
+    pointer-events: auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -897,7 +931,8 @@
     }
 
     #content-area {
-        padding: 80px 20px 20px 20px; /* Add top padding to clear the menu button */
+        padding: 80px 0 0 0;
+        max-width: 100vw; /* Add top padding to clear the menu button */
         width: 100%;
         overflow-y: visible; /* Let body handle vertical scroll */
         overflow-x: hidden;
@@ -965,13 +1000,24 @@
         box-sizing: border-box;
     }
 
+    .chat-section-override {
+        height: calc(100dvh - 120px);
+        max-height: calc(100dvh - 120px);
+        width: 100% !important;
+        margin: 0;
+        border-radius: 0;
+    }
+
     #chat-container {
         width: 100%;
-        max-width: 95vw;
-        height: 70vh;
-        min-height: 400px;
+        max-width: 100%;
+        flex: 1;
+        min-height: 0;
         box-sizing: border-box;
         flex-direction: column;
+        border-radius: 0;
+        border: none;
+        border-top: 1px solid #eee;
     }
 
     #avatar-container {
@@ -1039,6 +1085,7 @@
     .floating-social {
         bottom: 10px;
         right: 10px;
+        display: none;
         flex-direction: column;
         gap: 8px;
         z-index: 50;
