@@ -982,6 +982,7 @@
 
 .admin-tab-content {
     display: none;
+    width: 100%;
 }
 
 .admin-tab-content.active {
@@ -1008,4 +1009,5 @@
 
 .table-responsive {
     overflow-x: auto;
+    width: 100%;
 }
