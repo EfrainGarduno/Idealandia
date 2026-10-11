@@ -687,7 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCreateUser = document.createElement('button');
     btnCreateUser.textContent = 'Crear Usuario';
     btnCreateUser.className = 'btn btn-primary';
-    btnCreateUser.style.marginBottom = '1rem';
 
     // Add create user button and search input to Users tab
     const usersTab = document.getElementById('admin-usuarios');
@@ -698,6 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
         controlsDiv.style.display = 'flex';
         controlsDiv.style.gap = '10px';
         controlsDiv.style.marginBottom = '10px';
+        controlsDiv.style.flexWrap = 'wrap';
 
         controlsDiv.appendChild(btnCreateUser);
 
@@ -783,13 +783,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rolesTab) {
         const btn = document.getElementById('admin-btn-create-rol');
         if (btn) {
+            const controlsDiv = document.createElement('div');
+            controlsDiv.style.display = 'flex';
+            controlsDiv.style.gap = '10px';
+            controlsDiv.style.marginBottom = '10px';
+            controlsDiv.style.flexWrap = 'wrap';
+
+            btn.parentNode.insertBefore(controlsDiv, btn);
+            controlsDiv.appendChild(btn);
+
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
             searchInput.id = 'search-roles';
             searchInput.placeholder = 'Buscar roles...';
             searchInput.className = 'form-input';
-            searchInput.style.marginLeft = '10px';
-            btn.after(searchInput);
+
+            controlsDiv.appendChild(searchInput);
 
             searchInput.addEventListener('input', (e) => {
                 const term = e.target.value.toLowerCase();

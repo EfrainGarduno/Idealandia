@@ -311,7 +311,7 @@
 
             <div class="admin-tab-content" id="admin-roles">
                 <h3>Gestión de Roles</h3>
-                <button id="admin-btn-create-rol" class="btn btn-primary" style="margin-bottom: 1rem;">Crear Rol</button>
+                <button id="admin-btn-create-rol" class="btn btn-primary">Crear Rol</button>
                 <div class="table-responsive">
                     <table class="admin-table">
                         <thead>
@@ -391,6 +391,13 @@
 
         <section id="chat" class="content-section" style="display: none;">
             <div id="chat-container">
+
+                <div id="avatar-container" style="display: none; justify-content: center; align-items: center; padding: 20px; background-color: #f8f9fa; border-bottom: 1px solid #eee;">
+                    <div style="position: relative; width: 100px; height: 100px;">
+                        <img id="avatar-img" src="img/idealita-avatar.jpg" alt="Idealita Avatar" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid #6c40f7;">
+                        <div id="avatar-mouth" style="position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); width: 20px; height: 5px; background-color: #333; border-radius: 10px; display: none; transition: height 0.1s ease-in-out;"></div>
+                    </div>
+                </div>
 
                 <div id="chat-history">
                     <div class="message idealita-message">
