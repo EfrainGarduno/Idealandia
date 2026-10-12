@@ -1593,6 +1593,7 @@
                         let smoothedAverage = 0;
 
                         function globalAnimateAvatar() {
+                            if (!window.avatarAnalyser && !window.micAnalyser) return;
                             const hologram = document.getElementById('idealita-hologram');
                             if (!hologram) return;
 
