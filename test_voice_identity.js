@@ -99,6 +99,15 @@ window.AudioWorkletNode = class {
     disconnect() {}
 };
 
+// Mock window.matchMedia
+window.matchMedia = window.matchMedia || function() {
+    return {
+        matches: false,
+        addListener: function() {},
+        removeListener: function() {}
+    };
+};
+
 // Mock MediaDevices
 if (!window.navigator) {
     window.navigator = {};

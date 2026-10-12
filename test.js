@@ -56,6 +56,14 @@ const dom = new JSDOM(htmlContent, {
 const window = dom.window;
 const document = window.document;
 
+window.matchMedia = window.matchMedia || function() {
+    return {
+        matches: false,
+        addListener: function() {},
+        removeListener: function() {}
+    };
+};
+
 // Mock window.fetch for testing the API call
 let fetchCount = 0;
 

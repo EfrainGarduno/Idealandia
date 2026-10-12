@@ -1543,6 +1543,11 @@
                         const source = audioContext.createMediaStreamSource(micStream);
                         audioWorkletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
 
+                        // Setup microphone analyser for reactive avatar listening state
+                        window.micAnalyser = audioContext.createAnalyser();
+                        window.micAnalyser.fftSize = 256;
+                        source.connect(window.micAnalyser);
+
                         audioWorkletNode.port.onmessage = (event) => {
                             if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && isSetupComplete && !isMicMuted) {
                                 const pcmBuffer = event.data;
@@ -1580,17 +1585,81 @@
                         window.avatarAnalyser.fftSize = 256;
                         window.avatarAnalyser.connect(pcmPlaybackContext.destination);
 
-                        const dataArray = new Uint8Array(window.avatarAnalyser.frequencyBinCount);
+                        const outDataArray = new Uint8Array(window.avatarAnalyser.frequencyBinCount);
+                        // window.micAnalyser was initialized earlier for input audio
+                        let micDataArray = null;
+
+                        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                        let smoothedAverage = 0;
 
                         function globalAnimateAvatar() {
-                            if (!window.avatarAnalyser) return;
-                            window.avatarAnalyser.getByteFrequencyData(dataArray);
-                            let sum = 0;
-                            for (let i = 0; i < dataArray.length; i++) {
-                                sum += dataArray[i];
+                            if (!window.avatarAnalyser && !window.micAnalyser) return;
+                            const hologram = document.getElementById('idealita-hologram');
+                            if (!hologram) return;
+
+                            let currentAverage = 0;
+                            let isSpeaking = hologram.classList.contains('state-speaking');
+                            let isListening = hologram.classList.contains('state-listening');
+
+                            if (!prefersReducedMotion) {
+                                if (isSpeaking && window.avatarAnalyser) {
+                                    window.avatarAnalyser.getByteFrequencyData(outDataArray);
+                                    let sum = 0;
+                                    for (let i = 0; i < outDataArray.length; i++) {
+                                        sum += outDataArray[i];
+                                    }
+                                    currentAverage = sum / outDataArray.length;
+                                    smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
+
+                                    // Scale: 1 to ~1.05
+                                    const scale = 1 + (smoothedAverage / 255) * 0.05;
+                                    // Glow size: 15px base to ~30px
+                                    const glowSize = 15 + (smoothedAverage / 255) * 15;
+
+                                    hologram.style.setProperty('--avatar-scale', scale);
+                                    hologram.style.setProperty('--avatar-glow-size', `${glowSize}px`);
+                                    hologram.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 255) * 0.2})`);
+
+                                } else if (isListening && window.micAnalyser && !isMicMuted) {
+                                    if (!micDataArray) {
+                                        micDataArray = new Uint8Array(window.micAnalyser.frequencyBinCount);
+                                    }
+                                    window.micAnalyser.getByteFrequencyData(micDataArray);
+                                    let sum = 0;
+                                    for (let i = 0; i < micDataArray.length; i++) {
+                                        sum += micDataArray[i];
+                                    }
+                                    currentAverage = sum / micDataArray.length;
+                                    smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
+
+                                    // Scale: 1 to ~1.03
+                                    const scale = 1 + (smoothedAverage / 255) * 0.03;
+                                    // Glow size: 10px base to ~20px
+                                    const glowSize = 10 + (smoothedAverage / 255) * 10;
+
+                                    hologram.style.setProperty('--avatar-scale', scale);
+                                    hologram.style.setProperty('--avatar-glow-size', `${glowSize}px`);
+                                    hologram.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 255) * 0.3})`);
+                                } else {
+                                    // Idle or muted state fallback
+                                    smoothedAverage = smoothedAverage * 0.85; // smooth reset
+                                    hologram.style.setProperty('--avatar-scale', 1);
+                                    if(isSpeaking) {
+                                         hologram.style.setProperty('--avatar-glow-size', `15px`);
+                                         hologram.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, 0.8)`);
+                                    } else if(isListening) {
+                                         hologram.style.setProperty('--avatar-glow-size', `10px`);
+                                         hologram.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, 0.5)`);
+                                    } else {
+                                         hologram.style.setProperty('--avatar-glow-size', `0px`);
+                                         hologram.style.setProperty('--avatar-glow-color', `transparent`);
+                                    }
+                                }
+                            } else {
+                                // Ensure base scale if reduced motion
+                                hologram.style.setProperty('--avatar-scale', 1);
+                                // The base glow sizes and colors are already handled by the CSS fallback classes.
                             }
-                            let average = sum / dataArray.length;
-                            // Future logic for scaling or applying filters to the static image based on amplitude can go here
 
                             if (window.requestAnimationFrame) {
                                 window.currentMouthAnimId = window.requestAnimationFrame(globalAnimateAvatar);
@@ -1811,6 +1880,18 @@
                 if (window.avatarAnalyser) {
                     try { window.avatarAnalyser.disconnect(); } catch(e){}
                     window.avatarAnalyser = null;
+                }
+                if (window.micAnalyser) {
+                    try { window.micAnalyser.disconnect(); } catch(e){}
+                    window.micAnalyser = null;
+                }
+
+                const hologram = document.getElementById('idealita-hologram');
+                if(hologram) {
+                     hologram.style.setProperty('--avatar-scale', 1);
+                     hologram.style.setProperty('--avatar-glow-size', `0px`);
+                     hologram.style.setProperty('--avatar-glow-color', `transparent`);
+                     hologram.classList.remove('state-listening', 'state-speaking');
                 }
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';

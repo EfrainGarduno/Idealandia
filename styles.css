@@ -258,24 +258,39 @@
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
-            /* Basic animation for the image container to simulate holograhpic float */
+
+            /* Dynamic variables set by JS */
+            --avatar-scale: 1;
+            --avatar-glow-size: 0px;
+            --avatar-glow-color: transparent;
+
+            /* Apply filter for dynamic drop shadow */
+            filter: drop-shadow(0 0 var(--avatar-glow-size) var(--avatar-glow-color));
+
+            /* Basic animation for the image container to simulate holograhpic float,
+               while retaining the dynamic scale variable */
             animation: hologram-float 6s infinite ease-in-out;
+            transition: filter 0.15s ease-out; /* Smooth transition for glow changes */
         }
 
         @keyframes hologram-float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-5px); }
+            0%, 100% { transform: translateY(0) scale(var(--avatar-scale, 1)); }
+            50% { transform: translateY(-5px) scale(var(--avatar-scale, 1)); }
         }
 
-        /* State modifiers for the static image */
-        .state-listening #idealita-hologram {
-            filter: drop-shadow(0 0 10px rgba(108, 64, 247, 0.5));
-            transition: filter 0.3s ease;
-        }
-
-        .state-speaking #idealita-hologram {
-            filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.8));
-            transition: filter 0.3s ease;
+        /* State modifiers - Fallbacks if JS disabled or prefers-reduced-motion */
+        @media (prefers-reduced-motion: reduce) {
+            #idealita-hologram {
+                animation: none;
+                transform: scale(1) !important;
+                transition: filter 0.3s ease !important;
+            }
+            .state-listening #idealita-hologram {
+                filter: drop-shadow(0 0 10px rgba(108, 64, 247, 0.5));
+            }
+            .state-speaking #idealita-hologram {
+                filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.8));
+            }
         }
 
         #chat-main-area {
