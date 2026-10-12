@@ -11,6 +11,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
+
+    <!-- Markdown and Sanitization for Chat -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
 </head>
 
 <body>
@@ -392,147 +396,13 @@
         <section id="chat" class="content-section chat-section-override" style="display: none;">
             <div id="chat-container">
 
-                <div id="avatar-container" style="display: none;">
+                <div id="avatar-container">
                     <button id="btn-toggle-avatar" class="mobile-toggle-btn" aria-label="Minimizar Avatar" style="display: none;">
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div id="avatar-visual-wrapper">
-                        <!-- Nivel 1: Avatar Holográfico SVG - Realistic Version -->
-                        <!-- Nivel 1: Avatar Holográfico SVG - Polished Holographic Realistic Edition -->
-                        <svg id="idealita-hologram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
-                            <defs>
-                                <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-                                    <stop offset="0%" stop-color="rgba(108, 64, 247, 0.4)" />
-                                    <stop offset="60%" stop-color="rgba(77, 184, 255, 0.1)" />
-                                    <stop offset="100%" stop-color="rgba(108, 64, 247, 0)" />
-                                </radialGradient>
-                                <linearGradient id="hologram-base" x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" stop-color="rgba(180, 230, 255, 0.9)" />
-                                    <stop offset="100%" stop-color="rgba(108, 64, 247, 0.8)" />
-                                </linearGradient>
-                                <linearGradient id="hair-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" stop-color="rgba(40, 20, 80, 0.9)" />
-                                    <stop offset="50%" stop-color="rgba(108, 64, 247, 0.7)" />
-                                    <stop offset="100%" stop-color="rgba(77, 184, 255, 0.8)" />
-                                </linearGradient>
-                                <linearGradient id="shirt-holo" x1="0%" y1="0%" x2="100%" y2="0%">
-                                    <stop offset="0%" stop-color="rgba(255, 255, 255, 0.3)" />
-                                    <stop offset="50%" stop-color="rgba(77, 184, 255, 0.4)" />
-                                    <stop offset="100%" stop-color="rgba(255, 255, 255, 0.3)" />
-                                </linearGradient>
-                                <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
-                                    <feGaussianBlur stdDeviation="3" result="blur" />
-                                    <feMerge>
-                                        <feMergeNode in="blur"/>
-                                        <feMergeNode in="SourceGraphic"/>
-                                    </feMerge>
-                                </filter>
-                                <pattern id="scanlines" patternUnits="userSpaceOnUse" width="4" height="4">
-                                    <line x1="0" y1="0" x2="4" y2="0" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-                                </pattern>
-                                <!-- Clipping path for the torso/shirt -->
-                                <clipPath id="torso-clip">
-                                    <path d="M100 400 C100 300, 130 250, 200 250 C270 250, 300 300, 300 400 Z" />
-                                </clipPath>
-                            </defs>
-
-                            <!-- Glow trasero y Scanlines del entorno -->
-                            <circle cx="200" cy="200" r="190" fill="url(#glow)" class="hologram-glow" />
-                            <circle cx="200" cy="200" r="190" fill="url(#scanlines)" />
-
-                            <!-- Torso y Camisa (Estilo holográfico de rayas) -->
-                            <g class="avatar-torso" clip-path="url(#torso-clip)">
-                                <path d="M0 200 L400 200 L400 400 L0 400 Z" fill="url(#shirt-holo)"/>
-                                <!-- Rayas oscuras holográficas de la blusa -->
-                                <path d="M120 400 C120 320, 145 270, 160 245 L170 245 C155 270, 130 320, 130 400 Z" fill="rgba(20, 10, 50, 0.6)"/>
-                                <path d="M160 400 C160 340, 175 280, 185 245 L195 245 C185 280, 170 340, 170 400 Z" fill="rgba(20, 10, 50, 0.6)"/>
-                                <path d="M200 400 C200 350, 205 300, 210 245 L220 245 C215 300, 210 350, 210 400 Z" fill="rgba(20, 10, 50, 0.6)"/>
-                                <path d="M240 400 C240 340, 245 290, 255 255 L265 255 C255 290, 250 340, 250 400 Z" fill="rgba(20, 10, 50, 0.6)"/>
-                                <path d="M280 400 C280 320, 290 280, 300 260 L310 260 C300 280, 290 320, 290 400 Z" fill="rgba(20, 10, 50, 0.6)"/>
-                                <!-- Borde brillante holográfico -->
-                                <path d="M100 400 C100 300, 130 250, 200 250 C270 250, 300 300, 300 400" fill="none" stroke="#4db8ff" stroke-width="3" filter="url(#neon-glow)"/>
-                            </g>
-
-                            <!-- Brazos (animables para explicar, con uniones realistas pero tech) -->
-                            <g class="avatar-arms">
-                                <path class="arm-left" d="M120 310 Q80 370, 90 420" fill="none" stroke="url(#hologram-base)" stroke-width="22" stroke-linecap="round" filter="url(#neon-glow)"/>
-                                <path class="arm-left-inner" d="M120 310 Q80 370, 90 420" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
-
-                                <path class="arm-right" d="M280 310 Q320 370, 310 420" fill="none" stroke="url(#hologram-base)" stroke-width="22" stroke-linecap="round" filter="url(#neon-glow)"/>
-                                <path class="arm-right-inner" d="M280 310 Q320 370, 310 420" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
-                            </g>
-
-                            <!-- Cuello tech -->
-                            <path d="M175 250 L225 250 L220 190 L180 190 Z" fill="url(#hologram-base)" opacity="0.9"/>
-                            <path d="M185 240 L215 240" fill="none" stroke="#4db8ff" stroke-width="2" opacity="0.5"/>
-                            <path d="M188 220 L212 220" fill="none" stroke="#4db8ff" stroke-width="2" opacity="0.5"/>
-
-                            <!-- Cabeza y rostro -->
-                            <g class="avatar-head">
-                                <!-- Cabello Posterior (Voluminoso y realista pero con shader holo) -->
-                                <path d="M120 290 C90 190, 120 80, 200 80 C280 80, 310 190, 280 290 C265 340, 275 380, 285 410 L115 410 C125 380, 135 340, 120 290 Z" fill="url(#hair-glow)"/>
-                                <path d="M120 290 C90 190, 120 80, 200 80 C280 80, 310 190, 280 290" fill="none" stroke="#6c40f7" stroke-width="4" filter="url(#neon-glow)"/>
-
-                                <!-- Rostro Base (Óvalo más natural y anatómico) -->
-                                <path d="M140 170 C140 100, 260 100, 260 170 C260 220, 230 260, 200 265 C170 260, 140 220, 140 170 Z" fill="url(#hologram-base)"/>
-                                <!-- Contorno de rostro brillante -->
-                                <path d="M140 170 C140 100, 260 100, 260 170 C260 220, 230 260, 200 265 C170 260, 140 220, 140 170 Z" fill="none" stroke="#4db8ff" stroke-width="2" filter="url(#neon-glow)"/>
-
-                                <!-- Cejas definidas -->
-                                <path d="M152 145 Q165 138, 185 142" fill="none" stroke="#281450" stroke-width="4" stroke-linecap="round"/>
-                                <path d="M248 145 Q235 138, 215 142" fill="none" stroke="#281450" stroke-width="4" stroke-linecap="round"/>
-
-                                <!-- Nariz sutil (estilo luz) -->
-                                <path d="M200 155 L200 195 L208 200" fill="none" stroke="rgba(108, 64, 247, 0.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M192 198 Q200 205, 208 198" fill="none" stroke="rgba(108, 64, 247, 0.6)" stroke-width="2" stroke-linecap="round"/>
-
-                                <!-- Ojos (Parpadeo y realismo holo) -->
-                                <g class="avatar-eyes">
-                                    <!-- Ojo izquierdo -->
-                                    <path d="M155 165 Q170 152, 185 165 Q170 173, 155 165" fill="rgba(255, 255, 255, 0.9)" stroke="#4db8ff" stroke-width="1.5"/>
-                                    <circle cx="170" cy="163" r="5.5" fill="#6c40f7"/> <!-- Iris holográfico -->
-                                    <circle cx="170" cy="163" r="2.5" fill="#1a0033"/> <!-- Pupila -->
-                                    <circle cx="172" cy="161" r="1.5" fill="#fff" filter="url(#neon-glow)"/> <!-- Brillo -->
-
-                                    <!-- Ojo derecho -->
-                                    <path d="M215 165 Q230 152, 245 165 Q230 173, 215 165" fill="rgba(255, 255, 255, 0.9)" stroke="#4db8ff" stroke-width="1.5"/>
-                                    <circle cx="230" cy="163" r="5.5" fill="#6c40f7"/>
-                                    <circle cx="230" cy="163" r="2.5" fill="#1a0033"/>
-                                    <circle cx="232" cy="161" r="1.5" fill="#fff" filter="url(#neon-glow)"/>
-                                </g>
-
-                                <!-- Cabello Frontal (Mechones realistas estilo holograma) -->
-                                <path d="M200 85 C140 85, 125 140, 130 180 Q135 230, 115 300 C100 200, 130 90, 200 85 Z" fill="#2a164d" opacity="0.8"/>
-                                <path d="M200 85 C260 85, 275 140, 270 180 Q265 230, 285 300 C300 200, 270 90, 200 85 Z" fill="#2a164d" opacity="0.8"/>
-                                <!-- Reflejos de luz en el cabello -->
-                                <path d="M150 110 Q145 130, 135 170" fill="none" stroke="#4db8ff" stroke-width="2" stroke-linecap="round" filter="url(#neon-glow)" opacity="0.6"/>
-                                <path d="M250 110 Q255 130, 265 170" fill="none" stroke="#4db8ff" stroke-width="2" stroke-linecap="round" filter="url(#neon-glow)" opacity="0.6"/>
-
-                                <!-- Boca Holográfica (Analizador de amplitud) -->
-                                <g id="avatar-mouth-container" transform="translate(200, 222)">
-                                    <!-- Boca cerrada -->
-                                    <path id="avatar-mouth" d="M -18 0 Q 0 5 18 0 Q 0 8 -18 0" fill="rgba(108, 64, 247, 0.8)" stroke="#4db8ff" stroke-width="1.5" stroke-linecap="round" filter="url(#neon-glow)" />
-
-                                    <!-- Boca abierta (animada dinámicamente) -->
-                                    <g id="avatar-mouth-open" style="display: none;">
-                                        <!-- Fondo oscuro de la boca -->
-                                        <path id="mouth-bg" d="M -18 0 Q 0 14 18 0 Q 0 0 -18 0" fill="#1a0033" />
-                                        <!-- Dientes holográficos -->
-                                        <path id="avatar-teeth" d="M -12 2 Q 0 4 12 2 Q 0 0 -12 2" fill="rgba(255, 255, 255, 0.9)" />
-                                        <!-- Labio superior holográfico -->
-                                        <path id="lip-top" d="M -18 0 Q 0 -6 18 0 Q 0 2 -18 0" fill="rgba(108, 64, 247, 0.8)" stroke="#4db8ff" stroke-width="1" />
-                                        <!-- Labio inferior holográfico -->
-                                        <path id="lip-bottom" d="M -18 0 Q 0 16 18 0 Q 0 8 -18 0" fill="rgba(108, 64, 247, 0.8)" stroke="#4db8ff" stroke-width="1.5" filter="url(#neon-glow)" />
-                                    </g>
-                                </g>
-
-                                <!-- Detalles Tech Cyborg/Holograma en las mejillas -->
-                                <circle cx="150" cy="210" r="3" fill="#4db8ff" filter="url(#neon-glow)" opacity="0.7"/>
-                                <path d="M150 210 L160 215" fill="none" stroke="#4db8ff" stroke-width="1" opacity="0.5"/>
-                                <circle cx="250" cy="210" r="3" fill="#4db8ff" filter="url(#neon-glow)" opacity="0.7"/>
-                                <path d="M250 210 L240 215" fill="none" stroke="#4db8ff" stroke-width="1" opacity="0.5"/>
-                            </g>
-                        </svg>
+                        <!-- Avatar Imagen Estática -->
+                        <img id="idealita-hologram" src="img/idealita-avatar-new.png" alt="Idealita Avatar" />
                     </div>
                 </div>
 
@@ -1381,24 +1251,34 @@
             const chatHistory = document.getElementById('chat-history');
 
             function addMessage(text, sender) {
-
                 const messageDiv = document.createElement('div');
-
                 messageDiv.classList.add('message');
 
                 if (sender === 'user') {
                     messageDiv.classList.add('user-message');
+                    messageDiv.textContent = text;
                 } else if (sender === 'thinking') {
                     messageDiv.classList.add('thinking-message');
+                    messageDiv.textContent = text;
                 } else {
                     messageDiv.classList.add('idealita-message');
+                    messageDiv.dataset.rawText = text;
+                    try {
+                        const rawHtml = marked.parse(text);
+                        const cleanHtml = DOMPurify.sanitize(rawHtml);
+                        messageDiv.innerHTML = cleanHtml;
+                    } catch (e) {
+                        console.error('Markdown parsing error:', e);
+                        messageDiv.textContent = text;
+                    }
                 }
-
-                messageDiv.textContent = text;
 
                 chatHistory.appendChild(messageDiv);
 
-                chatHistory.scrollTop = chatHistory.scrollHeight;
+                const isNearBottom = chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight < 100;
+                if (isNearBottom || sender === 'user') {
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                }
 
                 return messageDiv;
             }
@@ -1695,14 +1575,14 @@
                         pcmPlaybackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
                         nextPlayTime = pcmPlaybackContext.currentTime;
 
-                        // Setup global analyser for avatar mouth
+                        // Setup global analyser for avatar image manipulation (if needed in future)
                         window.avatarAnalyser = pcmPlaybackContext.createAnalyser();
                         window.avatarAnalyser.fftSize = 256;
                         window.avatarAnalyser.connect(pcmPlaybackContext.destination);
 
                         const dataArray = new Uint8Array(window.avatarAnalyser.frequencyBinCount);
 
-                        function globalAnimateMouth() {
+                        function globalAnimateAvatar() {
                             if (!window.avatarAnalyser) return;
                             window.avatarAnalyser.getByteFrequencyData(dataArray);
                             let sum = 0;
@@ -1710,37 +1590,15 @@
                                 sum += dataArray[i];
                             }
                             let average = sum / dataArray.length;
-
-                            const mouthClosed = document.getElementById('avatar-mouth');
-                            const mouthOpen = document.getElementById('avatar-mouth-open');
-
-                            if (mouthClosed && mouthOpen) {
-                                if (average > 2) {
-                                    mouthClosed.style.display = 'none';
-                                    mouthOpen.style.display = 'block';
-                                    // Calculate scale and position factors based on amplitude for realistic lip-sync effect
-                                    const amp = average / 25; // Normalizer
-                                    const bgScaleY = Math.min(1 + (amp * 1.5), 2.5);
-                                    const bottomLipY = Math.min(15 + (amp * 10), 30);
-
-                                    const mouthBg = document.getElementById('mouth-bg');
-                                    const lipBottom = document.getElementById('lip-bottom');
-
-                                    if(mouthBg) mouthBg.setAttribute('transform', `scale(1, ${bgScaleY})`);
-                                    if(lipBottom) lipBottom.setAttribute('d', `M -18 0 Q 0 ${bottomLipY} 18 0 Q 0 ${bottomLipY - 7} -18 0`);
-                                } else {
-                                    mouthClosed.style.display = 'block';
-                                    mouthOpen.style.display = 'none';
-                                }
-                            }
+                            // Future logic for scaling or applying filters to the static image based on amplitude can go here
 
                             if (window.requestAnimationFrame) {
-                                window.currentMouthAnimId = window.requestAnimationFrame(globalAnimateMouth);
+                                window.currentMouthAnimId = window.requestAnimationFrame(globalAnimateAvatar);
                             }
                         }
 
                         // Start global loop
-                        globalAnimateMouth();
+                        globalAnimateAvatar();
 
                         updateLiveStatus("Esperando setup...");
                         btnStartLive.style.display = 'none';
@@ -1812,10 +1670,20 @@
                                      window.currentLiveMessageText += newText;
                                  }
 
-                                 window.currentLiveMessageDiv.textContent = window.currentLiveMessageText;
+                                 try {
+                                     const rawHtml = marked.parse(window.currentLiveMessageText);
+                                     window.currentLiveMessageDiv.innerHTML = DOMPurify.sanitize(rawHtml);
+                                 } catch (e) {
+                                     window.currentLiveMessageDiv.textContent = window.currentLiveMessageText;
+                                 }
 
                                  const chatHistory = document.getElementById('chat-history');
-                                 if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
+                                 if (chatHistory) {
+                                     const isNearBottom = chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight < 100;
+                                     if (isNearBottom) {
+                                         chatHistory.scrollTop = chatHistory.scrollHeight;
+                                     }
+                                 }
                             }
 
                             if (content.turnComplete) {
@@ -1836,11 +1704,6 @@
                                 }
 
                                 updateLiveStatus("Escuchando...");
-
-                                const mouthClosed = document.getElementById('avatar-mouth');
-                                const mouthOpen = document.getElementById('avatar-mouth-open');
-                                if (mouthClosed) mouthClosed.style.display = 'block';
-                                if (mouthOpen) mouthOpen.style.display = 'none';
 
                                 // Close the transcription bubble immediately without waiting for turnComplete
                                 window.currentLiveMessageDiv = null;
@@ -1949,10 +1812,6 @@
                     try { window.avatarAnalyser.disconnect(); } catch(e){}
                     window.avatarAnalyser = null;
                 }
-                const mouthClosed = document.getElementById('avatar-mouth');
-                const mouthOpen = document.getElementById('avatar-mouth-open');
-                if (mouthClosed) mouthClosed.style.display = 'block';
-                if (mouthOpen) mouthOpen.style.display = 'none';
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';
                 const avatarContainer = document.getElementById('avatar-container');
