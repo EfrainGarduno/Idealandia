@@ -251,6 +251,31 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden; /* Ensure image doesn't break out */
+        }
+
+        #idealita-hologram {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            /* Basic animation for the image container to simulate holograhpic float */
+            animation: hologram-float 6s infinite ease-in-out;
+        }
+
+        @keyframes hologram-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* State modifiers for the static image */
+        .state-listening #idealita-hologram {
+            filter: drop-shadow(0 0 10px rgba(108, 64, 247, 0.5));
+            transition: filter 0.3s ease;
+        }
+
+        .state-speaking #idealita-hologram {
+            filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.8));
+            transition: filter 0.3s ease;
         }
 
         #chat-main-area {
@@ -274,91 +299,6 @@
             display: flex;
             flex-direction: column;
             background: #fafafa;
-        }
-
-        /* Avatar Animation States - Realistic Edition */
-        @keyframes blink {
-            0%, 96%, 98%, 100% { transform: scaleY(1); }
-            97%, 99% { transform: scaleY(0.1); }
-        }
-
-        @keyframes head-bob {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            50% { transform: translateY(-2px) rotate(0.5deg); }
-        }
-
-        @keyframes subtle-breath {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-2px) scaleY(1.02); }
-        }
-
-        @keyframes arm-gesture-left {
-            0%, 100% { transform: rotate(0deg) translateX(0); }
-            50% { transform: rotate(5deg) translateX(-5px); }
-        }
-
-        @keyframes arm-gesture-right {
-            0%, 100% { transform: rotate(0deg) translateX(0); }
-            50% { transform: rotate(-5deg) translateX(5px); }
-        }
-
-        .avatar-eyes {
-            transform-origin: 200px 165px;
-            animation: blink 4s infinite;
-        }
-
-        .avatar-head {
-            transform-origin: 200px 250px;
-            animation: head-bob 6s infinite ease-in-out;
-        }
-
-        .avatar-torso {
-            transform-origin: 200px 400px;
-            animation: subtle-breath 4s infinite ease-in-out;
-        }
-
-        .arm-left {
-            transform-origin: 110px 320px;
-        }
-
-        .arm-right {
-            transform-origin: 290px 320px;
-        }
-
-        /* Listening State */
-        .state-listening .avatar-head {
-            transform: rotate(2deg) translateY(2px) translateX(2px);
-            animation: none;
-            transition: transform 0.5s ease;
-        }
-
-        .state-listening .hologram-glow {
-            fill: rgba(108, 64, 247, 0.7);
-            transition: fill 0.5s ease;
-        }
-
-        /* Speaking / Explaining State */
-        .state-speaking .avatar-head {
-            animation: head-bob 3s infinite ease-in-out;
-        }
-
-        .state-speaking .arm-left {
-            animation: arm-gesture-left 3s infinite ease-in-out;
-        }
-
-        .state-speaking .arm-right {
-            animation: arm-gesture-right 3.5s infinite ease-in-out;
-        }
-
-        .state-speaking .hologram-glow {
-            fill: rgba(162, 127, 255, 0.6);
-            transition: fill 0.5s ease;
-            animation: pulse-glow 2s infinite ease-in-out alternate;
-        }
-
-        @keyframes pulse-glow {
-            from { opacity: 0.8; transform: scale(0.98); }
-            to { opacity: 1; transform: scale(1.02); }
         }
 
         .message {

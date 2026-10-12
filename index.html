@@ -401,192 +401,8 @@
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div id="avatar-visual-wrapper">
-                        <!-- Nivel 1: Avatar Holográfico SVG - Realistic Version -->
-                        <!-- Nivel 1: Avatar Holográfico SVG - Polished Holographic Realistic Edition -->
-                        <svg id="idealita-hologram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
-    <defs>
-        <!-- Hologram Gradients -->
-        <linearGradient id="holo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="rgba(0, 229, 255, 0.9)" />
-            <stop offset="50%" stop-color="rgba(0, 153, 255, 0.6)" />
-            <stop offset="100%" stop-color="rgba(0, 51, 153, 0.2)" />
-        </linearGradient>
-        <linearGradient id="face-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#ccffff" />
-            <stop offset="100%" stop-color="#66ccff" />
-        </linearGradient>
-        <linearGradient id="holo-beam" x1="0%" y1="100%" x2="0%" y2="0%">
-            <stop offset="0%" stop-color="rgba(0, 229, 255, 0.8)" />
-            <stop offset="100%" stop-color="rgba(0, 229, 255, 0)" />
-        </linearGradient>
-
-        <!-- Glow Effects -->
-        <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-        <filter id="subtle-glow" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-
-        <!-- Tech Patterns -->
-        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0, 229, 255, 0.1)" stroke-width="1"/>
-        </pattern>
-        <pattern id="hex-grid" width="24" height="41.5" patternUnits="userSpaceOnUse">
-            <path d="M12 0 L24 7 L24 20 L12 27 L0 20 L0 7 Z" fill="none" stroke="rgba(0, 229, 255, 0.15)" stroke-width="1"/>
-            <path d="M12 41.5 L24 34.5 L24 21.5 L12 28.5 L0 21.5 L0 34.5 Z" fill="none" stroke="rgba(0, 229, 255, 0.15)" stroke-width="1"/>
-            <path d="M24 20 L36 27 L36 40 L24 47 L12 40 L12 27 Z" fill="none" stroke="rgba(0, 229, 255, 0.15)" stroke-width="1"/>
-            <path d="M0 20 L-12 27 L-12 40 L0 47 L12 40 L12 27 Z" fill="none" stroke="rgba(0, 229, 255, 0.15)" stroke-width="1"/>
-        </pattern>
-
-        <clipPath id="torso-clip">
-            <path d="M120 400 C120 300, 140 230, 200 230 C260 230, 280 300, 280 400 Z" />
-        </clipPath>
-    </defs>
-
-    <!-- Background Space / Ambient Glow -->
-    <rect width="400" height="400" fill="#030b14" />
-    <rect width="400" height="400" fill="url(#grid)" />
-    <circle cx="200" cy="200" r="180" fill="url(#glow)" />
-
-    <!-- Holographic Data Panels (Background) -->
-    <g class="holo-panels" opacity="0.6">
-        <!-- Left Panel -->
-        <rect x="30" y="80" width="80" height="120" rx="4" fill="rgba(0, 229, 255, 0.05)" stroke="rgba(0, 229, 255, 0.3)" stroke-width="1" />
-        <line x1="40" y1="100" x2="100" y2="100" stroke="rgba(0, 229, 255, 0.5)" stroke-width="2" />
-        <line x1="40" y1="110" x2="80" y2="110" stroke="rgba(0, 229, 255, 0.3)" stroke-width="2" />
-        <circle cx="50" cy="140" r="15" fill="none" stroke="rgba(0, 229, 255, 0.4)" stroke-width="2" stroke-dasharray="4 2" />
-        <circle cx="50" cy="140" r="8" fill="rgba(0, 229, 255, 0.2)" />
-
-        <!-- Right Panel -->
-        <rect x="290" y="100" width="90" height="140" rx="4" fill="rgba(0, 229, 255, 0.05)" stroke="rgba(0, 229, 255, 0.3)" stroke-width="1" />
-        <path d="M300 120 L320 140 L340 130 L360 160 L370 150" fill="none" stroke="rgba(0, 229, 255, 0.6)" stroke-width="2" />
-        <rect x="300" y="180" width="70" height="4" fill="rgba(0, 229, 255, 0.2)" />
-        <rect x="300" y="180" width="40" height="4" fill="rgba(0, 229, 255, 0.8)" />
-        <rect x="300" y="190" width="70" height="4" fill="rgba(0, 229, 255, 0.2)" />
-        <rect x="300" y="190" width="60" height="4" fill="rgba(0, 229, 255, 0.8)" />
-    </g>
-
-    <!-- Holographic Projection Base -->
-    <g class="holo-base" transform="translate(0, 10)">
-        <ellipse cx="200" cy="380" rx="140" ry="15" fill="rgba(0, 229, 255, 0.1)" stroke="rgba(0, 229, 255, 0.8)" stroke-width="2" filter="url(#neon-glow)" />
-        <ellipse cx="200" cy="380" rx="120" ry="10" fill="none" stroke="rgba(0, 229, 255, 0.5)" stroke-width="1" />
-        <ellipse cx="200" cy="380" rx="100" ry="5" fill="rgba(0, 229, 255, 0.3)" />
-        <path d="M90 380 L140 280 L260 280 L310 380 Z" fill="url(#holo-beam)" />
-    </g>
-
-    <!-- Torso (Dress/Skirt and Body) -->
-    <g class="avatar-torso">
-        <!-- Skirt / Lower Body -->
-        <path d="M140 330 C130 360, 120 380, 110 380 L290 380 C280 380, 270 360, 260 330 Z" fill="url(#holo-gradient)" opacity="0.6" />
-        <path d="M140 330 C130 360, 120 380, 110 380 L290 380 C280 380, 270 360, 260 330 Z" fill="url(#hex-grid)" />
-        <path d="M140 330 C130 360, 120 380, 110 380 L290 380 C280 380, 270 360, 260 330 Z" fill="none" stroke="#00e5ff" stroke-width="2" filter="url(#neon-glow)" />
-
-        <!-- Upper Torso / Shirt -->
-        <path d="M165 200 C145 220, 130 250, 140 330 L260 330 C270 250, 255 220, 235 200 Z" fill="url(#holo-gradient)" opacity="0.8" />
-        <path d="M165 200 C145 220, 130 250, 140 330 L260 330 C270 250, 255 220, 235 200 Z" fill="url(#hex-grid)" />
-        <path d="M165 200 C145 220, 130 250, 140 330 L260 330 C270 250, 255 220, 235 200 Z" fill="none" stroke="#00e5ff" stroke-width="2" filter="url(#neon-glow)" />
-
-        <!-- Tech Lines on Torso -->
-        <path d="M170 250 L200 280 L230 250" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.7" />
-        <path d="M200 280 L200 330" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.7" />
-        <circle cx="200" cy="280" r="4" fill="#00e5ff" filter="url(#neon-glow)" />
-    </g>
-
-    <!-- Arms -->
-    <g class="avatar-arms">
-        <!-- Left Arm (Resting/Slightly bent) -->
-        <path d="M145 210 Q120 250, 125 300 Q130 330, 140 350" fill="none" stroke="rgba(0, 229, 255, 0.4)" stroke-width="16" stroke-linecap="round" />
-        <path d="M145 210 Q120 250, 125 300 Q130 330, 140 350" fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" filter="url(#neon-glow)" />
-        <!-- Left Hand -->
-        <circle cx="140" cy="350" r="8" fill="rgba(0, 229, 255, 0.6)" filter="url(#neon-glow)" />
-
-        <!-- Right Arm (Raised, pointing/interacting) -->
-        <path class="arm-right" d="M255 210 Q280 230, 310 190 Q330 160, 345 130" fill="none" stroke="rgba(0, 229, 255, 0.4)" stroke-width="16" stroke-linecap="round" />
-        <path class="arm-right" d="M255 210 Q280 230, 310 190 Q330 160, 345 130" fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" filter="url(#neon-glow)" />
-        <!-- Right Hand -->
-        <circle class="arm-right" cx="345" cy="130" r="8" fill="#ffffff" filter="url(#neon-glow)" />
-        <path class="arm-right" d="M345 130 L355 110" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" filter="url(#neon-glow)" />
-
-        <!-- Ripple effect around the interacting hand -->
-        <circle cx="355" cy="110" r="15" fill="none" stroke="#00e5ff" stroke-width="2" opacity="0.8">
-            <animate attributeName="r" values="5;20" dur="1.5s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.8;0" dur="1.5s" repeatCount="indefinite" />
-        </circle>
-        <circle cx="355" cy="110" r="25" fill="none" stroke="#00e5ff" stroke-width="1" opacity="0.5">
-            <animate attributeName="r" values="10;30" dur="1.5s" begin="0.5s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.5;0" dur="1.5s" begin="0.5s" repeatCount="indefinite" />
-        </circle>
-    </g>
-
-    <!-- Neck -->
-    <path d="M190 195 L210 195 L215 165 L185 165 Z" fill="url(#face-gradient)" opacity="0.9" />
-    <path d="M190 195 L210 195 L215 165 L185 165 Z" fill="none" stroke="#00e5ff" stroke-width="1" />
-
-    <!-- Head and Face -->
-    <g class="avatar-head">
-        <!-- Back Hair -->
-        <path d="M150 160 C140 100, 160 50, 200 50 C240 50, 260 100, 250 160 C245 180, 255 200, 255 210 L145 210 C145 200, 155 180, 150 160 Z" fill="rgba(0, 100, 200, 0.7)" filter="url(#neon-glow)" />
-
-        <!-- Face Shape -->
-        <path d="M155 130 C155 80, 245 80, 245 130 C245 170, 225 200, 200 205 C175 200, 155 170, 155 130 Z" fill="url(#face-gradient)" />
-        <path d="M155 130 C155 80, 245 80, 245 130 C245 170, 225 200, 200 205 C175 200, 155 170, 155 130 Z" fill="none" stroke="#00e5ff" stroke-width="1.5" filter="url(#subtle-glow)" />
-
-        <!-- Cheeks / Tech details -->
-        <circle cx="165" cy="165" r="10" fill="#00e5ff" opacity="0.15" filter="url(#neon-glow)" />
-        <circle cx="235" cy="165" r="10" fill="#00e5ff" opacity="0.15" filter="url(#neon-glow)" />
-        <path d="M160 165 L165 170 M240 165 L235 170" stroke="#00e5ff" stroke-width="1" opacity="0.4" />
-
-        <!-- Eyebrows -->
-        <path d="M165 118 Q175 110, 185 115" fill="none" stroke="#004488" stroke-width="2" stroke-linecap="round" />
-        <path d="M235 118 Q225 110, 215 115" fill="none" stroke="#004488" stroke-width="2" stroke-linecap="round" />
-
-        <!-- Eyes -->
-        <g class="avatar-eyes">
-            <!-- Left Eye -->
-            <path d="M165 130 Q175 122, 185 130 Q175 138, 165 130" fill="#ffffff" />
-            <path d="M165 130 Q175 122, 185 130 Q175 138, 165 130" fill="none" stroke="#00e5ff" stroke-width="1" />
-            <circle cx="175" cy="130" r="4" fill="#004488" />
-            <circle cx="175" cy="130" r="2" fill="#000000" />
-            <circle cx="176" cy="129" r="1" fill="#ffffff" filter="url(#neon-glow)" />
-
-            <!-- Right Eye -->
-            <path d="M235 130 Q225 122, 215 130 Q225 138, 235 130" fill="#ffffff" />
-            <path d="M235 130 Q225 122, 215 130 Q225 138, 235 130" fill="none" stroke="#00e5ff" stroke-width="1" />
-            <circle cx="225" cy="130" r="4" fill="#004488" />
-            <circle cx="225" cy="130" r="2" fill="#000000" />
-            <circle cx="226" cy="129" r="1" fill="#ffffff" filter="url(#neon-glow)" />
-        </g>
-
-        <!-- Nose -->
-        <path d="M200 135 L200 155 L205 158" fill="none" stroke="rgba(0, 100, 200, 0.4)" stroke-width="1.5" stroke-linecap="round" />
-
-        <!-- Mouth -->
-        <g id="avatar-mouth-container" transform="translate(200, 175)">
-            <!-- Closed Mouth -->
-            <path id="avatar-mouth" d="M -12 0 Q 0 4 12 0 Q 0 4 -12 0" fill="#004488" stroke="#00e5ff" stroke-width="1" stroke-linecap="round" />
-
-            <!-- Open Mouth -->
-            <g id="avatar-mouth-open" style="display: none;">
-                <path id="mouth-bg" d="M -12 0 Q 0 12 12 0 Q 0 0 -12 0" fill="#001133" />
-                <path id="avatar-teeth" d="M -8 1 Q 0 3 8 1 Q 0 0 -8 1" fill="#ffffff" opacity="0.9" />
-                <path id="lip-top" d="M -12 0 Q 0 -4 12 0 Q 0 2 -12 0" fill="#004488" />
-                <path id="lip-bottom" d="M -12 0 Q 0 14 12 0 Q 0 6 -12 0" fill="#004488" stroke="#00e5ff" stroke-width="1" filter="url(#subtle-glow)" />
-            </g>
-        </g>
-
-        <!-- Front Hair (Bob Style) -->
-        <path d="M200 65 C145 65, 140 110, 145 150 Q150 180, 140 210 C125 150, 145 65, 200 65 Z" fill="rgba(0, 153, 255, 0.8)" filter="url(#subtle-glow)" />
-        <path d="M200 65 C255 65, 260 110, 255 150 Q250 180, 260 210 C275 150, 255 65, 200 65 Z" fill="rgba(0, 153, 255, 0.8)" filter="url(#subtle-glow)" />
-
-        <!-- Bangs -->
-        <path d="M150 75 Q175 100, 200 70 Q225 100, 250 75 Q200 45, 150 75 Z" fill="rgba(0, 229, 255, 0.6)" filter="url(#neon-glow)" />
-        <path d="M165 70 Q180 110, 200 70" fill="none" stroke="#00e5ff" stroke-width="1.5" filter="url(#neon-glow)" opacity="0.8" />
-        <path d="M235 70 Q220 110, 200 70" fill="none" stroke="#00e5ff" stroke-width="1.5" filter="url(#neon-glow)" opacity="0.8" />
-    </g>
-</svg>
+                        <!-- Avatar Imagen Estática -->
+                        <img id="idealita-hologram" src="img/idealita-avatar-new.png" alt="Idealita Avatar" />
                     </div>
                 </div>
 
@@ -1759,14 +1575,14 @@
                         pcmPlaybackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
                         nextPlayTime = pcmPlaybackContext.currentTime;
 
-                        // Setup global analyser for avatar mouth
+                        // Setup global analyser for avatar image manipulation (if needed in future)
                         window.avatarAnalyser = pcmPlaybackContext.createAnalyser();
                         window.avatarAnalyser.fftSize = 256;
                         window.avatarAnalyser.connect(pcmPlaybackContext.destination);
 
                         const dataArray = new Uint8Array(window.avatarAnalyser.frequencyBinCount);
 
-                        function globalAnimateMouth() {
+                        function globalAnimateAvatar() {
                             if (!window.avatarAnalyser) return;
                             window.avatarAnalyser.getByteFrequencyData(dataArray);
                             let sum = 0;
@@ -1774,37 +1590,15 @@
                                 sum += dataArray[i];
                             }
                             let average = sum / dataArray.length;
-
-                            const mouthClosed = document.getElementById('avatar-mouth');
-                            const mouthOpen = document.getElementById('avatar-mouth-open');
-
-                            if (mouthClosed && mouthOpen) {
-                                if (average > 2) {
-                                    mouthClosed.style.display = 'none';
-                                    mouthOpen.style.display = 'block';
-                                    // Calculate scale and position factors based on amplitude for realistic lip-sync effect
-                                    const amp = average / 25; // Normalizer
-                                    const bgScaleY = Math.min(1 + (amp * 1.5), 2.5);
-                                    const bottomLipY = Math.min(15 + (amp * 10), 30);
-
-                                    const mouthBg = document.getElementById('mouth-bg');
-                                    const lipBottom = document.getElementById('lip-bottom');
-
-                                    if(mouthBg) mouthBg.setAttribute('transform', `scale(1, ${bgScaleY})`);
-                                    if(lipBottom) lipBottom.setAttribute('d', `M -18 0 Q 0 ${bottomLipY} 18 0 Q 0 ${bottomLipY - 7} -18 0`);
-                                } else {
-                                    mouthClosed.style.display = 'block';
-                                    mouthOpen.style.display = 'none';
-                                }
-                            }
+                            // Future logic for scaling or applying filters to the static image based on amplitude can go here
 
                             if (window.requestAnimationFrame) {
-                                window.currentMouthAnimId = window.requestAnimationFrame(globalAnimateMouth);
+                                window.currentMouthAnimId = window.requestAnimationFrame(globalAnimateAvatar);
                             }
                         }
 
                         // Start global loop
-                        globalAnimateMouth();
+                        globalAnimateAvatar();
 
                         updateLiveStatus("Esperando setup...");
                         btnStartLive.style.display = 'none';
@@ -1910,11 +1704,6 @@
                                 }
 
                                 updateLiveStatus("Escuchando...");
-
-                                const mouthClosed = document.getElementById('avatar-mouth');
-                                const mouthOpen = document.getElementById('avatar-mouth-open');
-                                if (mouthClosed) mouthClosed.style.display = 'block';
-                                if (mouthOpen) mouthOpen.style.display = 'none';
 
                                 // Close the transcription bubble immediately without waiting for turnComplete
                                 window.currentLiveMessageDiv = null;
@@ -2023,10 +1812,6 @@
                     try { window.avatarAnalyser.disconnect(); } catch(e){}
                     window.avatarAnalyser = null;
                 }
-                const mouthClosed = document.getElementById('avatar-mouth');
-                const mouthOpen = document.getElementById('avatar-mouth-open');
-                if (mouthClosed) mouthClosed.style.display = 'block';
-                if (mouthOpen) mouthOpen.style.display = 'none';
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';
                 const avatarContainer = document.getElementById('avatar-container');
