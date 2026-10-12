@@ -258,41 +258,24 @@
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
-            /* CSS variables for dynamic JS manipulation */
-            --avatar-scale: 1;
-            --avatar-glow-color: transparent;
-            --avatar-glow-size: 0px;
-            /* Use multiple drop-shadows or combine scale with translation in the transform */
-            filter: drop-shadow(0 0 var(--avatar-glow-size) var(--avatar-glow-color));
-            transform: scale(var(--avatar-scale));
-
             /* Basic animation for the image container to simulate holograhpic float */
             animation: hologram-float 6s infinite ease-in-out;
-            transition: filter 0.1s ease-out, transform 0.1s ease-out;
         }
 
         @keyframes hologram-float {
-            0%, 100% { transform: scale(var(--avatar-scale)) translateY(0); }
-            50% { transform: scale(var(--avatar-scale)) translateY(-5px); }
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
         }
 
-        /* Fallback / Baseline state modifiers */
+        /* State modifiers for the static image */
         .state-listening #idealita-hologram {
-            --avatar-glow-color: rgba(108, 64, 247, 0.5); /* Violet base */
-            --avatar-glow-size: 10px;
+            filter: drop-shadow(0 0 10px rgba(108, 64, 247, 0.5));
+            transition: filter 0.3s ease;
         }
 
         .state-speaking #idealita-hologram {
-            --avatar-glow-color: rgba(0, 229, 255, 0.8); /* Cyan base */
-            --avatar-glow-size: 15px;
-        }
-
-        /* Respect accessibility preferences */
-        @media (prefers-reduced-motion: reduce) {
-            #idealita-hologram {
-                animation: none;
-                transition: filter 0.5s ease-out;
-            }
+            filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.8));
+            transition: filter 0.3s ease;
         }
 
         #chat-main-area {
@@ -304,7 +287,8 @@
         }
 
         #chat-history {
-            flex-grow: 1;
+            flex: 1;
+            min-height: 0;
             padding: 15px;
             overflow-y: auto;
             display: flex;
