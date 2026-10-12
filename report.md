@@ -6,7 +6,7 @@ Este informe detalla las causas raíz de los problemas reportados, las solucione
 El contenedor principal del chat carecía de una jerarquía estructural correcta mediante Flexbox. Originalmente, existían reglas dependientes de `100dvh` forzadas en contenedores internos e insuficientes restricciones de desbordamiento, lo que ocasionaba que `#chat-history` (y por consiguiente, `#chat-main-area`) crecieran ilimitadamente con cada nuevo mensaje, desplazando los controles fuera de la pantalla. El `overflow-y: auto` no actuaba correctamente porque su contenedor padre (y abuelo) no tenían una altura máxima acotada por su respectivo padre.
 
 ## 2. Corrección aplicada al desplazamiento y a los controles
-Se eliminaron las restricciones estáticas y las alturas fijas incorrectas. Se implementó una estructura puramente Flexbox:
+Se reemplazó el uso obsoleto y estricto de `100dvh` por una estructura Flexbox responsiva. En `.chat-section-override`, se eliminó `height` y `max-height` (como las detectadas anteriormente en la línea 1001), utilizando en su lugar `flex: 1` y `min-height: 0` para permitir la contención correcta de los hijos (resolviendo los problemas de desbordamiento en móviles que causaban pérdida de visibilidad de los controles):
 - `.chat-section-override` y `#chat-container` operan con `display: flex; flex-direction: column; flex: 1; min-height: 0;`.
 - `#chat-main-area` utiliza `flex: 1; min-height: 0;` (fundamental para contener el desbordamiento en hijos de flex containers).
 - `#chat-history` ahora aprovecha `flex: 1; overflow-y: auto;` lo que le permite desplazarse internamente.
@@ -31,13 +31,13 @@ Se investigó la existencia de `img/idealita-avatar.jpg`. La auditoría de todo 
 
 ## 7. Resultado de cada prueba automatizada
 - **`npm test`**: Superado correctamente. Los cambios de front-end no introdujeron regresiones en el cálculo de pensiones o APIs del menú.
-- **`npm run test:responsive`**: Superado correctamente. Se comprobaron las resoluciones 375x667, 390x844, 412x915, 768x1024, y 1366x768. Playwright confirmó programáticamente que en todos los viewports la sección del chat no se desborda y el botón "Enviar" se mantiene 100% visible sin ser desplazado por la altura.
+- **`npm run test:responsive`**: Superado correctamente. Se comprobaron las resoluciones 375x667, 390x844, 412x915, 768x1024, y 1366x768. `verify_viewports.js` confirmó programáticamente que en todos los viewports la sección del chat no se desborda horizontal ni verticalmente de forma incontrolada, y que el botón "Enviar" se mantiene 100% visible dentro del viewport sin ser desplazado por la altura del historial. Adicionalmente, el script de captura `screenshot.js` utiliza mocking (interceptación de red de Playwright) y el protocolo `file:///` para la prueba de renderización del SVG y Markdown sin depender de un backend activo, aislando y validando puramente el layout del frontend.
 
 ## 8. Verificación visual
 Se generó una captura de escritorio empleando un script local en Playwright (con mensajes simulados en formato Markdown y un *streaming* prolongado) para asegurar que la renderización visual era correcta y que el diseño a doble panel (Avatar - Chat) funcionaba correctamente bajo condiciones de saturación de texto.
 
 ## 9. Limitaciones pendientes
-- **Pruebas de voz real (Gemini Live)**: Dado que las pruebas automatizadas se ejecutan en modo `headless` (Playwright sin micrófono/usuario real), y el entorno carece de acceso a la API clave de Gemini, las pruebas de interacción de voz en tiempo real con WebSocket se emularon mediante inyección DOM y mocking, asumiendo su correcta ejecución basada en el estado visual.
+- **Pruebas de voz real (Gemini Live)**: Dado que las pruebas automatizadas se ejecutan en modo `headless` (Playwright sin micrófono/usuario real), y el entorno carece de acceso a la API clave de Gemini, las pruebas de interacción de voz en tiempo real con WebSocket (reconocimiento de voz, transmisión PCM, y síntesis de respuesta generativa de audio) quedan **pendientes de verificación manual** en un entorno con API key válida. La prueba actual se limita a asegurar la correcta concatenación en streaming del texto de respaldo (`part.text`) y su sanitización con Markdown vía DOMPurify, validando visualmente la UI pero no la sesión de WebAudio.
 
 ## 10. URL del Pull Request
 Se ha creado un Pull Request para la rama `fix-chat-avatar-responsive`. (URL por determinarse tras su publicación).
