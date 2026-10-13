@@ -54,6 +54,18 @@ const dom = new JSDOM(htmlContent, {
 });
 
 const window = dom.window;
+
+// Mock Three.js gracefully for main testing loop
+window.THREE = {
+    Scene: class {},
+    PerspectiveCamera: class { constructor() { this.position = {}; } },
+    WebGLRenderer: class {
+        constructor() { throw new Error("Mocked WebGL failure to trigger fallback"); }
+    }
+};
+window.GLTFLoader = class {};
+window.VRMLoaderPlugin = class {};
+
 const document = window.document;
 
 window.matchMedia = window.matchMedia || function() {
@@ -520,6 +532,17 @@ window.addEventListener('load', () => {
                                             virtualConsole
                                         });
                                         const win = dom.window;
+
+                                        // Mock Three.js gracefully so VRM scripts don't crash jsdom
+                                        win.THREE = {
+                                            Scene: class {},
+                                            PerspectiveCamera: class { constructor() { this.position = {}; } },
+                                            WebGLRenderer: class {
+                                                constructor() { throw new Error("Mocked WebGL failure to trigger fallback"); }
+                                            }
+                                        };
+                                        win.GLTFLoader = class {};
+                                        win.VRMLoaderPlugin = class {};
 
                                         win.fetch = async (url, options) => {
                                             if (url === '/api/me') {

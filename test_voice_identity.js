@@ -18,6 +18,17 @@ global.document = window.document;
 global.window = window;
 global.navigator = window.navigator;
 
+// Mock Three.js gracefully for main testing loop
+window.THREE = {
+    Scene: class {},
+    PerspectiveCamera: class { constructor() { this.position = {}; } },
+    WebGLRenderer: class {
+        constructor() { throw new Error("Mocked WebGL failure to trigger fallback"); }
+    }
+};
+window.GLTFLoader = class {};
+window.VRMLoaderPlugin = class {};
+
 // Mock fetch for /api/live-token
 window.fetch = async (url) => {
     if (url === '/api/live-token') {
