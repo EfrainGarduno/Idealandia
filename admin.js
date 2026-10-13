@@ -240,6 +240,13 @@ async function loadMenus() {
             const tr = document.createElement('tr');
 
             let td = document.createElement('td'); td.textContent = m.id; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = m.nombre; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = m.funcionalidad_id !== null ? m.funcionalidad_id : 'NULL'; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = m.parent_id !== null ? m.parent_id : 'NULL'; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = m.orden; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = m.publico ? 'Sí' : 'No'; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = m.activo ? 'Sí' : 'No'; tr.appendChild(td);
+
             td = document.createElement('td');
 
             const editBtn = document.createElement('button');
