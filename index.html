@@ -589,43 +589,149 @@
 
                 avatarGroup = new THREE.Group();
 
-                // Head
-                const headGeo = new THREE.SphereGeometry(1.2, 32, 32);
-                const headMat = new THREE.MeshPhongMaterial({
-                    color: 0x8a2be2,
+                // Holographic Materials
+                const skinMat = new THREE.MeshPhongMaterial({
+                    color: 0x221144,
+                    emissive: 0x110033,
                     shininess: 100,
-                    specular: 0x00e5ff
+                    specular: 0x00e5ff,
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide
                 });
-                let headMesh = new THREE.Mesh(headGeo, headMat);
-                avatarGroup.add(headMesh);
+
+                const wireframeMat = new THREE.MeshBasicMaterial({
+                    color: 0x00e5ff,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.15
+                });
+
+                // Cranium (Upper head)
+                const craniumGeo = new THREE.SphereGeometry(1.2, 32, 32, 0, Math.PI * 2, 0, Math.PI / 1.6);
+                const craniumMesh = new THREE.Mesh(craniumGeo, skinMat);
+                craniumMesh.position.set(0, 0.2, 0);
+                avatarGroup.add(craniumMesh);
+
+                const craniumWire = new THREE.Mesh(craniumGeo, wireframeMat);
+                craniumWire.scale.set(1.02, 1.02, 1.02);
+                craniumMesh.add(craniumWire);
+
+                // Jaw / Lower face
+                const jawGeo = new THREE.CylinderGeometry(1.2, 0.7, 1.2, 32, 1, false, 0, Math.PI);
+                const jawMesh = new THREE.Mesh(jawGeo, skinMat);
+                jawMesh.rotation.y = -Math.PI / 2;
+                jawMesh.rotation.z = Math.PI / 2;
+                jawMesh.position.set(0, -0.6, 0);
+                // Squish the cylinder to look like a jaw
+                jawMesh.scale.set(0.8, 1, 1.1);
+                avatarGroup.add(jawMesh);
+
+                // Nose
+                const noseGeo = new THREE.ConeGeometry(0.2, 0.6, 4);
+                const noseMesh = new THREE.Mesh(noseGeo, skinMat);
+                noseMesh.rotation.y = Math.PI / 4;
+                noseMesh.position.set(0, -0.1, 1.2);
+                noseMesh.scale.set(1, 1, 0.5);
+                avatarGroup.add(noseMesh);
+
+                // Cheeks
+                const cheekGeo = new THREE.SphereGeometry(0.4, 16, 16);
+                const leftCheek = new THREE.Mesh(cheekGeo, skinMat);
+                leftCheek.position.set(-0.6, -0.2, 1.0);
+                leftCheek.scale.set(1, 0.8, 0.5);
+                avatarGroup.add(leftCheek);
+
+                const rightCheek = new THREE.Mesh(cheekGeo, skinMat);
+                rightCheek.position.set(0.6, -0.2, 1.0);
+                rightCheek.scale.set(1, 0.8, 0.5);
+                avatarGroup.add(rightCheek);
 
                 // Eyes
-                const eyeGeo = new THREE.SphereGeometry(0.2, 16, 16);
-                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                const pupilGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                const eyeGeo = new THREE.SphereGeometry(0.25, 32, 16);
+                const eyeMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 200, specular: 0xffffff });
+                const pupilGeo = new THREE.SphereGeometry(0.12, 16, 16);
                 const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                const irisGeo = new THREE.SphereGeometry(0.15, 16, 16);
+                const irisMat = new THREE.MeshBasicMaterial({ color: 0x6c40f7 });
 
-                const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-                leftEye.position.set(-0.4, 0.3, 1.1);
-                const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
-                leftPupil.position.set(0, 0, 0.15);
-                leftEye.add(leftPupil);
+                function createEye(x) {
+                    const eyeGroup = new THREE.Group();
+
+                    const sclera = new THREE.Mesh(eyeGeo, eyeMat);
+                    sclera.scale.set(1.2, 0.7, 0.8); // Almond shape
+                    eyeGroup.add(sclera);
+
+                    const iris = new THREE.Mesh(irisGeo, irisMat);
+                    iris.position.set(0, 0, 0.12);
+                    iris.scale.set(1, 1.5, 1);
+                    eyeGroup.add(iris);
+
+                    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+                    pupil.position.set(0, 0, 0.16);
+                    pupil.scale.set(1, 1.5, 1);
+                    eyeGroup.add(pupil);
+
+                    // Eyelid
+                    const eyelidGeo = new THREE.SphereGeometry(0.28, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2.2);
+                    const eyelidMat = new THREE.MeshPhongMaterial({ color: 0x4a1b82, side: THREE.DoubleSide });
+                    const eyelid = new THREE.Mesh(eyelidGeo, eyelidMat);
+                    eyelid.rotation.x = -Math.PI / 10;
+                    eyelid.position.set(0, 0, 0.05);
+                    eyeGroup.add(eyelid);
+
+                    eyeGroup.position.set(x, 0.3, 1.05);
+                    return eyeGroup;
+                }
+
+                const leftEye = createEye(-0.45);
+                leftEye.rotation.y = -Math.PI / 12;
                 avatarGroup.add(leftEye);
 
-                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-                rightEye.position.set(0.4, 0.3, 1.1);
-                const rightPupil = new THREE.Mesh(pupilGeo, pupilMat);
-                rightPupil.position.set(0, 0, 0.15);
-                rightEye.add(rightPupil);
+                const rightEye = createEye(0.45);
+                rightEye.rotation.y = Math.PI / 12;
                 avatarGroup.add(rightEye);
 
-                // Mouth
-                const mouthGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 32);
-                const mouthMat = new THREE.MeshBasicMaterial({ color: 0xffaadd });
-                mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
-                mouthMesh.rotation.x = Math.PI / 2;
-                mouthMesh.position.set(0, -0.4, 1.15);
-                avatarGroup.add(mouthMesh);
+                // Mouth Structure
+                const mouthGroup = new THREE.Group();
+                mouthGroup.position.set(0, -0.6, 1.25);
+
+                // Upper Lip
+                const upperLipGeo = new THREE.TorusGeometry(0.25, 0.06, 16, 32, Math.PI);
+                const lipMat = new THREE.MeshPhongMaterial({ color: 0xd81b60, shininess: 80 });
+                const upperLip = new THREE.Mesh(upperLipGeo, lipMat);
+                upperLip.scale.set(1, 0.5, 1);
+                mouthGroup.add(upperLip);
+
+                // Lower Lip (This will be animated)
+                const lowerLipGeo = new THREE.TorusGeometry(0.25, 0.08, 16, 32, Math.PI);
+                mouthMesh = new THREE.Mesh(lowerLipGeo, lipMat); // We keep 'mouthMesh' var name for compatibility
+                mouthMesh.rotation.z = Math.PI;
+                mouthMesh.scale.set(1, 0.5, 1);
+                mouthGroup.add(mouthMesh);
+
+                // Inner dark mouth (appears when open)
+                const innerMouthGeo = new THREE.PlaneGeometry(0.45, 0.2);
+                const innerMouthMat = new THREE.MeshBasicMaterial({ color: 0x050011 });
+                const innerMouth = new THREE.Mesh(innerMouthGeo, innerMouthMat);
+                innerMouth.position.set(0, 0, -0.05);
+                innerMouth.scale.set(1, 0.1, 1); // Hidden initially
+                mouthGroup.add(innerMouth);
+
+                // Expose inner mouth to animation loop
+                avatarGroup.userData.innerMouth = innerMouth;
+                avatarGroup.userData.lowerLip = mouthMesh;
+
+                avatarGroup.add(mouthGroup);
+
+                // Hair / Tech accents
+                const accentGeo = new THREE.TorusGeometry(1.3, 0.05, 16, 64, Math.PI * 1.5);
+                const accentMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+                const accent1 = new THREE.Mesh(accentGeo, accentMat);
+                accent1.rotation.x = Math.PI / 2;
+                accent1.rotation.y = Math.PI / 4;
+                accent1.position.set(0, 0.5, 0);
+                avatarGroup.add(accent1);
 
                 scene.add(avatarGroup);
 
@@ -651,7 +757,19 @@
                     avatarGroup.rotation.y = Math.sin(time * 0.5) * 0.05;
 
                     // Smooth mouth interpolation
-                    mouthMesh.scale.y += (window.targetMouthScaleY - mouthMesh.scale.y) * 0.3;
+                    let targetScale = window.targetMouthScaleY;
+                    let currentInnerScale = avatarGroup.userData.innerMouth.scale.y;
+
+                    // targetScale is between 1 (rest) and ~5 (max volume)
+                    let normalizedOpen = (targetScale - 1) / 4; // 0 to 1
+                    if (normalizedOpen < 0) normalizedOpen = 0;
+                    if (normalizedOpen > 1) normalizedOpen = 1;
+
+                    let targetInnerScaleY = 0.1 + (normalizedOpen * 1.4);
+                    let targetLowerLipY = 0 - (normalizedOpen * 0.2);
+
+                    avatarGroup.userData.innerMouth.scale.y += (targetInnerScaleY - avatarGroup.userData.innerMouth.scale.y) * 0.3;
+                    avatarGroup.userData.lowerLip.position.y += (targetLowerLipY - avatarGroup.userData.lowerLip.position.y) * 0.3;
 
                     renderer.render(scene, camera);
                 }
