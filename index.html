@@ -15,6 +15,7 @@
     <!-- Markdown and Sanitization for Chat -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <body>
@@ -402,7 +403,7 @@
                     </button>
                     <div id="avatar-visual-wrapper">
                         <!-- Avatar Imagen Estática -->
-                        <img id="idealita-hologram" src="img/idealita-avatar-new.png" alt="Idealita Avatar" />
+                        <div id="idealita-3d-container"></div>
                     </div>
                 </div>
 
@@ -552,6 +553,244 @@
     <script src="pension.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+
+
+
+            window.threeJsAnimationFrameId = null;
+            window.targetMouthScaleY = 1;
+            let avatarGroup, mouthMesh, renderer, scene, camera;
+
+            window.init3DAvatar = function() {
+                const container = document.getElementById('idealita-3d-container');
+                if (!container) return;
+
+                container.innerHTML = '';
+
+                if (window.threeJsAnimationFrameId) {
+                    cancelAnimationFrame(window.threeJsAnimationFrameId);
+                }
+
+                let width = container.clientWidth || 300;
+                let height = container.clientHeight || 300;
+
+                scene = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+                camera.position.z = 5;
+
+                try {
+                    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+                    renderer.setSize(width, height);
+                    renderer.setPixelRatio(window.devicePixelRatio);
+                    container.appendChild(renderer.domElement);
+                } catch(e) {
+                    console.warn("WebGL not supported, skipping 3D render in this environment.");
+                    return; // Skip the rest of the 3D init if WebGL is unavailable
+                }
+
+                avatarGroup = new THREE.Group();
+
+                // Holographic Materials
+                const skinMat = new THREE.MeshPhongMaterial({
+                    color: 0x221144,
+                    emissive: 0x110033,
+                    shininess: 100,
+                    specular: 0x00e5ff,
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide
+                });
+
+                const wireframeMat = new THREE.MeshBasicMaterial({
+                    color: 0x00e5ff,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.15
+                });
+
+                // Cranium (Upper head)
+                const craniumGeo = new THREE.SphereGeometry(1.2, 32, 32, 0, Math.PI * 2, 0, Math.PI / 1.6);
+                const craniumMesh = new THREE.Mesh(craniumGeo, skinMat);
+                craniumMesh.position.set(0, 0.2, 0);
+                avatarGroup.add(craniumMesh);
+
+                const craniumWire = new THREE.Mesh(craniumGeo, wireframeMat);
+                craniumWire.scale.set(1.02, 1.02, 1.02);
+                craniumMesh.add(craniumWire);
+
+                // Jaw / Lower face
+                const jawGeo = new THREE.CylinderGeometry(1.2, 0.7, 1.2, 32, 1, false, 0, Math.PI);
+                const jawMesh = new THREE.Mesh(jawGeo, skinMat);
+                jawMesh.rotation.y = -Math.PI / 2;
+                jawMesh.rotation.z = Math.PI / 2;
+                jawMesh.position.set(0, -0.6, 0);
+                // Squish the cylinder to look like a jaw
+                jawMesh.scale.set(0.8, 1, 1.1);
+                avatarGroup.add(jawMesh);
+
+                // Nose
+                const noseGeo = new THREE.ConeGeometry(0.2, 0.6, 4);
+                const noseMesh = new THREE.Mesh(noseGeo, skinMat);
+                noseMesh.rotation.y = Math.PI / 4;
+                noseMesh.position.set(0, -0.1, 1.2);
+                noseMesh.scale.set(1, 1, 0.5);
+                avatarGroup.add(noseMesh);
+
+                // Cheeks
+                const cheekGeo = new THREE.SphereGeometry(0.4, 16, 16);
+                const leftCheek = new THREE.Mesh(cheekGeo, skinMat);
+                leftCheek.position.set(-0.6, -0.2, 1.0);
+                leftCheek.scale.set(1, 0.8, 0.5);
+                avatarGroup.add(leftCheek);
+
+                const rightCheek = new THREE.Mesh(cheekGeo, skinMat);
+                rightCheek.position.set(0.6, -0.2, 1.0);
+                rightCheek.scale.set(1, 0.8, 0.5);
+                avatarGroup.add(rightCheek);
+
+                // Eyes
+                const eyeGeo = new THREE.SphereGeometry(0.25, 32, 16);
+                const eyeMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 200, specular: 0xffffff });
+                const pupilGeo = new THREE.SphereGeometry(0.12, 16, 16);
+                const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                const irisGeo = new THREE.SphereGeometry(0.15, 16, 16);
+                const irisMat = new THREE.MeshBasicMaterial({ color: 0x6c40f7 });
+
+                function createEye(x) {
+                    const eyeGroup = new THREE.Group();
+
+                    const sclera = new THREE.Mesh(eyeGeo, eyeMat);
+                    sclera.scale.set(1.2, 0.7, 0.8); // Almond shape
+                    eyeGroup.add(sclera);
+
+                    const iris = new THREE.Mesh(irisGeo, irisMat);
+                    iris.position.set(0, 0, 0.12);
+                    iris.scale.set(1, 1.5, 1);
+                    eyeGroup.add(iris);
+
+                    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+                    pupil.position.set(0, 0, 0.16);
+                    pupil.scale.set(1, 1.5, 1);
+                    eyeGroup.add(pupil);
+
+                    // Eyelid
+                    const eyelidGeo = new THREE.SphereGeometry(0.28, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2.2);
+                    const eyelidMat = new THREE.MeshPhongMaterial({ color: 0x4a1b82, side: THREE.DoubleSide });
+                    const eyelid = new THREE.Mesh(eyelidGeo, eyelidMat);
+                    eyelid.rotation.x = -Math.PI / 10;
+                    eyelid.position.set(0, 0, 0.05);
+                    eyeGroup.add(eyelid);
+
+                    eyeGroup.position.set(x, 0.3, 1.05);
+                    return eyeGroup;
+                }
+
+                const leftEye = createEye(-0.45);
+                leftEye.rotation.y = -Math.PI / 12;
+                avatarGroup.add(leftEye);
+
+                const rightEye = createEye(0.45);
+                rightEye.rotation.y = Math.PI / 12;
+                avatarGroup.add(rightEye);
+
+                // Mouth Structure
+                const mouthGroup = new THREE.Group();
+                mouthGroup.position.set(0, -0.6, 1.25);
+
+                // Upper Lip
+                const upperLipGeo = new THREE.TorusGeometry(0.25, 0.06, 16, 32, Math.PI);
+                const lipMat = new THREE.MeshPhongMaterial({ color: 0xd81b60, shininess: 80 });
+                const upperLip = new THREE.Mesh(upperLipGeo, lipMat);
+                upperLip.scale.set(1, 0.5, 1);
+                mouthGroup.add(upperLip);
+
+                // Lower Lip (This will be animated)
+                const lowerLipGeo = new THREE.TorusGeometry(0.25, 0.08, 16, 32, Math.PI);
+                mouthMesh = new THREE.Mesh(lowerLipGeo, lipMat); // We keep 'mouthMesh' var name for compatibility
+                mouthMesh.rotation.z = Math.PI;
+                mouthMesh.scale.set(1, 0.5, 1);
+                mouthGroup.add(mouthMesh);
+
+                // Inner dark mouth (appears when open)
+                const innerMouthGeo = new THREE.PlaneGeometry(0.45, 0.2);
+                const innerMouthMat = new THREE.MeshBasicMaterial({ color: 0x050011 });
+                const innerMouth = new THREE.Mesh(innerMouthGeo, innerMouthMat);
+                innerMouth.position.set(0, 0, -0.05);
+                innerMouth.scale.set(1, 0.1, 1); // Hidden initially
+                mouthGroup.add(innerMouth);
+
+                // Expose inner mouth to animation loop
+                avatarGroup.userData.innerMouth = innerMouth;
+                avatarGroup.userData.lowerLip = mouthMesh;
+
+                avatarGroup.add(mouthGroup);
+
+                // Hair / Tech accents
+                const accentGeo = new THREE.TorusGeometry(1.3, 0.05, 16, 64, Math.PI * 1.5);
+                const accentMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+                const accent1 = new THREE.Mesh(accentGeo, accentMat);
+                accent1.rotation.x = Math.PI / 2;
+                accent1.rotation.y = Math.PI / 4;
+                accent1.position.set(0, 0.5, 0);
+                avatarGroup.add(accent1);
+
+                scene.add(avatarGroup);
+
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+
+                const pointLight = new THREE.PointLight(0x00e5ff, 1);
+                pointLight.position.set(5, 5, 5);
+                scene.add(pointLight);
+
+                const pointLight2 = new THREE.PointLight(0x6c40f7, 1);
+                pointLight2.position.set(-5, -5, 5);
+                scene.add(pointLight2);
+
+                let time = 0;
+
+                function animate3DAvatar() {
+                    window.threeJsAnimationFrameId = requestAnimationFrame(animate3DAvatar);
+
+                    time += 0.02;
+                    avatarGroup.position.y = Math.sin(time) * 0.1;
+                    avatarGroup.rotation.y = Math.sin(time * 0.5) * 0.05;
+
+                    // Smooth mouth interpolation
+                    let targetScale = window.targetMouthScaleY;
+                    let currentInnerScale = avatarGroup.userData.innerMouth.scale.y;
+
+                    // targetScale is between 1 (rest) and ~5 (max volume)
+                    let normalizedOpen = (targetScale - 1) / 4; // 0 to 1
+                    if (normalizedOpen < 0) normalizedOpen = 0;
+                    if (normalizedOpen > 1) normalizedOpen = 1;
+
+                    let targetInnerScaleY = 0.1 + (normalizedOpen * 1.4);
+                    let targetLowerLipY = 0 - (normalizedOpen * 0.2);
+
+                    avatarGroup.userData.innerMouth.scale.y += (targetInnerScaleY - avatarGroup.userData.innerMouth.scale.y) * 0.3;
+                    avatarGroup.userData.lowerLip.position.y += (targetLowerLipY - avatarGroup.userData.lowerLip.position.y) * 0.3;
+
+                    renderer.render(scene, camera);
+                }
+                animate3DAvatar();
+
+                // Resize handling
+                window.avatarResizeObserver = new ResizeObserver(entries => {
+                    for (let entry of entries) {
+                        const newWidth = entry.contentRect.width;
+                        const newHeight = entry.contentRect.height;
+                        if (newWidth > 0 && newHeight > 0 && renderer && camera) {
+                            renderer.setSize(newWidth, newHeight);
+                            camera.aspect = newWidth / newHeight;
+                            camera.updateProjectionMatrix();
+                        }
+                    }
+                });
+                window.avatarResizeObserver.observe(container);
+            }
+
+            window.init3DAvatar();
 
         // Custom Modal Logic
         window.showModal = function(message) {
@@ -1470,16 +1709,16 @@
             function updateLiveStatus(status) {
                 if (liveStatus) liveStatus.textContent = status;
 
-                const hologram = document.getElementById('idealita-hologram');
-                if (!hologram) return;
+                const avatarWrapper = document.getElementById('avatar-visual-wrapper');
+                if (!avatarWrapper) return;
 
                 // Limpiar estados previos
-                hologram.classList.remove('state-listening', 'state-speaking');
+                avatarWrapper.classList.remove('state-listening', 'state-speaking');
 
                 if (status === "Escuchando...") {
-                    hologram.classList.add('state-listening');
+                    avatarWrapper.classList.add('state-listening');
                 } else if (status === "Hablando...") {
-                    hologram.classList.add('state-speaking');
+                    avatarWrapper.classList.add('state-speaking');
                 }
             }
 
@@ -1504,6 +1743,9 @@
 
             async function startLive() {
                 try {
+                    if (!window.threeJsAnimationFrameId && typeof window.init3DAvatar === "function") {
+                        window.init3DAvatar();
+                    }
                     updateLiveStatus("Obteniendo credenciales...");
                     const res = await fetch('/api/live-token');
                     if (!res.ok) {
@@ -1585,7 +1827,7 @@
                         window.avatarAnalyser.fftSize = 256;
                         window.avatarAnalyser.connect(pcmPlaybackContext.destination);
 
-                        const outDataArray = new Uint8Array(window.avatarAnalyser.frequencyBinCount);
+                        const outDataArray = new Uint8Array(window.avatarAnalyser.fftSize);
                         // window.micAnalyser was initialized earlier for input audio
                         let micDataArray = null;
 
@@ -1593,71 +1835,77 @@
                         let smoothedAverage = 0;
 
                         function globalAnimateAvatar() {
-                            if (!window.avatarAnalyser && !window.micAnalyser) return;
-                            const hologram = document.getElementById('idealita-hologram');
-                            if (!hologram) return;
+                            if (!window.avatarAnalyser && !window.micAnalyser) { window.targetMouthScaleY = 1; return; }
+                            const avatarWrapper = document.getElementById('avatar-visual-wrapper');
+                            if (!avatarWrapper) return;
 
                             let currentAverage = 0;
-                            let isSpeaking = hologram.classList.contains('state-speaking');
-                            let isListening = hologram.classList.contains('state-listening');
+                            let isSpeaking = avatarWrapper.classList.contains('state-speaking');
+                            let isListening = avatarWrapper.classList.contains('state-listening');
 
                             if (!prefersReducedMotion) {
                                 if (isSpeaking && window.avatarAnalyser) {
-                                    window.avatarAnalyser.getByteFrequencyData(outDataArray);
-                                    let sum = 0;
-                                    for (let i = 0; i < outDataArray.length; i++) {
-                                        sum += outDataArray[i];
+                                    if (typeof window.avatarAnalyser.getByteTimeDomainData === 'function') {
+                                        window.avatarAnalyser.getByteTimeDomainData(outDataArray);
+                                    } else {
+                                        outDataArray.fill(128);
                                     }
-                                    currentAverage = sum / outDataArray.length;
-                                    smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
+                                    let maxDiff = 0;
+                                    for (let i = 0; i < outDataArray.length; i++) {
+                                        let diff = Math.abs(outDataArray[i] - 128);
+                                        if (diff > maxDiff) maxDiff = diff;
+                                    }
+                                    if (maxDiff < 5) maxDiff = 0; // noise gate
+                                    currentAverage = maxDiff;
+                                    smoothedAverage = smoothedAverage * 0.8 + currentAverage * 0.2;
 
-                                    // Scale: 1 to ~1.05
-                                    const scale = 1 + (smoothedAverage / 255) * 0.05;
-                                    // Glow size: 15px base to ~30px
-                                    const glowSize = 15 + (smoothedAverage / 255) * 15;
+                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 4;
 
-                                    hologram.style.setProperty('--avatar-scale', scale);
-                                    hologram.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    hologram.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 255) * 0.2})`);
+                                    const glowSize = 15 + (smoothedAverage / 128) * 15;
+                                    avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
+                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 128) * 0.2})`);
 
                                 } else if (isListening && window.micAnalyser && !isMicMuted) {
                                     if (!micDataArray) {
-                                        micDataArray = new Uint8Array(window.micAnalyser.frequencyBinCount);
+                                        micDataArray = new Uint8Array(window.micAnalyser.fftSize);
                                     }
-                                    window.micAnalyser.getByteFrequencyData(micDataArray);
-                                    let sum = 0;
+                                    if (typeof window.micAnalyser.getByteTimeDomainData === 'function') {
+                                        window.micAnalyser.getByteTimeDomainData(micDataArray);
+                                    } else {
+                                        micDataArray.fill(128);
+                                    }
+                                    let maxDiff = 0;
                                     for (let i = 0; i < micDataArray.length; i++) {
-                                        sum += micDataArray[i];
+                                        let diff = Math.abs(micDataArray[i] - 128);
+                                        if (diff > maxDiff) maxDiff = diff;
                                     }
-                                    currentAverage = sum / micDataArray.length;
-                                    smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
+                                    if (maxDiff < 3) maxDiff = 0;
+                                    currentAverage = maxDiff;
+                                    smoothedAverage = smoothedAverage * 0.8 + currentAverage * 0.2;
 
-                                    // Scale: 1 to ~1.03
-                                    const scale = 1 + (smoothedAverage / 255) * 0.03;
-                                    // Glow size: 10px base to ~20px
-                                    const glowSize = 10 + (smoothedAverage / 255) * 10;
+                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 1.5;
 
-                                    hologram.style.setProperty('--avatar-scale', scale);
-                                    hologram.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    hologram.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 255) * 0.3})`);
+                                    const glowSize = 10 + (smoothedAverage / 128) * 10;
+                                    avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
+                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 128) * 0.3})`);
                                 } else {
                                     // Idle or muted state fallback
                                     smoothedAverage = smoothedAverage * 0.85; // smooth reset
-                                    hologram.style.setProperty('--avatar-scale', 1);
+                                    window.targetMouthScaleY = 1;
                                     if(isSpeaking) {
-                                         hologram.style.setProperty('--avatar-glow-size', `15px`);
-                                         hologram.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, 0.8)`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-size', `15px`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, 0.8)`);
                                     } else if(isListening) {
-                                         hologram.style.setProperty('--avatar-glow-size', `10px`);
-                                         hologram.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, 0.5)`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-size', `10px`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, 0.5)`);
                                     } else {
-                                         hologram.style.setProperty('--avatar-glow-size', `0px`);
-                                         hologram.style.setProperty('--avatar-glow-color', `transparent`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-size', `0px`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-color', `transparent`);
                                     }
                                 }
                             } else {
                                 // Ensure base scale if reduced motion
-                                hologram.style.setProperty('--avatar-scale', 1);
+                                window.targetMouthScaleY = 1;
                                 // The base glow sizes and colors are already handled by the CSS fallback classes.
                             }
 
@@ -1876,7 +2124,9 @@
                 if (window.currentMouthAnimId && window.cancelAnimationFrame) {
                     window.cancelAnimationFrame(window.currentMouthAnimId);
                     window.currentMouthAnimId = null;
+                    window.targetMouthScaleY = 1;
                 }
+                // We DO NOT cancel threeJsAnimationFrameId here because we want the avatar to keep rendering its idle state.
                 if (window.avatarAnalyser) {
                     try { window.avatarAnalyser.disconnect(); } catch(e){}
                     window.avatarAnalyser = null;
@@ -1886,17 +2136,16 @@
                     window.micAnalyser = null;
                 }
 
-                const hologram = document.getElementById('idealita-hologram');
-                if(hologram) {
-                     hologram.style.setProperty('--avatar-scale', 1);
-                     hologram.style.setProperty('--avatar-glow-size', `0px`);
-                     hologram.style.setProperty('--avatar-glow-color', `transparent`);
-                     hologram.classList.remove('state-listening', 'state-speaking');
+                const avatarWrapper = document.getElementById('avatar-visual-wrapper');
+                if(avatarWrapper) {
+                     window.targetMouthScaleY = 1;
+                     avatarWrapper.style.setProperty('--avatar-glow-size', `0px`);
+                     avatarWrapper.style.setProperty('--avatar-glow-color', `transparent`);
+                     avatarWrapper.classList.remove('state-listening', 'state-speaking');
                 }
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';
-                const avatarContainer = document.getElementById('avatar-container');
-                if(avatarContainer) avatarContainer.style.display = 'none';
+
 
             }
 
