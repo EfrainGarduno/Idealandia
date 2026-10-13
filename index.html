@@ -15,6 +15,7 @@
     <!-- Markdown and Sanitization for Chat -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <body>
@@ -402,7 +403,7 @@
                     </button>
                     <div id="avatar-visual-wrapper">
                         <!-- Avatar Imagen Estática -->
-                        <img id="idealita-hologram" src="img/idealita-avatar-new.png" alt="Idealita Avatar" />
+                        <div id="idealita-3d-container"></div>
                     </div>
                 </div>
 
@@ -552,6 +553,126 @@
     <script src="pension.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+
+
+
+            window.threeJsAnimationFrameId = null;
+            window.targetMouthScaleY = 1;
+            let avatarGroup, mouthMesh, renderer, scene, camera;
+
+            window.init3DAvatar = function() {
+                const container = document.getElementById('idealita-3d-container');
+                if (!container) return;
+
+                container.innerHTML = '';
+
+                if (window.threeJsAnimationFrameId) {
+                    cancelAnimationFrame(window.threeJsAnimationFrameId);
+                }
+
+                let width = container.clientWidth || 300;
+                let height = container.clientHeight || 300;
+
+                scene = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+                camera.position.z = 5;
+
+                try {
+                    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+                    renderer.setSize(width, height);
+                    renderer.setPixelRatio(window.devicePixelRatio);
+                    container.appendChild(renderer.domElement);
+                } catch(e) {
+                    console.warn("WebGL not supported, skipping 3D render in this environment.");
+                    return; // Skip the rest of the 3D init if WebGL is unavailable
+                }
+
+                avatarGroup = new THREE.Group();
+
+                // Head
+                const headGeo = new THREE.SphereGeometry(1.2, 32, 32);
+                const headMat = new THREE.MeshPhongMaterial({
+                    color: 0x8a2be2,
+                    shininess: 100,
+                    specular: 0x00e5ff
+                });
+                let headMesh = new THREE.Mesh(headGeo, headMat);
+                avatarGroup.add(headMesh);
+
+                // Eyes
+                const eyeGeo = new THREE.SphereGeometry(0.2, 16, 16);
+                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const pupilGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+                const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+                leftEye.position.set(-0.4, 0.3, 1.1);
+                const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
+                leftPupil.position.set(0, 0, 0.15);
+                leftEye.add(leftPupil);
+                avatarGroup.add(leftEye);
+
+                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+                rightEye.position.set(0.4, 0.3, 1.1);
+                const rightPupil = new THREE.Mesh(pupilGeo, pupilMat);
+                rightPupil.position.set(0, 0, 0.15);
+                rightEye.add(rightPupil);
+                avatarGroup.add(rightEye);
+
+                // Mouth
+                const mouthGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 32);
+                const mouthMat = new THREE.MeshBasicMaterial({ color: 0xffaadd });
+                mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+                mouthMesh.rotation.x = Math.PI / 2;
+                mouthMesh.position.set(0, -0.4, 1.15);
+                avatarGroup.add(mouthMesh);
+
+                scene.add(avatarGroup);
+
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+
+                const pointLight = new THREE.PointLight(0x00e5ff, 1);
+                pointLight.position.set(5, 5, 5);
+                scene.add(pointLight);
+
+                const pointLight2 = new THREE.PointLight(0x6c40f7, 1);
+                pointLight2.position.set(-5, -5, 5);
+                scene.add(pointLight2);
+
+                let time = 0;
+
+                function animate3DAvatar() {
+                    window.threeJsAnimationFrameId = requestAnimationFrame(animate3DAvatar);
+
+                    time += 0.02;
+                    avatarGroup.position.y = Math.sin(time) * 0.1;
+                    avatarGroup.rotation.y = Math.sin(time * 0.5) * 0.05;
+
+                    // Smooth mouth interpolation
+                    mouthMesh.scale.y += (window.targetMouthScaleY - mouthMesh.scale.y) * 0.3;
+
+                    renderer.render(scene, camera);
+                }
+                animate3DAvatar();
+
+                // Resize handling
+                const resizeObserver = new ResizeObserver(entries => {
+                    for (let entry of entries) {
+                        const newWidth = entry.contentRect.width;
+                        const newHeight = entry.contentRect.height;
+                        if (newWidth > 0 && newHeight > 0 && renderer && camera) {
+                            renderer.setSize(newWidth, newHeight);
+                            camera.aspect = newWidth / newHeight;
+                            camera.updateProjectionMatrix();
+                        }
+                    }
+                });
+                resizeObserver.observe(container);
+            }
+
+            window.init3DAvatar();
 
         // Custom Modal Logic
         window.showModal = function(message) {
@@ -1470,16 +1591,16 @@
             function updateLiveStatus(status) {
                 if (liveStatus) liveStatus.textContent = status;
 
-                const hologram = document.getElementById('idealita-hologram');
-                if (!hologram) return;
+                const avatarWrapper = document.getElementById('avatar-visual-wrapper');
+                if (!avatarWrapper) return;
 
                 // Limpiar estados previos
-                hologram.classList.remove('state-listening', 'state-speaking');
+                avatarWrapper.classList.remove('state-listening', 'state-speaking');
 
                 if (status === "Escuchando...") {
-                    hologram.classList.add('state-listening');
+                    avatarWrapper.classList.add('state-listening');
                 } else if (status === "Hablando...") {
-                    hologram.classList.add('state-speaking');
+                    avatarWrapper.classList.add('state-speaking');
                 }
             }
 
@@ -1504,6 +1625,9 @@
 
             async function startLive() {
                 try {
+                    if (!window.threeJsAnimationFrameId && typeof window.init3DAvatar === "function") {
+                        window.init3DAvatar();
+                    }
                     updateLiveStatus("Obteniendo credenciales...");
                     const res = await fetch('/api/live-token');
                     if (!res.ok) {
@@ -1594,12 +1718,12 @@
 
                         function globalAnimateAvatar() {
                             if (!window.avatarAnalyser && !window.micAnalyser) return;
-                            const hologram = document.getElementById('idealita-hologram');
-                            if (!hologram) return;
+                            const avatarWrapper = document.getElementById('avatar-visual-wrapper');
+                            if (!avatarWrapper) return;
 
                             let currentAverage = 0;
-                            let isSpeaking = hologram.classList.contains('state-speaking');
-                            let isListening = hologram.classList.contains('state-listening');
+                            let isSpeaking = avatarWrapper.classList.contains('state-speaking');
+                            let isListening = avatarWrapper.classList.contains('state-listening');
 
                             if (!prefersReducedMotion) {
                                 if (isSpeaking && window.avatarAnalyser) {
@@ -1612,13 +1736,13 @@
                                     smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
 
                                     // Scale: 1 to ~1.05
-                                    const scale = 1 + (smoothedAverage / 255) * 0.05;
+                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 5;
                                     // Glow size: 15px base to ~30px
                                     const glowSize = 15 + (smoothedAverage / 255) * 15;
 
-                                    hologram.style.setProperty('--avatar-scale', scale);
-                                    hologram.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    hologram.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 255) * 0.2})`);
+
+                                    avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
+                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 255) * 0.2})`);
 
                                 } else if (isListening && window.micAnalyser && !isMicMuted) {
                                     if (!micDataArray) {
@@ -1633,31 +1757,31 @@
                                     smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
 
                                     // Scale: 1 to ~1.03
-                                    const scale = 1 + (smoothedAverage / 255) * 0.03;
+                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 2;
                                     // Glow size: 10px base to ~20px
                                     const glowSize = 10 + (smoothedAverage / 255) * 10;
 
-                                    hologram.style.setProperty('--avatar-scale', scale);
-                                    hologram.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    hologram.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 255) * 0.3})`);
+
+                                    avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
+                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 255) * 0.3})`);
                                 } else {
                                     // Idle or muted state fallback
                                     smoothedAverage = smoothedAverage * 0.85; // smooth reset
-                                    hologram.style.setProperty('--avatar-scale', 1);
+                                    window.targetMouthScaleY = 1;
                                     if(isSpeaking) {
-                                         hologram.style.setProperty('--avatar-glow-size', `15px`);
-                                         hologram.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, 0.8)`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-size', `15px`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, 0.8)`);
                                     } else if(isListening) {
-                                         hologram.style.setProperty('--avatar-glow-size', `10px`);
-                                         hologram.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, 0.5)`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-size', `10px`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, 0.5)`);
                                     } else {
-                                         hologram.style.setProperty('--avatar-glow-size', `0px`);
-                                         hologram.style.setProperty('--avatar-glow-color', `transparent`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-size', `0px`);
+                                         avatarWrapper.style.setProperty('--avatar-glow-color', `transparent`);
                                     }
                                 }
                             } else {
                                 // Ensure base scale if reduced motion
-                                hologram.style.setProperty('--avatar-scale', 1);
+                                window.targetMouthScaleY = 1;
                                 // The base glow sizes and colors are already handled by the CSS fallback classes.
                             }
 
@@ -1876,6 +2000,11 @@
                 if (window.currentMouthAnimId && window.cancelAnimationFrame) {
                     window.cancelAnimationFrame(window.currentMouthAnimId);
                     window.currentMouthAnimId = null;
+                    window.targetMouthScaleY = 1;
+                }
+                if (window.threeJsAnimationFrameId && window.cancelAnimationFrame) {
+                    window.cancelAnimationFrame(window.threeJsAnimationFrameId);
+                    window.threeJsAnimationFrameId = null;
                 }
                 if (window.avatarAnalyser) {
                     try { window.avatarAnalyser.disconnect(); } catch(e){}
@@ -1886,12 +2015,12 @@
                     window.micAnalyser = null;
                 }
 
-                const hologram = document.getElementById('idealita-hologram');
-                if(hologram) {
-                     hologram.style.setProperty('--avatar-scale', 1);
-                     hologram.style.setProperty('--avatar-glow-size', `0px`);
-                     hologram.style.setProperty('--avatar-glow-color', `transparent`);
-                     hologram.classList.remove('state-listening', 'state-speaking');
+                const avatarWrapper = document.getElementById('avatar-visual-wrapper');
+                if(avatarWrapper) {
+                     window.targetMouthScaleY = 1;
+                     avatarWrapper.style.setProperty('--avatar-glow-size', `0px`);
+                     avatarWrapper.style.setProperty('--avatar-glow-color', `transparent`);
+                     avatarWrapper.classList.remove('state-listening', 'state-speaking');
                 }
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';
