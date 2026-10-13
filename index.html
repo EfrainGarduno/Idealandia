@@ -1709,7 +1709,7 @@
                         window.avatarAnalyser.fftSize = 256;
                         window.avatarAnalyser.connect(pcmPlaybackContext.destination);
 
-                        const outDataArray = new Uint8Array(window.avatarAnalyser.frequencyBinCount);
+                        const outDataArray = new Uint8Array(window.avatarAnalyser.fftSize);
                         // window.micAnalyser was initialized earlier for input audio
                         let micDataArray = null;
 
@@ -1717,7 +1717,7 @@
                         let smoothedAverage = 0;
 
                         function globalAnimateAvatar() {
-                            if (!window.avatarAnalyser && !window.micAnalyser) return;
+                            if (!window.avatarAnalyser && !window.micAnalyser) { window.targetMouthScaleY = 1; return; }
                             const avatarWrapper = document.getElementById('avatar-visual-wrapper');
                             if (!avatarWrapper) return;
 
@@ -1727,43 +1727,49 @@
 
                             if (!prefersReducedMotion) {
                                 if (isSpeaking && window.avatarAnalyser) {
-                                    window.avatarAnalyser.getByteFrequencyData(outDataArray);
-                                    let sum = 0;
-                                    for (let i = 0; i < outDataArray.length; i++) {
-                                        sum += outDataArray[i];
+                                    if (typeof window.avatarAnalyser.getByteTimeDomainData === 'function') {
+                                        window.avatarAnalyser.getByteTimeDomainData(outDataArray);
+                                    } else {
+                                        outDataArray.fill(128);
                                     }
-                                    currentAverage = sum / outDataArray.length;
-                                    smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
+                                    let maxDiff = 0;
+                                    for (let i = 0; i < outDataArray.length; i++) {
+                                        let diff = Math.abs(outDataArray[i] - 128);
+                                        if (diff > maxDiff) maxDiff = diff;
+                                    }
+                                    if (maxDiff < 5) maxDiff = 0; // noise gate
+                                    currentAverage = maxDiff;
+                                    smoothedAverage = smoothedAverage * 0.8 + currentAverage * 0.2;
 
-                                    // Scale: 1 to ~1.05
-                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 5;
-                                    // Glow size: 15px base to ~30px
-                                    const glowSize = 15 + (smoothedAverage / 255) * 15;
+                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 4;
 
-
+                                    const glowSize = 15 + (smoothedAverage / 128) * 15;
                                     avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 255) * 0.2})`);
+                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 128) * 0.2})`);
 
                                 } else if (isListening && window.micAnalyser && !isMicMuted) {
                                     if (!micDataArray) {
-                                        micDataArray = new Uint8Array(window.micAnalyser.frequencyBinCount);
+                                        micDataArray = new Uint8Array(window.micAnalyser.fftSize);
                                     }
-                                    window.micAnalyser.getByteFrequencyData(micDataArray);
-                                    let sum = 0;
+                                    if (typeof window.micAnalyser.getByteTimeDomainData === 'function') {
+                                        window.micAnalyser.getByteTimeDomainData(micDataArray);
+                                    } else {
+                                        micDataArray.fill(128);
+                                    }
+                                    let maxDiff = 0;
                                     for (let i = 0; i < micDataArray.length; i++) {
-                                        sum += micDataArray[i];
+                                        let diff = Math.abs(micDataArray[i] - 128);
+                                        if (diff > maxDiff) maxDiff = diff;
                                     }
-                                    currentAverage = sum / micDataArray.length;
-                                    smoothedAverage = smoothedAverage * 0.85 + currentAverage * 0.15;
+                                    if (maxDiff < 3) maxDiff = 0;
+                                    currentAverage = maxDiff;
+                                    smoothedAverage = smoothedAverage * 0.8 + currentAverage * 0.2;
 
-                                    // Scale: 1 to ~1.03
-                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 2;
-                                    // Glow size: 10px base to ~20px
-                                    const glowSize = 10 + (smoothedAverage / 255) * 10;
+                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 1.5;
 
-
+                                    const glowSize = 10 + (smoothedAverage / 128) * 10;
                                     avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 255) * 0.3})`);
+                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 128) * 0.3})`);
                                 } else {
                                     // Idle or muted state fallback
                                     smoothedAverage = smoothedAverage * 0.85; // smooth reset
