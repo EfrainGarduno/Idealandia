@@ -1360,11 +1360,50 @@
                                 footerDiv.style.paddingTop = '10px';
                                 footerDiv.style.borderTop = '1px solid #eee';
 
+
                                 const statusSpan = document.createElement('span');
                                 statusSpan.textContent = 'Estado: ';
-                                const strongStatus = document.createElement('strong');
-                                strongStatus.textContent = idea.estado;
-                                statusSpan.appendChild(strongStatus);
+
+                                const statusSelect = document.createElement('select');
+                                statusSelect.style.padding = '3px';
+                                statusSelect.style.borderRadius = '3px';
+                                statusSelect.style.border = '1px solid #ccc';
+                                statusSelect.style.marginLeft = '5px';
+
+                                const estados = ['pendiente', 'en progreso', 'completada', 'descartada'];
+                                estados.forEach(e => {
+                                    const opt = document.createElement('option');
+                                    opt.value = e;
+                                    opt.textContent = e;
+                                    if (e === idea.estado) opt.selected = true;
+                                    statusSelect.appendChild(opt);
+                                });
+
+                                statusSelect.addEventListener('change', async (e) => {
+                                    const nuevoEstado = e.target.value;
+                                    try {
+                                        const res = await fetch(`/api/ideas/${idea.id}/estado`, {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ estado: nuevoEstado })
+                                        });
+                                        const data = await res.json();
+                                        if (res.ok) {
+                                            showModal('Estado de la idea actualizado correctamente.');
+                                            fetchAndDisplayIdeas();
+                                        } else {
+                                            showModal(`Error: ${data.error}`);
+                                            e.target.value = idea.estado; // revert
+                                        }
+                                    } catch (err) {
+                                        console.error('Error actualizando estado:', err);
+                                        showModal('Ocurrió un error al actualizar el estado.');
+                                        e.target.value = idea.estado; // revert
+                                    }
+                                });
+
+                                statusSpan.appendChild(statusSelect);
+
 
                                 const dateSpan = document.createElement('span');
                                 dateSpan.textContent = fecha;

@@ -511,6 +511,87 @@ app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
     }
 });
 
+app.delete('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
+    try {
+        const userIdToDelete = parseInt(req.params.id);
+        const requestingUserId = req.user.id;
+
+        if (isNaN(userIdToDelete)) {
+            return res.status(400).json({ error: 'ID de usuario inválido.' });
+        }
+
+        if (requestingUserId === userIdToDelete) {
+            return res.status(400).json({ error: 'No puedes eliminar tu propio usuario.' });
+        }
+
+        // Check for business content dependencies (ideas)
+        const [ideasCheck] = await pool.execute('SELECT id FROM ideas WHERE usuario_id = ? LIMIT 1', [userIdToDelete]);
+        if (ideasCheck.length > 0) {
+            return res.status(400).json({ error: 'El usuario tiene ideas asociadas y no puede ser eliminado.' });
+        }
+
+        const connection = await pool.getConnection();
+        let lockAcquired = false;
+        try {
+            // Serialize concurrent modifications to prevent race conditions on admin deletion
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+            if (!lockResult[0].acquired) {
+                return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+            }
+            lockAcquired = true;
+
+            await connection.beginTransaction();
+
+            // Delete user roles
+            await connection.execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [userIdToDelete]);
+
+            // Delete user
+            const [deleteResult] = await connection.execute('DELETE FROM usuarios WHERE id = ?', [userIdToDelete]);
+
+            if (deleteResult.affectedRows === 0) {
+                await connection.rollback();
+                return res.status(404).json({ error: 'Usuario no encontrado.' });
+            }
+
+            // Verify the system is not left without an admin
+            const adminQuery = `
+                SELECT COUNT(DISTINCT ur.usuario_id) as count
+                FROM usuario_roles ur
+                JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                JOIN rol_permisos rp ON r.id = rp.rol_id
+                JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                WHERE p.codigo = 'admin.access'
+            `;
+            const [adminCheck] = await connection.execute(adminQuery);
+
+            if (parseInt(adminCheck[0].count) === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+            }
+
+            await connection.commit();
+            res.status(200).json({ message: 'Usuario eliminado exitosamente.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            if (lockAcquired) {
+                try {
+                    await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                } catch (e) {
+                    console.error('Error releasing lock', e);
+                }
+            }
+            connection.release();
+        }
+
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/usuarios:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+
 app.get('/api/admin/roles', requireAdmin, async (req, res) => {
     try {
         const [roles] = await pool.execute('SELECT id, nombre, descripcion, activo FROM roles');
@@ -700,6 +781,40 @@ app.put('/api/admin/menus/:id', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
+
+app.post('/api/admin/menus', requireAdmin, async (req, res) => {
+    try {
+        const { nombre, funcionalidad_id, parent_id, orden, publico, activo } = req.body;
+
+        if (!nombre || orden === undefined || orden === null) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios (nombre, orden).' });
+        }
+
+        if (funcionalidad_id) {
+            const [funcCheck] = await pool.execute('SELECT id FROM funcionalidades WHERE id = ?', [funcionalidad_id]);
+            if (funcCheck.length === 0) {
+                return res.status(400).json({ error: 'La funcionalidad_id proporcionada no existe.' });
+            }
+        }
+
+        if (parent_id) {
+            const [parentCheck] = await pool.execute('SELECT id FROM menu_items WHERE id = ?', [parent_id]);
+            if (parentCheck.length === 0) {
+                return res.status(400).json({ error: 'El parent_id proporcionado no existe.' });
+            }
+        }
+
+        const [result] = await pool.execute(
+            'INSERT INTO menu_items (nombre, funcionalidad_id, parent_id, orden, publico, activo) VALUES (?, ?, ?, ?, ?, ?)',
+            [nombre, funcionalidad_id || null, parent_id || null, orden, publico ? 1 : 0, activo ? 1 : 0]
+        );
+        res.status(201).json({ message: 'Menú creado exitosamente.', id: result.insertId });
+    } catch (error) {
+        console.error('Error in POST /api/admin/menus:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 
 app.get('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
     try {
@@ -1004,4 +1119,43 @@ app.delete('/api/ideas/:id', async (req, res) => {
         }
     }
 });
+
+app.put('/api/ideas/:id/estado', async (req, res) => {
+    try {
+        const token = req.cookies.auth_token;
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+        }
+
+        const secret = process.env.AUTH_SECRET;
+        const decoded = jwt.verify(token, secret);
+        const usuario_id = decoded.id;
+        const idea_id = req.params.id;
+        const { estado } = req.body;
+
+        if (!idea_id || isNaN(idea_id)) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        const estadosValidos = ['pendiente', 'en progreso', 'completada', 'descartada'];
+        if (!estadosValidos.includes(estado)) {
+            return res.status(400).json({ error: 'Estado inválido.' });
+        }
+
+        const [result] = await pool.execute(
+            'UPDATE ideas SET estado = ? WHERE id = ? AND usuario_id = ?',
+            [estado, idea_id, usuario_id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        res.status(200).json({ message: 'Estado actualizado correctamente.' });
+    } catch (error) {
+        console.error('Error in /api/ideas/:id/estado (PUT):', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });

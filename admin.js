@@ -240,24 +240,43 @@ async function loadMenus() {
             const tr = document.createElement('tr');
 
             let td = document.createElement('td'); td.textContent = m.id; tr.appendChild(td);
-            td = document.createElement('td'); td.textContent = m.nombre; tr.appendChild(td);
-            td = document.createElement('td'); td.textContent = m.funcionalidad_id || 'NULL'; tr.appendChild(td);
-            td = document.createElement('td'); td.textContent = m.parent_id || 'NULL'; tr.appendChild(td);
-            td = document.createElement('td'); td.textContent = m.orden; tr.appendChild(td);
-            td = document.createElement('td'); td.textContent = m.publico ? 'Sí' : 'No'; tr.appendChild(td);
-            td = document.createElement('td'); td.textContent = m.activo ? 'Sí' : 'No'; tr.appendChild(td);
-
             td = document.createElement('td');
 
             const editBtn = document.createElement('button');
             editBtn.textContent = 'Editar';
-
             editBtn.className = 'btn btn-primary btn-sm';
+            editBtn.style.marginRight = '5px';
             editBtn.onclick = () => showEditMenuModal(m);
             td.appendChild(editBtn);
-            tr.appendChild(td);
 
+            const toggleBtn = document.createElement('button');
+            toggleBtn.textContent = m.activo ? 'Desactivar' : 'Activar';
+            toggleBtn.className = m.activo ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm';
+            toggleBtn.onclick = async () => {
+                try {
+                    const res = await fetch(`/api/admin/menus/${m.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...m, activo: !m.activo })
+                    });
+                    if (res.ok) {
+                        window.showModal(`Menú ${m.activo ? 'desactivado' : 'activado'}.`);
+                        loadMenus();
+                    } else {
+                        const data = await res.json();
+                        window.showModal(`Error: ${data.error}`);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    window.showModal('Error al cambiar estado del menú.');
+                }
+            };
+            td.appendChild(toggleBtn);
+
+            tr.appendChild(td);
             tbody.appendChild(tr);
+
+
         }
     } catch (error) {
         console.error(error);
@@ -688,7 +707,19 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCreateUser.textContent = 'Crear Usuario';
     btnCreateUser.className = 'btn btn-primary';
 
-    // Add create user button and search input to Users tab
+
+    const btnCreateMenu = document.createElement('button');
+    btnCreateMenu.textContent = 'Crear Menú';
+    btnCreateMenu.className = 'btn btn-primary';
+    btnCreateMenu.style.marginBottom = '15px';
+    btnCreateMenu.onclick = showCreateMenuModal;
+
+    const menusTab = document.getElementById('admin-menus');
+    if (menusTab) {
+        menusTab.insertBefore(btnCreateMenu, menusTab.querySelector('h3').nextSibling);
+    }
+
+// Add create user button and search input to Users tab
     const usersTab = document.getElementById('admin-usuarios');
     if (usersTab) {
         const header = usersTab.querySelector('h3');
@@ -880,4 +911,72 @@ async function showEditFuncPermisosModal(funcId, funcName) {
         console.error(error);
         window.showModal('Error al cargar permisos de la funcionalidad.');
     }
+}
+
+
+function showCreateMenuModal() {
+    const html = `
+        <div style="text-align: left;">
+            <label>Nombre:</label>
+            <input type="text" id="create-menu-nombre" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Funcionalidad ID (Dejar en blanco para NULL):</label>
+            <input type="number" id="create-menu-func" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Parent ID (Dejar en blanco para NULL):</label>
+            <input type="number" id="create-menu-parent" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Orden:</label>
+            <input type="number" id="create-menu-orden" value="0" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>
+                <input type="checkbox" id="create-menu-publico"> Público
+            </label>
+            <label style="margin-left: 10px;">
+                <input type="checkbox" id="create-menu-activo" checked> Activo
+            </label>
+            <br>
+            <button id="btn-save-new-menu" class="btn btn-primary" style="margin-top: 10px;">Crear</button>
+            <button id="btn-cancel-new-menu" class="btn btn-secondary" style="margin-top: 10px;">Cancelar</button>
+        </div>
+    `;
+
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Crear Nuevo Menú</h3>` + html;
+    buttonsContainer.innerHTML = '';
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-new-menu').onclick = () => {
+        overlay.classList.remove('active');
+    };
+
+    document.getElementById('btn-save-new-menu').onclick = async () => {
+        const nombre = document.getElementById('create-menu-nombre').value;
+        const func_val = document.getElementById('create-menu-func').value;
+        const parent_val = document.getElementById('create-menu-parent').value;
+        const orden = parseInt(document.getElementById('create-menu-orden').value) || 0;
+        const publico = document.getElementById('create-menu-publico').checked;
+        const activo = document.getElementById('create-menu-activo').checked;
+
+        const funcionalidad_id = func_val === '' ? null : parseInt(func_val);
+        const parent_id = parent_val === '' ? null : parseInt(parent_val);
+
+        try {
+            const res = await fetch('/api/admin/menus', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, funcionalidad_id, parent_id, orden, publico, activo })
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Menú creado.');
+                loadMenus();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al crear menú.');
+        }
+    };
 }

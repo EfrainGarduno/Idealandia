@@ -185,6 +185,14 @@ window.fetch = async (url, options) => {
         // Unauthenticated test
         if (!globalAuthState) {
             return { ok: false, status: 401, json: async () => ({ error: 'No autorizado.' }) };
+        } else if (url && url.match(/\/api\/ideas\/\d+\/estado/) && options && options.method === 'PUT') {
+            const id = parseInt(url.split('/')[3]);
+            const body = JSON.parse(options.body);
+            if (!['pendiente', 'en progreso', 'completada', 'descartada'].includes(body.estado)) {
+                return Promise.resolve({ ok: false, status: 400, json: async () => ({ error: 'Estado inválido' }) });
+            }
+            if (id === 2) return Promise.resolve({ ok: false, status: 404, json: async () => ({ error: 'No autorizado' }) });
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({ message: 'Estado actualizado' }) });
         }
 
         // Invalid ID test

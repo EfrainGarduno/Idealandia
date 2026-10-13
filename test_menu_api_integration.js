@@ -43,6 +43,10 @@ const dbExecuteMock = async (query, params) => {
         return [[{ released: 1 }]];
     }
     if (query.includes('FROM menu_items')) {
+        if (query.includes('WHERE id = ?')) {
+            const id = params[0];
+            if (id === 10) return [[{ id: 10, parent_id: 10 }]];
+        }
         return [mockMenuItems];
     } else if (query.includes('FROM usuario_roles') && !query.includes('DELETE FROM') && !query.includes('INSERT INTO')) {
     // Only check constraints on SELECT statements for usuario_roles, skip INSERT/DELETE
@@ -333,6 +337,8 @@ async function testMenuAPI() {
         }
         simulateReleaseLockError = false;
         console.log("Concurrency RELEASE_LOCK error resilience check passed.");
+
+
 
         console.log("All integration tests passed successfully.");
         // Terminate the process to close the server
