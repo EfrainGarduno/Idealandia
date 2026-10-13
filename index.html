@@ -585,10 +585,27 @@
                 const container = document.getElementById('idealita-3d-container');
                 if (!container) return;
 
-                container.innerHTML = '';
-
+                // Cleanup previous resources
                 if (window.threeJsAnimationFrameId) {
                     cancelAnimationFrame(window.threeJsAnimationFrameId);
+                    window.threeJsAnimationFrameId = null;
+                }
+                if (window.avatarResizeObserver) {
+                    window.avatarResizeObserver.disconnect();
+                    window.avatarResizeObserver = null;
+                }
+                if (renderer) {
+                    renderer.dispose();
+                    renderer.forceContextLoss();
+                    renderer = null;
+                }
+
+                container.innerHTML = '';
+
+                if (!window.THREE || !window.GLTFLoader || !window.VRMLoaderPlugin) {
+                    console.warn("Three.js or VRM modules not loaded yet.");
+                    container.innerHTML = '<div style="color:#d81b60; text-align:center; padding: 20px;">Error al inicializar 3D: Módulos no disponibles.</div>';
+                    return;
                 }
 
                 let width = container.clientWidth || 300;
@@ -596,7 +613,7 @@
 
                 scene = new window.THREE.Scene();
                 camera = new window.THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-                camera.position.z = 2.5; // adjust camera for VRM
+                camera.position.z = 1.5; // default framing
 
                 try {
                     renderer = new window.THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -616,11 +633,6 @@
                 directionalLight.position.set(1, 1, 1).normalize();
                 scene.add(directionalLight);
 
-                if (!window.THREE || !window.GLTFLoader || !window.VRMLoaderPlugin) {
-                    console.warn("Three.js or VRM modules not loaded yet.");
-                    return;
-                }
-
                 window.threeClock = new window.THREE.Clock();
                 window.currentVrm = null;
 
@@ -638,11 +650,29 @@
                             scene.add(vrm.scene);
                             window.currentVrm = vrm;
 
-                            // Center and scale to fit the UI container
+                            // Face the camera
                             vrm.scene.rotation.y = Math.PI;
 
-                            // We position it down a bit assuming we want to focus on the bust/head
-                            vrm.scene.position.set(0, -1.2, 0);
+                            // Dynamic framing based on bounding box
+                            const box = new window.THREE.Box3().setFromObject(vrm.scene);
+                            const size = box.getSize(new window.THREE.Vector3());
+                            const center = box.getCenter(new window.THREE.Vector3());
+
+                            // Adjust scale so it fits nicely
+                            const maxDim = Math.max(size.x, size.y, size.z);
+                            // Desired height ~1.2 units visible
+                            const scale = 1.2 / maxDim;
+                            vrm.scene.scale.setScalar(scale);
+
+                            // Recalculate center after scaling
+                            box.setFromObject(vrm.scene);
+                            box.getCenter(center);
+
+                            // Center the model's head approximately
+                            vrm.scene.position.sub(center);
+
+                            // Nudge slightly down so the bust is visible
+                            vrm.scene.position.y -= 0.3;
                         }
                     },
                     (progress) => {
@@ -650,9 +680,11 @@
                     },
                     (error) => {
                         console.error("Error loading idealita.vrm:", error);
-                        container.innerHTML = '<div style="color:red; text-align:center; padding: 20px;">No se pudo cargar el avatar.<br>Asegúrese de que public/models/idealita.vrm existe.</div>';
+                        container.innerHTML = '<div style="color:#d81b60; text-align:center; padding: 20px;">No se pudo cargar el avatar.<br>Asegúrese de que public/models/idealita.vrm existe.</div>';
                     }
                 );
+
+                let currentJawRotation = 0;
 
                 function animate3DAvatar() {
                     window.threeJsAnimationFrameId = requestAnimationFrame(animate3DAvatar);
@@ -662,17 +694,19 @@
                     if (window.currentVrm) {
                         window.currentVrm.update(deltaTime);
 
-                        // We use targetMouthScaleY to interpolate mouth opening
+                        // We use targetMouthScaleY to interpolate mouth opening smoothly
                         let targetScale = window.targetMouthScaleY;
                         let normalizedOpen = (targetScale - 1) / 4;
                         if (normalizedOpen < 0) normalizedOpen = 0;
                         if (normalizedOpen > 1) normalizedOpen = 1;
 
-                        // Use jaw bone if it exists, otherwise fall back to simple scale
                         const jawBone = window.currentVrm.humanoid?.getNormalizedBoneNode('jaw');
                         if (jawBone) {
-                            // Rotate jaw downwards for opening (X axis or Z axis depending on the model rigging)
-                            jawBone.rotation.x = normalizedOpen * 0.4;
+                            // Smoothly interpolate current rotation towards target to avoid snapping
+                            let targetRot = normalizedOpen * 0.4;
+                            currentJawRotation += (targetRot - currentJawRotation) * 10 * deltaTime;
+
+                            jawBone.rotation.x = currentJawRotation;
                             jawBone.rotation.y = 0;
                             jawBone.rotation.z = 0;
                         }
@@ -682,6 +716,8 @@
                         renderer.render(scene, camera);
                     }
                 }
+
+                // Only start animation loop once
                 animate3DAvatar();
 
                 // Resize handling
