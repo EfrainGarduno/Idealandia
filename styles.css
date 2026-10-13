@@ -257,7 +257,7 @@
             overflow: hidden; /* Ensure image doesn't break out */
         }
 
-        #idealita-hologram {
+        #avatar-visual-wrapper {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
@@ -283,15 +283,15 @@
 
         /* State modifiers - Fallbacks if JS disabled or prefers-reduced-motion */
         @media (prefers-reduced-motion: reduce) {
-            #idealita-hologram {
+            #avatar-visual-wrapper {
                 animation: none;
                 transform: scale(1) !important;
                 transition: filter 0.3s ease !important;
             }
-            .state-listening #idealita-hologram {
+            .state-listening #avatar-visual-wrapper {
                 filter: drop-shadow(0 0 10px rgba(108, 64, 247, 0.5));
             }
-            .state-speaking #idealita-hologram {
+            .state-speaking #avatar-visual-wrapper {
                 filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.8));
             }
         }

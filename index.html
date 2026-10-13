@@ -776,7 +776,7 @@
                 animate3DAvatar();
 
                 // Resize handling
-                const resizeObserver = new ResizeObserver(entries => {
+                window.avatarResizeObserver = new ResizeObserver(entries => {
                     for (let entry of entries) {
                         const newWidth = entry.contentRect.width;
                         const newHeight = entry.contentRect.height;
@@ -787,7 +787,7 @@
                         }
                     }
                 });
-                resizeObserver.observe(container);
+                window.avatarResizeObserver.observe(container);
             }
 
             window.init3DAvatar();
@@ -2126,10 +2126,7 @@
                     window.currentMouthAnimId = null;
                     window.targetMouthScaleY = 1;
                 }
-                if (window.threeJsAnimationFrameId && window.cancelAnimationFrame) {
-                    window.cancelAnimationFrame(window.threeJsAnimationFrameId);
-                    window.threeJsAnimationFrameId = null;
-                }
+                // We DO NOT cancel threeJsAnimationFrameId here because we want the avatar to keep rendering its idle state.
                 if (window.avatarAnalyser) {
                     try { window.avatarAnalyser.disconnect(); } catch(e){}
                     window.avatarAnalyser = null;
@@ -2148,8 +2145,7 @@
                 }
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';
-                const avatarContainer = document.getElementById('avatar-container');
-                if(avatarContainer) avatarContainer.style.display = 'none';
+
 
             }
 
