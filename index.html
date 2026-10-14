@@ -576,16 +576,53 @@
 
             window.threeJsAnimationFrameId = null;
             window.targetMouthScaleY = 1;
+
+            // New globals for VRM integration
             window.currentVrm = null;
             window.threeClock = null;
+            window.avatarInitId = 0; // Prevent race conditions
 
             let renderer, scene, camera;
+
+            // Helper to recursively dispose of Three.js resources
+            function disposeThreeScene(object) {
+                if (!object) return;
+
+                // If it's a VRM instance, it might have its own dispose logic
+                if (object.dispose && typeof object.dispose === 'function') {
+                    try { object.dispose(); } catch (e) {}
+                }
+
+                if (object.children) {
+                    for (let i = object.children.length - 1; i >= 0; i--) {
+                        disposeThreeScene(object.children[i]);
+                    }
+                }
+
+                if (object.geometry) {
+                    object.geometry.dispose();
+                }
+                if (object.material) {
+                    if (Array.isArray(object.material)) {
+                        object.material.forEach(m => {
+                            if(m.map) m.map.dispose();
+                            m.dispose();
+                        });
+                    } else {
+                        if(object.material.map) object.material.map.dispose();
+                        object.material.dispose();
+                    }
+                }
+            }
 
             window.init3DAvatar = function() {
                 const container = document.getElementById('idealita-3d-container');
                 if (!container) return;
 
-                // Cleanup previous resources
+                // 1. Cleanup
+                window.avatarInitId++;
+                const currentInitId = window.avatarInitId;
+
                 if (window.threeJsAnimationFrameId) {
                     cancelAnimationFrame(window.threeJsAnimationFrameId);
                     window.threeJsAnimationFrameId = null;
@@ -594,16 +631,26 @@
                     window.avatarResizeObserver.disconnect();
                     window.avatarResizeObserver = null;
                 }
+
+                if (scene) disposeThreeScene(scene);
+                if (window.currentVrm) {
+                    disposeThreeScene(window.currentVrm.scene);
+                    window.currentVrm = null;
+                }
+
                 if (renderer) {
                     renderer.dispose();
                     renderer.forceContextLoss();
+                    const oldCanvas = renderer.domElement;
+                    if (oldCanvas && oldCanvas.parentNode) {
+                        oldCanvas.parentNode.removeChild(oldCanvas);
+                    }
                     renderer = null;
                 }
 
                 container.innerHTML = '';
 
                 if (!window.THREE || !window.GLTFLoader || !window.VRMLoaderPlugin) {
-                    console.warn("Three.js or VRM modules not loaded yet.");
                     container.innerHTML = '<div style="color:#d81b60; text-align:center; padding: 20px;">Error al inicializar 3D: Módulos no disponibles.</div>';
                     return;
                 }
@@ -613,7 +660,6 @@
 
                 scene = new window.THREE.Scene();
                 camera = new window.THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-                camera.position.z = 1.5; // default framing
 
                 try {
                     renderer = new window.THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -622,7 +668,8 @@
                     container.appendChild(renderer.domElement);
                 } catch(e) {
                     console.warn("WebGL not supported, skipping 3D render in this environment.");
-                    return; // Skip the rest of the 3D init if WebGL is unavailable
+                    container.innerHTML = '<div style="color:#d81b60; text-align:center; padding: 20px;">WebGL no disponible en este entorno.</div>';
+                    return;
                 }
 
                 // Lighting
@@ -634,7 +681,6 @@
                 scene.add(directionalLight);
 
                 window.threeClock = new window.THREE.Clock();
-                window.currentVrm = null;
 
                 const loader = new window.GLTFLoader();
 
@@ -645,6 +691,12 @@
                 loader.load(
                     '/models/idealita.vrm',
                     (gltf) => {
+                        // Race condition check: Ensure this callback belongs to the latest init call
+                        if (currentInitId !== window.avatarInitId) {
+                            disposeThreeScene(gltf.scene);
+                            return;
+                        }
+
                         const vrm = gltf.userData.vrm;
                         if (vrm) {
                             scene.add(vrm.scene);
@@ -673,12 +725,14 @@
 
                             // Nudge slightly down so the bust is visible
                             vrm.scene.position.y -= 0.3;
+                            camera.position.z = 1.5;
                         }
                     },
                     (progress) => {
                         // Progress callback if needed
                     },
                     (error) => {
+                        if (currentInitId !== window.avatarInitId) return;
                         console.error("Error loading idealita.vrm:", error);
                         container.innerHTML = '<div style="color:#d81b60; text-align:center; padding: 20px;">No se pudo cargar el avatar.<br>Asegúrese de que public/models/idealita.vrm existe.</div>';
                     }
@@ -695,6 +749,7 @@
                         window.currentVrm.update(deltaTime);
 
                         // We use targetMouthScaleY to interpolate mouth opening smoothly
+                        // Note: This is an approximation based on amplitude, not precise phoneme sync.
                         let targetScale = window.targetMouthScaleY;
                         let normalizedOpen = (targetScale - 1) / 4;
                         if (normalizedOpen < 0) normalizedOpen = 0;
@@ -703,6 +758,7 @@
                         const jawBone = window.currentVrm.humanoid?.getNormalizedBoneNode('jaw');
                         if (jawBone) {
                             // Smoothly interpolate current rotation towards target to avoid snapping
+                            // Max opening roughly 20-30 degrees (0.35 to 0.5 rad)
                             let targetRot = normalizedOpen * 0.4;
                             currentJawRotation += (targetRot - currentJawRotation) * 10 * deltaTime;
 
