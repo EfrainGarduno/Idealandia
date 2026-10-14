@@ -54,6 +54,18 @@ const dom = new JSDOM(htmlContent, {
 });
 
 const window = dom.window;
+
+// Mock Three.js gracefully for main testing loop
+window.THREE = {
+    Scene: class {},
+    PerspectiveCamera: class { constructor() { this.position = {}; } },
+    WebGLRenderer: class {
+        constructor() { throw new Error("Mocked WebGL failure to trigger fallback"); }
+    }
+};
+window.GLTFLoader = class {};
+window.VRMLoaderPlugin = class {};
+
 const document = window.document;
 
 window.matchMedia = window.matchMedia || function() {
@@ -521,6 +533,17 @@ window.addEventListener('load', () => {
                                         });
                                         const win = dom.window;
 
+                                        // Mock Three.js gracefully so VRM scripts don't crash jsdom
+                                        win.THREE = {
+                                            Scene: class {},
+                                            PerspectiveCamera: class { constructor() { this.position = {}; } },
+                                            WebGLRenderer: class {
+                                                constructor() { throw new Error("Mocked WebGL failure to trigger fallback"); }
+                                            }
+                                        };
+                                        win.GLTFLoader = class {};
+                                        win.VRMLoaderPlugin = class {};
+
                                         win.fetch = async (url, options) => {
                                             if (url === '/api/me') {
                                                 if (authState) return { ok: true, json: async () => ({ user: { id: 1 } }) };
@@ -656,6 +679,62 @@ window.addEventListener('load', () => {
                                     if (!isOrdered) {
                                          console.error("Test failed: Menu elements order is not respected.");
                                          process.exit(1);
+                                    }
+
+                                    // Test 9: Avatar Initialization Fallback without dependencies
+                                    console.log("Testing Avatar Initialization Fallback...");
+                                    const { JSDOM: FallbackJSDOM } = require('jsdom');
+                                    const htmlContentFallback = require('fs').readFileSync('index.html', 'utf-8');
+                                    const fallbackDom = new FallbackJSDOM(htmlContentFallback, { runScripts: "dangerously" });
+                                    const fw = fallbackDom.window;
+
+                                    fw.fetch = async () => ({ ok: false });
+                                    await new Promise(resolve => {
+                                        fw.dispatchEvent(new fw.Event('load'));
+                                        setTimeout(resolve, 500);
+                                    });
+
+                                    const fallbackContainer = fw.document.getElementById('idealita-3d-container');
+                                    if (!fallbackContainer || !fallbackContainer.innerHTML.includes('Módulos no disponibles')) {
+                                        console.error("Test failed: Avatar initialization should gracefully show missing dependency message.");
+                                        process.exit(1);
+                                    }
+
+                                    // Test 10: Avatar Re-initialization
+                                    console.log("Testing Avatar Re-initialization cleanup...");
+                                    const mockDom = new FallbackJSDOM(htmlContentFallback, { runScripts: "dangerously" });
+                                    const mw = mockDom.window;
+                                    mw.THREE = {
+                                        Scene: class { add(){} },
+                                        PerspectiveCamera: class { constructor(){ this.position = {}; } },
+                                        WebGLRenderer: class {
+                                            constructor() { this.domElement = mw.document.createElement('canvas'); }
+                                            setSize() {} setPixelRatio() {} dispose() {} forceContextLoss() {} render() {}
+                                        },
+                                        AmbientLight: class {}, DirectionalLight: class { position={ set: ()=>({ normalize: ()=>{} }) }; }, Clock: class { getDelta(){ return 0; } }
+                                    };
+                                    mw.GLTFLoader = class { register(){} load(u, s) { s({ userData: { vrm: { scene: { rotation:{}, position:{ sub:()=>{}, y:0 }, scale:{ setScalar:()=>{} } }, humanoid: { getNormalizedBoneNode:()=>null }, update:()=>{} } } }); } };
+                                    mw.VRMLoaderPlugin = class {};
+                                    mw.THREE.Box3 = class { setFromObject(){ return this; } getSize(){ return {x:1,y:1,z:1}; } getCenter(){ return {x:0,y:0,z:0}; } };
+                                    mw.THREE.Vector3 = class {};
+
+                                    // Mock requestAnimationFrame and ResizeObserver
+                                    let frameId = 100;
+                                    mw.requestAnimationFrame = (cb) => { return ++frameId; };
+                                    mw.cancelAnimationFrame = (id) => {};
+                                    mw.ResizeObserver = class { observe(){} disconnect(){} };
+
+                                    await new Promise(resolve => {
+                                        mw.dispatchEvent(new mw.Event('load'));
+                                        setTimeout(resolve, 500);
+                                    });
+                                    const firstAnimId = mw.threeJsAnimationFrameId;
+                                    mw.init3DAvatar();
+                                    const secondAnimId = mw.threeJsAnimationFrameId;
+
+                                    if (firstAnimId === secondAnimId || firstAnimId === null) {
+                                        console.error("Test failed: Avatar re-initialization did not properly cycle animation frames.");
+                                        process.exit(1);
                                     }
 
                                     console.log('Test passed successfully: Context, multiple messages, registration form, auth flow, and dynamic menu worked. Delete logic fully tested.');
