@@ -739,33 +739,81 @@
                 );
 
                 let currentJawRotation = 0;
+                let time = 0;
+                let nextBlinkTime = Math.random() * 3 + 2; // Random blink every 2-5 seconds
+                let isBlinking = false;
+                let blinkDuration = 0.15;
+                let blinkTimer = 0;
 
                 function animate3DAvatar() {
                     window.threeJsAnimationFrameId = requestAnimationFrame(animate3DAvatar);
 
                     const deltaTime = window.threeClock ? window.threeClock.getDelta() : 0;
+                    time += deltaTime;
 
                     if (window.currentVrm) {
                         window.currentVrm.update(deltaTime);
 
-                        // We use targetMouthScaleY to interpolate mouth opening smoothly
-                        // Note: This is an approximation based on amplitude, not precise phoneme sync.
-                        let targetScale = window.targetMouthScaleY;
+                        // Lip sync using expression manager instead of jaw bone
+                        let targetScale = window.targetMouthScaleY || 1;
                         let normalizedOpen = (targetScale - 1) / 4;
                         if (normalizedOpen < 0) normalizedOpen = 0;
                         if (normalizedOpen > 1) normalizedOpen = 1;
 
-                        const jawBone = window.currentVrm.humanoid?.getNormalizedBoneNode('jaw');
-                        if (jawBone) {
-                            // Smoothly interpolate current rotation towards target to avoid snapping
-                            // Max opening roughly 20-30 degrees (0.35 to 0.5 rad)
-                            let targetRot = normalizedOpen * 0.4;
-                            currentJawRotation += (targetRot - currentJawRotation) * 10 * deltaTime;
-
-                            jawBone.rotation.x = currentJawRotation;
-                            jawBone.rotation.y = 0;
-                            jawBone.rotation.z = 0;
+                        if (window.currentVrm.expressionManager) {
+                            window.currentVrm.expressionManager.setValue('aa', normalizedOpen);
                         }
+
+                        // Breathing animation
+                        const spine = window.currentVrm.humanoid?.getNormalizedBoneNode('spine');
+                        if (spine) {
+                            spine.rotation.x = Math.sin(time * Math.PI) * 0.02;
+                        }
+
+                        const chest = window.currentVrm.humanoid?.getNormalizedBoneNode('chest');
+                        if (chest) {
+                             chest.rotation.x = Math.sin(time * Math.PI) * 0.02;
+                        }
+
+                        // Head sway animation
+                        const head = window.currentVrm.humanoid?.getNormalizedBoneNode('head');
+                        if (head) {
+                            head.rotation.y = Math.sin(time * 0.5 * Math.PI) * 0.05;
+                            head.rotation.z = Math.sin(time * 0.25 * Math.PI) * 0.02;
+                        }
+
+                        // Blinking animation
+                        if (!isBlinking && time > nextBlinkTime) {
+                            isBlinking = true;
+                            blinkTimer = 0;
+                            nextBlinkTime = time + Math.random() * 3 + 2;
+                        }
+
+                        if (isBlinking) {
+                            blinkTimer += deltaTime;
+                            let blinkValue = 0;
+
+                            if (blinkTimer < blinkDuration / 2) {
+                                // Closing
+                                blinkValue = blinkTimer / (blinkDuration / 2);
+                            } else if (blinkTimer < blinkDuration) {
+                                // Opening
+                                blinkValue = 1 - ((blinkTimer - blinkDuration / 2) / (blinkDuration / 2));
+                            } else {
+                                // Done blinking
+                                isBlinking = false;
+                                blinkValue = 0;
+                            }
+
+                            if (window.currentVrm.expressionManager) {
+                                window.currentVrm.expressionManager.setValue('blink', blinkValue);
+                            }
+                        } else {
+                            if (window.currentVrm.expressionManager) {
+                                window.currentVrm.expressionManager.setValue('blink', 0);
+                            }
+                        }
+
                     }
 
                     if (renderer && scene && camera) {
