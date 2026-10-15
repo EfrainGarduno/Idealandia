@@ -584,6 +584,30 @@
 
             let renderer, scene, camera;
 
+            function applyIdealitaRestPose(vrm) {
+                if (!vrm || !vrm.humanoid) return;
+
+                const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+                if (leftUpperArm) {
+                    leftUpperArm.rotation.set(0, 0, 0.9);
+                }
+
+                const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                if (rightUpperArm) {
+                    rightUpperArm.rotation.set(0, 0, -0.9);
+                }
+
+                const leftLowerArm = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
+                if (leftLowerArm) {
+                    leftLowerArm.rotation.set(0, 0, 0.1);
+                }
+
+                const rightLowerArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+                if (rightLowerArm) {
+                    rightLowerArm.rotation.set(0, 0, -0.1);
+                }
+            }
+
             // Helper to recursively dispose of Three.js resources
             function disposeThreeScene(object) {
                 if (!object) return;
@@ -704,6 +728,9 @@
 
                             // Face the camera
                             vrm.scene.rotation.y = Math.PI;
+
+                            // Apply initial relaxed pose
+                            applyIdealitaRestPose(vrm);
 
                             // Dynamic framing based on bounding box
                             const box = new window.THREE.Box3().setFromObject(vrm.scene);

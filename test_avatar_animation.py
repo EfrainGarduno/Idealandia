@@ -24,21 +24,18 @@ def run(playwright):
 
     # Wait for the main avatar
     print("Waiting for avatar...")
-    page.wait_for_selector("#idealita-hologram")
+    page.wait_for_selector("#idealita-3d-container")
 
     # 1. State: Reposo (Idle)
     print("Capturing Reposo state...")
-    time.sleep(1) # Let the animation settle
+    time.sleep(2) # Let the model load and animation settle
     page.screenshot(path="verification/idealita-reposo.png")
 
     # 2. State: Escuchando (Listening)
     print("Injecting Listening state...")
     page.evaluate('''() => {
-        const hologram = document.getElementById('idealita-hologram');
-        hologram.classList.add('state-listening');
-        hologram.style.setProperty('--avatar-scale', '1.02');
-        hologram.style.setProperty('--avatar-glow-size', '15px');
-        hologram.style.setProperty('--avatar-glow-color', 'rgba(108, 64, 247, 0.7)');
+        const wrapper = document.getElementById('avatar-visual-wrapper');
+        if (wrapper) wrapper.classList.add('state-listening');
     }''')
     time.sleep(1)
     page.screenshot(path="verification/idealita-escuchando.png")
@@ -46,12 +43,11 @@ def run(playwright):
     # 3. State: Hablando (Speaking)
     print("Injecting Speaking state...")
     page.evaluate('''() => {
-        const hologram = document.getElementById('idealita-hologram');
-        hologram.classList.remove('state-listening');
-        hologram.classList.add('state-speaking');
-        hologram.style.setProperty('--avatar-scale', '1.05');
-        hologram.style.setProperty('--avatar-glow-size', '25px');
-        hologram.style.setProperty('--avatar-glow-color', 'rgba(0, 229, 255, 0.9)');
+        const wrapper = document.getElementById('avatar-visual-wrapper');
+        if (wrapper) {
+            wrapper.classList.remove('state-listening');
+            wrapper.classList.add('state-speaking');
+        }
     }''')
     time.sleep(1)
     page.screenshot(path="verification/idealita-hablando.png")
