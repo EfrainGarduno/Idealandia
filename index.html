@@ -551,6 +551,10 @@
         </section>
     </div>
 
+    <footer style="margin-top: auto; width: 100%; padding: 20px; text-align: center; color: #666; font-size: 0.9em; border-top: 1px solid #eee; background-color: #f8f9fa;">
+        <div id="footer-info">Cargando información...</div>
+    </footer>
+
     <div class="floating-social">
         <a href="#" class="social-icon facebook" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
         <a href="#" class="social-icon youtube" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
@@ -589,12 +593,12 @@
 
                 const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
                 if (leftUpperArm) {
-                    leftUpperArm.rotation.set(0, 0, 0.9);
+                    leftUpperArm.rotation.set(0, 0, 1.25);
                 }
 
                 const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
                 if (rightUpperArm) {
-                    rightUpperArm.rotation.set(0, 0, -0.9);
+                    rightUpperArm.rotation.set(0, 0, -1.25);
                 }
 
                 const leftLowerArm = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
@@ -713,7 +717,7 @@
                 });
 
                 loader.load(
-                    '/models/idealita.vrm',
+                    '/public/models/idealita.vrm',
                     (gltf) => {
                         // Race condition check: Ensure this callback belongs to the latest init call
                         if (currentInitId !== window.avatarInitId) {
@@ -924,6 +928,21 @@
         };
 
 
+            async function loadFooterInfo() {
+                try {
+                    const response = await fetch('/api/visitas');
+                    if (response.ok) {
+                        const data = await response.json();
+                        const footerInfo = document.getElementById('footer-info');
+                        if (footerInfo) {
+                            footerInfo.innerHTML = `Versión: ${data.version} | Visitas: ${data.visitas}`;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error cargando información del footer', error);
+                }
+            }
+
             async function buildMenu() {
                 try {
                     const response = await fetch('/api/menu');
@@ -1029,6 +1048,7 @@
 
             // Check auth status on load
             checkAuthStatus();
+            loadFooterInfo();
 
             // Logout logic
             const btnLogout = document.getElementById('btn-logout');
