@@ -98,6 +98,31 @@ async function loadUsuarios() {
             editBtn.className = 'btn btn-primary btn-sm';
             editBtn.onclick = () => showEditUsuarioModal(u);
             td.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Eliminar';
+            deleteBtn.className = 'btn btn-secondary btn-sm';
+            deleteBtn.style.marginLeft = '5px';
+            deleteBtn.onclick = async () => {
+                const confirmed = await window.showConfirm(`¿Estás seguro de que deseas eliminar al usuario ${u.usuario}?`);
+                if (confirmed) {
+                    try {
+                        const res = await fetch(`/api/admin/usuarios/${u.id}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (res.ok) {
+                            window.showModal('Usuario eliminado exitosamente.');
+                            loadUsuarios();
+                        } else {
+                            window.showModal(`Error: ${data.error}`);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        window.showModal('Error al eliminar usuario.');
+                    }
+                }
+            };
+            td.appendChild(deleteBtn);
+
             tr.appendChild(td);
 
             tbody.appendChild(tr);

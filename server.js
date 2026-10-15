@@ -998,6 +998,13 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
     }
 });
 
+let visitCounter = 0;
+
+app.get('/api/visitas', (req, res) => {
+    visitCounter++;
+    res.json({ visitas: visitCounter, version: require('./package.json').version });
+});
+
 app.get('/api/ideas', async (req, res) => {
     try {
         const token = req.cookies.auth_token;
