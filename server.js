@@ -514,7 +514,7 @@ app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
 app.delete('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
     try {
         const userIdToDelete = parseInt(req.params.id);
-        const requestingUserId = req.user.id;
+        const requestingUserId = req.userId;
 
         if (isNaN(userIdToDelete)) {
             return res.status(400).json({ error: 'ID de usuario inválido.' });
@@ -998,11 +998,30 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
     }
 });
 
+const fs = require("fs");
 let visitCounter = 0;
+try {
+    if (fs.existsSync("visitas.json")) {
+        const data = fs.readFileSync("visitas.json", "utf8");
+        visitCounter = JSON.parse(data).visitas || 0;
+    }
+} catch (err) {
+    console.error("Error reading visitas.json:", err);
+}
 
-app.get('/api/visitas', (req, res) => {
-    visitCounter++;
-    res.json({ visitas: visitCounter, version: require('./package.json').version });
+app.get("/api/visitas", (req, res) => {
+    if (!req.cookies?.visited) {
+        visitCounter++;
+        try {
+            fs.writeFile("visitas.json", JSON.stringify({ visitas: visitCounter }), (err) => {
+                if (err) console.error("Error saving visitas.json:", err);
+            });
+        } catch (err) {
+            console.error("Error saving visitas.json:", err);
+        }
+        res.cookie("visited", "true", { maxAge: 24 * 60 * 60 * 1000, httpOnly: true });
+    }
+    res.json({ visitas: visitCounter, version: require("./package.json").version });
 });
 
 app.get('/api/ideas', async (req, res) => {
