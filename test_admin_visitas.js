@@ -86,6 +86,16 @@ async function runTests() {
         let res3 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/visitas', method: 'GET' });
         if (res3.data.visitas !== initialCounter + 1) throw new Error("Visit counter should increment without cookie.");
 
+        // Concurrent requests to test the queue
+        let concurrentRequests = [];
+        for (let i = 0; i < 50; i++) {
+            concurrentRequests.push(request({ hostname: 'localhost', port: TEST_PORT, path: '/api/visitas', method: 'GET' }));
+        }
+        await Promise.all(concurrentRequests);
+
+        let res4 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/visitas', method: 'GET', headers: { 'Cookie': cookieHeader } });
+        if (res4.data.visitas !== initialCounter + 51) throw new Error(`Concurrent visit counter failed. Expected ${initialCounter + 51}, got ${res4.data.visitas}`);
+
         console.log("Visit counter tests passed!");
 
         // --- DELETE USER TESTS ---
