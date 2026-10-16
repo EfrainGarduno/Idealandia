@@ -513,10 +513,10 @@ app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
     try {
-        const userIdToDelete = parseInt(req.params.id);
-        const requestingUserId = req.user.id;
+        const userIdToDelete = Number(req.params.id);
+        const requestingUserId = req.userId;
 
-        if (isNaN(userIdToDelete)) {
+        if (!Number.isSafeInteger(userIdToDelete) || userIdToDelete <= 0) {
             return res.status(400).json({ error: 'ID de usuario inválido.' });
         }
 
@@ -998,11 +998,47 @@ app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
     }
 });
 
+const fs = require("fs");
 let visitCounter = 0;
+let visitasWritePromise = Promise.resolve();
+try {
+    if (fs.existsSync("visitas.json")) {
+        const data = fs.readFileSync("visitas.json", "utf8");
+        visitCounter = JSON.parse(data).visitas || 0;
+    }
+} catch (err) {
+    console.error("Error reading visitas.json:", err);
+}
 
-app.get('/api/visitas', (req, res) => {
-    visitCounter++;
-    res.json({ visitas: visitCounter, version: require('./package.json').version });
+app.get("/api/visitas", (req, res) => {
+    if (!req.cookies?.visited) {
+        visitCounter++;
+        const currentCounter = visitCounter;
+
+        visitasWritePromise = visitasWritePromise.then(() => {
+            return new Promise((resolve) => {
+                const tmpFile = `visitas.json.tmp.${Date.now()}.${Math.random().toString(36).substring(2)}`;
+                fs.writeFile(tmpFile, JSON.stringify({ visitas: currentCounter }), (err) => {
+                    if (err) {
+                        console.error("Error writing to temp visitas file:", err);
+                        return resolve();
+                    }
+                    fs.rename(tmpFile, "visitas.json", (renameErr) => {
+                        if (renameErr) {
+                            console.error("Error renaming temp visitas file:", renameErr);
+                            fs.unlink(tmpFile, () => {});
+                        }
+                        resolve();
+                    });
+                });
+            });
+        }).catch(err => {
+            console.error("Promise queue error:", err);
+        });
+
+        res.cookie("visited", "true", { maxAge: 24 * 60 * 60 * 1000, httpOnly: true });
+    }
+    res.json({ visitas: visitCounter, version: require("./package.json").version });
 });
 
 app.get('/api/ideas', async (req, res) => {
