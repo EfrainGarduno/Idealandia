@@ -184,7 +184,6 @@
         }
         /* Chat UI Redesign */
         .chat-section-override {
-    height: calc(100vh - 120px);
             flex: 1;
             min-height: 0;
             display: flex;
@@ -834,7 +833,6 @@
         box-sizing: border-box;
     }
     .chat-section-override {
-    height: calc(100vh - 120px);
         flex: 1;
         min-height: 0;
         margin: 0;
