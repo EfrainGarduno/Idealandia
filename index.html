@@ -2020,7 +2020,7 @@
                                     currentAverage = maxDiff;
                                     smoothedAverage = smoothedAverage * 0.8 + currentAverage * 0.2;
 
-                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 1.5;
+                                    window.targetMouthScaleY = 1;
 
                                     const glowSize = 10 + (smoothedAverage / 128) * 10;
                                     avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
