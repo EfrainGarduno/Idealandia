@@ -1,128 +1,41 @@
-1. **Understand the Goal:** The user wants to cherry-pick the dynamic menu and RBAC tests from PR #41 into `test.js` in the `main` branch. The constraints are:
-   - Use `test.js` from `main` as the base.
-   - Do not replace `test.js` entirely.
-   - Retain `globalPermissions` instead of reverting to `globalAuthRole`.
-   - Add the `/api/menu` mock.
-   - Add the dynamic menu tests, adapting them to use `globalPermissions`.
-   - Ensure the mock is initialized before any code that calls `checkAuthStatus()` (which may fetch `/api/menu`).
-   - Fix JSDOM initialization order: DOM first, fetch mocks before `checkAuthStatus`, global state before app init.
-   - Fix asynchronous issues without skipping tests.
-   - Ensure `npm test` passes, including new tests, RBAC, and delete logic.
-   - Keep `server.js` (with `p.codigo`), `index.html`, and `plan.md` as they are in main.
-   - Keep everything in PR #41 branch.
+1. **Fix Responsive Design (CSS)**
+   - Remove rigid dimensions from `.chat-section-override` and `#chat-container` (e.g., remove `width: 90% !important`, `max-width: 900px !important`). Instead, use container queries or flexbox max-widths on the inner content area, leaving the chat container to be fluid. Let flex stretch take care of filling horizontal space nicely but max widths to prevent taking entire screen.
+   - For Mobile view (`@media (max-width: 768px)`), modify `#chat-container` to stack vertically (`flex-direction: column`).
+   - Fix `#content-area` overflow and centering issues.
+   - Adjust `footer` styles (currently hardcoded inline style on index.html) to flex layout, wrap nicely on mobile, accommodating the social media icons which are currently `.floating-social` (maybe move them inside the footer or adjust `.floating-social` media queries so they don't break/overlap).
+   - Important constraint: do not modify `applyIdealitaRestPose(vrm)` or VRM rendering code.
 
-2. **Analysis of `test.js` (main):**
-   - It defines `window.fetch` to mock responses.
-   - It sets up `globalAuthState` and `globalPermissions`.
-   - It triggers application logic inside `window.addEventListener('load')` by calling event dispatches.
-   - It uses a nested `setTimeout` structure to run assertions sequentially.
-   - We need to add the mock for `/api/menu` in the `window.fetch` implementation. It should use `globalPermissions` instead of `globalAuthRole`.
-   - We need to append the dynamic menu tests at the end of `testAuthFlow` in `test.js`.
-
-3. **Modifications to `test.js`:**
-   - **Mocking `/api/menu`:**
-     ```javascript
-     } else if (url === '/api/menu' && (!options || options.method === 'GET' || !options.method)) {
-         if (globalPermissions.includes('admin.access')) {
-             return {
-                 ok: true,
-                 json: async () => ([
-                     { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
-                     { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                     { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] },
-                     { id: 10, nombre: 'Administración', orden: 10, ruta: '/admin', hijos: [] }
-                 ])
-             };
-         } else if (globalAuthState) {
-              return {
-                 ok: true,
-                 json: async () => ([
-                     { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] },
-                     { id: 2, nombre: 'Ideas', orden: 2, ruta: '/ideas', hijos: [] },
-                     { id: 3, nombre: 'Servicios', orden: 3, hijos: [ { id: 16, nombre: 'Asesorías Financieras', orden: 1, ruta: '/asesorias' } ] }
-                 ])
-             };
-         } else {
-              return {
-                 ok: true,
-                 json: async () => ([
-                     { id: 1, nombre: 'Inicio', orden: 1, ruta: '/', hijos: [] }
-                 ])
-             };
-         }
-     }
+2. **Fix Delete User Error**
+   - The backend query for `DELETE /api/admin/usuarios` checks if removing a user would leave the system without administrators:
+     ```sql
+     SELECT COUNT(DISTINCT ur.usuario_id) as count
+     FROM usuario_roles ur
+     ...
      ```
-   - **Adding Tests:** Inside the `testAuthFlow` function's final `setTimeout` (after testing logout and unauthenticated DELETE), replace the existing `admin/check` tests with the unified dynamic menu and RBAC tests from PR #41, adapting `globalAuthRole` to `globalPermissions`.
-     ```javascript
-                                     // Start of dynamic menu testing
-                                     console.log("Testing Dynamic Menu...");
-                                     globalAuthState = false;
-                                     globalPermissions = [];
-
-                                     // Test 1: Unauthenticated
-                                     const menuGuestRes = await window.fetch('/api/menu');
-                                     const menuGuest = await menuGuestRes.json();
-                                     if (menuGuest.some(i => i.nombre === 'Ideas' || i.nombre === 'Administración')) {
-                                          console.error("Test failed: Unauthenticated user should only see public items.");
-                                          process.exit(1);
-                                     }
-
-                                     // Test 2: Authenticated user
-                                     globalAuthState = true;
-                                     const menuUserRes = await window.fetch('/api/menu');
-                                     const menuUser = await menuUserRes.json();
-                                     if (menuUser.some(i => i.nombre === 'Administración')) {
-                                          console.error("Test failed: Standard user should NOT see Administración.");
-                                          process.exit(1);
-                                     }
-                                     if (!menuUser.some(i => i.nombre === 'Ideas')) {
-                                          console.error("Test failed: Standard user should see Ideas.");
-                                          process.exit(1);
-                                     }
-                                     // Test 5: Servicios conserves submenus
-                                     const servicios = menuUser.find(i => i.nombre === 'Servicios');
-                                     if (!servicios || servicios.hijos.length === 0) {
-                                          console.error("Test failed: Servicios should conserve its submenus.");
-                                          process.exit(1);
-                                     }
-
-                                     // Test 4: 403 on admin resource
-                                     globalPermissions = [];
-                                     const adminCheckFail = await window.fetch('/api/admin/check');
-                                     if (adminCheckFail.status !== 403) {
-                                          console.error("Test failed: User without admin.access should get 403 on admin resource.");
-                                          process.exit(1);
-                                     }
-
-                                     // Test 3: Administrator
-                                     globalPermissions = ['admin.access'];
-                                     const menuAdminRes = await window.fetch('/api/menu');
-                                     const menuAdmin = await menuAdminRes.json();
-                                     if (!menuAdmin.some(i => i.nombre === 'Administración')) {
-                                          console.error("Test failed: Administrator should see Administración.");
-                                          process.exit(1);
-                                     }
-
-                                     const adminCheckSuccess = await window.fetch('/api/admin/check');
-                                     if (adminCheckSuccess.status !== 200) {
-                                          console.error("Test failed: User with admin.access should get 200 on admin resource.");
-                                          process.exit(1);
-                                     }
-
-                                     // Test 6: Check order
-                                     let isOrdered = true;
-                                     for (let i = 0; i < menuAdmin.length - 1; i++) {
-                                         if (menuAdmin[i].orden > menuAdmin[i+1].orden) isOrdered = false;
-                                     }
-                                     if (!isOrdered) {
-                                          console.error("Test failed: Menu elements order is not respected.");
-                                          process.exit(1);
-                                     }
-
-                                     console.log('Test passed successfully: Context, multiple messages, registration form, auth flow, and dynamic menu worked. Delete logic fully tested.');
-                                     process.exit(0);
+   - The bug is likely here or in the delete itself. Also, need to check if there are foreign keys on `ideas` table or others. Let's look at `/api/ideas/:id` where it deletes from ideas. The user might have ideas (`usuario_id`), which prevents deleting the user due to foreign key constraints.
+   - The delete endpoint currently does:
+     ```js
+     await connection.execute('DELETE FROM usuario_roles WHERE usuario_id = ?', [userIdToDelete]);
+     const [deleteResult] = await connection.execute('DELETE FROM usuarios WHERE id = ?', [userIdToDelete]);
      ```
-   - Make sure `globalPermissions` is properly declared, which it is (`let globalPermissions = [];`).
-   - Re-evaluate JSDOM initialization order: In `test.js`, the setup is already working and fetch mock is added *before* `dom` events are dispatched via `window.dispatchEvent(new window.Event('load'));`. The user specifically asked to "Make sure the mock is initialized BEFORE checkAuthStatus() or any code that can trigger the asynchronous menu request."
-   - The user also said: "For server.js, index.html, and plan.md, keep the conflict resolutions already made. Also, server.js should retain p.codigo as already resolved from main. Do not create a new PR. Keep all changes in PR #41."
-   - Currently on branch `jules-16973758359270078334-3e2da6f8`. I need to ensure I commit to this branch, but the user says "Keep all changes in PR #41". I am not in PR #41 branch. Wait, I should make the changes in the current branch `main` and then user probably meant that PR #41 will just be updated by whatever I commit if this branch is PR #41, but I am in `jules-...` branch. I will just do the changes in my current branch and `submit` using `pr-41` or this branch if it's the intended one, wait. Let's just follow standard instructions: I will modify `test.js` in my current branch (`jules-16973758359270078334-3e2da6f8` which is identical to `main`) and submit it to `pr-41` or keep it on my branch. I'll ask for plan review.
+   - If `ideas` table has `usuario_id` foreign key and it doesn't `ON DELETE CASCADE`, deleting `usuarios` will fail with "internal server error".
+   - Need to modify the delete endpoint to:
+     - Check if user has associated ideas. If they do, block deletion with a clear message: `No se puede eliminar el usuario porque tiene ideas asociadas.` (or gracefully delete the ideas if business logic permits, but prompt says "comprueba cómo deben tratarse los registros relacionados ... no elimines información relacionada indiscriminadamente. Si la eliminación está bloqueada por una restricción legítima, devuelve un mensaje comprensible y conserva la integridad de los datos"). So, check and block with a clean message.
+
+3. **Fix and Validate Visit Counter**
+   - In `server.js`:
+     ```js
+     let visitCounter = 0;
+     app.get('/api/visitas', (req, res) => {
+         visitCounter++;
+         res.json({ visitas: visitCounter, version: require('./package.json').version });
+     });
+     ```
+   - This increments on *every* request to `/api/visitas`, which happens on every page load (SPA init). It is not persistent (it's kept in memory `let visitCounter = 0`).
+   - Create a simple persistence (e.g. read/write from a file `visitas.json` or create a simple table if DB is available - but constraint: "No modifiques la estructura de la base de datos existente o crees nuevas tablas directamente"). Wait, the prompt says "Utiliza el almacenamiento persistente apropiado para la arquitectura existente; no mantengas el total únicamente en una variable de JavaScript" and "Do not modify the existing database structure... If schema changes are strictly necessary, provide a separate, idempotent SQL script for review but do not execute it against production."
+   - Given we have a file system (Node), perhaps a small `visitas.json` file is acceptable? Or we use `fs.readFileSync`/`fs.writeFileSync`.
+   - Also, to prevent duplicate increments by the same user, use a cookie or session. When returning `/api/visitas`, check if `req.cookies.visited` is present. If not, increment, set cookie, save to persistent storage (e.g., `fs`).
+
+4. **Testing**
+   - Run `npm test`.
+   - Add tests for new behaviors.
