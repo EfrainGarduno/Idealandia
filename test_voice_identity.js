@@ -30,7 +30,18 @@ window.GLTFLoader = class {};
 window.VRMLoaderPlugin = class {};
 
 // Mock fetch for /api/live-token
+dom.window.eval('window.currentUser = { id: 1, usuario: "testuser", nombre: "Test User" };');
+
 window.fetch = async (url) => {
+    if (url === '/api/ideas') {
+        if (global.mockIdeasFail) {
+            return { ok: false };
+        }
+        return {
+            ok: true,
+            json: async () => ({ ideas: [{ id: 1, titulo: 'Idea mock', estado: 'pendiente' }] })
+        };
+    }
     if (url === '/api/live-token') {
         return {
             ok: true,
@@ -147,6 +158,7 @@ setTimeout(() => {
         process.exit(1);
     }
 
+    dom.window.currentUser = { id: 1, usuario: 'testuser', nombre: 'Test User' };
     startBtn.click();
 
     // Check if the setup message was sent
@@ -162,8 +174,8 @@ setTimeout(() => {
 
             const instructionText = parsed.setup.systemInstruction.parts[0].text;
 
-            assert.ok(instructionText.includes('Idealita, la asistente virtual de Idealandia'), 'Should contain correct identity intro');
-            assert.ok(instructionText.includes('acompañarlos dentro de Idealandia'), 'Should contain specific purpose');
+            assert.ok(instructionText.includes('Eres Idealita, la asistente virtual de Idealandia'), 'Should contain correct identity intro');
+            assert.ok(instructionText.includes('Dirígete a él o ella por su nombre cuando resulte natural.'), 'Should contain specific purpose');
             assert.ok(instructionText.includes('NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje'), 'Should contain strict negative command');
             assert.ok(parsed.setup.generationConfig, 'Setup should have generationConfig');
 
@@ -212,8 +224,65 @@ setTimeout(() => {
                             assert.strictEqual(msg2.textContent.includes('Cumula tivo'), true, 'Cumulative + interrupted turn failed');
                             assert.strictEqual(msg3.textContent.includes('Nuevo turno'), true, 'New turn after stray turnComplete failed');
 
-                            console.log('Voice identity and transcription deduplication tests passed successfully.');
-                            process.exit(0);
+                            // Case 5: Function Call for consultar_ideas_usuario (Success)
+                    global.mockIdeasFail = false;
+                    const initialMessagesCount = MockWebSocket.messagesSent.length;
+                    wsInstance.onmessage({
+                        data: JSON.stringify({
+                            serverContent: {
+                                modelTurn: {
+                                    parts: [
+                                        { functionCall: { id: "call_123", name: "consultar_ideas_usuario" } }
+                                    ]
+                                }
+                            }
+                        })
+                    });
+
+                    setTimeout(() => {
+                        try {
+                            const newMessages = MockWebSocket.messagesSent.slice(initialMessagesCount);
+                            assert.strictEqual(newMessages.length > 0, true, 'Function call response not sent');
+                            const funcRes = JSON.parse(newMessages[0]);
+                            assert.ok(funcRes.toolResponse, 'Should wrap inside toolResponse');
+                            assert.strictEqual(funcRes.toolResponse.functionResponses[0].name, 'consultar_ideas_usuario');
+                            assert.strictEqual(funcRes.toolResponse.functionResponses[0].response.result[0].titulo, 'Idea mock');
+
+                            // Case 6: Function Call for consultar_ideas_usuario (Failure / Unauth)
+                            global.mockIdeasFail = true;
+                            const beforeFailCount = MockWebSocket.messagesSent.length;
+                            wsInstance.onmessage({
+                                data: JSON.stringify({
+                                    serverContent: {
+                                        modelTurn: {
+                                            parts: [
+                                                { functionCall: { id: "call_456", name: "consultar_ideas_usuario" } }
+                                            ]
+                                        }
+                                    }
+                                })
+                            });
+
+                            setTimeout(() => {
+                                try {
+                                    const failMessages = MockWebSocket.messagesSent.slice(beforeFailCount);
+                                    const failRes = JSON.parse(failMessages[0]);
+                                    assert.ok(failRes.toolResponse.functionResponses[0].response.error);
+                                    assert.ok(failRes.toolResponse.functionResponses[0].response.error.includes("no esté autenticado"));
+
+                                    console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
+                                    process.exit(0);
+                                } catch (e) {
+                                    console.error('Tool function test failed (fail case):', e);
+                                    process.exit(1);
+                                }
+                            }, 50);
+
+                        } catch (e) {
+                            console.error('Tool function test failed (success case):', e);
+                            process.exit(1);
+                        }
+                    }, 50);
                         } catch (err) {
                             console.error('Transcription DOM Test failed:', err);
                             process.exit(1);

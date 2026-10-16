@@ -407,6 +407,7 @@
             <div id="chat-container">
 
                 <div id="avatar-container">
+                    <div class="soy-idealita-label">Soy Idealita</div>
                     <button id="btn-toggle-avatar" class="mobile-toggle-btn" aria-label="Minimizar Avatar" style="display: none;">
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -1030,6 +1031,7 @@
                     if (response.ok) {
                         const data = await response.json();
                         const user = data.user;
+                        window.currentUser = user;
                         document.getElementById('auth-container-guest').style.display = 'none';
                         document.getElementById('auth-container-user').style.display = 'flex';
                         document.getElementById('user-greeting').textContent = `Bienvenido, ${user.nombre || user.usuario}`;
@@ -1037,6 +1039,7 @@
                         document.getElementById('auth-container-guest').style.display = 'flex';
                         document.getElementById('auth-container-user').style.display = 'none';
                         document.getElementById('user-greeting').textContent = '';
+                        window.currentUser = null;
                     }
 
                     // Build menu after determining auth status
@@ -1898,12 +1901,28 @@
                         updateLiveStatus("Configurando audio...");
 
                         // Send initial setup
+                        const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
+                        let sysInstruction = "Eres Idealita, la asistente virtual de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES IDEALITA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las funciones y los datos reales disponibles para esta sesión.";
+                        if (window.currentUser) {
+                            sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
+                        }
+
                         const setupMessage = {
                             setup: {
                                 model: "models/gemini-3.8-live",
                                 systemInstruction: {
-                                    parts: [{ text: "Eres Idealita, la asistente virtual de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES IDEALITA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español." }]
+                                    parts: [{ text: sysInstruction }]
                                 },
+                                tools: [
+                                    {
+                                        functionDeclarations: [
+                                            {
+                                                name: "consultar_ideas_usuario",
+                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas."
+                                            }
+                                        ]
+                                    }
+                                ],
                                 generationConfig: {
                                     responseModalities: ["AUDIO"]
                                 },
@@ -1911,6 +1930,8 @@
                             }
                         };
                         liveWebSocket.send(JSON.stringify(setupMessage));
+
+
 
                         // Setup audio recording
                         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -2084,6 +2105,23 @@
                             console.log("Gemini Live Setup Complete:", response.setupComplete);
                             isSetupComplete = true;
                             updateLiveStatus("Escuchando...");
+
+                            // Send Initial identity messages once setup is complete
+                            if (window.currentUser) {
+                                const userName = window.currentUser.nombre || window.currentUser.usuario;
+                                liveWebSocket.send(JSON.stringify({
+                                    clientContent: {
+                                        turns: [{ role: "user", parts: [{ text: `Soy ${userName}` }] }],
+                                        turnComplete: false
+                                    }
+                                }));
+                                liveWebSocket.send(JSON.stringify({
+                                    clientContent: {
+                                        turns: [{ role: "user", parts: [{ text: "Tú eres Idealita." }] }],
+                                        turnComplete: false
+                                    }
+                                }));
+                            }
                         }
 
                         if (response.serverContent) {
@@ -2091,6 +2129,53 @@
 
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for (const part of content.modelTurn.parts) {
+                                    if (part.functionCall) {
+                                        const call = part.functionCall;
+                                        if (call.name === "consultar_ideas_usuario") {
+                                            try {
+                                                const ideasRes = await fetch('/api/ideas');
+                                                if (ideasRes.ok) {
+                                                    const ideasData = await ideasRes.json();
+                                                    liveWebSocket.send(JSON.stringify({
+                                                        toolResponse: {
+                                                            functionResponses: [{
+                                                                id: call.id,
+                                                                name: call.name,
+                                                                response: {
+                                                                    result: ideasData.ideas
+                                                                }
+                                                            }]
+                                                        }
+                                                    }));
+                                                } else {
+                                                    liveWebSocket.send(JSON.stringify({
+                                                        toolResponse: {
+                                                            functionResponses: [{
+                                                                id: call.id,
+                                                                name: call.name,
+                                                                response: {
+                                                                    error: "No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado."
+                                                                }
+                                                            }]
+                                                        }
+                                                    }));
+                                                }
+                                            } catch (e) {
+                                                liveWebSocket.send(JSON.stringify({
+                                                    toolResponse: {
+                                                        functionResponses: [{
+                                                            id: call.id,
+                                                            name: call.name,
+                                                            response: {
+                                                                error: "Error de red al consultar ideas."
+                                                            }
+                                                        }]
+                                                    }
+                                                }));
+                                            }
+                                        }
+                                    }
+
                                     if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
                                         updateLiveStatus("Hablando...");
                                         playPcmAudio(part.inlineData.data);
