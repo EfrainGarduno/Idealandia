@@ -85,8 +85,9 @@
         #content-area {
             flex-grow: 1;
             display: flex;
-            justify-content: center;
-            align-items: flex-start;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
             padding: 40px;
             box-sizing: border-box;
             overflow-y: auto;
@@ -185,9 +186,12 @@
         /* Chat UI Redesign */
         .chat-section-override {
             flex: 1;
+            width: 100%;
+            max-width: 1000px;
             min-height: 0;
             display: flex;
             flex-direction: column;
+            margin: 0 auto;
         }
         #chat-container {
             width: 100%;
@@ -403,7 +407,10 @@
     border-radius: 24px;
     padding: 60px;
     max-width: 1000px;
+    width: 100%;
+    box-sizing: border-box;
     box-shadow: none;
+    margin: 0 auto;
 }
 .home-layout {
     display: flex;
@@ -483,6 +490,8 @@
     justify-content: center;
     align-items: center;
     min-height: 400px;
+    overflow: hidden;
+    max-width: 100%;
 }
 .visual-container {
     position: relative;
@@ -707,7 +716,8 @@
         padding: 20px;
     }
     .new-home-section {
-        padding: 40px;
+        padding: 40px 20px;
+        border-radius: 0;
     }
     .home-title {
         font-size: 48px;
