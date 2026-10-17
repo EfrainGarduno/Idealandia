@@ -17,6 +17,9 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(express.static(__dirname));
 
+// Trust proxy for secure rate limiting behind reverse proxies (like Nginx/Load Balancers)
+app.set('trust proxy', 1);
+
 // Rate Limiting
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -313,17 +316,6 @@ app.post('/api/reset', async (req, res) => {
 
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-        const [resets] = await pool.execute(
-            'SELECT * FROM password_resets WHERE token_hash = ? AND used = 0 AND expires_at > NOW()',
-            [tokenHash]
-        );
-
-        if (resets.length === 0) {
-            return res.status(400).json({ error: 'El token de recuperación es inválido o ha caducado.' });
-        }
-
-        const resetRecord = resets[0];
-
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(password, saltRounds);
 
@@ -331,9 +323,33 @@ app.post('/api/reset', async (req, res) => {
         try {
             await connection.beginTransaction();
 
-            await connection.execute('UPDATE usuarios SET password_hash = ? WHERE id = ?', [newPasswordHash, resetRecord.usuario_id]);
-            await connection.execute('UPDATE password_resets SET used = 1 WHERE id = ?', [resetRecord.id]);
-            // Optional: Session revocation could be added here by invalidating current JWTs if we tracked them, but currently JWTs are stateless.
+            // Use atomic UPDATE to prevent TOCTOU race condition
+            const [updateResult] = await connection.execute(
+                'UPDATE password_resets SET used = 1 WHERE token_hash = ? AND used = 0 AND expires_at > NOW()',
+                [tokenHash]
+            );
+
+            if (updateResult.affectedRows === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'El token de recuperación es inválido, ha caducado o ya fue utilizado.' });
+            }
+
+            // Get the user id
+            const [resets] = await connection.execute(
+                'SELECT usuario_id FROM password_resets WHERE token_hash = ?',
+                [tokenHash]
+            );
+            const userId = resets[0].usuario_id;
+
+            await connection.execute('UPDATE usuarios SET password_hash = ? WHERE id = ?', [newPasswordHash, userId]);
+
+            // Clear the auth_token cookie to force logout of the current session on this device
+            res.cookie('auth_token', '', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                expires: new Date(0) // Expire immediately
+            });
 
             await connection.commit();
             res.status(200).json({ message: 'Contraseña actualizada exitosamente.' });
