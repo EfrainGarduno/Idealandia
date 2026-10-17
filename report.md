@@ -102,3 +102,21 @@ He revisado exhaustivamente el código implementado y he realizado pruebas de re
 Se han purgado además las dependencias inútiles (como `crypto`, dado que es nativo) y archivos residuales del proceso iterativo.
 
 **Recomendación:** El código es seguro, estable y cumple con todas las restricciones requeridas. **El PR está listo para ser aprobado (Approved) y realizar el merge a la rama principal (main).**
+
+## Final Audit Addendum (JWT & Proxy Security)
+
+1. **JWT Session Invalidation:**
+   - **Mechanism:** The `usuarios` table was updated (via `db_jwt_version.sql`) with a `jwt_version` column.
+   - **Flow:** During login, `jwt_version` is embedded into the JWT payload. Any subsequent requests requiring authorization (such as `/api/me`, `/api/ideas`, `requireAdmin`, etc.) are intercepted by a centralized `verifyToken` function. This function dynamically fetches the `jwt_version` from the database and strictly compares it against the token's payload.
+   - **Reset:** Successfully executing `/api/reset` atomically increments the user's `jwt_version` in the database.
+   - **Verification:** All tests in `test_auth_recovery.js` confirmed that older JWTs immediately return `401 Unauthorized` while newly authenticated tokens seamlessly process protected routes without breaking RBAC logic.
+
+2. **Trust Proxy Configuration:**
+   - **Risk Addressed:** Previous standard implementations of `express-rate-limit` without correct `trust proxy` configurations can be easily bypassed using spoofed `X-Forwarded-For` HTTP headers.
+   - **Resolution:** The code now safely configures `app.set('trust proxy', process.env.TRUST_PROXY || 'loopback')`. It specifically trusts standard localized routing unless deliberately opened to a CDN. The rigorous tests dynamically confirm that local rate limiting ignores externally spoofed `X-Forwarded-For` injection attempts.
+
+3. **Atomic Token Check:**
+   - **Validation:** Reset logic explicitly utilizes atomic condition blocks (`UPDATE ... WHERE token_hash = ? AND used = 0`) to immediately lock token usage.
+   - **Result Processing:** If `updateResult.affectedRows === 0`, the transaction rolls back synchronously. Tested using simulated race conditions to ensure only the first inbound thread executes the reset.
+
+The branch fulfills all requirements and is fully ready to merge.

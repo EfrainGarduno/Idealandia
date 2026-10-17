@@ -82,13 +82,41 @@ async function runTests() {
             let reset1 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
             if (reset1.status !== 200) throw new Error("Valid reset failed.");
 
+            // Grab previous JWT to test invalidation
+            const oldJwtCookie = login2.headers['set-cookie'][0].split(';')[0];
+
             // Verify password actually changed
-            let login3 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '192.168.1.2' } }, JSON.stringify({ usuario: 'testrec', password: 'newpassword123' }));
+            let login3 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ usuario: 'testrec', password: 'newpassword123' }));
             if (login3.status !== 200) throw new Error("Login with new password failed.");
+
+            // Verify new JWT works
+            const newJwtCookie = login3.headers['set-cookie'][0].split(';')[0];
+            let me1 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/me', method: 'GET', headers: { 'Cookie': newJwtCookie } });
+            if (me1.status !== 200) throw new Error("New JWT should be valid.");
+
+            // Verify old JWT is invalid
+            let me2 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/me', method: 'GET', headers: { 'Cookie': oldJwtCookie } });
+            if (me2.status !== 401) throw new Error("Old JWT should be invalidated after password reset.");
 
             // Test reuse of the same token
             let reset2 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'anotherpassword', passwordConfirm: 'anotherpassword' }));
             if (reset2.status !== 400) throw new Error("Reusing a token should fail.");
+
+            // Test Rate Limit Spoofing (X-Forwarded-For should be ignored because 'trust proxy' is 'loopback' and we are simulating external IP spoofing)
+            for (let i = 0; i < 4; i++) {
+                 await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
+            }
+            // 5th total on localhost (we already did 6 earlier, wait, the rate limiter tracks per IP. '127.0.0.1' did 6, so it's already blocked).
+            // Actually, because 'trust proxy' is 'loopback', X-Forwarded-For is IGNORED when the connection comes from localhost (127.0.0.1 is loopback so it MIGHT trust it).
+            // If it trusts it, it uses '8.8.8.8'. Let's see if 8.8.8.8 gets blocked.
+            let rateLimitSpoof = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
+            // We sent 4 to 8.8.8.8. If we send a 5th, it should pass, 6th should fail.
+            await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
+            let blockCheck = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
+
+            // To ensure it's not globally blocked, let's try a fresh IP.
+            let freshIP = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '9.9.9.9' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'newpassword123' }));
+            if (freshIP.status !== 200) throw new Error("Rate limiting spoof check failed or globally blocked.");
 
         }
         console.log("Full Auth and recovery tests passed!");

@@ -8,6 +8,27 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 
+
+async function verifyToken(token, connectionPool) {
+    const secret = process.env.AUTH_SECRET;
+    const decoded = jwt.verify(token, secret);
+
+    // Check DB for jwt_version to invalidate old tokens
+    const [users] = await connectionPool.execute('SELECT jwt_version FROM usuarios WHERE id = ?', [decoded.id]);
+    if (users.length === 0) {
+        throw new Error('Usuario no encontrado');
+    }
+
+    const currentVersion = users[0].jwt_version || 1;
+    const tokenVersion = decoded.jwt_version || 1;
+
+    if (tokenVersion !== currentVersion) {
+        throw new Error('Token revocado');
+    }
+
+    return decoded;
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 const rateLimit = require('express-rate-limit');
@@ -18,7 +39,8 @@ app.use(cookieParser());
 app.use(express.static(__dirname));
 
 // Trust proxy for secure rate limiting behind reverse proxies (like Nginx/Load Balancers)
-app.set('trust proxy', 1);
+// Only trust the explicitly provided proxy IPs or local loopback by default.
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 
 // Rate Limiting
 const authLimiter = rateLimit({
@@ -197,7 +219,7 @@ app.post('/api/login', async (req, res) => {
         }
 
         const [users] = await pool.execute(
-            'SELECT id, usuario, password_hash, nombre, telefono, email FROM usuarios WHERE usuario = ? OR email = ?',
+            'SELECT id, usuario, password_hash, nombre, telefono, email, jwt_version FROM usuarios WHERE usuario = ? OR email = ?',
             [usuario, usuario]
         );
 
@@ -214,7 +236,8 @@ app.post('/api/login', async (req, res) => {
 
         const payload = {
             id: user.id,
-            usuario: user.usuario
+            usuario: user.usuario,
+            jwt_version: user.jwt_version || 1
         };
 
         const secret = process.env.AUTH_SECRET;
@@ -228,7 +251,7 @@ app.post('/api/login', async (req, res) => {
         });
 
         // Return user data (excluding password_hash)
-        const { password_hash, ...userData } = user;
+        const { password_hash, jwt_version, ...userData } = user;
         res.status(200).json({ user: userData, message: 'Login exitoso.' });
 
     } catch (error) {
@@ -341,7 +364,7 @@ app.post('/api/reset', async (req, res) => {
             );
             const userId = resets[0].usuario_id;
 
-            await connection.execute('UPDATE usuarios SET password_hash = ? WHERE id = ?', [newPasswordHash, userId]);
+            await connection.execute('UPDATE usuarios SET password_hash = ?, jwt_version = COALESCE(jwt_version, 1) + 1 WHERE id = ?', [newPasswordHash, userId]);
 
             // Clear the auth_token cookie to force logout of the current session on this device
             res.cookie('auth_token', '', {
@@ -375,7 +398,7 @@ app.get('/api/menu', async (req, res) => {
         if (token) {
             try {
                 const secret = process.env.AUTH_SECRET;
-                const decoded = jwt.verify(token, secret);
+                const decoded = await verifyToken(token, pool);
                 userId = decoded.id;
             } catch (err) {
                 // Invalid or expired token: treat as unauthenticated
@@ -454,7 +477,7 @@ app.get('/api/me', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
 
         const [users] = await pool.execute(
             'SELECT id, usuario, nombre, telefono, email FROM usuarios WHERE id = ?',
@@ -1194,7 +1217,7 @@ app.get('/api/ideas', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
         const [ideas] = await pool.execute(
@@ -1217,7 +1240,7 @@ app.post('/api/ideas', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
         let { titulo, descripcion, estado } = req.body;
@@ -1279,7 +1302,7 @@ app.delete('/api/ideas/:id', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
         const idea_id = req.params.id;
 
@@ -1316,7 +1339,7 @@ app.put('/api/ideas/:id/estado', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
         const idea_id = req.params.id;
         const { estado } = req.body;
