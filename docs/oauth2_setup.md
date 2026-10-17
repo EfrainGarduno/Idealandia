@@ -24,7 +24,7 @@ A continuación, se detallan los pasos para obtener las credenciales necesarias 
 1. En el panel izquierdo de tu aplicación, ve a **API permissions** (Permisos de API).
 2. Haz clic en **Add a permission** -> **Microsoft Graph** -> **Delegated permissions**.
 3. Busca y marca los siguientes permisos:
-   - `Mail.Send` (Para poder enviar correos)
+   - `https://outlook.office.com/SMTP.Send` (Para poder enviar correos SMTP)
    - `offline_access` (Necesario para obtener el `refresh_token` de larga duración)
    - `User.Read` (Generalmente añadido por defecto, no lo elimines)
 4. Haz clic en **Add permissions**.
@@ -38,7 +38,7 @@ Debes ejecutar este flujo una vez desde tu navegador o desde herramientas como P
 Abre la siguiente URL en tu navegador web, reemplazando `TU_CLIENT_ID` por el ID obtenido en el paso 2 y `URL_REDIRECCION` por la configurada en el paso 1 (ej: `http://localhost`):
 
 ```
-https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=TU_CLIENT_ID&response_type=code&redirect_uri=URL_REDIRECCION&response_mode=query&scope=offline_access%20Mail.Send&state=12345
+https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=TU_CLIENT_ID&response_type=code&redirect_uri=URL_REDIRECCION&response_mode=query&scope=offline_access%20https%3A%2F%2Foutlook.office.com%2FSMTP.Send&state=12345
 ```
 
 Accede con la cuenta que envía los correos, y otorga los permisos solicitados.
@@ -53,7 +53,7 @@ Inmediatamente (el código expira rápido), haz una petición POST (puedes usar 
 ```bash
 curl -X POST https://login.microsoftonline.com/common/oauth2/v2.0/token \
      -d "client_id=TU_CLIENT_ID" \
-     -d "scope=offline_access Mail.Send" \
+     -d "scope=offline_access https://outlook.office.com/SMTP.Send" \
      -d "code=EL_CODIGO_COPIADO" \
      -d "redirect_uri=URL_REDIRECCION" \
      -d "grant_type=authorization_code" \

@@ -265,42 +265,52 @@ const nodemailer = require('nodemailer');
 
 let mailTransporter = null;
 
-// Initialize mail transporter once
-function initMailTransporter() {
-    const useOAuth2 = process.env.SMTP_CLIENT_ID || process.env.SMTP_CLIENT_SECRET || process.env.SMTP_REFRESH_TOKEN;
+// Exportable for testing
+function initMailTransporter(env = process.env) {
+    const useOAuth2 = env.SMTP_CLIENT_ID || env.SMTP_CLIENT_SECRET || env.SMTP_REFRESH_TOKEN;
+    let transporter = null;
 
     if (useOAuth2) {
-        if (!process.env.SMTP_USER || !process.env.SMTP_CLIENT_ID || !process.env.SMTP_CLIENT_SECRET || !process.env.SMTP_REFRESH_TOKEN) {
+        if (!env.SMTP_USER || !env.SMTP_CLIENT_ID || !env.SMTP_CLIENT_SECRET || !env.SMTP_REFRESH_TOKEN) {
             console.error('SMTP OAuth2 Error: Incomplete configuration. SMTP_USER, SMTP_CLIENT_ID, SMTP_CLIENT_SECRET, and SMTP_REFRESH_TOKEN are all required for OAuth2.');
+            // We explicitly DO NOT fall back to basic auth if an incomplete OAuth2 configuration is detected, for security.
         } else {
-            mailTransporter = nodemailer.createTransport({
-                service: 'hotmail',
+            transporter = nodemailer.createTransport({
+                host: 'smtp-mail.outlook.com',
+                port: 587,
+                secure: false, // true for 465, false for other ports
                 auth: {
                     type: 'OAuth2',
-                    user: process.env.SMTP_USER,
-                    clientId: process.env.SMTP_CLIENT_ID,
-                    clientSecret: process.env.SMTP_CLIENT_SECRET,
-                    refreshToken: process.env.SMTP_REFRESH_TOKEN
+                    user: env.SMTP_USER,
+                    clientId: env.SMTP_CLIENT_ID,
+                    clientSecret: env.SMTP_CLIENT_SECRET,
+                    refreshToken: env.SMTP_REFRESH_TOKEN
                 }
             });
             console.log('Idealandia recovery email configured to use OAuth2 (Outlook/Hotmail).');
         }
-    } else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-        mailTransporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT || 587,
-            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+    } else if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
+        transporter = nodemailer.createTransport({
+            host: env.SMTP_HOST,
+            port: env.SMTP_PORT || 587,
+            secure: env.SMTP_SECURE === 'true', // true for 465, false for other ports
             auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
+                user: env.SMTP_USER,
+                pass: env.SMTP_PASS
             }
         });
         console.log('Idealandia recovery email configured to use Basic Auth.');
     } else {
         console.log('Idealandia recovery email not configured to send real emails (SMTP variables missing).');
     }
+    return transporter;
 }
-initMailTransporter();
+mailTransporter = initMailTransporter();
+
+// Export for test_smtp_config.js
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { app, initMailTransporter };
+}
 
 app.post('/api/recover', async (req, res) => {
     try {
