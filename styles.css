@@ -1043,3 +1043,20 @@
     justify-content: center;
     align-items: center;
 }
+
+.soy-idealita-label {
+    position: absolute;
+    top: 10px;
+    background: rgba(108, 64, 247, 0.9);
+    color: white;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    z-index: 20;
+    pointer-events: none;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
