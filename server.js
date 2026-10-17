@@ -263,6 +263,45 @@ app.post('/api/login', async (req, res) => {
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
+let mailTransporter = null;
+
+// Initialize mail transporter once
+function initMailTransporter() {
+    const useOAuth2 = process.env.SMTP_CLIENT_ID || process.env.SMTP_CLIENT_SECRET || process.env.SMTP_REFRESH_TOKEN;
+
+    if (useOAuth2) {
+        if (!process.env.SMTP_USER || !process.env.SMTP_CLIENT_ID || !process.env.SMTP_CLIENT_SECRET || !process.env.SMTP_REFRESH_TOKEN) {
+            console.error('SMTP OAuth2 Error: Incomplete configuration. SMTP_USER, SMTP_CLIENT_ID, SMTP_CLIENT_SECRET, and SMTP_REFRESH_TOKEN are all required for OAuth2.');
+        } else {
+            mailTransporter = nodemailer.createTransport({
+                service: 'hotmail',
+                auth: {
+                    type: 'OAuth2',
+                    user: process.env.SMTP_USER,
+                    clientId: process.env.SMTP_CLIENT_ID,
+                    clientSecret: process.env.SMTP_CLIENT_SECRET,
+                    refreshToken: process.env.SMTP_REFRESH_TOKEN
+                }
+            });
+            console.log('Idealandia recovery email configured to use OAuth2 (Outlook/Hotmail).');
+        }
+    } else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        mailTransporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT || 587,
+            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS
+            }
+        });
+        console.log('Idealandia recovery email configured to use Basic Auth.');
+    } else {
+        console.log('Idealandia recovery email not configured to send real emails (SMTP variables missing).');
+    }
+}
+initMailTransporter();
+
 app.post('/api/recover', async (req, res) => {
     try {
         const { email } = req.body;
@@ -295,24 +334,19 @@ app.post('/api/recover', async (req, res) => {
         const resetLink = `${appUrl}/?token=${token}`;
 
         // Attempt to send email
-        if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-            const transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST,
-                port: process.env.SMTP_PORT || 587,
-                secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASS
-                }
-            });
-
-            await transporter.sendMail({
-                from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
-                to: user.email,
-                subject: "Recuperación de Contraseña - Idealandia",
-                text: `Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):\n\n${resetLink}\n\nSi no fuiste tú, ignora este correo.`,
-                html: `<p>Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si no fuiste tú, ignora este correo.</p>`
-            });
+        if (mailTransporter) {
+            try {
+                await mailTransporter.sendMail({
+                    from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
+                    to: user.email,
+                    subject: "Recuperación de Contraseña - Idealandia",
+                    text: `Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):\n\n${resetLink}\n\nSi no fuiste tú, ignora este correo.`,
+                    html: `<p>Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si no fuiste tú, ignora este correo.</p>`
+                });
+            } catch (err) {
+                console.error("Error al enviar el correo de recuperación:", err.message);
+                // We still want to return a successful message to the user to prevent enumeration
+            }
         } else {
             console.log('Idealandia recovery email successfully triggered. (Email content suppressed to protect secrets). Configured SMTP variables to send real emails.');
         }
