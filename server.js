@@ -284,7 +284,8 @@ function initMailTransporter(env = process.env) {
                     user: env.SMTP_USER,
                     clientId: env.SMTP_CLIENT_ID,
                     clientSecret: env.SMTP_CLIENT_SECRET,
-                    refreshToken: env.SMTP_REFRESH_TOKEN
+                    refreshToken: env.SMTP_REFRESH_TOKEN,
+                    accessUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
                 }
             });
             console.log('Idealandia recovery email configured to use OAuth2 (Outlook/Hotmail).');

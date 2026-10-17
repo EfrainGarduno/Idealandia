@@ -22,12 +22,11 @@ A continuación, se detallan los pasos para obtener las credenciales necesarias 
 
 ## 3. Configurar Permisos de API
 1. En el panel izquierdo de tu aplicación, ve a **API permissions** (Permisos de API).
-2. Haz clic en **Add a permission** -> **Microsoft Graph** -> **Delegated permissions**.
-3. Busca y marca los siguientes permisos:
-   - `https://outlook.office.com/SMTP.Send` (Para poder enviar correos SMTP)
-   - `offline_access` (Necesario para obtener el `refresh_token` de larga duración)
-   - `User.Read` (Generalmente añadido por defecto, no lo elimines)
-4. Haz clic en **Add permissions**.
+2. Para añadir el permiso `offline_access`, haz clic en **Add a permission** -> **Microsoft Graph** -> **Delegated permissions** y selecciona `offline_access` (junto con `User.Read` que suele estar por defecto). Haz clic en **Add permissions**.
+3. Para el permiso de SMTP (que **no** está en Microsoft Graph), haz clic de nuevo en **Add a permission**.
+4. Selecciona la pestaña **APIs my organization uses** (APIs que usa mi organización) y busca `Office 365 Exchange Online`.
+5. Selecciona **Delegated permissions** y marca la casilla **SMTP.Send** (`https://outlook.office.com/SMTP.Send`).
+6. Haz clic en **Add permissions**.
 
 ## 4. Obtener el Refresh Token (Una sola vez)
 Puesto que esta aplicación enviará correos de manera automatizada en el backend sin intervención de un usuario, necesitamos obtener un `refresh_token` que se usará para obtener nuevos tokens de acceso cada vez que se necesite enviar un correo.
