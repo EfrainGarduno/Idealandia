@@ -514,8 +514,7 @@ const requireAdmin = async (req, res, next) => {
             return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
         }
 
-        const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const userId = decoded.id;
 
         // Verify if user has the admin.access permission
@@ -537,7 +536,7 @@ const requireAdmin = async (req, res, next) => {
         next();
     } catch (error) {
         console.error('Error in admin middleware:', error);
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado') {
              res.status(401).json({ error: 'Token inválido o expirado.' });
         } else {
              res.status(500).json({ error: 'Error interno del servidor.' });

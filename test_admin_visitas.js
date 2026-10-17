@@ -18,27 +18,38 @@ const request = (options, postData) => {
 };
 
 async function createTestAdminToken(pool) {
-    const payload = { id: 1, email: "testadmin@test.com", dbtest: true };
-    const token = jwt.sign(payload, process.env.AUTH_SECRET || 'testnode');
-
     try {
-        await pool.execute("INSERT IGNORE INTO usuarios (id, usuario, password_hash, email, activo) VALUES (1, 'testadmin', 'mock', 'testadmin@test.com', 1)");
+        await pool.execute("INSERT IGNORE INTO usuarios (id, usuario, password_hash, email, activo, jwt_version) VALUES (998, 'testadmin998', 'mock', 'testadmin998@test.com', 1, 1)");
         await pool.execute("INSERT IGNORE INTO roles (id, nombre, descripcion, activo) VALUES (999, 'TestAdminRole', 'Mock', 1)");
         await pool.execute("INSERT IGNORE INTO permisos (id, nombre, codigo, descripcion, activo) VALUES (999, 'Admin Access', 'admin.access', 'Mock', 1)");
-        await pool.execute("INSERT IGNORE INTO usuario_roles (usuario_id, rol_id) VALUES (1, 999)");
+        await pool.execute("INSERT IGNORE INTO usuario_roles (usuario_id, rol_id) VALUES (998, 999)");
         await pool.execute("INSERT IGNORE INTO rol_permisos (rol_id, permiso_id) VALUES (999, 999)");
     } catch(e) {}
 
+    let jwt_version = 1;
+    try {
+        const [rows] = await pool.execute("SELECT jwt_version FROM usuarios WHERE id = 998");
+        if (rows.length > 0 && rows[0].jwt_version) jwt_version = rows[0].jwt_version;
+    } catch(e) {}
+
+    const payload = { id: 998, email: "testadmin998@test.com", dbtest: true, jwt_version };
+    const token = jwt.sign(payload, process.env.AUTH_SECRET || 'testnode');
     return `auth_token=${token}`;
 }
 
 async function createTestUserToken(pool, userId) {
-    const payload = { id: userId, email: `testuser${userId}@test.com`, dbtest: true };
-    const token = jwt.sign(payload, process.env.AUTH_SECRET || 'testnode');
-
     try {
-        await pool.execute("INSERT IGNORE INTO usuarios (id, usuario, password_hash, email, activo) VALUES (?, ?, 'mock', ?, 1)", [userId, `testuser${userId}`, payload.email]);
+        await pool.execute("INSERT IGNORE INTO usuarios (id, usuario, password_hash, email, activo, jwt_version) VALUES (?, ?, 'mock', ?, 1, 1)", [userId, `testuser${userId}`, `testuser${userId}@test.com`]);
     } catch(e) {}
+
+    let jwt_version = 1;
+    try {
+        const [rows] = await pool.execute("SELECT jwt_version FROM usuarios WHERE id = ?", [userId]);
+        if (rows.length > 0 && rows[0].jwt_version) jwt_version = rows[0].jwt_version;
+    } catch(e) {}
+
+    const payload = { id: userId, email: `testuser${userId}@test.com`, dbtest: true, jwt_version };
+    const token = jwt.sign(payload, process.env.AUTH_SECRET || 'testnode');
     return `auth_token=${token}`;
 }
 
@@ -107,7 +118,7 @@ async function runTests() {
             await pool.execute("INSERT IGNORE INTO ideas (id, usuario_id, titulo, descripcion, estado) VALUES (999, 101, 'Test Idea', 'Desc', 'pendiente')");
 
             // Test Delete self
-            let delRes1 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/admin/usuarios/1', method: 'DELETE', headers: { 'Cookie': adminCookie }});
+            let delRes1 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/admin/usuarios/998', method: 'DELETE', headers: { 'Cookie': adminCookie }});
             if (delRes1.status !== 400 || !delRes1.data.error.includes("propio usuario")) throw new Error("Self-delete should fail.");
 
             // Test Delete user with ideas
@@ -147,7 +158,7 @@ async function runTests() {
                 await pool.execute("DELETE FROM roles WHERE id = 999");
                 await pool.execute("DELETE FROM permisos WHERE id = 999");
                 await pool.execute("DELETE FROM ideas WHERE id = 999");
-                await pool.execute("DELETE FROM usuarios WHERE id IN (1, 100, 101)");
+                await pool.execute("DELETE FROM usuarios WHERE id IN (998, 100, 101)");
             } catch(e) {}
             if (pool) await pool.end();
         }
