@@ -263,6 +263,56 @@ app.post('/api/login', async (req, res) => {
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
+let mailTransporter = null;
+
+// Exportable for testing
+function initMailTransporter(env = process.env) {
+    const useOAuth2 = env.SMTP_CLIENT_ID || env.SMTP_CLIENT_SECRET || env.SMTP_REFRESH_TOKEN;
+    let transporter = null;
+
+    if (useOAuth2) {
+        if (!env.SMTP_USER || !env.SMTP_CLIENT_ID || !env.SMTP_CLIENT_SECRET || !env.SMTP_REFRESH_TOKEN) {
+            console.error('SMTP OAuth2 Error: Incomplete configuration. SMTP_USER, SMTP_CLIENT_ID, SMTP_CLIENT_SECRET, and SMTP_REFRESH_TOKEN are all required for OAuth2.');
+            // We explicitly DO NOT fall back to basic auth if an incomplete OAuth2 configuration is detected, for security.
+        } else {
+            transporter = nodemailer.createTransport({
+                host: 'smtp-mail.outlook.com',
+                port: 587,
+                secure: false, // true for 465, false for other ports
+                auth: {
+                    type: 'OAuth2',
+                    user: env.SMTP_USER,
+                    clientId: env.SMTP_CLIENT_ID,
+                    clientSecret: env.SMTP_CLIENT_SECRET,
+                    refreshToken: env.SMTP_REFRESH_TOKEN,
+                    accessUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+                }
+            });
+            console.log('Idealandia recovery email configured to use OAuth2 (Outlook/Hotmail).');
+        }
+    } else if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
+        transporter = nodemailer.createTransport({
+            host: env.SMTP_HOST,
+            port: env.SMTP_PORT || 587,
+            secure: env.SMTP_SECURE === 'true', // true for 465, false for other ports
+            auth: {
+                user: env.SMTP_USER,
+                pass: env.SMTP_PASS
+            }
+        });
+        console.log('Idealandia recovery email configured to use Basic Auth.');
+    } else {
+        console.log('Idealandia recovery email not configured to send real emails (SMTP variables missing).');
+    }
+    return transporter;
+}
+mailTransporter = initMailTransporter();
+
+// Export for test_smtp_config.js
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { app, initMailTransporter };
+}
+
 app.post('/api/recover', async (req, res) => {
     try {
         const { email } = req.body;
@@ -295,24 +345,19 @@ app.post('/api/recover', async (req, res) => {
         const resetLink = `${appUrl}/?token=${token}`;
 
         // Attempt to send email
-        if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-            const transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST,
-                port: process.env.SMTP_PORT || 587,
-                secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASS
-                }
-            });
-
-            await transporter.sendMail({
-                from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
-                to: user.email,
-                subject: "Recuperación de Contraseña - Idealandia",
-                text: `Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):\n\n${resetLink}\n\nSi no fuiste tú, ignora este correo.`,
-                html: `<p>Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si no fuiste tú, ignora este correo.</p>`
-            });
+        if (mailTransporter) {
+            try {
+                await mailTransporter.sendMail({
+                    from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
+                    to: user.email,
+                    subject: "Recuperación de Contraseña - Idealandia",
+                    text: `Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):\n\n${resetLink}\n\nSi no fuiste tú, ignora este correo.`,
+                    html: `<p>Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si no fuiste tú, ignora este correo.</p>`
+                });
+            } catch (err) {
+                console.error("Error al enviar el correo de recuperación:", err.message);
+                // We still want to return a successful message to the user to prevent enumeration
+            }
         } else {
             console.log('Idealandia recovery email successfully triggered. (Email content suppressed to protect secrets). Configured SMTP variables to send real emails.');
         }
