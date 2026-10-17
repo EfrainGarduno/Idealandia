@@ -1,3 +1,21 @@
-sed -i 's/Se eliminaron las restricciones estáticas y las alturas fijas incorrectas. Se implementó una estructura puramente Flexbox:/Se reemplazó el uso obsoleto y estricto de `100dvh` por una estructura Flexbox responsiva. En `.chat-section-override`, se eliminó `height` y `max-height` (como las detectadas anteriormente en la línea 1001), utilizando en su lugar `flex: 1` y `min-height: 0` para permitir la contención correcta de los hijos (resolviendo los problemas de desbordamiento en móviles que causaban pérdida de visibilidad de los controles):/g' report.md
-sed -i 's/Se comprobó las resoluciones 375x667, 390x844, 412x915, 768x1024, y 1366x768. Playwright confirmó programáticamente que en todos los viewports la sección del chat no se desborda y el botón "Enviar" se mantiene 100% visible sin ser desplazado por la altura./Se comprobó las resoluciones 375x667, 390x844, 412x915, 768x1024, y 1366x768. `verify_viewports.js` confirmó programáticamente que en todos los viewports la sección del chat no se desborda horizontal ni verticalmente de forma incontrolada, y que el botón "Enviar" se mantiene 100% visible dentro del viewport sin ser desplazado por la altura del historial. Adicionalmente, el script de captura `screenshot.js` utiliza mocking (interceptación de red de Playwright) y el protocolo `file:\/\/` para la prueba de renderización del SVG y Markdown sin depender de un backend activo, aislando y validando puramente el layout del frontend./g' report.md
-sed -i 's/- \*\*Pruebas de voz real (Gemini Live)\*\*: Dado que las pruebas automatizadas se ejecutan en modo `headless` (Playwright sin micrófono\/usuario real), y el entorno carece de acceso a la API clave de Gemini, las pruebas de interacción de voz en tiempo real con WebSocket se emularon mediante inyección DOM y mocking, asumiendo su correcta ejecución basada en el estado visual./- \*\*Pruebas de voz real (Gemini Live)\*\*: Dado que las pruebas automatizadas se ejecutan en modo `headless` (Playwright sin micrófono\/usuario real), y el entorno carece de acceso a la API clave de Gemini, las pruebas de interacción de voz en tiempo real con WebSocket (reconocimiento de voz, transmisión PCM, y síntesis de respuesta generativa de audio) quedan **pendientes de verificación manual** en un entorno con API key válida. La prueba actual se limita a asegurar la correcta concatenación en streaming del texto de respaldo (`part.text`) y su sanitización con Markdown vía DOMPurify, validando visualmente la UI pero no la sesión de WebAudio./g' report.md
+#!/bin/bash
+cat << 'MD' >> report.md
+
+## Auth & Admin Improvements
+
+1. **Authentication Updates:**
+    - The login form now accepts either the username or the registered email address.
+    - A toggle button has been added to the password field to show/hide the password.
+    - Rate-limiting (max 5 requests per 15 mins per IP) has been implemented on `/api/login` and `/api/recover` to prevent brute-force and enumeration attacks.
+
+2. **Password Recovery:**
+    - A new "Forgot Password?" flow has been introduced with UI sections for email submission and token-based password resetting.
+    - Secure token generation using Node's native `crypto` module, hashed via `sha256` before database storage to protect against DB leaks.
+    - The endpoints intentionally return generic success messages to avoid user enumeration.
+    - Configured integration for `nodemailer` to dispatch real emails if the `SMTP_*` environment variables are provided (e.g., `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`).
+
+3. **Admin Dashboard Responsiveness:**
+    - Modified CSS targeting `.content-section` and `#admin` to utilize `max-width: 95%`, effectively widening the administrative views on desktop displays.
+    - The `.table-responsive` wrapper now correctly applies `overflow-x: auto` as a block-level element, preserving layout stability.
+    - Enforced `white-space: nowrap` on `th` cells to keep headers legible while letting table data (`td`) wrap naturally unless otherwise constrained, ensuring IDs/Emails are comfortably readable.
+MD

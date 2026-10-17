@@ -113,14 +113,53 @@
             <h2>Iniciar Sesión</h2>
             <div class="pension-form">
                 <div class="form-group">
-                    <label for="login-usuario">Usuario:</label>
+                    <label for="login-usuario">Usuario o Correo:</label>
                     <input type="text" id="login-usuario" name="login-usuario">
                 </div>
                 <div class="form-group">
                     <label for="login-password">Contraseña:</label>
-                    <input type="password" id="login-password" name="login-password">
+                    <div style="position: relative; width: 100%;">
+                        <input type="password" id="login-password" name="login-password" style="width: 100%; padding-right: 40px;">
+                        <button type="button" id="btn-toggle-password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #555;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div style="margin-top: 8px; text-align: right; width: 100%;">
+                        <a href="#" data-section="recover" style="font-size: 14px; color: #6c40f7; text-decoration: none;">¿Olvidaste tu contraseña?</a>
+                    </div>
                 </div>
                 <button id="btn-login" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #007bff; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Login</button>
+            </div>
+        </section>
+
+        <section id="recover" class="content-section" style="display: none;">
+            <h2>Recuperar Contraseña</h2>
+            <div class="pension-form">
+                <p style="margin-bottom: 15px; color: #555; text-align: center;">Ingresa tu correo electrónico registrado y te enviaremos un enlace para restablecer tu contraseña.</p>
+                <div class="form-group">
+                    <label for="recover-email">Correo Electrónico:</label>
+                    <input type="email" id="recover-email" name="recover-email">
+                </div>
+                <button id="btn-recover" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #6c40f7; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Enviar enlace</button>
+                <div style="margin-top: 15px; text-align: center;">
+                    <a href="#" data-section="login" style="font-size: 14px; color: #555; text-decoration: none;">Volver al Login</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="reset" class="content-section" style="display: none;">
+            <h2>Restablecer Contraseña</h2>
+            <div class="pension-form">
+                <input type="hidden" id="reset-token" name="reset-token">
+                <div class="form-group">
+                    <label for="reset-password">Nueva Contraseña:</label>
+                    <input type="password" id="reset-password" name="reset-password">
+                </div>
+                <div class="form-group">
+                    <label for="reset-password-confirm">Confirmar Contraseña:</label>
+                    <input type="password" id="reset-password-confirm" name="reset-password-confirm">
+                </div>
+                <button id="btn-reset" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Actualizar contraseña</button>
             </div>
         </section>
 
@@ -1307,6 +1346,107 @@
                 btnEnviarRegistro.addEventListener('click', (e) => {
                     e.preventDefault();
                     showModal("Datos enviados con éxito.");
+                });
+            }
+
+            // Recover Password Logic
+            const btnRecover = document.getElementById('btn-recover');
+            if (btnRecover) {
+                btnRecover.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const email = document.getElementById('recover-email').value;
+
+                    if (!email) {
+                        showModal('Por favor, ingresa tu correo electrónico.');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/recover', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email })
+                        });
+                        const data = await response.json();
+
+                        // Always show generic message
+                        showModal(data.message || 'Si el correo está registrado, recibirás un enlace de recuperación pronto.');
+                        document.getElementById('recover-email').value = '';
+                    } catch (error) {
+                        console.error('Error durante la recuperación:', error);
+                        showModal('Error al procesar la solicitud.');
+                    }
+                });
+            }
+
+            // Check for reset token in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            if (token) {
+                document.getElementById('reset-token').value = token;
+                // Use a slight timeout to ensure DOM is ready and attachMenuEvents has run
+                setTimeout(() => {
+                    const resetLink = document.createElement('a');
+                    resetLink.setAttribute('data-section', 'reset');
+                    document.body.appendChild(resetLink);
+                    attachMenuEvents();
+                    resetLink.click();
+                    resetLink.remove();
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }, 100);
+            }
+
+            // Reset Password Logic
+            const btnReset = document.getElementById('btn-reset');
+            if (btnReset) {
+                btnReset.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const token = document.getElementById('reset-token').value;
+                    const password = document.getElementById('reset-password').value;
+                    const passwordConfirm = document.getElementById('reset-password-confirm').value;
+
+                    if (!password || !passwordConfirm) {
+                        showModal('Por favor, completa ambas contraseñas.');
+                        return;
+                    }
+
+                    if (password !== passwordConfirm) {
+                        showModal('Las contraseñas no coinciden.');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch('/api/reset', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token, password, passwordConfirm })
+                        });
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            showModal('Contraseña restablecida correctamente. Ya puedes iniciar sesión.');
+                            document.querySelector('a[data-section="login"]').click();
+                            document.getElementById('reset-password').value = '';
+                            document.getElementById('reset-password-confirm').value = '';
+                        } else {
+                            showModal(`Error: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error durante el restablecimiento:', error);
+                        showModal('Error al restablecer la contraseña.');
+                    }
+                });
+            }
+
+            // Password Toggle Logic
+            const btnTogglePassword = document.getElementById('btn-toggle-password');
+            const loginPasswordInput = document.getElementById('login-password');
+            if (btnTogglePassword && loginPasswordInput) {
+                btnTogglePassword.addEventListener('click', () => {
+                    const type = loginPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                    loginPasswordInput.setAttribute('type', type);
+                    btnTogglePassword.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
                 });
             }
 

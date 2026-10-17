@@ -104,6 +104,11 @@
             box-shadow: 0 8px 16px rgba(0,0,0,0.1);
             box-sizing: border-box;
         }
+
+        #admin.content-section {
+            max-width: 95%; /* Take up more horizontal space for admin tables */
+            padding: 20px;
+        }
         .hero {
             text-align: center;
             margin-bottom: 40px;
@@ -1003,14 +1008,18 @@
     padding: 10px;
     border: 1px solid #ddd;
     text-align: left;
+    white-space: normal; /* Allow text to wrap by default */
 }
 .admin-table th {
     background-color: #f8f9fa;
     font-weight: bold;
+    white-space: nowrap; /* Keep headers from wrapping unnecessarily */
 }
 .table-responsive {
     overflow-x: auto;
+    display: block;
     width: 100%;
+    max-width: 100%; /* Ensure the scrollbar stays within the container */
 }
         /* Markdown rendering styles in Chat */
         .idealita-message h1, .idealita-message h2, .idealita-message h3 {

@@ -8,13 +8,51 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 
+
+async function verifyToken(token, connectionPool) {
+    const secret = process.env.AUTH_SECRET;
+    const decoded = jwt.verify(token, secret);
+
+    // Check DB for jwt_version to invalidate old tokens
+    const [users] = await connectionPool.execute('SELECT jwt_version FROM usuarios WHERE id = ?', [decoded.id]);
+    if (users.length === 0) {
+        throw new Error('Usuario no encontrado');
+    }
+
+    const currentVersion = users[0].jwt_version || 1;
+    const tokenVersion = decoded.jwt_version || 1;
+
+    if (tokenVersion !== currentVersion) {
+        throw new Error('Token revocado');
+    }
+
+    return decoded;
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
+const rateLimit = require('express-rate-limit');
 
 app.use(cors());
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use(express.static(__dirname));
+
+// Trust proxy for secure rate limiting behind reverse proxies (like Nginx/Load Balancers)
+// Only trust the explicitly provided proxy IPs or local loopback by default.
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
+
+// Rate Limiting
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // Limit each IP to 5 requests per `window` (here, per 15 minutes)
+    message: { error: 'Demasiados intentos desde esta dirección IP. Por favor intenta de nuevo en 15 minutos.' },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+app.use('/api/login', authLimiter);
+app.use('/api/recover', authLimiter);
 
 // Check if API key is provided
 if (!process.env.GEMINI_API_KEY) {
@@ -181,8 +219,8 @@ app.post('/api/login', async (req, res) => {
         }
 
         const [users] = await pool.execute(
-            'SELECT id, usuario, password_hash, nombre, telefono, email FROM usuarios WHERE usuario = ?',
-            [usuario]
+            'SELECT id, usuario, password_hash, nombre, telefono, email, jwt_version FROM usuarios WHERE usuario = ? OR email = ?',
+            [usuario, usuario]
         );
 
         if (users.length === 0) {
@@ -198,7 +236,8 @@ app.post('/api/login', async (req, res) => {
 
         const payload = {
             id: user.id,
-            usuario: user.usuario
+            usuario: user.usuario,
+            jwt_version: user.jwt_version || 1
         };
 
         const secret = process.env.AUTH_SECRET;
@@ -212,12 +251,141 @@ app.post('/api/login', async (req, res) => {
         });
 
         // Return user data (excluding password_hash)
-        const { password_hash, ...userData } = user;
+        const { password_hash, jwt_version, ...userData } = user;
         res.status(200).json({ user: userData, message: 'Login exitoso.' });
 
     } catch (error) {
         console.error('Error in /api/login:', error);
         res.status(500).json({ error: 'Error interno del servidor durante el inicio de sesión.' });
+    }
+});
+
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+
+app.post('/api/recover', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'El correo es requerido.' });
+        }
+
+        // We always return the same message to avoid enumeration
+        const genericMessage = 'Si el correo está registrado, recibirás un enlace de recuperación pronto.';
+
+        const [users] = await pool.execute('SELECT id, email FROM usuarios WHERE email = ?', [email]);
+        if (users.length === 0) {
+            return res.status(200).json({ message: genericMessage });
+        }
+
+        const user = users[0];
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
+
+        // Invalidate previous pending tokens for this user
+        await pool.execute('UPDATE password_resets SET used = 1 WHERE usuario_id = ? AND used = 0', [user.id]);
+
+        await pool.execute(
+            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, ?)',
+            [user.id, tokenHash, expiresAt]
+        );
+
+        const appUrl = process.env.APP_URL || 'http://localhost:3000';
+        const resetLink = `${appUrl}/?token=${token}`;
+
+        // Attempt to send email
+        if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+            const transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST,
+                port: process.env.SMTP_PORT || 587,
+                secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+                auth: {
+                    user: process.env.SMTP_USER,
+                    pass: process.env.SMTP_PASS
+                }
+            });
+
+            await transporter.sendMail({
+                from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
+                to: user.email,
+                subject: "Recuperación de Contraseña - Idealandia",
+                text: `Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):\n\n${resetLink}\n\nSi no fuiste tú, ignora este correo.`,
+                html: `<p>Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si no fuiste tú, ignora este correo.</p>`
+            });
+        } else {
+            console.log('Idealandia recovery email successfully triggered. (Email content suppressed to protect secrets). Configured SMTP variables to send real emails.');
+        }
+
+        res.status(200).json({ message: genericMessage });
+
+    } catch (error) {
+        console.error('Error in /api/recover. Check server logs.');
+        res.status(500).json({ error: 'Error interno del servidor durante la recuperación.' });
+    }
+});
+
+app.post('/api/reset', async (req, res) => {
+    try {
+        const { token, password, passwordConfirm } = req.body;
+
+        if (!token || !password || !passwordConfirm) {
+            return res.status(400).json({ error: 'Faltan campos.' });
+        }
+
+        if (password !== passwordConfirm) {
+            return res.status(400).json({ error: 'Las contraseñas no coinciden.' });
+        }
+
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+        const saltRounds = 10;
+        const newPasswordHash = await bcrypt.hash(password, saltRounds);
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            // Use atomic UPDATE to prevent TOCTOU race condition
+            const [updateResult] = await connection.execute(
+                'UPDATE password_resets SET used = 1 WHERE token_hash = ? AND used = 0 AND expires_at > NOW()',
+                [tokenHash]
+            );
+
+            if (updateResult.affectedRows === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: 'El token de recuperación es inválido, ha caducado o ya fue utilizado.' });
+            }
+
+            // Get the user id
+            const [resets] = await connection.execute(
+                'SELECT usuario_id FROM password_resets WHERE token_hash = ?',
+                [tokenHash]
+            );
+            const userId = resets[0].usuario_id;
+
+            await connection.execute('UPDATE usuarios SET password_hash = ?, jwt_version = COALESCE(jwt_version, 1) + 1 WHERE id = ?', [newPasswordHash, userId]);
+
+            // Clear the auth_token cookie to force logout of the current session on this device
+            res.cookie('auth_token', '', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                expires: new Date(0) // Expire immediately
+            });
+
+            await connection.commit();
+            res.status(200).json({ message: 'Contraseña actualizada exitosamente.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+
+    } catch (error) {
+        console.error('Error in /api/reset. Check server logs.');
+        res.status(500).json({ error: 'Error interno del servidor al restablecer contraseña.' });
     }
 });
 
@@ -230,7 +398,7 @@ app.get('/api/menu', async (req, res) => {
         if (token) {
             try {
                 const secret = process.env.AUTH_SECRET;
-                const decoded = jwt.verify(token, secret);
+                const decoded = await verifyToken(token, pool);
                 userId = decoded.id;
             } catch (err) {
                 // Invalid or expired token: treat as unauthenticated
@@ -309,7 +477,7 @@ app.get('/api/me', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
 
         const [users] = await pool.execute(
             'SELECT id, usuario, nombre, telefono, email FROM usuarios WHERE id = ?',
@@ -1049,7 +1217,7 @@ app.get('/api/ideas', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
         const [ideas] = await pool.execute(
@@ -1072,7 +1240,7 @@ app.post('/api/ideas', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
         let { titulo, descripcion, estado } = req.body;
@@ -1134,7 +1302,7 @@ app.delete('/api/ideas/:id', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
         const idea_id = req.params.id;
 
@@ -1171,7 +1339,7 @@ app.put('/api/ideas/:id/estado', async (req, res) => {
         }
 
         const secret = process.env.AUTH_SECRET;
-        const decoded = jwt.verify(token, secret);
+        const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
         const idea_id = req.params.id;
         const { estado } = req.body;
