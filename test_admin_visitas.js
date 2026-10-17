@@ -33,7 +33,7 @@ async function createTestAdminToken(pool) {
     } catch(e) {}
 
     const payload = { id: 998, email: "testadmin998@test.com", dbtest: true, jwt_version };
-    const token = jwt.sign(payload, process.env.AUTH_SECRET || 'testnode');
+    const token = jwt.sign(payload, 'testnode');
     return `auth_token=${token}`;
 }
 
@@ -49,7 +49,7 @@ async function createTestUserToken(pool, userId) {
     } catch(e) {}
 
     const payload = { id: userId, email: `testuser${userId}@test.com`, dbtest: true, jwt_version };
-    const token = jwt.sign(payload, process.env.AUTH_SECRET || 'testnode');
+    const token = jwt.sign(payload, 'testnode');
     return `auth_token=${token}`;
 }
 
@@ -80,6 +80,8 @@ async function runTests() {
     const TEST_PORT = 3005;
     const { spawn } = require('child_process');
     const serverProcess = spawn('node', ['server.js'], { env: { ...process.env, AUTH_SECRET: 'testnode', PORT: TEST_PORT } });
+    serverProcess.stdout.on('data', (data) => console.log(`SERVER STDOUT: ${data}`));
+    serverProcess.stderr.on('data', (data) => console.error(`SERVER STDERR: ${data}`));
     await new Promise(r => setTimeout(r, 2000));
 
     try {
