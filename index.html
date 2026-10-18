@@ -1384,14 +1384,16 @@
             const token = urlParams.get('token');
             if (token) {
                 document.getElementById('reset-token').value = token;
-                // Use a slight timeout to ensure DOM is ready and attachMenuEvents has run
+                // Use a slight timeout to ensure DOM is ready
                 setTimeout(() => {
-                    const resetLink = document.createElement('a');
-                    resetLink.setAttribute('data-section', 'reset');
-                    document.body.appendChild(resetLink);
-                    attachMenuEvents();
-                    resetLink.click();
-                    resetLink.remove();
+                    const sections = document.querySelectorAll('.content-section');
+                    sections.forEach(section => {
+                        if (section.id === 'reset') {
+                            section.style.display = 'flex';
+                        } else {
+                            section.style.display = 'none';
+                        }
+                    });
                     // Clean URL
                     window.history.replaceState({}, document.title, window.location.pathname);
                 }, 100);
