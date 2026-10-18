@@ -267,30 +267,11 @@ let mailTransporter = null;
 
 // Exportable for testing
 function initMailTransporter(env = process.env) {
-    const useOAuth2 = env.SMTP_CLIENT_ID || env.SMTP_CLIENT_SECRET || env.SMTP_REFRESH_TOKEN;
     let transporter = null;
 
-    if (useOAuth2) {
-        if (!env.SMTP_USER || !env.SMTP_CLIENT_ID || !env.SMTP_CLIENT_SECRET || !env.SMTP_REFRESH_TOKEN) {
-            console.error('SMTP OAuth2 Error: Incomplete configuration. SMTP_USER, SMTP_CLIENT_ID, SMTP_CLIENT_SECRET, and SMTP_REFRESH_TOKEN are all required for OAuth2.');
-            // We explicitly DO NOT fall back to basic auth if an incomplete OAuth2 configuration is detected, for security.
-        } else {
-            transporter = nodemailer.createTransport({
-                host: 'smtp-mail.outlook.com',
-                port: 587,
-                secure: false, // true for 465, false for other ports
-                auth: {
-                    type: 'OAuth2',
-                    user: env.SMTP_USER,
-                    clientId: env.SMTP_CLIENT_ID,
-                    clientSecret: env.SMTP_CLIENT_SECRET,
-                    refreshToken: env.SMTP_REFRESH_TOKEN,
-                    accessUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
-                }
-            });
-            console.log('Idealandia recovery email configured to use OAuth2 (Outlook/Hotmail).');
-        }
-    } else if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
+    if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+        console.error('SMTP Configuration Error: Incomplete configuration. SMTP_HOST, SMTP_USER, and SMTP_PASS are required to send emails.');
+    } else {
         transporter = nodemailer.createTransport({
             host: env.SMTP_HOST,
             port: env.SMTP_PORT || 587,
@@ -300,9 +281,7 @@ function initMailTransporter(env = process.env) {
                 pass: env.SMTP_PASS
             }
         });
-        console.log('Idealandia recovery email configured to use Basic Auth.');
-    } else {
-        console.log('Idealandia recovery email not configured to send real emails (SMTP variables missing).');
+        console.log('Idealandia recovery email configured to use SMTP Auth.');
     }
     return transporter;
 }
@@ -359,7 +338,7 @@ app.post('/api/recover', async (req, res) => {
                 // We still want to return a successful message to the user to prevent enumeration
             }
         } else {
-            console.log('Idealandia recovery email successfully triggered. (Email content suppressed to protect secrets). Configured SMTP variables to send real emails.');
+            console.error('Mail transporter not initialized. Ensure SMTP_HOST, SMTP_USER, and SMTP_PASS are set.');
         }
 
         res.status(200).json({ message: genericMessage });

@@ -1,8 +1,7 @@
 process.env.AUTH_SECRET = 'test_secret';
-process.env.SMTP_CLIENT_ID = 'integration-test'; // Force OAuth2 path
-process.env.SMTP_CLIENT_SECRET = 'test';
-process.env.SMTP_REFRESH_TOKEN = 'test';
-process.env.SMTP_USER = 'test@hotmail.com';
+process.env.SMTP_HOST = 'smtp.gmail.com'; // Force SMTP Auth
+process.env.SMTP_USER = 'test@gmail.com';
+process.env.SMTP_PASS = 'mock_app_password';
 
 // Intercept nodemailer
 const nodemailer = require('nodemailer');
@@ -53,18 +52,33 @@ async function testConfigLogic() {
     }
 
     try {
-        let res2 = testConfig({
-            SMTP_USER: 'test@hotmail.com',
-            SMTP_CLIENT_ID: 'cid',
-            SMTP_CLIENT_SECRET: 'csec',
-            SMTP_REFRESH_TOKEN: 'rtoken'
+        let res1 = testConfig({
+            SMTP_HOST: 'smtp.gmail.com',
+            SMTP_PORT: 587,
+            SMTP_SECURE: 'false',
+            SMTP_USER: 'test@gmail.com',
+            SMTP_PASS: 'secret_password'
         });
-        if (!res2.config || res2.config.auth.accessUrl !== 'https://login.microsoftonline.com/common/oauth2/v2.0/token') {
-            throw new Error("OAuth2 setup failed to include Microsoft accessUrl");
+
+        if (!res1.config || res1.config.auth.user !== 'test@gmail.com' || res1.config.auth.pass !== 'secret_password' || res1.config.host !== 'smtp.gmail.com') {
+            throw new Error("SMTP setup failed to configure correctly with provided variables");
+        }
+        if (res1.errors.length > 0) {
+            throw new Error("Unexpected error logged during valid SMTP setup: " + res1.errors.join(", "));
         }
 
-        let res3 = testConfig({ SMTP_USER: 'test@hotmail.com', SMTP_CLIENT_ID: 'cid', SMTP_HOST: 'smtp.mail.com', SMTP_PASS: 'secret' });
-        if (res3.config !== null) throw new Error("Incomplete OAuth2 validation failed or fell back to basic auth unexpectedly");
+        let res2 = testConfig({ SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'test@gmail.com' });
+        if (res2.config !== null) {
+            throw new Error("Incomplete SMTP validation failed; returned config when missing PASS");
+        }
+        if (res2.errors.length === 0 || !res2.errors[0].includes('Incomplete configuration')) {
+            throw new Error("Failed to securely log an error when SMTP configuration is incomplete");
+        }
+
+        let credentialsExposed = res2.errors.some(err => err.includes('test@gmail.com') || err.includes('smtp.gmail.com') || err.includes('secret_password'));
+        if (credentialsExposed) {
+            throw new Error("Security Violation: Credentials or config details exposed in error logs.");
+        }
 
         originalConsoleLog("All SMTP configuration mock tests passed.");
     } finally {
