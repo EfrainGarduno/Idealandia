@@ -59,19 +59,44 @@ function searchInManual(query, allowedMenus, userId) {
         const manual = fs.readFileSync(path.join(__dirname, 'docs', 'idealandia_manual.md'), 'utf-8');
         const sections = manual.split(/(?=^## )/m); // Split by h2
 
-        // Normalize terms for better matching
         const normalizedQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const keywords = normalizedQuery.split(' ').filter(w => w.length > 3 || w === 'lip' || w === 'sync');
 
         let bestMatch = null;
 
-        // Check for admin explicitly
-        const adminKeywords = ['administrador', 'roles', 'permisos', 'rbac', 'admin_usuarios', 'funcionalidad_permisos', 'usuario_roles', 'gestionar usuarios'];
-        // Don't block 'lip-sync' just because 'lip' is short
-        const isQueryAdmin = adminKeywords.some(kw => normalizedQuery.includes(kw));
+        // --- EXPLICIT SECTION POLICIES ---
+        // Maps section numbers/names to required capabilities.
+        // If a section is not mapped here, it's considered PUBLIC (or denied by default if sensitive keywords are present).
+        const sectionPolicies = [
+            { id: '1', name: 'presentacion y proposito', requireMenu: null },
+            { id: '2', name: 'arquitectura general', requireMenu: null },
+            { id: '3', name: 'menu principal', requireMenu: null },
+            { id: '4', name: 'descripcion funcional', subPolicies: [
+                { keyword: 'mis ideas:', requireMenu: 'ideas' },
+                { keyword: 'panel administrador:', requireMenu: 'administrador' }
+            ]},
+            { id: '5', name: 'requisitos de acceso', requireMenu: 'administrador' },
+            { id: '6', name: 'guias paso a paso', subPolicies: [
+                { keyword: 'como gestionar tus ideas', requireMenu: 'ideas' }
+            ]},
+            { id: '7', name: 'idealita chat', requireMenu: null }, // Chat details are public docs, using it requires auth
+            { id: '8', name: 'api y servicios', subPolicies: [
+                { keyword: '/api/ideas', requireMenu: 'ideas' },
+                { keyword: 'requireadmin', requireMenu: 'administrador' }
+            ]},
+            { id: '9', name: 'modelo de datos', requireMenu: 'administrador' },
+            { id: '10', name: 'preguntas frecuentes', requireMenu: null },
+            { id: '11', name: 'limitaciones', requireMenu: null },
+            { id: '12', name: 'glosario', requireMenu: null }
+        ];
 
-        const ideaKeywords = ['mis ideas', 'gestionar ideas', 'borrar idea', 'crear idea', 'editar idea'];
-        const isQueryAuth = ideaKeywords.some(kw => normalizedQuery.includes(kw));
+        // --- PRE-CHECK QUERY FOR SENSITIVE KEYWORDS ---
+        // If the user's query itself is trying to fish for sensitive info, evaluate their permissions before even searching.
+        const adminQueryKeywords = ['administrador', 'roles', 'permisos', 'rbac', 'admin_usuarios', 'funcionalidad_permisos', 'usuario_roles', 'gestionar usuarios'];
+        const isQueryAdmin = adminQueryKeywords.some(kw => normalizedQuery.includes(kw));
+
+        const ideaQueryKeywords = ['mis ideas', 'gestionar ideas', 'borrar idea', 'crear idea', 'editar idea'];
+        const isQueryAuth = ideaQueryKeywords.some(kw => normalizedQuery.includes(kw));
 
         if (isQueryAdmin && !allowedMenus.has('administrador')) {
              return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
@@ -81,7 +106,7 @@ function searchInManual(query, allowedMenus, userId) {
              return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
         }
 
-
+        // --- SEARCH SECTIONS ---
         for (const section of sections) {
             const normalizedSection = section.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -92,43 +117,40 @@ function searchInManual(query, allowedMenus, userId) {
             }
 
             if (isMatch) {
-                // Determine the authorization requirement of the section based on its content/header
-                let requiresAdmin = false;
-                let requiresAuth = false;
+                // Determine the authorization requirement based on explicit policy mapping
+                let requiredMenu = null;
 
-                // --- STRICT EXPLICIT POLICY BY SECTION CONTENT ---
+                for (const policy of sectionPolicies) {
+                    if (normalizedSection.startsWith(`## ${policy.id}.`) || normalizedSection.includes(policy.name)) {
+                        requiredMenu = policy.requireMenu; // Inherit section base policy
 
-                // Admin Content Block
-                if (
-                    normalizedSection.startsWith('## 5. requisitos') ||
-                    normalizedSection.startsWith('## 9. modelo') ||
-                    adminKeywords.some(kw => normalizedSection.includes(kw) && kw !== 'roles' && kw !== 'permisos') || // Avoid false positive on FAQ
-                    (normalizedSection.includes('panel administrador:')) ||
-                    (normalizedSection.includes('roles y permisos'))
-                ) {
-                    requiresAdmin = true;
+                        // Check sub-policies (e.g., specific parts of section 4 or 6)
+                        if (policy.subPolicies) {
+                             for (const subPolicy of policy.subPolicies) {
+                                 if (normalizedSection.includes(subPolicy.keyword)) {
+                                     requiredMenu = subPolicy.requireMenu;
+                                     break; // Found specific sub-policy match
+                                 }
+                             }
+                        }
+                        break; // Found main policy match
+                    }
                 }
 
-                // Auth Content Block (Ideas)
-                if (
-                    (normalizedSection.startsWith('## 6. guias') && normalizedSection.includes('gestionar tus ideas')) ||
-                    (normalizedSection.includes('mis ideas:')) ||
-                    (normalizedSection.startsWith('## 8. api') && normalizedSection.includes('/api/ideas')) ||
-                    ideaKeywords.some(kw => normalizedSection.includes(kw))
-                ) {
-                    // Prevent false positive for admin sections mentioning ideas
-                    if(!requiresAdmin) requiresAuth = true;
+                // If no policy could be strictly matched but it contains admin/auth keywords, deny by default (fail-safe)
+                if (requiredMenu === null) {
+                    if (adminQueryKeywords.some(kw => normalizedSection.includes(kw) && kw !== 'roles' && kw !== 'permisos')) {
+                        requiredMenu = 'administrador';
+                    } else if (ideaQueryKeywords.some(kw => normalizedSection.includes(kw))) {
+                        requiredMenu = 'ideas';
+                    }
                 }
 
-                // Apply the policies
-                if (requiresAdmin) {
-                    if (!allowedMenus.has('administrador')) {
-                        return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
-                    }
-                } else if (requiresAuth) {
-                    if (!allowedMenus.has('ideas')) {
-                        return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
-                    }
+                // Apply the resolved policy
+                if (requiredMenu === 'administrador' && !allowedMenus.has('administrador')) {
+                    return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
+                } else if (requiredMenu === 'ideas' && !allowedMenus.has('ideas')) {
+                    return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
                 }
 
                 bestMatch = section.substring(0, 1000).trim();
@@ -161,16 +183,23 @@ async function searchKnowledge(pool, userId, query) {
     });
 
     if (matchedCap) {
-        // Cross-reference with DB RBAC
+        // Cross-reference with DB RBAC using the dynamically generated allowedMenus map
         let isAllowed = false;
 
-        // Match JSON requirements to DB active functionalities based on real roles, not just menu names
+        // We check the explicit capabilities based on real roles and effective functional permissions
         if (matchedCap.requisitos_acceso.includes("Público")) {
              isAllowed = true;
         } else if (matchedCap.requisitos_acceso.includes("Requiere autenticación y Rol con permisos de Administrador")) {
              isAllowed = allowedMenus.has('administrador');
         } else if (matchedCap.requisitos_acceso.includes("Requiere autenticación")) {
-             isAllowed = !!userId; // Simply logged in
+             // Simply being logged in isn't enough if the capability explicitly requires a specific functional menu access
+             if (matchedCap.id === 'cap_ideas') {
+                 isAllowed = allowedMenus.has('ideas');
+             } else if (matchedCap.id === 'cap_chat') {
+                 isAllowed = !!userId; // Any authenticated user can use the chat UI
+             } else {
+                 isAllowed = !!userId;
+             }
         }
 
         if (!isAllowed) {
