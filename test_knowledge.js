@@ -38,6 +38,10 @@ async function runTests() {
         res = await searchKnowledge(pool, null, 'administrador');
         assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied admin info");
 
+        // 2b. Guest user asking directly about sensitive manual sections (should be blocked)
+        res = await searchKnowledge(pool, null, 'roles y permisos');
+        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied sensitive manual section");
+
         // 3. Authenticated standard user asking about ideas
         res = await searchKnowledge(pool, 100, 'ideas');
         assert.ok(res.includes('Gestión de Ideas') && res.includes('Fuente: Catálogo'), "User should see Ideas docs");
