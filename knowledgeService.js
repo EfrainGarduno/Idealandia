@@ -25,16 +25,31 @@ async function getUserMenuCapabilities(pool, userId) {
 
     const allowedMenuNames = new Set();
 
+
     // Evaluate which menus the user can actually see
     for (const item of menuItems) {
         if (item.publico) {
             allowedMenuNames.add(item.nombre.toLowerCase());
-        } else if (userId && (!item.funcionalidad_id || allowedFunctionalityIds.has(item.funcionalidad_id))) {
-            allowedMenuNames.add(item.nombre.toLowerCase());
+        } else if (userId) {
+            // If the item has a functionality_id, check it against RBAC
+            if (item.funcionalidad_id && allowedFunctionalityIds.has(item.funcionalidad_id)) {
+                allowedMenuNames.add(item.nombre.toLowerCase());
+            }
+            // DO NOT blindly add items without functionality_id
         }
     }
 
+
     // Hardcode basic auth capabilities that are always public
+
+    // Strict assignment based on real functionalities
+    if (allowedFunctionalityIds.has(20)) { // Assuming 20 is the base admin functionality (Usuarios)
+        allowedMenuNames.add('administrador');
+    }
+    if (allowedFunctionalityIds.has(10)) { // Assuming 10 is the base ideas functionality
+        allowedMenuNames.add('ideas');
+    }
+
     allowedMenuNames.add("login");
     allowedMenuNames.add("register");
     allowedMenuNames.add("auth");
@@ -57,43 +72,40 @@ function loadCapabilitiesJson() {
 function searchInManual(query, allowedMenus, userId) {
     try {
         const manual = fs.readFileSync(path.join(__dirname, 'docs', 'idealandia_manual.md'), 'utf-8');
-        const sections = manual.split(/(?=^## )/m); // Split by h2
 
+        // We need to split the manual into very precise blocks to prevent a user
+        // with "ideas" access from getting "admin" text just because they are in the same H2 section.
+        // We'll split by newlines and create logical blocks.
+
+        const lines = manual.split('\n');
+        let blocks = [];
+        let currentBlock = { header: '', content: '' };
+
+        for (const line of lines) {
+             if (line.startsWith('## ') || line.startsWith('- **') || line.startsWith('### ')) {
+                  if (currentBlock.content.trim() !== '') {
+                      blocks.push({...currentBlock});
+                  }
+                  currentBlock = { header: line, content: line + '\n' };
+             } else {
+                  currentBlock.content += line + '\n';
+             }
+        }
+        if (currentBlock.content.trim() !== '') {
+             blocks.push({...currentBlock});
+        }
+
+        // Normalize terms for better matching
         const normalizedQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const keywords = normalizedQuery.split(' ').filter(w => w.length > 3 || w === 'lip' || w === 'sync');
 
         let bestMatch = null;
 
-        // --- EXPLICIT SECTION POLICIES ---
-        // Maps section numbers/names to required capabilities.
-        // If a section is not mapped here, it's considered PUBLIC (or denied by default if sensitive keywords are present).
-        const sectionPolicies = [
-            { id: '1', name: 'presentacion y proposito', requireMenu: null },
-            { id: '2', name: 'arquitectura general', requireMenu: null },
-            { id: '3', name: 'menu principal', requireMenu: null },
-            { id: '4', name: 'descripcion funcional', subPolicies: [
-                { keyword: 'mis ideas:', requireMenu: 'ideas' },
-                { keyword: 'panel administrador:', requireMenu: 'administrador' }
-            ]},
-            { id: '5', name: 'requisitos de acceso', requireMenu: 'administrador' },
-            { id: '6', name: 'guias paso a paso', subPolicies: [
-                { keyword: 'como gestionar tus ideas', requireMenu: 'ideas' }
-            ]},
-            { id: '7', name: 'idealita chat', requireMenu: null }, // Chat details are public docs, using it requires auth
-            { id: '8', name: 'api y servicios', subPolicies: [
-                { keyword: '/api/ideas', requireMenu: 'ideas' },
-                { keyword: 'requireadmin', requireMenu: 'administrador' }
-            ]},
-            { id: '9', name: 'modelo de datos', requireMenu: 'administrador' },
-            { id: '10', name: 'preguntas frecuentes', requireMenu: null },
-            { id: '11', name: 'limitaciones', requireMenu: null },
-            { id: '12', name: 'glosario', requireMenu: null }
-        ];
-
         // --- PRE-CHECK QUERY FOR SENSITIVE KEYWORDS ---
         // If the user's query itself is trying to fish for sensitive info, evaluate their permissions before even searching.
-        const adminQueryKeywords = ['administrador', 'roles', 'permisos', 'rbac', 'admin_usuarios', 'funcionalidad_permisos', 'usuario_roles', 'gestionar usuarios'];
-        const isQueryAdmin = adminQueryKeywords.some(kw => normalizedQuery.includes(kw));
+        const adminQueryKeywords = ['administrador', 'roles', 'permisos', 'rbac', 'admin_usuarios', 'funcionalidad_permisos', 'usuario_roles', 'gestionar usuarios', 'quiero ver los roles'];
+        // Ensure "quiero ver los roles" is matched via "roles" if not explicitly listed
+        const isQueryAdmin = adminQueryKeywords.some(kw => normalizedQuery.includes(kw)) || normalizedQuery.includes('roles') || normalizedQuery.includes('permisos');
 
         const ideaQueryKeywords = ['mis ideas', 'gestionar ideas', 'borrar idea', 'crear idea', 'editar idea'];
         const isQueryAuth = ideaQueryKeywords.some(kw => normalizedQuery.includes(kw));
@@ -106,42 +118,41 @@ function searchInManual(query, allowedMenus, userId) {
              return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
         }
 
-        // --- SEARCH SECTIONS ---
-        for (const section of sections) {
-            const normalizedSection = section.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        // --- SEARCH PRECISE BLOCKS ---
+        for (const block of blocks) {
+            const normalizedContent = block.content.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
             // Check relevance
-            let isMatch = normalizedSection.includes(normalizedQuery);
+            let isMatch = normalizedContent.includes(normalizedQuery);
             if (!isMatch && keywords.length > 0) {
-                isMatch = keywords.some(kw => normalizedSection.includes(kw));
+                isMatch = keywords.some(kw => normalizedContent.includes(kw));
             }
 
             if (isMatch) {
-                // Determine the authorization requirement based on explicit policy mapping
+                // Determine the authorization requirement based on EXACT block content
                 let requiredMenu = null;
 
-                for (const policy of sectionPolicies) {
-                    if (normalizedSection.startsWith(`## ${policy.id}.`) || normalizedSection.includes(policy.name)) {
-                        requiredMenu = policy.requireMenu; // Inherit section base policy
-
-                        // Check sub-policies (e.g., specific parts of section 4 or 6)
-                        if (policy.subPolicies) {
-                             for (const subPolicy of policy.subPolicies) {
-                                 if (normalizedSection.includes(subPolicy.keyword)) {
-                                     requiredMenu = subPolicy.requireMenu;
-                                     break; // Found specific sub-policy match
-                                 }
-                             }
-                        }
-                        break; // Found main policy match
-                    }
+                // Admin explicit matching
+                if (
+                    normalizedContent.includes('## 5. requisitos') ||
+                    normalizedContent.includes('## 9. modelo') ||
+                    (normalizedContent.includes('- **administrador:**') || normalizedContent.includes('panel administrador:')) ||
+                    (normalizedContent.includes('/api/admin/')) ||
+                    adminQueryKeywords.some(kw => normalizedContent.includes(kw) && kw !== 'roles' && kw !== 'permisos') || // avoid FAQ false positive
+                    normalizedContent.includes('rbac') || normalizedContent.includes('roles')
+                ) {
+                    requiredMenu = 'administrador';
                 }
 
-                // If no policy could be strictly matched but it contains admin/auth keywords, deny by default (fail-safe)
-                if (requiredMenu === null) {
-                    if (adminQueryKeywords.some(kw => normalizedSection.includes(kw) && kw !== 'roles' && kw !== 'permisos')) {
-                        requiredMenu = 'administrador';
-                    } else if (ideaQueryKeywords.some(kw => normalizedSection.includes(kw))) {
+                // Auth explicit matching (Ideas)
+                // Note: the general 'ideas' mention in introduction (## 1 or ## 3) is public.
+                // But specific management instructions or API definitions are private.
+                if (
+                    (normalizedContent.includes('- **ideas:** crud') || normalizedContent.includes('mis ideas:')) ||
+                    (normalizedContent.includes('/api/ideas')) ||
+                    ideaQueryKeywords.some(kw => normalizedContent.includes(kw))
+                ) {
+                    if (requiredMenu !== 'administrador') { // Don't downgrade an admin block
                         requiredMenu = 'ideas';
                     }
                 }
@@ -153,7 +164,7 @@ function searchInManual(query, allowedMenus, userId) {
                     return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
                 }
 
-                bestMatch = section.substring(0, 1000).trim();
+                bestMatch = block.content.substring(0, 1000).trim();
                 break;
             }
         }

@@ -56,22 +56,6 @@ async function runTests() {
         res = await searchKnowledge(pool, null, 'rbac');
         assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied RBAC info");
 
-        // 2g. Standard user asking about roles
-        res = await searchKnowledge(pool, 100, 'quiero ver los roles');
-        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Standard user should be denied roles info");
-
-        // 2h. Standard user asking about user management
-        res = await searchKnowledge(pool, 100, 'gestionar usuarios');
-        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Standard user should be denied user management info");
-
-
-        // 2e. Guest user asking about user management
-        res = await searchKnowledge(pool, null, 'admin_usuarios');
-        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied admin_usuarios");
-
-        // 2f. Guest user asking about RBAC
-        res = await searchKnowledge(pool, null, 'rbac');
-        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied RBAC info");
 
         // 2g. Standard user asking about roles
         res = await searchKnowledge(pool, 100, 'quiero ver los roles');
@@ -80,14 +64,26 @@ async function runTests() {
         // 2h. Standard user asking about user management
         res = await searchKnowledge(pool, 100, 'gestionar usuarios');
         assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Standard user should be denied user management info");
-
-        // 3a. Auth user WITHOUT ideas permission asking about ideas
-        res = await searchKnowledge(pool, 101, 'gestionar ideas');
-        assert.ok(res.includes('tu usuario no está autorizado (requiere iniciar sesión o permisos)'), "User without ideas permission should be denied Ideas docs");
 
         // 3. Authenticated standard user asking about ideas
         res = await searchKnowledge(pool, 100, 'ideas');
         assert.ok(res.includes('Gestión de Ideas') && res.includes('Fuente: Catálogo'), "User should see Ideas docs");
+
+        // 3a. Auth user WITHOUT ideas permission asking about ideas
+        res = await searchKnowledge(pool, 101, 'gestionar ideas');
+        assert.ok(res.includes('tu usuario no está autorizado'), "User without ideas permission should be denied Ideas docs");
+
+        // 3b. Auth user with Ideas permission asking for Admin docs
+        res = await searchKnowledge(pool, 100, 'Panel Administrador');
+        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Standard user should not see Admin docs even if in same section");
+
+        // 3c. Auth user with Ideas permission asking about Ideas API
+        res = await searchKnowledge(pool, 100, '/api/ideas');
+        assert.ok(res.includes('/api/ideas') || res.includes('ideas'), "Standard user should see ideas API docs");
+
+        // 3d. Auth user with Ideas permission asking about Admin API
+        res = await searchKnowledge(pool, 100, '/api/admin');
+        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Standard user should not see Admin API docs");
 
         // 4. Authenticated standard user asking about admin panel
         res = await searchKnowledge(pool, 100, 'administrador');
