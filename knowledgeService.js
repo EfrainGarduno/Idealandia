@@ -105,7 +105,7 @@ function searchInManual(query, allowedMenus, userId) {
         // If the user's query itself is trying to fish for sensitive info, evaluate their permissions before even searching.
         const adminQueryKeywords = ['administrador', 'roles', 'permisos', 'rbac', 'admin_usuarios', 'funcionalidad_permisos', 'usuario_roles', 'gestionar usuarios', 'quiero ver los roles'];
         // Ensure "quiero ver los roles" is matched via "roles" if not explicitly listed
-        const isQueryAdmin = adminQueryKeywords.some(kw => normalizedQuery.includes(kw)) || normalizedQuery.includes('roles') || normalizedQuery.includes('permisos');
+        const isQueryAdmin = adminQueryKeywords.some(kw => normalizedQuery.includes(kw)) || normalizedQuery.includes('roles') || normalizedQuery.includes('permisos') || normalizedQuery.includes('/api/admin');
 
         const ideaQueryKeywords = ['mis ideas', 'gestionar ideas', 'borrar idea', 'crear idea', 'editar idea'];
         const isQueryAuth = ideaQueryKeywords.some(kw => normalizedQuery.includes(kw));
@@ -159,9 +159,9 @@ function searchInManual(query, allowedMenus, userId) {
 
                 // Apply the resolved policy
                 if (requiredMenu === 'administrador' && !allowedMenus.has('administrador')) {
-                    return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
+                    continue; // Skip blocks user is not allowed to see
                 } else if (requiredMenu === 'ideas' && !allowedMenus.has('ideas')) {
-                    return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
+                    continue; // Skip blocks user is not allowed to see
                 }
 
                 bestMatch = block.content.substring(0, 1000).trim();
