@@ -1,0 +1,66 @@
+[
+  {
+    "id": "cap_inicio",
+    "nombre_visible": "Inicio",
+    "descripcion": "Página de presentación de la plataforma.",
+    "ubicacion_menu": "Inicio",
+    "finalidad_pasos": "Permite visualizar información introductoria del proyecto.",
+    "requisitos_acceso": "Público. No requiere autenticación.",
+    "estado_implementacion": "Completo",
+    "referencia_manual": "4"
+  },
+  {
+    "id": "cap_ideas",
+    "nombre_visible": "Gestión de Ideas",
+    "descripcion": "Herramienta para registrar, visualizar, actualizar y eliminar ideas del usuario.",
+    "ubicacion_menu": "Ideas",
+    "finalidad_pasos": "El usuario navega a Ideas y puede agregar un título y descripción de sus ideas. Idealita puede consultar estas ideas.",
+    "requisitos_acceso": "Requiere autenticación (Usuario logueado).",
+    "estado_implementacion": "Completo",
+    "referencia_manual": "4",
+    "dependencias_relevantes": ["Base de datos (tabla ideas)"]
+  },
+  {
+    "id": "cap_pensiones",
+    "nombre_visible": "Asesoría en Pensiones",
+    "descripcion": "Calculadora estimativa de pensiones para usuarios.",
+    "ubicacion_menu": "Servicios > Asesoría en Pensiones",
+    "finalidad_pasos": "Ingresar a Servicios, seleccionar Asesoría en Pensiones, llenar el formulario (semanas, salario) y hacer clic en 'Calcular Pensión'.",
+    "requisitos_acceso": "Público.",
+    "estado_implementacion": "Completo",
+    "referencia_manual": "4"
+  },
+  {
+    "id": "cap_chat",
+    "nombre_visible": "Idealita Chat / Live",
+    "descripcion": "Asistente virtual conversacional con avatar 3D. Soporta texto y voz en tiempo real.",
+    "ubicacion_menu": "CHAT (Botón inferior o barra lateral)",
+    "finalidad_pasos": "Hacer clic en CHAT. Usar el campo de texto para Chat tradicional o usar los controles de voz para conectarse a Idealita Live y hablar.",
+    "requisitos_acceso": "Requiere autenticación.",
+    "estado_implementacion": "Completo (Chat tradicional y Gemini Live)",
+    "referencia_manual": "7",
+    "dependencias_relevantes": ["Gemini AI API", "Three.js", "@pixiv/three-vrm"]
+  },
+  {
+    "id": "cap_admin",
+    "nombre_visible": "Panel Administrador",
+    "descripcion": "Consola de administración para gestionar usuarios, roles, permisos y menús.",
+    "ubicacion_menu": "Administrador (y submenús)",
+    "finalidad_pasos": "Navegar a las opciones del menú Administrador para modificar entidades del sistema usando tablas interactivas.",
+    "requisitos_acceso": "Requiere autenticación y Rol con permisos de Administrador.",
+    "estado_implementacion": "Completo",
+    "referencia_manual": "4",
+    "dependencias_relevantes": ["Middleware requireAdmin", "Tablas RBAC"]
+  },
+  {
+    "id": "cap_auth",
+    "nombre_visible": "Autenticación (Login, Registro, Recuperación)",
+    "descripcion": "Gestión de sesiones de usuario.",
+    "ubicacion_menu": "Botones superiores (Login / Register)",
+    "finalidad_pasos": "Hacer clic en los botones superiores para registrar una cuenta nueva o iniciar sesión (con usuario/email). Incluye recuperación de contraseña.",
+    "requisitos_acceso": "Público.",
+    "estado_implementacion": "Completo",
+    "referencia_manual": "6",
+    "dependencias_relevantes": ["Nodemailer (SMTP) para recuperación"]
+  }
+]

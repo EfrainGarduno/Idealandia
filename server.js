@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { searchKnowledge } = require('./knowledgeService');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -88,12 +89,40 @@ pool.getConnection()
     });
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Initialize tools dynamically for the chat
+// Note: We use generateContent instead of chats.create to support tool calling with context more robustly per request
+
+// Tool configuration
+const idealandiaTools = [{
+    functionDeclarations: [
+        {
+            name: "consultar_documentacion",
+            description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    tema: {
+                        type: "STRING",
+                        description: "Palabra clave o tema a buscar en la documentación."
+                    }
+                },
+                required: ["tema"]
+            }
+        }
+    ]
+}];
+
+const chatSysInstr = "Eres 'idealita', un asistente virtual de Idealandia. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
+
+// Keep the old object for backward compatibility if needed, but we'll use ai.models.generateContentStream in the POST
 const chat = ai.chats.create({
     model: 'gemini-3.6-flash',
     config: {
-        systemInstruction: "Eres 'idealita', un asistente virtual. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google."
+        systemInstruction: chatSysInstr,
+        tools: idealandiaTools
     }
 });
+
 
 app.get('/api/live-token', async (req, res) => {
     try {
@@ -133,14 +162,70 @@ app.post('/api/chat', async (req, res) => {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        // Enviar respuesta por partes conforme Gemini la genera
-        const stream = await chat.sendMessageStream({
-            message: message
+
+        // Ensure we know who is asking
+        const token = req.cookies.auth_token;
+        let userId = null;
+        if (token) {
+            try {
+                const decoded = await verifyToken(token, pool);
+                userId = decoded.id;
+            } catch (e) {}
+        }
+
+        let aiResponseStream = await ai.models.generateContentStream({
+            model: 'gemini-3.6-flash',
+            contents: [{ role: 'user', parts: [{ text: message }] }],
+            config: {
+                systemInstruction: chatSysInstr,
+                tools: idealandiaTools
+            }
         });
 
-        for await (const chunk of stream) {
-            if (chunk.text) {
+        // Collect function calls if they occur first
+        let functionCall = null;
+        let functionName = null;
+
+        for await (const chunk of aiResponseStream) {
+            if (chunk.functionCalls && chunk.functionCalls.length > 0) {
+                functionCall = chunk.functionCalls[0];
+                functionName = functionCall.name;
+                break; // Model wants to call a tool, stop streaming this response
+            } else if (chunk.text) {
                 res.write(chunk.text);
+            }
+        }
+
+        if (functionCall && functionName === 'consultar_documentacion') {
+            const query = functionCall.args.tema || message;
+            const docResult = await searchKnowledge(pool, userId, query);
+
+            // Second turn: send tool result back
+            const secondTurnStream = await ai.models.generateContentStream({
+                model: 'gemini-3.6-flash',
+                contents: [
+                    { role: 'user', parts: [{ text: message }] },
+                    { role: 'model', parts: [{ functionCall: functionCall }] },
+                    {
+                        role: 'user',
+                        parts: [{
+                            functionResponse: {
+                                name: functionName,
+                                response: { result: docResult }
+                            }
+                        }]
+                    }
+                ],
+                config: {
+                    systemInstruction: chatSysInstr,
+                    tools: idealandiaTools
+                }
+            });
+
+            for await (const chunk of secondTurnStream) {
+                if (chunk.text) {
+                    res.write(chunk.text);
+                }
             }
         }
 
@@ -1230,6 +1315,34 @@ app.get("/api/visitas", (req, res) => {
         res.cookie("visited", "true", { maxAge: 24 * 60 * 60 * 1000, httpOnly: true });
     }
     res.json({ visitas: visitCounter, version: require("./package.json").version });
+});
+
+
+app.get('/api/knowledge', async (req, res) => {
+    try {
+        const query = req.query.query;
+        if (!query) {
+            return res.status(400).json({ error: 'Falta el parámetro de búsqueda (query)' });
+        }
+
+        const token = req.cookies.auth_token;
+        let userId = null;
+
+        if (token) {
+            try {
+                const decoded = await verifyToken(token, pool);
+                userId = decoded.id;
+            } catch (err) {
+                // Treated as Guest
+            }
+        }
+
+        const result = await searchKnowledge(pool, userId, query);
+        res.status(200).json({ result });
+    } catch (error) {
+        console.error('Error in /api/knowledge:', error);
+        res.status(500).json({ error: 'Error interno del servidor al consultar la base de conocimiento.' });
+    }
 });
 
 app.get('/api/ideas', async (req, res) => {
