@@ -2044,7 +2044,7 @@
 
                         // Send initial setup
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
-                        let sysInstruction = "Eres Idealita, la asistente virtual de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES IDEALITA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las funciones y los datos reales disponibles para esta sesión.";
+                        let sysInstruction = "Eres Idealita, la asistente virtual de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES IDEALITA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
                             sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
                         }
@@ -2061,6 +2061,19 @@
                                             {
                                                 name: "consultar_ideas_usuario",
                                                 description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas."
+                                            },{
+                                                name: "consultar_documentacion",
+                                                description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
+                                                parameters: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        tema: {
+                                                            type: "STRING",
+                                                            description: "Palabra clave o tema a buscar en la documentación (ej. 'ideas', 'pensión', 'administrador', 'menú', 'login')."
+                                                        }
+                                                    },
+                                                    required: ["tema"]
+                                                }
                                             }
                                         ]
                                     }
@@ -2315,6 +2328,41 @@
                                                     }
                                                 }));
                                             }
+                                        } else if (call.name === "consultar_documentacion") {
+                                            try {
+                                                const argStr = call.args ? call.args.tema : '';
+                                                const q = argStr || '';
+                                                const docRes = await fetch('/api/knowledge?query=' + encodeURIComponent(q));
+                                                let resultText = "Error al consultar la documentación.";
+                                                if (docRes.ok) {
+                                                    const docData = await docRes.json();
+                                                    resultText = docData.result;
+                                                }
+                                                liveWebSocket.send(JSON.stringify({
+                                                    toolResponse: {
+                                                        functionResponses: [{
+                                                            id: call.id,
+                                                            name: call.name,
+                                                            response: {
+                                                                result: resultText
+                                                            }
+                                                        }]
+                                                    }
+                                                }));
+                                            } catch (e) {
+                                                liveWebSocket.send(JSON.stringify({
+                                                    toolResponse: {
+                                                        functionResponses: [{
+                                                            id: call.id,
+                                                            name: call.name,
+                                                            response: {
+                                                                error: "Error de red al consultar documentación."
+                                                            }
+                                                        }]
+                                                    }
+                                                }));
+                                            }
+
                                         }
                                     }
 
