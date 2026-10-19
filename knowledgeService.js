@@ -65,6 +65,23 @@ function searchInManual(query, allowedMenus, userId) {
 
         let bestMatch = null;
 
+        // Check for admin explicitly
+        const adminKeywords = ['administrador', 'roles', 'permisos', 'rbac', 'admin_usuarios', 'funcionalidad_permisos', 'usuario_roles', 'gestionar usuarios'];
+        // Don't block 'lip-sync' just because 'lip' is short
+        const isQueryAdmin = adminKeywords.some(kw => normalizedQuery.includes(kw));
+
+        const ideaKeywords = ['mis ideas', 'gestionar ideas', 'borrar idea', 'crear idea', 'editar idea'];
+        const isQueryAuth = ideaKeywords.some(kw => normalizedQuery.includes(kw));
+
+        if (isQueryAdmin && !allowedMenus.has('administrador')) {
+             return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
+        }
+
+        if (isQueryAuth && !allowedMenus.has('ideas')) {
+             return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
+        }
+
+
         for (const section of sections) {
             const normalizedSection = section.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -75,34 +92,40 @@ function searchInManual(query, allowedMenus, userId) {
             }
 
             if (isMatch) {
-                const isAuthSection = normalizedSection.includes('## 5. requisitos') || normalizedSection.includes('## 9. modelo');
-                if (isAuthSection && !allowedMenus.has('administrador')) {
-                    return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
+                // Determine the authorization requirement of the section based on its content/header
+                let requiresAdmin = false;
+                let requiresAuth = false;
+
+                // --- STRICT EXPLICIT POLICY BY SECTION CONTENT ---
+
+                // Admin Content Block
+                if (
+                    normalizedSection.startsWith('## 5. requisitos') ||
+                    normalizedSection.startsWith('## 9. modelo') ||
+                    adminKeywords.some(kw => normalizedSection.includes(kw) && kw !== 'roles' && kw !== 'permisos') || // Avoid false positive on FAQ
+                    (normalizedSection.includes('panel administrador:')) ||
+                    (normalizedSection.includes('roles y permisos'))
+                ) {
+                    requiresAdmin = true;
                 }
 
-                const isAdminSection = normalizedSection.includes('administrador') || normalizedSection.includes('roles') || normalizedSection.includes('permisos') || normalizedSection.includes('rbac');
-                // Ensure we block if the section is primarily about admin
-                if (isAdminSection && !normalizedSection.includes('## 1.') && !normalizedSection.includes('## 12.') && !normalizedSection.includes('## 10.') && !normalizedSection.includes('## 7.') && !normalizedSection.includes('## 4.')) {
+                // Auth Content Block (Ideas)
+                if (
+                    (normalizedSection.startsWith('## 6. guias') && normalizedSection.includes('gestionar tus ideas')) ||
+                    (normalizedSection.includes('mis ideas:')) ||
+                    (normalizedSection.startsWith('## 8. api') && normalizedSection.includes('/api/ideas')) ||
+                    ideaKeywords.some(kw => normalizedSection.includes(kw))
+                ) {
+                    // Prevent false positive for admin sections mentioning ideas
+                    if(!requiresAdmin) requiresAuth = true;
+                }
+
+                // Apply the policies
+                if (requiresAdmin) {
                     if (!allowedMenus.has('administrador')) {
                         return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
                     }
-                }
-
-                // Block if it's the specific part of section 4 that is admin
-                if (normalizedSection.includes('## 4.') && normalizedSection.includes('panel administrador:') && normalizedQuery.includes('admin')) {
-                    if (!allowedMenus.has('administrador')) {
-                        return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
-                    }
-                }
-
-                // Extra block for role and permissions to be super safe
-                if (normalizedSection.includes('roles y permisos') && !allowedMenus.has('administrador')) {
-                    return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
-                }
-
-                const isIdeasSection = normalizedSection.includes('ideas') &&
-                    (normalizedSection.startsWith('## 4.') || normalizedSection.startsWith('## 8.'));
-                if (isIdeasSection) {
+                } else if (requiresAuth) {
                     if (!allowedMenus.has('ideas')) {
                         return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
                     }

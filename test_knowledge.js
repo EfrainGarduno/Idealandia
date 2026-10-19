@@ -42,6 +42,23 @@ async function runTests() {
         res = await searchKnowledge(pool, null, 'roles y permisos');
         assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied sensitive manual section");
 
+
+        // 2e. Guest user asking about user management
+        res = await searchKnowledge(pool, null, 'admin_usuarios');
+        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied admin_usuarios");
+
+        // 2f. Guest user asking about RBAC
+        res = await searchKnowledge(pool, null, 'rbac');
+        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Guest should be denied RBAC info");
+
+        // 2g. Standard user asking about roles
+        res = await searchKnowledge(pool, 100, 'quiero ver los roles');
+        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Standard user should be denied roles info");
+
+        // 2h. Standard user asking about user management
+        res = await searchKnowledge(pool, 100, 'gestionar usuarios');
+        assert.ok(res.includes('tu usuario no tiene permisos o no está autorizado para acceder a ella'), "Standard user should be denied user management info");
+
         // 3. Authenticated standard user asking about ideas
         res = await searchKnowledge(pool, 100, 'ideas');
         assert.ok(res.includes('Gestión de Ideas') && res.includes('Fuente: Catálogo'), "User should see Ideas docs");
@@ -56,7 +73,7 @@ async function runTests() {
 
         // 6. Unknown query fallback to markdown
         res = await searchKnowledge(pool, 100, 'lip-sync');
-        assert.ok(res.includes('lip-sync'), "Should fallback to manual Markdown content");
+        assert.ok(res.includes('Fuente: Manual de Usuario'), "Should fallback to manual Markdown content");
 
         // 7. Completely non-existent function
         res = await searchKnowledge(pool, 100, 'qwertyuiop');
