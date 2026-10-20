@@ -1803,134 +1803,260 @@
                 return messageDiv;
             }
 
-            async function handleSend() {
+                        // Variables to keep track of current text streaming state
+            let currentTextResponse = '';
+            let isFirstTextChunk = true;
+            let currentThinkingMessage = null;
 
-                const text = userInput.value.trim();
+            async function ensureLiveConnection(voice = false) {
+                isVoiceMode = voice;
 
-                if (text === '') {
-                    return;
+                if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && isConnectionReady) {
+                    return true;
                 }
 
-                // Mostrar pregunta del usuario
-                addMessage(text, 'user');
+                try {
+                    const res = await fetch('/api/live-token');
+                    if (!res.ok) {
+                        throw new Error("No se pudo obtener el token.");
+                    }
+                    const data = await res.json();
+                    const token = data.token;
 
-                // Limpiar campo
+                    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
+
+                    return new Promise((resolve, reject) => {
+                        liveWebSocket = new WebSocket(wsUrl);
+
+                        liveWebSocket.onopen = async () => {
+                            const setupMsg = {
+                                setup: {
+                                    generationConfig: {
+                                        responseModalities: ["TEXT", "AUDIO"],
+                                        speechConfig: {
+                                            voiceConfig: {
+                                                prebuiltVoiceConfig: {
+                                                    voiceName: "Aoede"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            };
+                            liveWebSocket.send(JSON.stringify(setupMsg));
+                        };
+
+                        liveWebSocket.onmessage = async (event) => {
+                            if (typeof event.data === 'string') {
+                                try {
+                                    const response = JSON.parse(event.data);
+
+                                    if (response.setupComplete) {
+                                        isConnectionReady = true;
+                                        if (window.currentUser) {
+                                            const userName = window.currentUser.nombre || window.currentUser.usuario;
+                                            liveWebSocket.send(JSON.stringify({
+                                                clientContent: {
+                                                    turns: [{ role: "user", parts: [{ text: "Soy " + userName }] }],
+                                                    turnComplete: false
+                                                }
+                                            }));
+                                        }
+                                        resolve(true);
+                                        return;
+                                    }
+
+                                    if (response.serverContent) {
+                                        const content = response.serverContent;
+
+                                        // Intercept tool calls
+                                        if (content.modelTurn && content.modelTurn.parts) {
+                                            for (const part of content.modelTurn.parts) {
+                                                if (part.functionCall) {
+                                                    const call = part.functionCall;
+
+                                                    // Handle Idea tool
+                                                    if (call.name === "consultar_ideas_usuario") {
+                                                        const ideasRes = await fetch('/api/ideas');
+                                                        if (ideasRes.ok) {
+                                                            const ideasData = await ideasRes.json();
+                                                            liveWebSocket.send(JSON.stringify({
+                                                                toolResponse: {
+                                                                    functionResponses: [{
+                                                                        id: call.id,
+                                                                        name: call.name,
+                                                                        response: { result: ideasData.ideas }
+                                                                    }]
+                                                                }
+                                                            }));
+                                                        } else {
+                                                            liveWebSocket.send(JSON.stringify({
+                                                                toolResponse: {
+                                                                    functionResponses: [{
+                                                                        id: call.id,
+                                                                        name: call.name,
+                                                                        response: { error: "No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado." }
+                                                                    }]
+                                                                }
+                                                            }));
+                                                        }
+                                                    }
+
+                                                    // Handle Docs tool
+                                                    if (call.name === "consultar_documentacion") {
+                                                        const query = call.args ? call.args.query : "";
+                                                        const docsRes = await fetch('/api/knowledge?query=' + encodeURIComponent(query));
+                                                        const docsData = docsRes.ok ? await docsRes.json() : { result: "Error al consultar la base de conocimiento" };
+                                                        liveWebSocket.send(JSON.stringify({
+                                                            toolResponse: {
+                                                                functionResponses: [{
+                                                                    id: call.id,
+                                                                    name: call.name,
+                                                                    response: { result: docsData.result }
+                                                                }]
+                                                            }
+                                                        }));
+                                                    }
+                                                }
+
+                                                // Handle Text Output directly (Model Turn Text parts)
+                                                if (part.text && !isVoiceMode) {
+                                                    if (isFirstTextChunk) {
+                                                        if (currentThinkingMessage) currentThinkingMessage.remove();
+                                                        addMessage('', 'idealita');
+                                                        isFirstTextChunk = false;
+                                                    }
+
+                                                    currentTextResponse += part.text;
+                                                    const messages = chatHistory.querySelectorAll('.idealita-message');
+                                                    const responseMessage = messages[messages.length - 1];
+
+                                                    if (typeof marked !== 'undefined') {
+                                                        let htmlContent = marked.parse(currentTextResponse);
+                                                        if (typeof DOMPurify !== 'undefined') {
+                                                            htmlContent = DOMPurify.sanitize(htmlContent);
+                                                        }
+                                                        responseMessage.innerHTML = htmlContent;
+                                                    } else {
+                                                        responseMessage.textContent = currentTextResponse;
+                                                    }
+                                                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                                                }
+
+                                                // Disable Audio playback if in text mode
+                                                if (part.inlineData && !isVoiceMode) {
+                                                    // Ignore audio chunks if we are in text mode
+                                                    continue;
+                                                }
+                                            }
+                                        }
+
+                                        // Handling transcriptions for Voice Mode
+                                        let newText = '';
+                                        if (content.outputTranscription && content.outputTranscription.text && isVoiceMode) {
+                                            newText = content.outputTranscription.text;
+                                        }
+
+                                        if (newText !== '') {
+                                             if (!window.currentLiveMessageDiv) {
+                                                 window.currentLiveMessageDiv = addMessage('', 'idealita');
+                                                 window.currentLiveMessageText = '';
+                                             }
+                                             if (window.currentLiveMessageText && newText.startsWith(window.currentLiveMessageText)) {
+                                                 window.currentLiveMessageText = newText;
+                                             } else {
+                                                 window.currentLiveMessageText += newText;
+                                             }
+                                             try {
+                                                 const rawHtml = typeof marked !== 'undefined' ? marked.parse(window.currentLiveMessageText) : window.currentLiveMessageText;
+                                                 window.currentLiveMessageDiv.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(rawHtml) : rawHtml;
+                                             } catch (e) {
+                                                 window.currentLiveMessageDiv.textContent = window.currentLiveMessageText;
+                                             }
+                                             chatHistory.scrollTop = chatHistory.scrollHeight;
+                                        }
+
+                                        // Finish turn logic for text mode
+                                        if (content.turnComplete) {
+                                            if (!isVoiceMode) {
+                                                sendBtn.disabled = false;
+                                                userInput.disabled = false;
+                                                userInput.focus();
+                                            } else {
+                                                window.currentLiveMessageDiv = null;
+                                                window.currentLiveMessageText = '';
+                                            }
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error("Error parsing WebSocket text message", e);
+                                }
+                            } else if (event.data instanceof Blob) {
+                                // Only process binary audio data if in voice mode
+                                if (isVoiceMode) {
+                                    const arrayBuffer = await event.data.arrayBuffer();
+                                    audioQueue.push(arrayBuffer);
+                                    if (!isPlaying) {
+                                        playNextAudio();
+                                    }
+                                }
+                            }
+                        };
+
+                        liveWebSocket.onerror = (e) => {
+                            console.error("Live WebSocket error:", e);
+                            isConnectionReady = false;
+                            reject(e);
+                        };
+
+                        liveWebSocket.onclose = () => {
+                            isConnectionReady = false;
+                        };
+                    });
+                } catch (error) {
+                    console.error("Error in ensureLiveConnection:", error);
+                    return false;
+                }
+            }
+
+            async function handleSend() {
+                const text = userInput.value.trim();
+                if (text === '') return;
+
+                addMessage(text, 'user');
                 userInput.value = '';
 
-                // Bloquear controles mientras responde
                 sendBtn.disabled = true;
                 userInput.disabled = true;
 
-                // Mostrar indicador inmediatamente
-                const thinkingMessage = addMessage(
-                    'Idealita está pensando...',
-                    'thinking'
-                );
+                currentThinkingMessage = addMessage('Idealita está pensando...', 'thinking');
 
                 try {
-
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: text
-                        })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(
-                            'El servidor respondió con estado ' + response.status
-                        );
+                    const connected = await ensureLiveConnection(false);
+                    if (!connected) {
+                        throw new Error('Could not establish Live connection for text chat.');
                     }
 
-                    // Comprobar que el navegador puede leer el streaming
-                    if (!response.body) {
-                        throw new Error('El servidor no está enviando streaming.');
-                    }
+                    // Reset text tracking variables for the new turn
+                    currentTextResponse = '';
+                    isFirstTextChunk = true;
 
-                    // Preparar lectura progresiva
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder('utf-8');
-
-                    let fullResponse = '';
-                    let firstChunk = true;
-
-                    // Leer los fragmentos conforme llegan
-                    while (true) {
-
-                        const { value, done } = await reader.read();
-
-                        if (done) {
-                            break;
+                    // Send text to Gemini Live
+                    liveWebSocket.send(JSON.stringify({
+                        clientContent: {
+                            turns: [{
+                                role: "user",
+                                parts: [{ text: text }]
+                            }],
+                            turnComplete: true
                         }
-
-                        const chunk = decoder.decode(value, {
-                            stream: true
-                        });
-
-                        if (chunk) {
-
-                            // Al llegar la primera parte de la respuesta,
-                            // quitar "Idealita está pensando..."
-                            if (firstChunk) {
-                                thinkingMessage.remove();
-                                firstChunk = false;
-
-                                // Crear burbuja donde aparecerá la respuesta
-                                addMessage('', 'idealita');
-                            }
-
-                            fullResponse += chunk;
-
-                            // Actualizar la última burbuja
-                            const messages =
-                                chatHistory.querySelectorAll('.idealita-message');
-
-                            const responseMessage =
-                                messages[messages.length - 1];
-
-                            responseMessage.textContent = fullResponse;
-
-                            // Mantener visible la parte más reciente
-                            chatHistory.scrollTop =
-                                chatHistory.scrollHeight;
-                        }
-                    }
-
-                    // Si por alguna razón no llegó ningún fragmento
-                    if (firstChunk) {
-
-                        thinkingMessage.remove();
-
-                        addMessage(
-                            'No recibí una respuesta del modelo.',
-                            'idealita'
-                        );
-                    }
-
+                    }));
                 } catch (error) {
-
-                    console.error(
-                        'Error fetching chat response:',
-                        error
-                    );
-
-                    // Quitar indicador
-                    thinkingMessage.remove();
-
-                    addMessage(
-                        'Lo siento, hubo un error al conectar con el servidor.',
-                        'idealita'
-                    );
-
-                } finally {
-
-                    // Reactivar controles
+                    console.error('Error fetching chat response:', error);
+                    if (currentThinkingMessage) currentThinkingMessage.remove();
+                    addMessage('Lo siento, ocurrió un error de conexión.', 'idealita');
                     sendBtn.disabled = false;
                     userInput.disabled = false;
-                    userInput.focus();
                 }
             }
 
@@ -1949,9 +2075,12 @@
 
             // --- Idealita Live Logic ---
             let liveWebSocket = null;
+            let isVoiceMode = false;
+            let isConnectionReady = false;
             let audioContext = null;
             let audioWorkletNode = null;
             let micStream = null;
+            let isMuted = false;
             let pcmPlaybackContext = null;
             let activeAudioSources = [];
             let nextPlayTime = 0;
@@ -2022,487 +2151,66 @@
                 return bytes.buffer;
             }
 
-            async function startLive() {
+                        async function startLive() {
                 try {
+                    const connected = await ensureLiveConnection(true);
+                    if (!connected) throw new Error("Connection failed");
+
                     if (!window.threeJsAnimationFrameId && typeof window.init3DAvatar === "function") {
                         window.init3DAvatar();
                     }
-                    updateLiveStatus("Obteniendo credenciales...");
-                    const res = await fetch('/api/live-token');
-                    if (!res.ok) {
-                        throw new Error("No se pudo obtener el token.");
-                    }
-                    const data = await res.json();
-                    const token = data.token;
 
-                    updateLiveStatus("Conectando con Gemini...");
-                    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
-                    liveWebSocket = new WebSocket(wsUrl);
+                    updateLiveStatus("Configurando audio...");
 
-                    liveWebSocket.onopen = async () => {
-                        updateLiveStatus("Configurando audio...");
-
-                        // Send initial setup
-                        const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
-                        let sysInstruction = "Eres Idealita, la asistente virtual de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES IDEALITA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
-                        if (window.currentUser) {
-                            sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
-                        }
-
-                        const setupMessage = {
-                            setup: {
-                                model: "models/gemini-3.8-live",
-                                systemInstruction: {
-                                    parts: [{ text: sysInstruction }]
-                                },
-                                tools: [
-                                    {
-                                        functionDeclarations: [
-                                            {
-                                                name: "consultar_ideas_usuario",
-                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas."
-                                            },{
-                                                name: "consultar_documentacion",
-                                                description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
-                                                parameters: {
-                                                    type: "OBJECT",
-                                                    properties: {
-                                                        tema: {
-                                                            type: "STRING",
-                                                            description: "Palabra clave o tema a buscar en la documentación (ej. 'ideas', 'pensión', 'administrador', 'menú', 'login')."
-                                                        }
-                                                    },
-                                                    required: ["tema"]
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ],
-                                generationConfig: {
-                                    responseModalities: ["AUDIO"]
-                                },
-                                outputAudioTranscription: {}
-                            }
-                        };
-                        liveWebSocket.send(JSON.stringify(setupMessage));
-
-
-
-                        // Setup audio recording
+                    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                            sampleRate: 16000
+                        });
 
                         await audioContext.audioWorklet.addModule('audio-worklet-processor.js');
 
                         const source = audioContext.createMediaStreamSource(micStream);
-                        audioWorkletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
+                        const processor = new AudioWorkletNode(audioContext, 'audio-processor');
 
-                        // Setup microphone analyser for reactive avatar listening state
-                        window.micAnalyser = audioContext.createAnalyser();
-                        window.micAnalyser.fftSize = 256;
-                        source.connect(window.micAnalyser);
-
-                        audioWorkletNode.port.onmessage = (event) => {
-                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && isSetupComplete && !isMicMuted) {
-                                const pcmBuffer = event.data;
-                                const base64Data = bufferToBase64(pcmBuffer);
-
-                                const msg = {
+                        processor.port.onmessage = (e) => {
+                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && !isMuted) {
+                                const base64Data = arrayBufferToBase64(e.data);
+                                liveWebSocket.send(JSON.stringify({
                                     realtimeInput: {
-                                        audio: {
+                                        mediaChunks: [{
                                             mimeType: "audio/pcm;rate=16000",
                                             data: base64Data
-                                        }
+                                        }]
                                     }
-                                };
-
-                                // To avoid spamming, only log one in every 50 chunks
-                                chunkCount++;
-                                if (chunkCount % 50 === 0) {
-                                    console.log("Sending PCM audio chunk... (logged 1 every 50)");
-                                }
-
-                                liveWebSocket.send(JSON.stringify(msg));
+                                }));
                             }
                         };
 
-                        source.connect(audioWorkletNode);
-                        audioWorkletNode.connect(audioContext.destination);
+                        source.connect(processor);
+                        processor.connect(audioContext.destination);
 
-                        // Setup audio playback context (24kHz for Gemini output)
+                        micAnalyser = audioContext.createAnalyser();
+                        micAnalyser.fftSize = 256;
+                        source.connect(micAnalyser);
 
-                        pcmPlaybackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-                        nextPlayTime = pcmPlaybackContext.currentTime;
-
-                        // Setup global analyser for avatar image manipulation (if needed in future)
-                        window.avatarAnalyser = pcmPlaybackContext.createAnalyser();
-                        window.avatarAnalyser.fftSize = 256;
-                        window.avatarAnalyser.connect(pcmPlaybackContext.destination);
-
-                        const outDataArray = new Uint8Array(window.avatarAnalyser.fftSize);
-                        // window.micAnalyser was initialized earlier for input audio
-                        let micDataArray = null;
-
-                        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                        let smoothedAverage = 0;
-
-                        function globalAnimateAvatar() {
-                            if (!window.avatarAnalyser && !window.micAnalyser) { window.targetMouthScaleY = 1; return; }
-                            const avatarWrapper = document.getElementById('avatar-visual-wrapper');
-                            if (!avatarWrapper) return;
-
-                            let currentAverage = 0;
-                            let isSpeaking = avatarWrapper.classList.contains('state-speaking');
-                            let isListening = avatarWrapper.classList.contains('state-listening');
-
-                            if (!prefersReducedMotion) {
-                                if (isSpeaking && window.avatarAnalyser) {
-                                    if (typeof window.avatarAnalyser.getByteTimeDomainData === 'function') {
-                                        window.avatarAnalyser.getByteTimeDomainData(outDataArray);
-                                    } else {
-                                        outDataArray.fill(128);
-                                    }
-                                    let maxDiff = 0;
-                                    for (let i = 0; i < outDataArray.length; i++) {
-                                        let diff = Math.abs(outDataArray[i] - 128);
-                                        if (diff > maxDiff) maxDiff = diff;
-                                    }
-                                    if (maxDiff < 5) maxDiff = 0; // noise gate
-                                    currentAverage = maxDiff;
-                                    smoothedAverage = smoothedAverage * 0.8 + currentAverage * 0.2;
-
-                                    window.targetMouthScaleY = 1 + (smoothedAverage / 128) * 4;
-
-                                    const glowSize = 15 + (smoothedAverage / 128) * 15;
-                                    avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, ${0.8 + (smoothedAverage / 128) * 0.2})`);
-
-                                } else if (isListening && window.micAnalyser && !isMicMuted) {
-                                    if (!micDataArray) {
-                                        micDataArray = new Uint8Array(window.micAnalyser.fftSize);
-                                    }
-                                    if (typeof window.micAnalyser.getByteTimeDomainData === 'function') {
-                                        window.micAnalyser.getByteTimeDomainData(micDataArray);
-                                    } else {
-                                        micDataArray.fill(128);
-                                    }
-                                    let maxDiff = 0;
-                                    for (let i = 0; i < micDataArray.length; i++) {
-                                        let diff = Math.abs(micDataArray[i] - 128);
-                                        if (diff > maxDiff) maxDiff = diff;
-                                    }
-                                    if (maxDiff < 3) maxDiff = 0;
-                                    currentAverage = maxDiff;
-                                    smoothedAverage = smoothedAverage * 0.8 + currentAverage * 0.2;
-
-                                    window.targetMouthScaleY = 1;
-
-                                    const glowSize = 10 + (smoothedAverage / 128) * 10;
-                                    avatarWrapper.style.setProperty('--avatar-glow-size', `${glowSize}px`);
-                                    avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, ${0.5 + (smoothedAverage / 128) * 0.3})`);
-                                } else {
-                                    // Idle or muted state fallback
-                                    smoothedAverage = smoothedAverage * 0.85; // smooth reset
-                                    window.targetMouthScaleY = 1;
-                                    if(isSpeaking) {
-                                         avatarWrapper.style.setProperty('--avatar-glow-size', `15px`);
-                                         avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(0, 229, 255, 0.8)`);
-                                    } else if(isListening) {
-                                         avatarWrapper.style.setProperty('--avatar-glow-size', `10px`);
-                                         avatarWrapper.style.setProperty('--avatar-glow-color', `rgba(108, 64, 247, 0.5)`);
-                                    } else {
-                                         avatarWrapper.style.setProperty('--avatar-glow-size', `0px`);
-                                         avatarWrapper.style.setProperty('--avatar-glow-color', `transparent`);
-                                    }
-                                }
-                            } else {
-                                // Ensure base scale if reduced motion
-                                window.targetMouthScaleY = 1;
-                                // The base glow sizes and colors are already handled by the CSS fallback classes.
-                            }
-
-                            if (window.requestAnimationFrame) {
-                                window.currentMouthAnimId = window.requestAnimationFrame(globalAnimateAvatar);
-                            }
+                        if (typeof window.initAvatarAudioAnalysis === "function") {
+                            window.initAvatarAudioAnalysis();
                         }
 
-                        // Start global loop
-                        globalAnimateAvatar();
-
-                        updateLiveStatus("Esperando setup...");
+                        updateLiveStatus("Escuchando...");
                         btnStartLive.style.display = 'none';
                         btnStopLive.style.display = 'inline-block';
-                        if(btnMuteMic) btnMuteMic.style.display = 'inline-block';
-                        const avatarContainer = document.getElementById('avatar-container');
-                        if(avatarContainer) avatarContainer.style.display = 'flex';
-
-                    };
-
-                    liveWebSocket.onmessage = async (event) => {
-                        console.log("WebSocket message received, type:", event.data instanceof Blob ? 'Blob' : (event.data instanceof ArrayBuffer ? 'ArrayBuffer' : typeof event.data));
-
-                        let textData;
-                        if (event.data instanceof Blob) {
-                            textData = await event.data.text();
-                        } else if (event.data instanceof ArrayBuffer) {
-                            textData = new TextDecoder().decode(event.data);
-                        } else {
-                            textData = event.data;
+                        const btnMuteMic = document.getElementById('btn-mute-mic');
+                        if (btnMuteMic) {
+                            btnMuteMic.style.display = 'inline-block';
+                            btnMuteMic.innerHTML = isMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
                         }
-
-                        const response = JSON.parse(textData);
-
-                        // Debug log for all incoming messages for diagnostics
-                        console.log("Gemini Live API response received:", Object.keys(response));
-
-                        // Debug log for incoming messages
-                        if (response.setupComplete) {
-                            console.log("Gemini Live Setup Complete:", response.setupComplete);
-                            isSetupComplete = true;
-                            updateLiveStatus("Escuchando...");
-
-                            // Send Initial identity messages once setup is complete
-                            if (window.currentUser) {
-                                const userName = window.currentUser.nombre || window.currentUser.usuario;
-                                liveWebSocket.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: `Soy ${userName}` }] }],
-                                        turnComplete: false
-                                    }
-                                }));
-                                liveWebSocket.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: "Tú eres Idealita." }] }],
-                                        turnComplete: false
-                                    }
-                                }));
-                            }
-                        }
-
-                        if (response.serverContent) {
-                            const content = response.serverContent;
-
-                            if (content.modelTurn && content.modelTurn.parts) {
-                                for (const part of content.modelTurn.parts) {
-                                    if (part.functionCall) {
-                                        const call = part.functionCall;
-                                        if (call.name === "consultar_ideas_usuario") {
-                                            try {
-                                                const ideasRes = await fetch('/api/ideas');
-                                                if (ideasRes.ok) {
-                                                    const ideasData = await ideasRes.json();
-                                                    liveWebSocket.send(JSON.stringify({
-                                                        toolResponse: {
-                                                            functionResponses: [{
-                                                                id: call.id,
-                                                                name: call.name,
-                                                                response: {
-                                                                    result: ideasData.ideas
-                                                                }
-                                                            }]
-                                                        }
-                                                    }));
-                                                } else {
-                                                    liveWebSocket.send(JSON.stringify({
-                                                        toolResponse: {
-                                                            functionResponses: [{
-                                                                id: call.id,
-                                                                name: call.name,
-                                                                response: {
-                                                                    error: "No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado."
-                                                                }
-                                                            }]
-                                                        }
-                                                    }));
-                                                }
-                                            } catch (e) {
-                                                liveWebSocket.send(JSON.stringify({
-                                                    toolResponse: {
-                                                        functionResponses: [{
-                                                            id: call.id,
-                                                            name: call.name,
-                                                            response: {
-                                                                error: "Error de red al consultar ideas."
-                                                            }
-                                                        }]
-                                                    }
-                                                }));
-                                            }
-                                        } else if (call.name === "consultar_documentacion") {
-                                            try {
-                                                const argStr = call.args ? call.args.tema : '';
-                                                const q = argStr || '';
-                                                const docRes = await fetch('/api/knowledge?query=' + encodeURIComponent(q));
-                                                let resultText = "Error al consultar la documentación.";
-                                                if (docRes.ok) {
-                                                    const docData = await docRes.json();
-                                                    resultText = docData.result;
-                                                }
-                                                liveWebSocket.send(JSON.stringify({
-                                                    toolResponse: {
-                                                        functionResponses: [{
-                                                            id: call.id,
-                                                            name: call.name,
-                                                            response: {
-                                                                result: resultText
-                                                            }
-                                                        }]
-                                                    }
-                                                }));
-                                            } catch (e) {
-                                                liveWebSocket.send(JSON.stringify({
-                                                    toolResponse: {
-                                                        functionResponses: [{
-                                                            id: call.id,
-                                                            name: call.name,
-                                                            response: {
-                                                                error: "Error de red al consultar documentación."
-                                                            }
-                                                        }]
-                                                    }
-                                                }));
-                                            }
-
-                                        }
-                                    }
-
-                                    if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
-                                        updateLiveStatus("Hablando...");
-                                        playPcmAudio(part.inlineData.data);
-                                    }
-                                }
-                            }
-
-                            // Handling transcriptions
-                            // When responseModalities is ["AUDIO"] and outputAudioTranscription is enabled,
-                            // the official source for text is outputTranscription. We ignore modelTurn text
-                            // to avoid race conditions or duplicates.
-                            let newText = '';
-                            if (content.outputTranscription && content.outputTranscription.text) {
-                                newText = content.outputTranscription.text;
-                            }
-
-                            if (newText !== '') {
-                                 if (!window.currentLiveMessageDiv) {
-                                     window.currentLiveMessageDiv = addMessage('', 'idealita');
-                                     window.currentLiveMessageText = '';
-                                 }
-
-                                 // Deduplication strategy:
-                                 // We do not assume if fragments are strictly incremental or cumulative.
-                                 // If the new text starts with our currently accumulated text, it is cumulative.
-                                 // Otherwise, it is incremental and we append it.
-                                 if (window.currentLiveMessageText && newText.startsWith(window.currentLiveMessageText)) {
-                                     window.currentLiveMessageText = newText;
-                                 } else {
-                                     window.currentLiveMessageText += newText;
-                                 }
-
-                                 try {
-                                     const rawHtml = marked.parse(window.currentLiveMessageText);
-                                     window.currentLiveMessageDiv.innerHTML = DOMPurify.sanitize(rawHtml);
-                                 } catch (e) {
-                                     window.currentLiveMessageDiv.textContent = window.currentLiveMessageText;
-                                 }
-
-                                 const chatHistory = document.getElementById('chat-history');
-                                 if (chatHistory) {
-                                     const isNearBottom = chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight < 100;
-                                     if (isNearBottom) {
-                                         chatHistory.scrollTop = chatHistory.scrollHeight;
-                                     }
-                                 }
-                            }
-
-                            if (content.turnComplete) {
-                                window.currentLiveMessageDiv = null;
-                                window.currentLiveMessageText = '';
-                            }
-
-                            if (content.interrupted === true) {
-                                // Stop all currently playing or scheduled audio
-                                activeAudioSources.forEach(source => {
-                                    try { source.stop(); } catch (e) {}
-                                });
-                                activeAudioSources = [];
-
-                                // Reset the scheduling time to now so new audio plays immediately
-                                if (pcmPlaybackContext) {
-                                    nextPlayTime = pcmPlaybackContext.currentTime;
-                                }
-
-                                updateLiveStatus("Escuchando...");
-
-                                // Close the transcription bubble immediately without waiting for turnComplete
-                                window.currentLiveMessageDiv = null;
-                                window.currentLiveMessageText = '';
-                            }
-                        }
-                    };
-
-                    liveWebSocket.onerror = (err) => {
-                        console.error("Live API WS Error:", err);
-                        updateLiveStatus("Error en la conexión.");
-                        stopLive();
-                    };
-
-                    liveWebSocket.onclose = () => {
-                        console.log("Live API WS Closed.");
-                        stopLive();
-                    };
-
-                } catch (err) {
-                    console.error("Failed to start live:", err);
-                    showModal("No se pudo iniciar Idealita Live. Revisa los permisos de micrófono o tu conexión.");
-                    updateLiveStatus("Desconectado");
+                    }
+                } catch (error) {
+                    console.error("Error al iniciar Live:", error);
+                    updateLiveStatus("Error en conexión Live.");
                 }
-            }
-
-            function playPcmAudio(base64Data) {
-                if (!pcmPlaybackContext) return;
-
-                const buffer = base64ToArrayBuffer(base64Data);
-                const int16Array = new Int16Array(buffer);
-                const float32Array = new Float32Array(int16Array.length);
-
-                for (let i = 0; i < int16Array.length; i++) {
-                    float32Array[i] = int16Array[i] / 32768.0;
-                }
-
-                const audioBuffer = pcmPlaybackContext.createBuffer(1, float32Array.length, 24000);
-                audioBuffer.getChannelData(0).set(float32Array);
-
-
-                const source = pcmPlaybackContext.createBufferSource();
-                source.buffer = audioBuffer;
-
-                if (window.avatarAnalyser) {
-                    source.connect(window.avatarAnalyser);
-                } else {
-                    source.connect(pcmPlaybackContext.destination);
-                }
-
-
-                if (nextPlayTime < pcmPlaybackContext.currentTime) {
-                    nextPlayTime = pcmPlaybackContext.currentTime;
-                }
-
-                source.start(nextPlayTime);
-                nextPlayTime += audioBuffer.duration;
-
-                activeAudioSources.push(source);
-
-                source.onended = () => {
-                     // Remove source from active array
-                     const index = activeAudioSources.indexOf(source);
-                     if (index > -1) {
-                         activeAudioSources.splice(index, 1);
-                     }
-
-                     if(pcmPlaybackContext && activeAudioSources.length === 0 && pcmPlaybackContext.currentTime >= nextPlayTime) {
-                          updateLiveStatus("Escuchando...");
-                     }
-                };
             }
 
             function stopLive() {
