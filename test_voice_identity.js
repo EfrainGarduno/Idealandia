@@ -239,12 +239,10 @@ setTimeout(() => {
                     const initialMessagesCount = MockWebSocket.messagesSent.length;
                     wsInstance.onmessage({
                         data: JSON.stringify({
-                            serverContent: {
-                                modelTurn: {
-                                    parts: [
-                                        { functionCall: { id: "call_123", name: "consultar_ideas_usuario" } }
-                                    ]
-                                }
+                            toolCall: {
+                                functionCalls: [
+                                    { id: "call_123", name: "consultar_ideas_usuario" }
+                                ]
                             }
                         })
                     });
@@ -263,12 +261,10 @@ setTimeout(() => {
                             const beforeFailCount = MockWebSocket.messagesSent.length;
                             wsInstance.onmessage({
                                 data: JSON.stringify({
-                                    serverContent: {
-                                        modelTurn: {
-                                            parts: [
-                                                { functionCall: { id: "call_456", name: "consultar_ideas_usuario" } }
-                                            ]
-                                        }
+                                    toolCall: {
+                                        functionCalls: [
+                                            { id: "call_456", name: "consultar_ideas_usuario" }
+                                        ]
                                     }
                                 })
                             });

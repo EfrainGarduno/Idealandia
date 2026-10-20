@@ -1832,7 +1832,7 @@
                             const setupMsg = {
                                 setup: {
                                     generationConfig: {
-                                        responseModalities: ["TEXT", "AUDIO"],
+                                        responseModalities: isVoiceMode ? ["AUDIO"] : ["TEXT"],
                                         speechConfig: {
                                             voiceConfig: {
                                                 prebuiltVoiceConfig: {
@@ -1866,60 +1866,55 @@
                                         return;
                                     }
 
+                                    if (response.toolCall && response.toolCall.functionCalls) {
+                                        for (const call of response.toolCall.functionCalls) {
+                                            if (call.name === "consultar_ideas_usuario") {
+                                                const ideasRes = await fetch('/api/ideas');
+                                                if (ideasRes.ok) {
+                                                    const ideasData = await ideasRes.json();
+                                                    liveWebSocket.send(JSON.stringify({
+                                                        toolResponse: {
+                                                            functionResponses: [{
+                                                                id: call.id,
+                                                                name: call.name,
+                                                                response: { result: ideasData.ideas }
+                                                            }]
+                                                        }
+                                                    }));
+                                                } else {
+                                                    liveWebSocket.send(JSON.stringify({
+                                                        toolResponse: {
+                                                            functionResponses: [{
+                                                                id: call.id,
+                                                                name: call.name,
+                                                                response: { error: "No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado." }
+                                                            }]
+                                                        }
+                                                    }));
+                                                }
+                                            } else if (call.name === "consultar_documentacion") {
+                                                const query = call.args ? call.args.query : "";
+                                                const docsRes = await fetch('/api/knowledge?query=' + encodeURIComponent(query));
+                                                const docsData = docsRes.ok ? await docsRes.json() : { result: "Error al consultar la base de conocimiento" };
+                                                liveWebSocket.send(JSON.stringify({
+                                                    toolResponse: {
+                                                        functionResponses: [{
+                                                            id: call.id,
+                                                            name: call.name,
+                                                            response: { result: docsData.result }
+                                                        }]
+                                                    }
+                                                }));
+                                            }
+                                        }
+                                    }
+
                                     if (response.serverContent) {
                                         const content = response.serverContent;
 
-                                        // Intercept tool calls
+                                        // Handle Text Output directly (Model Turn Text parts)
                                         if (content.modelTurn && content.modelTurn.parts) {
                                             for (const part of content.modelTurn.parts) {
-                                                if (part.functionCall) {
-                                                    const call = part.functionCall;
-
-                                                    // Handle Idea tool
-                                                    if (call.name === "consultar_ideas_usuario") {
-                                                        const ideasRes = await fetch('/api/ideas');
-                                                        if (ideasRes.ok) {
-                                                            const ideasData = await ideasRes.json();
-                                                            liveWebSocket.send(JSON.stringify({
-                                                                toolResponse: {
-                                                                    functionResponses: [{
-                                                                        id: call.id,
-                                                                        name: call.name,
-                                                                        response: { result: ideasData.ideas }
-                                                                    }]
-                                                                }
-                                                            }));
-                                                        } else {
-                                                            liveWebSocket.send(JSON.stringify({
-                                                                toolResponse: {
-                                                                    functionResponses: [{
-                                                                        id: call.id,
-                                                                        name: call.name,
-                                                                        response: { error: "No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado." }
-                                                                    }]
-                                                                }
-                                                            }));
-                                                        }
-                                                    }
-
-                                                    // Handle Docs tool
-                                                    if (call.name === "consultar_documentacion") {
-                                                        const query = call.args ? call.args.query : "";
-                                                        const docsRes = await fetch('/api/knowledge?query=' + encodeURIComponent(query));
-                                                        const docsData = docsRes.ok ? await docsRes.json() : { result: "Error al consultar la base de conocimiento" };
-                                                        liveWebSocket.send(JSON.stringify({
-                                                            toolResponse: {
-                                                                functionResponses: [{
-                                                                    id: call.id,
-                                                                    name: call.name,
-                                                                    response: { result: docsData.result }
-                                                                }]
-                                                            }
-                                                        }));
-                                                    }
-                                                }
-
-                                                // Handle Text Output directly (Model Turn Text parts)
                                                 if (part.text && !isVoiceMode) {
                                                     if (isFirstTextChunk) {
                                                         if (currentThinkingMessage) currentThinkingMessage.remove();
