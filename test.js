@@ -542,6 +542,20 @@ window.addEventListener('load', () => {
                                                             })};
                                                         }
                                                     }
+                                                    if (url === '/api/menu') {
+                                                        if (!authState) {
+                                                            return { ok: true, json: async () => ([
+                                                                { id: 1, text: 'Inicio', target: 'home-section', is_public: 1, parent_id: null },
+                                                                { id: 2, text: 'Servicios', target: null, is_public: 1, parent_id: null },
+                                                                { id: 3, text: 'Pensión IMSS', target: 'pension-section', is_public: 1, parent_id: 2 }
+                                                            ]) };
+                                                        } else {
+                                                            return { ok: true, json: async () => ([
+                                                                { id: 1, text: 'Inicio', target: 'home-section', is_public: 1, parent_id: null },
+                                                                { id: 4, text: 'Admin', target: 'admin-section', is_public: 0, parent_id: null }
+                                                            ]) };
+                                                        }
+                                                    }
                                                     if (url === '/api/visitas') {
                                                         return { ok: true, json: async () => ({ visitas: 12345 }) };
                                                     }
