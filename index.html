@@ -1808,7 +1808,15 @@
             let isFirstTextChunk = true;
             let currentThinkingMessage = null;
 
+            let activeLiveMode = null; // Track current established mode
+
             async function ensureLiveConnection(voice = false) {
+                // If mode changes, we must reconnect to send new setupMsg with updated responseModalities
+                if (activeLiveMode !== null && activeLiveMode !== voice) {
+                    stopLive();
+                    isConnectionReady = false;
+                }
+
                 isVoiceMode = voice;
 
                 if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && isConnectionReady) {
@@ -1862,6 +1870,7 @@
                                                 }
                                             }));
                                         }
+                                        activeLiveMode = isVoiceMode;
                                         resolve(true);
                                         return;
                                     }
@@ -2075,7 +2084,7 @@
             let audioContext = null;
             let audioWorkletNode = null;
             let micStream = null;
-            let isMuted = false;
+
             let pcmPlaybackContext = null;
             let activeAudioSources = [];
             let nextPlayTime = 0;
@@ -2169,7 +2178,7 @@
                         const processor = new AudioWorkletNode(audioContext, 'audio-processor');
 
                         processor.port.onmessage = (e) => {
-                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && !isMuted) {
+                            if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && !isMicMuted) {
                                 const base64Data = arrayBufferToBase64(e.data);
                                 liveWebSocket.send(JSON.stringify({
                                     realtimeInput: {
@@ -2199,7 +2208,7 @@
                         const btnMuteMic = document.getElementById('btn-mute-mic');
                         if (btnMuteMic) {
                             btnMuteMic.style.display = 'inline-block';
-                            btnMuteMic.innerHTML = isMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+                            btnMuteMic.innerHTML = isMicMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
                         }
                     }
                 } catch (error) {
@@ -2210,6 +2219,7 @@
 
             function stopLive() {
                 isSetupComplete = false;
+                activeLiveMode = null;
                 if (liveWebSocket) {
                     liveWebSocket.close();
                     liveWebSocket = null;
