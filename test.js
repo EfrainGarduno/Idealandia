@@ -531,6 +531,22 @@ window.addEventListener('load', () => {
                                                     send(data) { if(data && data.includes('clientContent')) { setTimeout(() => { if (this.onmessage) this.onmessage({ data: JSON.stringify({ serverContent: { modelTurn: { parts: [{ text: "Esta es una respuesta simulada por Live." }] }, turnComplete: true } }) }); }, 20); } }
                                                     close() {}
                                                 };
+                                                win.fetch = async (url, options) => {
+                                                    if (url === '/api/me') {
+                                                        if (!authState) {
+                                                            return { ok: false, status: 401 };
+                                                        } else {
+                                                            return { ok: true, json: async () => ({
+                                                                user: { id: 1, name: 'Test User', email: 'test@example.com' },
+                                                                permissions: permissions
+                                                            })};
+                                                        }
+                                                    }
+                                                    if (url === '/api/visitas') {
+                                                        return { ok: true, json: async () => ({ visitas: 12345 }) };
+                                                    }
+                                                    return { ok: true, json: async () => ({}) };
+                                                };
                                             }
                                         });
                                         const win = dom.window;
