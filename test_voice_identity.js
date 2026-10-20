@@ -54,9 +54,18 @@ window.fetch = async (url) => {
         if (global.mockIdeasFail) {
             return { ok: false };
         }
+
+        const params = new URLSearchParams(url.split('?')[1]);
+        const query = params.get('query');
+        if (query === 'pension') {
+            return {
+                ok: true,
+                json: async () => ({ resultado: "La pensión es de 52733." })
+            };
+        }
         return {
             ok: true,
-            json: async () => ({ resultado: "La pensión es de 52733." })
+            json: async () => ({ resultado: "No se encontró información." })
         };
     }
     if (url === '/api/live-token') {
