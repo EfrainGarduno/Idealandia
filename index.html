@@ -1811,17 +1811,18 @@
             let activeLiveMode = null; // Track current established mode
 
             async function ensureLiveConnection(voice = false) {
+                // If mode changes, we must reconnect to send new setupMsg with updated responseModalities
+                if (activeLiveMode !== null && activeLiveMode !== voice) {
+                    stopLive();
+                    isConnectionReady = false;
+                }
+
                 if (voice && !pcmPlaybackContext) {
                     const Ctx = window.AudioContext || window.webkitAudioContext;
                     pcmPlaybackContext = new Ctx({ sampleRate: 24000 });
                 }
                 if (pcmPlaybackContext && pcmPlaybackContext.state === 'suspended') {
                     await pcmPlaybackContext.resume();
-                }
-                // If mode changes, we must reconnect to send new setupMsg with updated responseModalities
-                if (activeLiveMode !== null && activeLiveMode !== voice) {
-                    stopLive();
-                    isConnectionReady = false;
                 }
 
                 isVoiceMode = voice;

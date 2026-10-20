@@ -60,12 +60,12 @@ window.fetch = async (url) => {
         if (query === 'pension') {
             return {
                 ok: true,
-                json: async () => ({ resultado: "La pensión es de 52733." })
+                json: async () => ({ result: "La pensión es de 52733." })
             };
         }
         return {
             ok: true,
-            json: async () => ({ resultado: "No se encontró información." })
+            json: async () => ({ result: "No se encontró información." })
         };
     }
     if (url === '/api/live-token') {
