@@ -50,6 +50,15 @@ window.fetch = async (url) => {
             json: async () => ({ ideas: [{ id: 1, titulo: 'Idea mock', estado: 'pendiente' }] })
         };
     }
+    if (url.startsWith('/api/knowledge')) {
+        if (global.mockIdeasFail) {
+            return { ok: false };
+        }
+        return {
+            ok: true,
+            json: async () => ({ resultado: "La pensión es de 52733." })
+        };
+    }
     if (url === '/api/live-token') {
         return {
             ok: true,
@@ -262,7 +271,7 @@ setTimeout(() => {
                                 data: JSON.stringify({
                                     toolCall: {
                                         functionCalls: [
-                                            { id: "call_789", name: "consultar_documentacion", args: { tema: "pension" } }
+                                            { id: "call_789", name: "consultar_documentacion", args: { query: "pension" } }
                                         ]
                                     }
                                 })
