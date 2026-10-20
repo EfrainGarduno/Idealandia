@@ -1817,12 +1817,14 @@
                     isConnectionReady = false;
                 }
 
-                if (voice && !pcmPlaybackContext) {
-                    const Ctx = window.AudioContext || window.webkitAudioContext;
-                    pcmPlaybackContext = new Ctx({ sampleRate: 24000 });
-                }
-                if (pcmPlaybackContext && pcmPlaybackContext.state === 'suspended') {
-                    await pcmPlaybackContext.resume();
+                if (voice) {
+                    if (!pcmPlaybackContext || pcmPlaybackContext.state === 'closed') {
+                        const Ctx = window.AudioContext || window.webkitAudioContext;
+                        pcmPlaybackContext = new Ctx({ sampleRate: 24000 });
+                    }
+                    if (pcmPlaybackContext && pcmPlaybackContext.state === 'suspended') {
+                        await pcmPlaybackContext.resume();
+                    }
                 }
 
                 isVoiceMode = voice;

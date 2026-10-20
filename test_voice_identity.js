@@ -293,6 +293,8 @@ setTimeout(() => {
                                     const docRes = JSON.parse(docMessages[0]);
                                     assert.ok(docRes.toolResponse, 'Should wrap doc inside toolResponse');
                                     assert.strictEqual(docRes.toolResponse.functionResponses[0].name, 'consultar_documentacion');
+                                    assert.strictEqual(docRes.toolResponse.functionResponses[0].id, "call_789");
+                                    assert.strictEqual(docRes.toolResponse.functionResponses[0].response.result, "La pensión es de 52733.");
 
                                     // Verify output in text chat
                                     wsInstance.onmessage({ data: JSON.stringify({ serverContent: { modelTurn: { parts: [{ text: "La pensión es de 52733." }] }, turnComplete: true } }) });
