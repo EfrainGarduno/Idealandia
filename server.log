@@ -1,0 +1,34 @@
+◇ injected env (0) from .env
+SMTP Configuration Error: Incomplete configuration. SMTP_HOST, SMTP_USER, and SMTP_PASS are required to send emails.
+Server listening on port 3000
+Error connecting to MySQL database: AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  fatal: true,
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3306
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3306
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3306
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3306
+    }
+  ]
+}
+Error generating response: Error: ContentUnion is required
+    at tContent (/app/node_modules/@google/genai/dist/node/index.cjs:3397:15)
+    at Chat.sendMessage (/app/node_modules/@google/genai/dist/node/index.cjs:7649:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async /app/server.js:151:24

@@ -86,26 +86,22 @@ window.matchMedia = window.matchMedia || function() {
 // Mock window.fetch for testing the API call
 let fetchCount = 0;
 
-function createMockStream(text) {
-    const encoder = new TextEncoder();
-    const uint8array = encoder.encode(text);
-    return {
-        getReader: () => {
-            let done = false;
-            return {
-                read: async () => {
-                    if (done) {
-                        return { done: true, value: undefined };
-                    }
-                    done = true;
-                    return { done: false, value: uint8array };
-                }
-            };
-        }
-    };
-}
-
 window.fetch = async (url, options) => {
+    if (url === '/api/chat') {
+        fetchCount++;
+        return Promise.resolve({
+            ok: true,
+            json: async () => {
+                if (fetchCount === 1) {
+                    return { response: "Esta es una respuesta simulada por fetch." };
+                } else if (fetchCount === 2) {
+                    return { response: "Segunda respuesta simulada por fetch." };
+                }
+                return { response: "" };
+            }
+        });
+    }
+
     if (url.includes('/api/live-token')) return { ok: true, json: async () => ({ token: "mock_token" }) };
 if (url === '/api/register' && options.method === 'POST') {
         const body = JSON.parse(options.body);
@@ -345,7 +341,7 @@ window.addEventListener('load', () => {
         const messagesAfter = chatHistory.querySelectorAll('.message');
         let idealitaMessageFound = false;
         for (let msg of messagesAfter) {
-            if (msg.classList.contains('idealita-message') && msg.textContent.includes('Esta es una respuesta simulada por Live.')) {
+            if (msg.classList.contains('idealita-message') && msg.textContent.includes('Esta es una respuesta simulada por fetch.')) {
                 idealitaMessageFound = true;
                 break;
             }
@@ -364,7 +360,7 @@ window.addEventListener('load', () => {
             const messagesAfterSecond = chatHistory.querySelectorAll('.message');
             let idealitaSecondMessageFound = false;
             for (let msg of messagesAfterSecond) {
-                if (msg.classList.contains('idealita-message') && msg.textContent.includes('Esta es una respuesta simulada por Live.')) {
+                if (msg.classList.contains('idealita-message') && msg.textContent.includes('Segunda respuesta simulada por fetch.')) {
                     idealitaSecondMessageFound = true;
                     break;
                 }

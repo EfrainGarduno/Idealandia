@@ -96,6 +96,10 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const idealandiaTools = [{
     functionDeclarations: [
         {
+            name: "consultar_ideas_usuario",
+            description: "Consulta las ideas de proyecto registradas por el usuario autenticado."
+        },
+        {
             name: "consultar_documentacion",
             description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
             parameters: {
@@ -115,11 +119,102 @@ const idealandiaTools = [{
 const chatSysInstr = "Eres 'idealita', un asistente virtual de Idealandia. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
 
 // Keep the old object for backward compatibility if needed, but we'll use ai.models.generateContentStream in the POST
-const chat = ai.chats.create({
-    model: 'gemini-3.6-flash',
-    config: {
-        systemInstruction: chatSysInstr,
-        tools: idealandiaTools
+
+
+app.post('/api/chat', async (req, res) => {
+    try {
+        let text = req.body.text;
+        if (!text) {
+            return res.status(400).json({ error: 'Text field is required' });
+        }
+
+        const token = req.cookies.auth_token;
+        let userId = null;
+
+        if (token) {
+            try {
+                const decoded = await verifyToken(token, pool);
+                userId = decoded.id;
+            } catch (err) {
+                // Ignore token errors and process as guest
+            }
+        }
+
+        const chat = ai.chats.create({
+            model: 'gemini-3.6-flash',
+            config: {
+                systemInstruction: chatSysInstr,
+                tools: idealandiaTools
+            }
+        });
+
+        let response = await chat.sendMessage(text);
+        let responseText = "";
+
+        if (response.functionCalls && response.functionCalls.length > 0) {
+            const calls = response.functionCalls;
+            let functionResponses = [];
+
+            for (const call of calls) {
+                if (call.name === "consultar_documentacion") {
+                    const query = call.args ? call.args.tema : "";
+                    try {
+                        const docsRes = await searchKnowledge(pool, userId, query);
+                        functionResponses.push({
+                            functionResponse: {
+                                id: call.id,
+                                name: call.name,
+                                response: { result: docsRes }
+                            }
+                        });
+                    } catch (e) {
+                         functionResponses.push({
+                            functionResponse: {
+                                id: call.id,
+                                name: call.name,
+                                response: { error: "Error al consultar la base de conocimiento" }
+                            }
+                        });
+                    }
+                } else if (call.name === "consultar_ideas_usuario") {
+                     try {
+                          if (!userId) throw new Error("No autorizado");
+                          const [ideas] = await pool.execute(
+                              'SELECT id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
+                              [userId]
+                          );
+                          functionResponses.push({
+                              functionResponse: {
+                                  id: call.id,
+                                  name: call.name,
+                                  response: { result: ideas }
+                              }
+                          });
+                     } catch (e) {
+                          functionResponses.push({
+                              functionResponse: {
+                                  id: call.id,
+                                  name: call.name,
+                                  response: { error: "No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado." }
+                              }
+                          });
+                     }
+                }
+            }
+            if (functionResponses.length > 0) {
+                 response = await chat.sendMessage(functionResponses);
+            }
+        }
+
+        if (response.text) {
+             responseText = response.text;
+        }
+
+        res.status(200).json({ response: responseText });
+
+    } catch (error) {
+        console.error('Error generating response:', error);
+        res.status(500).json({ error: 'Error interno del servidor al procesar el mensaje.' });
     }
 });
 

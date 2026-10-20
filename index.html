@@ -1844,13 +1844,22 @@
                     const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
 
                     return new Promise((resolve, reject) => {
+                        let setupTimeout = setTimeout(() => {
+                            if (!isConnectionReady) {
+                                if (liveWebSocket) {
+                                    liveWebSocket.close();
+                                }
+                                reject(new Error("Timeout esperando setupComplete"));
+                            }
+                        }, 10000);
+
                         liveWebSocket = new WebSocket(wsUrl);
 
                         liveWebSocket.onopen = async () => {
                             const setupMsg = {
                                 setup: {
                                     generationConfig: {
-                                        responseModalities: isVoiceMode ? ["AUDIO"] : ["TEXT"],
+                                        responseModalities: ["AUDIO"],
                                         speechConfig: {
                                             voiceConfig: {
                                                 prebuiltVoiceConfig: {
@@ -1870,6 +1879,7 @@
                                     const response = JSON.parse(event.data);
 
                                     if (response.setupComplete) {
+                                        clearTimeout(setupTimeout);
                                         isConnectionReady = true;
                                         if (window.currentUser) {
                                             const userName = window.currentUser.nombre || window.currentUser.usuario;
@@ -2040,11 +2050,13 @@
 
                         liveWebSocket.onerror = (e) => {
                             console.error("Live WebSocket error:", e);
+                            clearTimeout(setupTimeout);
                             isConnectionReady = false;
                             reject(e);
                         };
 
                         liveWebSocket.onclose = () => {
+                            clearTimeout(setupTimeout);
                             isConnectionReady = false;
                         };
                     });
@@ -2067,31 +2079,40 @@
                 currentThinkingMessage = addMessage('Idealita está pensando...', 'thinking');
 
                 try {
-                    const connected = await ensureLiveConnection(false);
-                    if (!connected) {
-                        throw new Error('Could not establish Live connection for text chat.');
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ text })
+                    });
+
+                    if (currentThinkingMessage) {
+                        currentThinkingMessage.remove();
                     }
 
-                    // Reset text tracking variables for the new turn
-                    currentTextResponse = '';
-                    isFirstTextChunk = true;
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
 
-                    // Send text to Gemini Live
-                    liveWebSocket.send(JSON.stringify({
-                        clientContent: {
-                            turns: [{
-                                role: "user",
-                                parts: [{ text: text }]
-                            }],
-                            turnComplete: true
-                        }
-                    }));
+                    const data = await response.json();
+
+                    if (data.response) {
+                        addMessage(data.response, 'idealita');
+                    } else if (data.error) {
+                         addMessage('Lo siento, ocurrió un error: ' + data.error, 'idealita');
+                    } else {
+                         addMessage('Lo siento, no pude procesar tu solicitud.', 'idealita');
+                    }
+
                 } catch (error) {
                     console.error('Error fetching chat response:', error);
                     if (currentThinkingMessage) currentThinkingMessage.remove();
                     addMessage('Lo siento, ocurrió un error de conexión.', 'idealita');
+                } finally {
                     sendBtn.disabled = false;
                     userInput.disabled = false;
+                    userInput.focus();
                 }
             }
 
@@ -2244,7 +2265,8 @@
                     }
                 } catch (error) {
                     console.error("Error al iniciar Live:", error);
-                    updateLiveStatus("Error en conexión Live.");
+                    updateLiveStatus("Desconectado");
+                    alert("No se pudo iniciar la conexión Live. Por favor, revisa la consola o inténtalo de nuevo.");
                 }
             }
 
