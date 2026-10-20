@@ -107,20 +107,7 @@ function createMockStream(text) {
 
 window.fetch = async (url, options) => {
     if (url.includes('/api/live-token')) return { ok: true, json: async () => ({ token: "mock_token" }) };
-    if (url === '/api/chat' && options.method === 'POST') {
-        fetchCount++;
-        if (fetchCount === 1) {
-            return {
-                ok: true,
-                body: createMockStream('Soy Idealita, tu asistente de IA.')
-            };
-        } else {
-            return {
-                ok: true,
-                body: createMockStream('Entiendo, has enviado otro mensaje.')
-            };
-        }
-    } else if (url === '/api/register' && options.method === 'POST') {
+if (url === '/api/register' && options.method === 'POST') {
         const body = JSON.parse(options.body);
         if (body.usuario === 'testuser' && body.password === 'testpass') {
              return {
