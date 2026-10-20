@@ -256,14 +256,13 @@ setTimeout(() => {
                             assert.strictEqual(funcRes.toolResponse.functionResponses[0].name, 'consultar_ideas_usuario');
                             assert.strictEqual(funcRes.toolResponse.functionResponses[0].response.result[0].titulo, 'Idea mock');
 
-                            // Case 6: Function Call for consultar_ideas_usuario (Failure / Unauth)
-                            global.mockIdeasFail = true;
-                            const beforeFailCount = MockWebSocket.messagesSent.length;
+                            // New Case: Function Call for consultar_documentacion
+                            const beforeDocCount = MockWebSocket.messagesSent.length;
                             wsInstance.onmessage({
                                 data: JSON.stringify({
                                     toolCall: {
                                         functionCalls: [
-                                            { id: "call_456", name: "consultar_ideas_usuario" }
+                                            { id: "call_789", name: "consultar_documentacion", args: { tema: "pension" } }
                                         ]
                                     }
                                 })
@@ -271,16 +270,46 @@ setTimeout(() => {
 
                             setTimeout(() => {
                                 try {
-                                    const failMessages = MockWebSocket.messagesSent.slice(beforeFailCount);
-                                    const failRes = JSON.parse(failMessages[0]);
+                                    const docMessages = MockWebSocket.messagesSent.slice(beforeDocCount);
+                                    assert.strictEqual(docMessages.length > 0, true, 'consultar_documentacion response not sent');
+                                    const docRes = JSON.parse(docMessages[0]);
+                                    assert.ok(docRes.toolResponse, 'Should wrap doc inside toolResponse');
+                                    assert.strictEqual(docRes.toolResponse.functionResponses[0].name, 'consultar_documentacion');
 
-                                    assert.ok(failRes.toolResponse && failRes.toolResponse.functionResponses[0].response.error);
-                                    assert.ok(failRes.toolResponse.functionResponses[0].response.error.includes("no esté autenticado"));
+                                    // Verify output in text chat
+                                    wsInstance.onmessage({ data: JSON.stringify({ serverContent: { modelTurn: { parts: [{ text: "La pensión es de 52733." }] }, turnComplete: true } }) });
 
-                                    console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
-                                    process.exit(0);
+                                    // Case 6: Function Call for consultar_ideas_usuario (Failure / Unauth)
+                                    global.mockIdeasFail = true;
+                                    const beforeFailCount = MockWebSocket.messagesSent.length;
+                                    wsInstance.onmessage({
+                                        data: JSON.stringify({
+                                            toolCall: {
+                                                functionCalls: [
+                                                    { id: "call_456", name: "consultar_ideas_usuario" }
+                                                ]
+                                            }
+                                        })
+                                    });
+
+                                    setTimeout(() => {
+                                        try {
+                                            const failMessages = MockWebSocket.messagesSent.slice(beforeFailCount);
+                                            const failRes = JSON.parse(failMessages[0]);
+
+                                            assert.ok(failRes.toolResponse && failRes.toolResponse.functionResponses[0].response.error);
+                                            assert.ok(failRes.toolResponse.functionResponses[0].response.error.includes("no esté autenticado"));
+
+                                            console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
+                                            process.exit(0);
+                                        } catch (e) {
+                                            console.error('Tool function test failed (fail case):', e);
+                                            process.exit(1);
+                                        }
+                                    }, 50);
+
                                 } catch (e) {
-                                    console.error('Tool function test failed (fail case):', e);
+                                    console.error('Tool function test failed (doc case):', e);
                                     process.exit(1);
                                 }
                             }, 50);
