@@ -134,7 +134,33 @@ app.get('/api/live-token', async (req, res) => {
                 liveConnectConstraints: {
                     model: 'models/gemini-3.8-live',
                     config: {
-                        responseModalities: ['AUDIO']
+                        systemInstruction: {
+                            parts: [{ text: "Eres Idealita, la asistente virtual de Idealandia. Debes usar la herramienta consultar_documentacion si te preguntan sobre características o capacidades de la plataforma. Si te preguntan sobre las ideas del usuario, usa consultar_ideas_usuario." }]
+                        },
+                        tools: [
+                            {
+                                functionDeclarations: [
+                                    {
+                                        name: "consultar_ideas_usuario",
+                                        description: "Consulta las ideas de proyecto registradas por el usuario autenticado."
+                                    },
+                                    {
+                                        name: "consultar_documentacion",
+                                        description: "Consulta el manual de usuario, la base de conocimiento y los permisos del sistema Idealandia.",
+                                        parameters: {
+                                            type: "OBJECT",
+                                            properties: {
+                                                query: {
+                                                    type: "STRING",
+                                                    description: "La pregunta o tema a buscar en la documentación."
+                                                }
+                                            },
+                                            required: ["query"]
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
                     }
                 }
             }
@@ -147,102 +173,7 @@ app.get('/api/live-token', async (req, res) => {
     }
 });
 
-app.post('/api/chat', async (req, res) => {
-    try {
-        const { message } = req.body;
 
-        if (!message) {
-            return res.status(400).json({
-                error: 'Message is required'
-            });
-        }
-
-        // Preparar respuesta para streaming
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-
-
-        // Ensure we know who is asking
-        const token = req.cookies.auth_token;
-        let userId = null;
-        if (token) {
-            try {
-                const decoded = await verifyToken(token, pool);
-                userId = decoded.id;
-            } catch (e) {}
-        }
-
-        let aiResponseStream = await ai.models.generateContentStream({
-            model: 'gemini-3.6-flash',
-            contents: [{ role: 'user', parts: [{ text: message }] }],
-            config: {
-                systemInstruction: chatSysInstr,
-                tools: idealandiaTools
-            }
-        });
-
-        // Collect function calls if they occur first
-        let functionCall = null;
-        let functionName = null;
-
-        for await (const chunk of aiResponseStream) {
-            if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-                functionCall = chunk.functionCalls[0];
-                functionName = functionCall.name;
-                break; // Model wants to call a tool, stop streaming this response
-            } else if (chunk.text) {
-                res.write(chunk.text);
-            }
-        }
-
-        if (functionCall && functionName === 'consultar_documentacion') {
-            const query = functionCall.args.tema || message;
-            const docResult = await searchKnowledge(pool, userId, query);
-
-            // Second turn: send tool result back
-            const secondTurnStream = await ai.models.generateContentStream({
-                model: 'gemini-3.6-flash',
-                contents: [
-                    { role: 'user', parts: [{ text: message }] },
-                    { role: 'model', parts: [{ functionCall: functionCall }] },
-                    {
-                        role: 'user',
-                        parts: [{
-                            functionResponse: {
-                                name: functionName,
-                                response: { result: docResult }
-                            }
-                        }]
-                    }
-                ],
-                config: {
-                    systemInstruction: chatSysInstr,
-                    tools: idealandiaTools
-                }
-            });
-
-            for await (const chunk of secondTurnStream) {
-                if (chunk.text) {
-                    res.write(chunk.text);
-                }
-            }
-        }
-
-        res.end();
-
-    } catch (error) {
-        console.error('Error in /api/chat:', error);
-
-        if (!res.headersSent) {
-            res.status(500).json({
-                error: 'Internal server error'
-            });
-        } else {
-            res.end();
-        }
-    }
-});
 
 app.post('/api/register', async (req, res) => {
     try {

@@ -50,7 +50,14 @@ const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
 const dom = new JSDOM(htmlContent, {
   runScripts: "dangerously",
   resources: "usable",
-  virtualConsole
+  virtualConsole,
+  beforeParse(win) {
+    win.WebSocket = class {
+        constructor() { this.readyState = 1; setTimeout(() => { if (this.onopen) this.onopen(); setTimeout(() => { if (this.onmessage) this.onmessage({ data: JSON.stringify({ setupComplete: true }) }); }, 10); }, 10); }
+        send(data) { if(data && data.includes('clientContent')) { setTimeout(() => { if (this.onmessage) this.onmessage({ data: JSON.stringify({ serverContent: { modelTurn: { parts: [{ text: "Esta es una respuesta simulada por Live." }] }, turnComplete: true } }) }); }, 20); } }
+        close() {}
+    };
+  }
 });
 
 const window = dom.window;
@@ -99,20 +106,8 @@ function createMockStream(text) {
 }
 
 window.fetch = async (url, options) => {
-    if (url === '/api/chat' && options.method === 'POST') {
-        fetchCount++;
-        if (fetchCount === 1) {
-            return {
-                ok: true,
-                body: createMockStream('Soy Idealita, tu asistente de IA.')
-            };
-        } else {
-            return {
-                ok: true,
-                body: createMockStream('Entiendo, has enviado otro mensaje.')
-            };
-        }
-    } else if (url === '/api/register' && options.method === 'POST') {
+    if (url.includes('/api/live-token')) return { ok: true, json: async () => ({ token: "mock_token" }) };
+if (url === '/api/register' && options.method === 'POST') {
         const body = JSON.parse(options.body);
         if (body.usuario === 'testuser' && body.password === 'testpass') {
              return {
@@ -350,7 +345,7 @@ window.addEventListener('load', () => {
         const messagesAfter = chatHistory.querySelectorAll('.message');
         let idealitaMessageFound = false;
         for (let msg of messagesAfter) {
-            if (msg.classList.contains('idealita-message') && msg.textContent.includes('Soy Idealita, tu asistente de IA.')) {
+            if (msg.classList.contains('idealita-message') && msg.textContent.includes('Esta es una respuesta simulada por Live.')) {
                 idealitaMessageFound = true;
                 break;
             }
@@ -369,7 +364,7 @@ window.addEventListener('load', () => {
             const messagesAfterSecond = chatHistory.querySelectorAll('.message');
             let idealitaSecondMessageFound = false;
             for (let msg of messagesAfterSecond) {
-                if (msg.classList.contains('idealita-message') && msg.textContent.includes('Entiendo, has enviado otro mensaje.')) {
+                if (msg.classList.contains('idealita-message') && msg.textContent.includes('Esta es una respuesta simulada por Live.')) {
                     idealitaSecondMessageFound = true;
                     break;
                 }
@@ -529,7 +524,44 @@ window.addEventListener('load', () => {
                                         const dom = new JSDOM(htmlContent, {
                                             runScripts: "dangerously",
                                             resources: "usable",
-                                            virtualConsole
+                                            virtualConsole,
+                                            beforeParse(win) {
+                                                win.WebSocket = class {
+                                                    constructor() { this.readyState = 1; setTimeout(() => { if (this.onopen) this.onopen(); setTimeout(() => { if (this.onmessage) this.onmessage({ data: JSON.stringify({ setupComplete: true }) }); }, 10); }, 10); }
+                                                    send(data) { if(data && data.includes('clientContent')) { setTimeout(() => { if (this.onmessage) this.onmessage({ data: JSON.stringify({ serverContent: { modelTurn: { parts: [{ text: "Esta es una respuesta simulada por Live." }] }, turnComplete: true } }) }); }, 20); } }
+                                                    close() {}
+                                                };
+                                                win.fetch = async (url, options) => {
+                                                    if (url === '/api/me') {
+                                                        if (!authState) {
+                                                            return { ok: false, status: 401 };
+                                                        } else {
+                                                            return { ok: true, json: async () => ({
+                                                                user: { id: 1, name: 'Test User', email: 'test@example.com' },
+                                                                permissions: permissions
+                                                            })};
+                                                        }
+                                                    }
+                                                    if (url === '/api/menu') {
+                                                        if (!authState) {
+                                                            return { ok: true, json: async () => ([
+                                                                { id: 1, text: 'Inicio', target: 'home-section', is_public: 1, parent_id: null },
+                                                                { id: 2, text: 'Servicios', target: null, is_public: 1, parent_id: null },
+                                                                { id: 3, text: 'Pensión IMSS', target: 'pension-section', is_public: 1, parent_id: 2 }
+                                                            ]) };
+                                                        } else {
+                                                            return { ok: true, json: async () => ([
+                                                                { id: 1, text: 'Inicio', target: 'home-section', is_public: 1, parent_id: null },
+                                                                { id: 4, text: 'Admin', target: 'admin-section', is_public: 0, parent_id: null }
+                                                            ]) };
+                                                        }
+                                                    }
+                                                    if (url === '/api/visitas') {
+                                                        return { ok: true, json: async () => ({ visitas: 12345 }) };
+                                                    }
+                                                    return { ok: true, json: async () => ({}) };
+                                                };
+                                            }
                                         });
                                         const win = dom.window;
 
@@ -545,6 +577,7 @@ window.addEventListener('load', () => {
                                         win.VRMLoaderPlugin = class {};
 
                                         win.fetch = async (url, options) => {
+                                            if (url.includes('/api/live-token')) return { ok: true, json: async () => ({ token: "mock_token" }) };
                                             if (url === '/api/me') {
                                                 if (authState) return { ok: true, json: async () => ({ user: { id: 1 } }) };
                                                 return { ok: false, status: 401 };
