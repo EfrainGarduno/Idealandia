@@ -202,7 +202,7 @@ app.post('/api/chat', async (req, res) => {
                 }
             }
             if (functionResponses.length > 0) {
-                 response = await chat.sendMessage(functionResponses);
+                 response = await chat.sendMessage({ message: [{ role: 'user', parts: functionResponses }] });
             }
         }
 

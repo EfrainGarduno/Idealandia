@@ -2057,6 +2057,9 @@
 
                         liveWebSocket.onclose = () => {
                             clearTimeout(setupTimeout);
+                            if (!isConnectionReady) {
+                                reject(new Error("WebSocket cerrado antes de setupComplete"));
+                            }
                             isConnectionReady = false;
                         };
                     });
