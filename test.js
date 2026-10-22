@@ -98,21 +98,46 @@ function createMockStream(text) {
     };
 }
 
+class MockWebSocket {
+    constructor(url) {
+        this.url = url;
+        this.readyState = 1; // OPEN
+        setTimeout(() => {
+            if (this.onopen) this.onopen();
+            if (this.onmessage) {
+                this.onmessage({ data: JSON.stringify({ setupComplete: true }) });
+            }
+        }, 10);
+    }
+    send(data) {
+        try {
+            const parsed = JSON.parse(data);
+            if (parsed.clientContent && parsed.clientContent.turns) {
+                setTimeout(() => {
+                    if (this.onmessage) {
+                        const responseText = parsed.clientContent.turns[0].parts[0].text === 'Hello Idealita' ? "Soy Idealita, tu asistente de IA." : "Entiendo, has enviado otro mensaje.";
+                        if (parsed.clientContent.turnComplete) {
+                            this.onmessage({ data: JSON.stringify({ serverContent: { outputTranscription: { text: responseText }, turnComplete: true } }) });
+                        }
+                    }
+                }, 20);
+            }
+        } catch(e) {}
+    }
+    close() {}
+}
+
+window.WebSocket = MockWebSocket;
+
 window.fetch = async (url, options) => {
-    if (url === '/api/chat' && options.method === 'POST') {
-        fetchCount++;
-        if (fetchCount === 1) {
-            return {
-                ok: true,
-                body: createMockStream('Soy Idealita, tu asistente de IA.')
-            };
-        } else {
-            return {
-                ok: true,
-                body: createMockStream('Entiendo, has enviado otro mensaje.')
-            };
-        }
-    } else if (url === '/api/register' && options.method === 'POST') {
+    if (url === "/api/live-token") {
+        return {
+            ok: true,
+            json: async () => ({ token: "mock-token" })
+        };
+    } else if (url === "/api/ideas" && (!options || options.method === "GET")) {
+        return { ok: true, json: async () => ({ ideas: [] }) };
+    } else if (url === "/api/register" && options.method === "POST") {
         const body = JSON.parse(options.body);
         if (body.usuario === 'testuser' && body.password === 'testpass') {
              return {
