@@ -1991,7 +1991,7 @@
 
                         // Send initial setup
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
-                        let sysInstruction = "Eres Idealita, la asistente virtual de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES IDEALITA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
+                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
                             sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
                         }
@@ -2215,6 +2215,22 @@
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
                             // Send Initial identity messages once setup is complete
+                            try {
+                                const manualRes = await fetch('/docs/idealandia_manual.md');
+                                if (manualRes.ok) {
+                                    const manualText = await manualRes.text();
+                                    liveWebSocket.send(JSON.stringify({
+                                        clientContent: {
+                                            turns: [{ role: "user", parts: [{ text: `Aquí tienes el contexto de Idealandia, úsalo para responder preguntas sobre la plataforma:\n\n${manualText}` }] }],
+                                            turnComplete: false
+                                        }
+                                    }));
+                                }
+                            } catch (e) {
+                                console.error("Could not load manual context:", e);
+                            }
+
+
                             if (window.currentUser) {
                                 const userName = window.currentUser.nombre || window.currentUser.usuario;
                                 liveWebSocket.send(JSON.stringify({
@@ -2520,7 +2536,16 @@
 
             }
 
-            if (btnStartLive) btnStartLive.addEventListener('click', () => startLive(true));
+            if (btnStartLive) {
+                btnStartLive.addEventListener('click', async () => {
+                    if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && window.isCurrentVoiceMode === false) {
+                        stopLive();
+                        // wait a bit for cleanup
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                    startLive(true);
+                });
+            }
             if (btnStopLive) btnStopLive.addEventListener('click', stopLive);
 
             // Toggle Mobile Avatar
