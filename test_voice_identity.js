@@ -174,7 +174,7 @@ setTimeout(() => {
 
             const instructionText = parsed.setup.systemInstruction.parts[0].text;
 
-            assert.ok(instructionText.includes('Eres Idealita, la asistente virtual de Idealandia'), 'Should contain correct identity intro');
+            assert.ok(instructionText.includes('Eres Idealita, la asistente personal de Idealandia'), 'Should contain correct identity intro');
             assert.ok(instructionText.includes('Dirígete a él o ella por su nombre cuando resulte natural.'), 'Should contain specific purpose');
             assert.ok(instructionText.includes('NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje'), 'Should contain strict negative command');
             assert.ok(parsed.setup.generationConfig, 'Setup should have generationConfig');
@@ -229,13 +229,7 @@ setTimeout(() => {
                     const initialMessagesCount = MockWebSocket.messagesSent.length;
                     wsInstance.onmessage({
                         data: JSON.stringify({
-                            serverContent: {
-                                modelTurn: {
-                                    parts: [
-                                        { functionCall: { id: "call_123", name: "consultar_ideas_usuario" } }
-                                    ]
-                                }
-                            }
+                            toolCall: { functionCalls: [ { id: "call_123", name: "consultar_ideas_usuario" } ] }
                         })
                     });
 
@@ -253,13 +247,7 @@ setTimeout(() => {
                             const beforeFailCount = MockWebSocket.messagesSent.length;
                             wsInstance.onmessage({
                                 data: JSON.stringify({
-                                    serverContent: {
-                                        modelTurn: {
-                                            parts: [
-                                                { functionCall: { id: "call_456", name: "consultar_ideas_usuario" } }
-                                            ]
-                                        }
-                                    }
+                                    toolCall: { functionCalls: [ { id: "call_456", name: "consultar_ideas_usuario" } ] }
                                 })
                             });
 

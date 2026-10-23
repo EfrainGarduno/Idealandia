@@ -153,11 +153,21 @@
                 <input type="hidden" id="reset-token" name="reset-token">
                 <div class="form-group">
                     <label for="reset-password">Nueva Contraseña:</label>
-                    <input type="password" id="reset-password" name="reset-password">
+                    <div style="position: relative; width: 100%;">
+                        <input type="password" id="reset-password" name="reset-password" style="width: 100%; padding-right: 40px;">
+                        <button type="button" id="btn-toggle-reset-password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #555;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="reset-password-confirm">Confirmar Contraseña:</label>
-                    <input type="password" id="reset-password-confirm" name="reset-password-confirm">
+                    <div style="position: relative; width: 100%;">
+                        <input type="password" id="reset-password-confirm" name="reset-password-confirm" style="width: 100%; padding-right: 40px;">
+                        <button type="button" id="btn-toggle-reset-password-confirm" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #555;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <button id="btn-reset" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Actualizar contraseña</button>
             </div>
@@ -1452,6 +1462,26 @@
                 });
             }
 
+            const btnToggleResetPassword = document.getElementById('btn-toggle-reset-password');
+            const resetPasswordInput = document.getElementById('reset-password');
+            if (btnToggleResetPassword && resetPasswordInput) {
+                btnToggleResetPassword.addEventListener('click', () => {
+                    const type = resetPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                    resetPasswordInput.setAttribute('type', type);
+                    btnToggleResetPassword.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+                });
+            }
+
+            const btnToggleResetPasswordConfirm = document.getElementById('btn-toggle-reset-password-confirm');
+            const resetPasswordConfirmInput = document.getElementById('reset-password-confirm');
+            if (btnToggleResetPasswordConfirm && resetPasswordConfirmInput) {
+                btnToggleResetPasswordConfirm.addEventListener('click', () => {
+                    const type = resetPasswordConfirmInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                    resetPasswordConfirmInput.setAttribute('type', type);
+                    btnToggleResetPasswordConfirm.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+                });
+            }
+
             // Login logic
             const btnLogin = document.getElementById('btn-login');
             if (btnLogin) {
@@ -1804,7 +1834,6 @@
             }
 
             async function handleSend() {
-
                 const text = userInput.value.trim();
 
                 if (text === '') {
@@ -1821,112 +1850,27 @@
                 sendBtn.disabled = true;
                 userInput.disabled = true;
 
-                // Mostrar indicador inmediatamente
-                const thinkingMessage = addMessage(
-                    'Idealita está pensando...',
-                    'thinking'
-                );
-
                 try {
-
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: text
-                        })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(
-                            'El servidor respondió con estado ' + response.status
-                        );
+                    if (!liveWebSocket || liveWebSocket.readyState !== WebSocket.OPEN) {
+                        await startLive(false);
                     }
 
-                    // Comprobar que el navegador puede leer el streaming
-                    if (!response.body) {
-                        throw new Error('El servidor no está enviando streaming.');
-                    }
-
-                    // Preparar lectura progresiva
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder('utf-8');
-
-                    let fullResponse = '';
-                    let firstChunk = true;
-
-                    // Leer los fragmentos conforme llegan
-                    while (true) {
-
-                        const { value, done } = await reader.read();
-
-                        if (done) {
-                            break;
+                    liveWebSocket.send(JSON.stringify({
+                        clientContent: {
+                            turns: [{ role: "user", parts: [{ text: text }] }],
+                            turnComplete: true
                         }
+                    }));
 
-                        const chunk = decoder.decode(value, {
-                            stream: true
-                        });
-
-                        if (chunk) {
-
-                            // Al llegar la primera parte de la respuesta,
-                            // quitar "Idealita está pensando..."
-                            if (firstChunk) {
-                                thinkingMessage.remove();
-                                firstChunk = false;
-
-                                // Crear burbuja donde aparecerá la respuesta
-                                addMessage('', 'idealita');
-                            }
-
-                            fullResponse += chunk;
-
-                            // Actualizar la última burbuja
-                            const messages =
-                                chatHistory.querySelectorAll('.idealita-message');
-
-                            const responseMessage =
-                                messages[messages.length - 1];
-
-                            responseMessage.textContent = fullResponse;
-
-                            // Mantener visible la parte más reciente
-                            chatHistory.scrollTop =
-                                chatHistory.scrollHeight;
-                        }
-                    }
-
-                    // Si por alguna razón no llegó ningún fragmento
-                    if (firstChunk) {
-
-                        thinkingMessage.remove();
-
-                        addMessage(
-                            'No recibí una respuesta del modelo.',
-                            'idealita'
-                        );
+                    if (!window.currentLiveMessageDiv) {
+                        window.currentLiveMessageDiv = addMessage('', 'idealita');
+                        window.currentLiveMessageText = '';
                     }
 
                 } catch (error) {
-
-                    console.error(
-                        'Error fetching chat response:',
-                        error
-                    );
-
-                    // Quitar indicador
-                    thinkingMessage.remove();
-
-                    addMessage(
-                        'Lo siento, hubo un error al conectar con el servidor.',
-                        'idealita'
-                    );
-
+                    console.error('Error fetching chat response:', error);
+                    addMessage('Lo siento, hubo un error al conectar con el servidor.', 'idealita');
                 } finally {
-
                     // Reactivar controles
                     sendBtn.disabled = false;
                     userInput.disabled = false;
@@ -1949,6 +1893,7 @@
 
             // --- Idealita Live Logic ---
             let liveWebSocket = null;
+            window.isCurrentVoiceMode = true;
             let audioContext = null;
             let audioWorkletNode = null;
             let micStream = null;
@@ -2022,8 +1967,10 @@
                 return bytes.buffer;
             }
 
-            async function startLive() {
-                try {
+            async function startLive(isVoiceMode = true) {
+                return new Promise(async (resolve, reject) => {
+                    try {
+                        window.isCurrentVoiceMode = isVoiceMode;
                     if (!window.threeJsAnimationFrameId && typeof window.init3DAvatar === "function") {
                         window.init3DAvatar();
                     }
@@ -2044,7 +1991,7 @@
 
                         // Send initial setup
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
-                        let sysInstruction = "Eres Idealita, la asistente virtual de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES IDEALITA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
+                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
                             sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
                         }
@@ -2088,7 +2035,8 @@
 
 
 
-                        // Setup audio recording
+                        if (isVoiceMode) {
+                            // Setup audio recording
                         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
 
@@ -2139,7 +2087,10 @@
                         window.avatarAnalyser.fftSize = 256;
                         window.avatarAnalyser.connect(pcmPlaybackContext.destination);
 
-                        const outDataArray = new Uint8Array(window.avatarAnalyser.fftSize);
+
+                        }
+                        const outDataArray = window.avatarAnalyser ? new Uint8Array(window.avatarAnalyser.fftSize) : null;
+
                         // window.micAnalyser was initialized earlier for input audio
                         let micDataArray = null;
 
@@ -2156,7 +2107,7 @@
                             let isListening = avatarWrapper.classList.contains('state-listening');
 
                             if (!prefersReducedMotion) {
-                                if (isSpeaking && window.avatarAnalyser) {
+                                if (isSpeaking && window.avatarAnalyser && outDataArray) {
                                     if (typeof window.avatarAnalyser.getByteTimeDomainData === 'function') {
                                         window.avatarAnalyser.getByteTimeDomainData(outDataArray);
                                     } else {
@@ -2230,11 +2181,13 @@
                         globalAnimateAvatar();
 
                         updateLiveStatus("Esperando setup...");
-                        btnStartLive.style.display = 'none';
-                        btnStopLive.style.display = 'inline-block';
-                        if(btnMuteMic) btnMuteMic.style.display = 'inline-block';
-                        const avatarContainer = document.getElementById('avatar-container');
-                        if(avatarContainer) avatarContainer.style.display = 'flex';
+                        if (window.isCurrentVoiceMode !== false) {
+                            btnStartLive.style.display = 'none';
+                            btnStopLive.style.display = 'inline-block';
+                            if(btnMuteMic) btnMuteMic.style.display = 'inline-block';
+                            const avatarContainer = document.getElementById('avatar-container');
+                            if(avatarContainer) avatarContainer.style.display = 'flex';
+                        }
 
                     };
 
@@ -2259,9 +2212,25 @@
                         if (response.setupComplete) {
                             console.log("Gemini Live Setup Complete:", response.setupComplete);
                             isSetupComplete = true;
-                            updateLiveStatus("Escuchando...");
+                            updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
                             // Send Initial identity messages once setup is complete
+                            try {
+                                const manualRes = await fetch('/docs/idealandia_manual.md');
+                                if (manualRes.ok) {
+                                    const manualText = await manualRes.text();
+                                    liveWebSocket.send(JSON.stringify({
+                                        clientContent: {
+                                            turns: [{ role: "user", parts: [{ text: `Aquí tienes el contexto de Idealandia, úsalo para responder preguntas sobre la plataforma:\n\n${manualText}` }] }],
+                                            turnComplete: false
+                                        }
+                                    }));
+                                }
+                            } catch (e) {
+                                console.error("Could not load manual context:", e);
+                            }
+
+
                             if (window.currentUser) {
                                 const userName = window.currentUser.nombre || window.currentUser.usuario;
                                 liveWebSocket.send(JSON.stringify({
@@ -2277,6 +2246,52 @@
                                     }
                                 }));
                             }
+                            resolve();
+                        }
+
+                        if (response.toolCall && response.toolCall.functionCalls) {
+                            let toolResponse = {
+                                functionResponses: []
+                            };
+
+                            for (const call of response.toolCall.functionCalls) {
+                                let functionResponseItem = {
+                                    id: call.id,
+                                    name: call.name,
+                                    response: {}
+                                };
+
+                                if (call.name === "consultar_ideas_usuario") {
+                                    try {
+                                        const ideasRes = await fetch('/api/ideas');
+                                        if (ideasRes.ok) {
+                                            const ideasData = await ideasRes.json();
+                                            functionResponseItem.response = { result: ideasData.ideas };
+                                        } else {
+                                            functionResponseItem.response = { error: 'No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado.' };
+                                        }
+                                    } catch (e) {
+                                        functionResponseItem.response = { error: 'Error de red al consultar ideas.' };
+                                    }
+                                } else if (call.name === 'consultar_documentacion') {
+                                    try {
+                                        const argStr = call.args ? call.args.tema : '';
+                                        const q = argStr || '';
+                                        const docRes = await fetch('/api/knowledge?query=' + encodeURIComponent(q));
+                                        let resultText = 'Error al consultar la documentación.';
+                                        if (docRes.ok) {
+                                            const docData = await docRes.json();
+                                            resultText = docData.result;
+                                        }
+                                        functionResponseItem.response = { result: resultText };
+                                    } catch (e) {
+                                        functionResponseItem.response = { error: 'Error de red al consultar documentación.' };
+                                    }
+                                }
+                                toolResponse.functionResponses.push(functionResponseItem);
+                            }
+
+                            liveWebSocket.send(JSON.stringify({ toolResponse }));
                         }
 
                         if (response.serverContent) {
@@ -2284,91 +2299,11 @@
 
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for (const part of content.modelTurn.parts) {
-                                    if (part.functionCall) {
-                                        const call = part.functionCall;
-                                        if (call.name === "consultar_ideas_usuario") {
-                                            try {
-                                                const ideasRes = await fetch('/api/ideas');
-                                                if (ideasRes.ok) {
-                                                    const ideasData = await ideasRes.json();
-                                                    liveWebSocket.send(JSON.stringify({
-                                                        toolResponse: {
-                                                            functionResponses: [{
-                                                                id: call.id,
-                                                                name: call.name,
-                                                                response: {
-                                                                    result: ideasData.ideas
-                                                                }
-                                                            }]
-                                                        }
-                                                    }));
-                                                } else {
-                                                    liveWebSocket.send(JSON.stringify({
-                                                        toolResponse: {
-                                                            functionResponses: [{
-                                                                id: call.id,
-                                                                name: call.name,
-                                                                response: {
-                                                                    error: "No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado."
-                                                                }
-                                                            }]
-                                                        }
-                                                    }));
-                                                }
-                                            } catch (e) {
-                                                liveWebSocket.send(JSON.stringify({
-                                                    toolResponse: {
-                                                        functionResponses: [{
-                                                            id: call.id,
-                                                            name: call.name,
-                                                            response: {
-                                                                error: "Error de red al consultar ideas."
-                                                            }
-                                                        }]
-                                                    }
-                                                }));
-                                            }
-                                        } else if (call.name === "consultar_documentacion") {
-                                            try {
-                                                const argStr = call.args ? call.args.tema : '';
-                                                const q = argStr || '';
-                                                const docRes = await fetch('/api/knowledge?query=' + encodeURIComponent(q));
-                                                let resultText = "Error al consultar la documentación.";
-                                                if (docRes.ok) {
-                                                    const docData = await docRes.json();
-                                                    resultText = docData.result;
-                                                }
-                                                liveWebSocket.send(JSON.stringify({
-                                                    toolResponse: {
-                                                        functionResponses: [{
-                                                            id: call.id,
-                                                            name: call.name,
-                                                            response: {
-                                                                result: resultText
-                                                            }
-                                                        }]
-                                                    }
-                                                }));
-                                            } catch (e) {
-                                                liveWebSocket.send(JSON.stringify({
-                                                    toolResponse: {
-                                                        functionResponses: [{
-                                                            id: call.id,
-                                                            name: call.name,
-                                                            response: {
-                                                                error: "Error de red al consultar documentación."
-                                                            }
-                                                        }]
-                                                    }
-                                                }));
-                                            }
-
-                                        }
-                                    }
-
                                     if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
-                                        updateLiveStatus("Hablando...");
-                                        playPcmAudio(part.inlineData.data);
+                                        if (window.isCurrentVoiceMode !== false) {
+                                            updateLiveStatus("Hablando...");
+                                            playPcmAudio(part.inlineData.data);
+                                        }
                                     }
                                 }
                             }
@@ -2431,7 +2366,7 @@
                                     nextPlayTime = pcmPlaybackContext.currentTime;
                                 }
 
-                                updateLiveStatus("Escuchando...");
+                                updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
                                 // Close the transcription bubble immediately without waiting for turnComplete
                                 window.currentLiveMessageDiv = null;
@@ -2444,18 +2379,22 @@
                         console.error("Live API WS Error:", err);
                         updateLiveStatus("Error en la conexión.");
                         stopLive();
+                        reject(err);
                     };
 
                     liveWebSocket.onclose = () => {
                         console.log("Live API WS Closed.");
                         stopLive();
+                        reject(new Error("Connection closed"));
                     };
 
                 } catch (err) {
-                    console.error("Failed to start live:", err);
-                    showModal("No se pudo iniciar Idealita Live. Revisa los permisos de micrófono o tu conexión.");
-                    updateLiveStatus("Desconectado");
-                }
+                        console.error("Failed to start live:", err);
+                        showModal("No se pudo iniciar Idealita Live. Revisa los permisos de micrófono o tu conexión.");
+                        updateLiveStatus("Desconectado");
+                        reject(err);
+                    }
+                });
             }
 
             function playPcmAudio(base64Data) {
@@ -2500,7 +2439,7 @@
                      }
 
                      if(pcmPlaybackContext && activeAudioSources.length === 0 && pcmPlaybackContext.currentTime >= nextPlayTime) {
-                          updateLiveStatus("Escuchando...");
+                          updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
                      }
                 };
             }
@@ -2560,7 +2499,16 @@
 
             }
 
-            if (btnStartLive) btnStartLive.addEventListener('click', startLive);
+            if (btnStartLive) {
+                btnStartLive.addEventListener('click', async () => {
+                    if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && window.isCurrentVoiceMode === false) {
+                        stopLive();
+                        // wait a bit for cleanup
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                    startLive(true);
+                });
+            }
             if (btnStopLive) btnStopLive.addEventListener('click', stopLive);
 
             // Toggle Mobile Avatar

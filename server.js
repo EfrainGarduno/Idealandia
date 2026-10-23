@@ -395,7 +395,7 @@ app.post('/api/recover', async (req, res) => {
         const user = users[0];
         const token = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
         // Invalidate previous pending tokens for this user
         await pool.execute('UPDATE password_resets SET used = 1 WHERE usuario_id = ? AND used = 0', [user.id]);
@@ -415,8 +415,8 @@ app.post('/api/recover', async (req, res) => {
                     from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
                     to: user.email,
                     subject: "Recuperación de Contraseña - Idealandia",
-                    text: `Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):\n\n${resetLink}\n\nSi no fuiste tú, ignora este correo.`,
-                    html: `<p>Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 30 minutos):</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si no fuiste tú, ignora este correo.</p>`
+                    text: `Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 10 minutos):\n\n${resetLink}\n\nSi no fuiste tú, ignora este correo.`,
+                    html: `<p>Has solicitado recuperar tu contraseña. Usa este enlace para restablecerla (válido por 10 minutos):</p><p><a href="${resetLink}">${resetLink}</a></p><p>Si no fuiste tú, ignora este correo.</p>`
                 });
             } catch (err) {
                 console.error("Error al enviar el correo de recuperación:", err.message);
