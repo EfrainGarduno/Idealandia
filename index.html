@@ -1393,9 +1393,9 @@
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             if (token) {
-                // Verify the token before showing the reset form
+                // Verify token first
                 fetch(`/api/verify-reset-token/${token}`)
-                    .then(res => res.json())
+                    .then(response => response.json())
                     .then(data => {
                         if (data.valid) {
                             document.getElementById('reset-token').value = token;
@@ -1408,13 +1408,11 @@
                                 }
                             });
                         } else {
-                            showModal('El enlace de recuperación ha caducado o es inválido.');
+                            showModal('El enlace de recuperación es inválido o ha caducado.');
                         }
-                        // Clean URL
                         window.history.replaceState({}, document.title, window.location.pathname);
                     })
-                    .catch(err => {
-                        console.error('Error verifying token:', err);
+                    .catch(() => {
                         showModal('Error al verificar el enlace de recuperación.');
                         window.history.replaceState({}, document.title, window.location.pathname);
                     });
@@ -2020,14 +2018,14 @@
                                                 name: "consultar_ideas_usuario",
                                                 description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas.",
                                                 parameters: {
-                                                    type: "object",
+                                                    type: "OBJECT",
                                                     properties: {
                                                         estado: {
-                                                            type: "string",
+                                                            type: "STRING",
                                                             description: "El estado de las ideas a filtrar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). No envíes este parámetro si el usuario quiere todas las ideas."
                                                         },
                                                         palabra_clave: {
-                                                            type: "string",
+                                                            type: "STRING",
                                                             description: "Palabra clave para buscar dentro del título o descripción de las ideas (ej. 'proyecto', 'app')."
                                                         }
                                                     }
@@ -2036,10 +2034,10 @@
                                                 name: "consultar_documentacion",
                                                 description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
                                                 parameters: {
-                                                    type: "object",
+                                                    type: "OBJECT",
                                                     properties: {
                                                         tema: {
-                                                            type: "string",
+                                                            type: "STRING",
                                                             description: "Palabra clave o tema a buscar en la documentación (ej. 'ideas', 'pensión', 'administrador', 'menú', 'login')."
                                                         }
                                                     },

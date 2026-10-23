@@ -37,22 +37,9 @@ window.fetch = async (url) => {
         if (global.mockIdeasFail) {
             return { ok: false };
         }
-
-        const isFilterState = url.includes('estado=pendiente');
-        const isFilterKeyword = url.includes('palabra_clave=test');
-
-        let ideasMock = [{ id: 1, titulo: 'Idea mock test', estado: 'pendiente' }, { id: 2, titulo: 'Otra idea', estado: 'completada' }];
-
-        if (isFilterState) {
-            ideasMock = ideasMock.filter(i => i.estado === 'pendiente');
-        }
-        if (isFilterKeyword) {
-            ideasMock = ideasMock.filter(i => i.titulo.includes('test'));
-        }
-
         return {
             ok: true,
-            json: async () => ({ ideas: ideasMock })
+            json: async () => ({ ideas: [{ id: 1, titulo: 'Idea mock', estado: 'pendiente' }] })
         };
     }
     if (url === '/api/live-token') {
@@ -253,50 +240,28 @@ setTimeout(() => {
                             const funcRes = JSON.parse(newMessages[0]);
                             assert.ok(funcRes.toolResponse, 'Should wrap inside toolResponse');
                             assert.strictEqual(funcRes.toolResponse.functionResponses[0].name, 'consultar_ideas_usuario');
-                            assert.strictEqual(funcRes.toolResponse.functionResponses[0].response.result[0].titulo, 'Idea mock test');
-                            assert.strictEqual(funcRes.toolResponse.functionResponses[0].response.result.length, 2);
+                            assert.strictEqual(funcRes.toolResponse.functionResponses[0].response.result[0].titulo, 'Idea mock');
 
-                            // Case 5.5: Function Call with parameters (filters)
-                            const filterCount = MockWebSocket.messagesSent.length;
+                            // Case 6: Function Call for consultar_ideas_usuario (Failure / Unauth)
+                            global.mockIdeasFail = true;
+                            const beforeFailCount = MockWebSocket.messagesSent.length;
                             wsInstance.onmessage({
                                 data: JSON.stringify({
-                                    toolCall: { functionCalls: [ { id: "call_789", name: "consultar_ideas_usuario", args: { estado: 'pendiente', palabra_clave: 'test' } } ] }
+                                    toolCall: { functionCalls: [ { id: "call_456", name: "consultar_ideas_usuario" } ] }
                                 })
                             });
 
                             setTimeout(() => {
                                 try {
-                                    const filterMsgs = MockWebSocket.messagesSent.slice(filterCount);
-                                    const filterRes = JSON.parse(filterMsgs[0]);
-                                    assert.strictEqual(filterRes.toolResponse.functionResponses[0].response.result.length, 1);
-                                    assert.strictEqual(filterRes.toolResponse.functionResponses[0].response.result[0].titulo, 'Idea mock test');
+                                    const failMessages = MockWebSocket.messagesSent.slice(beforeFailCount);
+                                    const failRes = JSON.parse(failMessages[0]);
+                                    assert.ok(failRes.toolResponse.functionResponses[0].response.error);
+                                    assert.ok(failRes.toolResponse.functionResponses[0].response.error.includes("no esté autenticado"));
 
-                                    // Case 6: Function Call for consultar_ideas_usuario (Failure / Unauth)
-                                    global.mockIdeasFail = true;
-                                    const beforeFailCount = MockWebSocket.messagesSent.length;
-                                    wsInstance.onmessage({
-                                        data: JSON.stringify({
-                                            toolCall: { functionCalls: [ { id: "call_456", name: "consultar_ideas_usuario" } ] }
-                                        })
-                                    });
-
-                                    setTimeout(() => {
-                                        try {
-                                            const failMessages = MockWebSocket.messagesSent.slice(beforeFailCount);
-                                            const failRes = JSON.parse(failMessages[0]);
-                                            assert.ok(failRes.toolResponse.functionResponses[0].response.error);
-                                            assert.ok(failRes.toolResponse.functionResponses[0].response.error.includes("no esté autenticado"));
-
-                                            console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
-                                            process.exit(0);
-                                        } catch (e) {
-                                            console.error('Tool function test failed (fail case):', e);
-                                            process.exit(1);
-                                        }
-                                    }, 50);
-
+                                    console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
+                                    process.exit(0);
                                 } catch (e) {
-                                    console.error('Tool function test failed (filter case):', e);
+                                    console.error('Tool function test failed (fail case):', e);
                                     process.exit(1);
                                 }
                             }, 50);

@@ -99,10 +99,10 @@ const idealandiaTools = [{
             name: "consultar_documentacion",
             description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
             parameters: {
-                type: "object",
+                type: "OBJECT",
                 properties: {
                     tema: {
-                        type: "string",
+                        type: "STRING",
                         description: "Palabra clave o tema a buscar en la documentación."
                     }
                 },
@@ -395,11 +395,11 @@ app.post('/api/recover', async (req, res) => {
         const user = users[0];
         const token = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
         // Invalidate previous pending tokens for this user
         await pool.execute('UPDATE password_resets SET used = 1 WHERE usuario_id = ? AND used = 0', [user.id]);
 
-        // Fix: Use database time for expiration to prevent sync issues
         await pool.execute(
             'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))',
             [user.id, tokenHash]
@@ -437,25 +437,22 @@ app.post('/api/recover', async (req, res) => {
 app.get('/api/verify-reset-token/:token', async (req, res) => {
     try {
         const { token } = req.params;
-        if (!token) {
-            return res.status(400).json({ error: 'Falta token.' });
-        }
+        if (!token) return res.status(400).json({ valid: false });
 
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
         const [resets] = await pool.execute(
             'SELECT id FROM password_resets WHERE token_hash = ? AND used = 0 AND expires_at > NOW()',
             [tokenHash]
         );
 
-        if (resets.length === 0) {
-             return res.status(400).json({ error: 'El enlace de recuperación es inválido, ha caducado o ya fue utilizado.' });
+        if (resets.length > 0) {
+            res.status(200).json({ valid: true });
+        } else {
+            res.status(200).json({ valid: false });
         }
-
-        res.status(200).json({ valid: true });
     } catch (error) {
-        console.error('Error in /api/verify-reset-token:', error);
-        res.status(500).json({ error: 'Error interno del servidor.' });
+        console.error('Error verifying token:', error);
+        res.status(500).json({ valid: false });
     }
 });
 
@@ -1384,16 +1381,16 @@ app.get('/api/ideas', async (req, res) => {
         const { estado, palabra_clave } = req.query;
 
         let query = 'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
-        const queryParams = [usuario_id];
+        let queryParams = [usuario_id];
 
         if (estado) {
             query += ' AND estado = ?';
-            queryParams.push(estado);
+            queryParams.push(estado.trim().toLowerCase());
         }
 
         if (palabra_clave) {
             query += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
-            const wildcardKeyword = `%${palabra_clave}%`;
+            const wildcardKeyword = `%${palabra_clave.trim()}%`;
             queryParams.push(wildcardKeyword, wildcardKeyword);
         }
 
