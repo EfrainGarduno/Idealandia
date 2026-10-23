@@ -32,7 +32,9 @@ window.VRMLoaderPlugin = class {};
 // Mock fetch for /api/live-token
 dom.window.eval('window.currentUser = { id: 1, usuario: "testuser", nombre: "Test User" };');
 
+global.fetchSpyArgs = [];
 window.fetch = async (url) => {
+    global.fetchSpyArgs.push(url);
     if (url.startsWith('/api/ideas')) {
         if (global.mockIdeasFail) {
             return { ok: false };
@@ -258,8 +260,32 @@ setTimeout(() => {
                                     assert.ok(failRes.toolResponse.functionResponses[0].response.error);
                                     assert.ok(failRes.toolResponse.functionResponses[0].response.error.includes("no esté autenticado"));
 
-                                    console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
-                                    process.exit(0);
+                                    // Case 7: Function Call with query parameters for filtering
+                                    global.mockIdeasFail = false;
+                                    const beforeArgsCount = MockWebSocket.messagesSent.length;
+                                    wsInstance.onmessage({
+                                        data: JSON.stringify({
+                                            toolCall: { functionCalls: [ { id: "call_789", name: "consultar_ideas_usuario", args: { estado: "pendiente", palabra_clave: "test" } } ] }
+                                        })
+                                    });
+
+                                    setTimeout(() => {
+                                        try {
+                                            const argsMessages = MockWebSocket.messagesSent.slice(beforeArgsCount);
+                                            assert.strictEqual(argsMessages.length > 0, true, 'Function call response not sent for args');
+
+                                            // Validate fetchSpy tracking in global
+                                            assert.ok(global.fetchSpyArgs.some(url => url && url.includes("estado=pendiente")), "Fetch URL missing state");
+                                            assert.ok(global.fetchSpyArgs.some(url => url.includes('q=test')), "Fetch URL missing q");
+
+                                            console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
+                                            process.exit(0);
+                                        } catch (e) {
+                                            console.error('Tool function test failed (args case):', e);
+                                            process.exit(1);
+                                        }
+                                    }, 50);
+
                                 } catch (e) {
                                     console.error('Tool function test failed (fail case):', e);
                                     process.exit(1);
