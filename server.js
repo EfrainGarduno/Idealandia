@@ -1393,10 +1393,24 @@ app.get('/api/ideas', async (req, res) => {
         const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
-        const [ideas] = await pool.execute(
-            'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
-            [usuario_id]
-        );
+        const { estado, q } = req.query;
+        let query = 'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
+        const params = [usuario_id];
+
+        if (estado) {
+            query += ' AND estado = ?';
+            params.push(estado);
+        }
+
+        if (q) {
+            query += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
+            const likeQuery = `%${q}%`;
+            params.push(likeQuery, likeQuery);
+        }
+
+        query += ' ORDER BY fecha DESC';
+
+        const [ideas] = await pool.execute(query, params);
 
         res.status(200).json({ ideas });
     } catch (error) {
