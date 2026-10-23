@@ -96,6 +96,23 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const idealandiaTools = [{
     functionDeclarations: [
         {
+            name: "consultar_ideas_usuario",
+            description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    estado: {
+                        type: "STRING",
+                        description: "Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada')."
+                    },
+                    palabra_clave: {
+                        type: "STRING",
+                        description: "Palabras clave para buscar en título o descripción de la idea."
+                    }
+                }
+            }
+        },
+        {
             name: "consultar_documentacion",
             description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
             parameters: {
@@ -395,14 +412,13 @@ app.post('/api/recover', async (req, res) => {
         const user = users[0];
         const token = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
         // Invalidate previous pending tokens for this user
         await pool.execute('UPDATE password_resets SET used = 1 WHERE usuario_id = ? AND used = 0', [user.id]);
 
         await pool.execute(
-            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, ?)',
-            [user.id, tokenHash, expiresAt]
+            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))',
+            [user.id, tokenHash]
         );
 
         const appUrl = process.env.APP_URL || 'http://localhost:3000';
@@ -1356,10 +1372,26 @@ app.get('/api/ideas', async (req, res) => {
         const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
-        const [ideas] = await pool.execute(
-            'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
-            [usuario_id]
-        );
+        const estado = req.query.estado;
+        const q = req.query.q;
+
+        let query = 'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
+        const params = [usuario_id];
+
+        if (estado) {
+            query += ' AND estado = ?';
+            params.push(estado.toLowerCase());
+        }
+
+        if (q) {
+            query += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
+            const likeTerm = `%${q}%`;
+            params.push(likeTerm, likeTerm);
+        }
+
+        query += ' ORDER BY fecha DESC';
+
+        const [ideas] = await pool.execute(query, params);
 
         res.status(200).json({ ideas });
     } catch (error) {

@@ -2007,7 +2007,20 @@
                                         functionDeclarations: [
                                             {
                                                 name: "consultar_ideas_usuario",
-                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas."
+                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas.",
+                                                parameters: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        estado: {
+                                                            type: "STRING",
+                                                            description: "Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada')."
+                                                        },
+                                                        palabra_clave: {
+                                                            type: "STRING",
+                                                            description: "Palabras clave para buscar en título o descripción de la idea."
+                                                        }
+                                                    }
+                                                }
                                             },{
                                                 name: "consultar_documentacion",
                                                 description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
@@ -2263,7 +2276,13 @@
 
                                 if (call.name === "consultar_ideas_usuario") {
                                     try {
-                                        const ideasRes = await fetch('/api/ideas');
+                                        let url = '/api/ideas?';
+                                        const params = new URLSearchParams();
+                                        if (call.args && call.args.estado) params.append('estado', call.args.estado);
+                                        if (call.args && call.args.palabra_clave) params.append('q', call.args.palabra_clave);
+                                        url += params.toString();
+
+                                        const ideasRes = await fetch(url);
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
                                             functionResponseItem.response = { result: ideasData.ideas };
