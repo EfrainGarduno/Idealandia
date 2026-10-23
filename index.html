@@ -1393,20 +1393,42 @@
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             if (token) {
-                document.getElementById('reset-token').value = token;
-                // Use a slight timeout to ensure DOM is ready
-                setTimeout(() => {
-                    const sections = document.querySelectorAll('.content-section');
-                    sections.forEach(section => {
-                        if (section.id === 'reset') {
-                            section.style.display = 'flex';
+                fetch(`/api/verify-reset-token/${token}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.valid) {
+                            document.getElementById('reset-token').value = token;
+                            setTimeout(() => {
+                                const sections = document.querySelectorAll('.content-section');
+                                sections.forEach(section => {
+                                    if (section.id === 'reset') {
+                                        section.style.display = 'flex';
+                                    } else {
+                                        section.style.display = 'none';
+                                    }
+                                });
+                            }, 100);
                         } else {
-                            section.style.display = 'none';
+                            showModal('El enlace de recuperación es inválido o ha caducado.');
+                            setTimeout(() => {
+                                const sections = document.querySelectorAll('.content-section');
+                                sections.forEach(section => {
+                                    if (section.id === 'home') {
+                                        section.style.display = 'flex';
+                                    } else {
+                                        section.style.display = 'none';
+                                    }
+                                });
+                            }, 100);
                         }
+                    })
+                    .catch(() => {
+                        showModal('Error al verificar el enlace de recuperación.');
+                    })
+                    .finally(() => {
+                        // Clean URL
+                        window.history.replaceState({}, document.title, window.location.pathname);
                     });
-                    // Clean URL
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }, 100);
             }
 
             // Reset Password Logic
@@ -2007,20 +2029,7 @@
                                         functionDeclarations: [
                                             {
                                                 name: "consultar_ideas_usuario",
-                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas.",
-                                                parameters: {
-                                                    type: "OBJECT",
-                                                    properties: {
-                                                        estado: {
-                                                            type: "STRING",
-                                                            description: "Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada')."
-                                                        },
-                                                        palabra_clave: {
-                                                            type: "STRING",
-                                                            description: "Palabras clave para buscar en título o descripción de la idea."
-                                                        }
-                                                    }
-                                                }
+                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas."
                                             },{
                                                 name: "consultar_documentacion",
                                                 description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",

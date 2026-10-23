@@ -275,7 +275,7 @@ setTimeout(() => {
                                             assert.strictEqual(argsMessages.length > 0, true, 'Function call response not sent for args');
 
                                             // Validate fetchSpy tracking in global
-                                            assert.ok(global.fetchSpyArgs.some(url => url.includes('estado=pendiente')), "Fetch URL missing state");
+                                            assert.ok(global.fetchSpyArgs.some(url => url && url.includes("estado=pendiente")), "Fetch URL missing state");
                                             assert.ok(global.fetchSpyArgs.some(url => url.includes('q=test')), "Fetch URL missing q");
 
                                             console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');

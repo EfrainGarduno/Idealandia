@@ -97,17 +97,17 @@ const idealandiaTools = [{
     functionDeclarations: [
         {
             name: "consultar_ideas_usuario",
-            description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas.",
+            description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles. Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Si el usuario no pide un filtro, omite los parámetros.",
             parameters: {
                 type: "OBJECT",
                 properties: {
                     estado: {
                         type: "STRING",
-                        description: "Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada')."
+                        description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
                     },
                     palabra_clave: {
                         type: "STRING",
-                        description: "Palabras clave para buscar en título o descripción de la idea."
+                        description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
                     }
                 }
             }
@@ -447,6 +447,27 @@ app.post('/api/recover', async (req, res) => {
     } catch (error) {
         console.error('Error in /api/recover. Check server logs.');
         res.status(500).json({ error: 'Error interno del servidor durante la recuperación.' });
+    }
+});
+
+app.get('/api/verify-reset-token/:token', async (req, res) => {
+    try {
+        const token = req.params.token;
+        if (!token) {
+            return res.status(400).json({ error: 'Falta token' });
+        }
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const [rows] = await pool.execute(
+            'SELECT id FROM password_resets WHERE token_hash = ? AND used = 0 AND expires_at > NOW()',
+            [tokenHash]
+        );
+        if (rows.length > 0) {
+            res.status(200).json({ valid: true });
+        } else {
+            res.status(400).json({ valid: false, error: 'El token de recuperación es inválido, ha caducado o ya fue utilizado.' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Error interno.' });
     }
 });
 
@@ -1372,26 +1393,10 @@ app.get('/api/ideas', async (req, res) => {
         const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
-        const estado = req.query.estado;
-        const q = req.query.q;
-
-        let query = 'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
-        const params = [usuario_id];
-
-        if (estado) {
-            query += ' AND estado = ?';
-            params.push(estado.toLowerCase());
-        }
-
-        if (q) {
-            query += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
-            const likeTerm = `%${q}%`;
-            params.push(likeTerm, likeTerm);
-        }
-
-        query += ' ORDER BY fecha DESC';
-
-        const [ideas] = await pool.execute(query, params);
+        const [ideas] = await pool.execute(
+            'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
+            [usuario_id]
+        );
 
         res.status(200).json({ ideas });
     } catch (error) {
