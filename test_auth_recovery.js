@@ -76,15 +76,7 @@ async function runTests() {
             const knownToken = crypto.randomBytes(32).toString('hex');
             const knownTokenHash = crypto.createHash('sha256').update(knownToken).digest('hex');
 
-            // Force the token to be 11 minutes old
-            await pool.execute("UPDATE password_resets SET token_hash = ?, expires_at = DATE_SUB(NOW(), INTERVAL 11 MINUTE) WHERE usuario_id = 200", [knownTokenHash]);
-
-            // Test reset with expired token
-            let reset0 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
-            if (reset0.status !== 400) throw new Error("Expired reset token was not rejected.");
-
-            // Now make it valid (10 minutes in the future)
-            await pool.execute("UPDATE password_resets SET expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE) WHERE usuario_id = 200");
+            await pool.execute("UPDATE password_resets SET token_hash = ? WHERE usuario_id = 200", [knownTokenHash]);
 
             // Test reset with valid token
             let reset1 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
@@ -109,6 +101,26 @@ async function runTests() {
             // Test reuse of the same token
             let reset2 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'anotherpassword', passwordConfirm: 'anotherpassword' }));
             if (reset2.status !== 400) throw new Error("Reusing a token should fail.");
+
+            // Test expired token
+            const expiredToken = crypto.randomBytes(32).toString('hex');
+            const expiredTokenHash = crypto.createHash('sha256').update(expiredToken).digest('hex');
+
+            // Insert token that expired 1 second ago
+            await pool.execute("INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, DATE_SUB(NOW(), INTERVAL 1 SECOND))", [200, expiredTokenHash]);
+
+            let resetExpired = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: expiredToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
+            if (resetExpired.status !== 400) throw new Error("Using an expired token should fail.");
+
+            // Insert token exactly at the limit of expiration
+            const boundaryToken = crypto.randomBytes(32).toString('hex');
+            const boundaryTokenHash = crypto.createHash('sha256').update(boundaryToken).digest('hex');
+
+            // Insert token that has exactly expired
+            await pool.execute("INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, NOW())", [200, boundaryTokenHash]);
+
+            let resetBoundary = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: boundaryToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
+            if (resetBoundary.status !== 400) throw new Error("Using an exactly expired token should fail.");
 
             // Test Rate Limit Spoofing (X-Forwarded-For should be ignored because 'trust proxy' is 'loopback' and we are simulating external IP spoofing)
             for (let i = 0; i < 4; i++) {

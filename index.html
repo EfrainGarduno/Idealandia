@@ -1393,40 +1393,29 @@
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             if (token) {
+                // Verify the token before showing the reset form
                 fetch(`/api/verify-reset-token/${token}`)
                     .then(res => res.json())
                     .then(data => {
                         if (data.valid) {
                             document.getElementById('reset-token').value = token;
-                            setTimeout(() => {
-                                const sections = document.querySelectorAll('.content-section');
-                                sections.forEach(section => {
-                                    if (section.id === 'reset') {
-                                        section.style.display = 'flex';
-                                    } else {
-                                        section.style.display = 'none';
-                                    }
-                                });
-                            }, 100);
+                            const sections = document.querySelectorAll('.content-section');
+                            sections.forEach(section => {
+                                if (section.id === 'reset') {
+                                    section.style.display = 'flex';
+                                } else {
+                                    section.style.display = 'none';
+                                }
+                            });
                         } else {
-                            showModal('El enlace de recuperación es inválido o ha caducado.');
-                            setTimeout(() => {
-                                const sections = document.querySelectorAll('.content-section');
-                                sections.forEach(section => {
-                                    if (section.id === 'home') {
-                                        section.style.display = 'flex';
-                                    } else {
-                                        section.style.display = 'none';
-                                    }
-                                });
-                            }, 100);
+                            showModal('El enlace de recuperación ha caducado o es inválido.');
                         }
-                    })
-                    .catch(() => {
-                        showModal('Error al verificar el enlace de recuperación.');
-                    })
-                    .finally(() => {
                         // Clean URL
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    })
+                    .catch(err => {
+                        console.error('Error verifying token:', err);
+                        showModal('Error al verificar el enlace de recuperación.');
                         window.history.replaceState({}, document.title, window.location.pathname);
                     });
             }
@@ -2013,7 +2002,7 @@
 
                         // Send initial setup
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
-                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. DEBES usar la herramienta consultar_ideas_usuario obligatoriamente siempre que el usuario te pregunte por sus ideas, la cantidad de ellas, o busque alguna idea en específico. Tienes permiso total de consultar estas ideas por él. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
+                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
                             sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
                         }
@@ -2029,17 +2018,17 @@
                                         functionDeclarations: [
                                             {
                                                 name: "consultar_ideas_usuario",
-                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Si el usuario no pide un filtro, omite los parámetros.",
+                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas.",
                                                 parameters: {
-                                                    type: "OBJECT",
+                                                    type: "object",
                                                     properties: {
                                                         estado: {
-                                                            type: "STRING",
-                                                            description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
+                                                            type: "string",
+                                                            description: "El estado de las ideas a filtrar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). No envíes este parámetro si el usuario quiere todas las ideas."
                                                         },
                                                         palabra_clave: {
-                                                            type: "STRING",
-                                                            description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
+                                                            type: "string",
+                                                            description: "Palabra clave para buscar dentro del título o descripción de las ideas (ej. 'proyecto', 'app')."
                                                         }
                                                     }
                                                 }
@@ -2047,10 +2036,10 @@
                                                 name: "consultar_documentacion",
                                                 description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
                                                 parameters: {
-                                                    type: "OBJECT",
+                                                    type: "object",
                                                     properties: {
                                                         tema: {
-                                                            type: "STRING",
+                                                            type: "string",
                                                             description: "Palabra clave o tema a buscar en la documentación (ej. 'ideas', 'pensión', 'administrador', 'menú', 'login')."
                                                         }
                                                     },
@@ -2298,16 +2287,24 @@
 
                                 if (call.name === "consultar_ideas_usuario") {
                                     try {
-                                        let url = '/api/ideas?';
+                                        const estado = call.args && call.args.estado ? call.args.estado : '';
+                                        const palabra_clave = call.args && call.args.palabra_clave ? call.args.palabra_clave : '';
+
                                         const params = new URLSearchParams();
-                                        if (call.args && call.args.estado) params.append('estado', call.args.estado);
-                                        if (call.args && call.args.palabra_clave) params.append('q', call.args.palabra_clave);
-                                        url += params.toString();
+                                        if (estado) params.append('estado', estado);
+                                        if (palabra_clave) params.append('palabra_clave', palabra_clave);
+
+                                        const url = '/api/ideas' + (params.toString() ? '?' + params.toString() : '');
 
                                         const ideasRes = await fetch(url);
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
-                                            functionResponseItem.response = { result: ideasData.ideas };
+                                            // Ensure the result is presented clearly as text or an object structure Gemini can easily read
+                                            if (ideasData.ideas && ideasData.ideas.length > 0) {
+                                                functionResponseItem.response = { result: ideasData.ideas };
+                                            } else {
+                                                functionResponseItem.response = { result: "No se encontraron ideas que coincidan con los criterios." };
+                                            }
                                         } else {
                                             functionResponseItem.response = { error: 'No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado.' };
                                         }
