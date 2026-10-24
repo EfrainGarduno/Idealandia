@@ -96,6 +96,23 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const idealandiaTools = [{
     functionDeclarations: [
         {
+            name: "consultar_ideas_usuario",
+            description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles. Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Si el usuario no pide un filtro, omite los parámetros.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    estado: {
+                        type: "STRING",
+                        description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
+                    },
+                    palabra_clave: {
+                        type: "STRING",
+                        description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
+                    }
+                }
+            }
+        },
+        {
             name: "consultar_documentacion",
             description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
             parameters: {
@@ -395,14 +412,13 @@ app.post('/api/recover', async (req, res) => {
         const user = users[0];
         const token = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
         // Invalidate previous pending tokens for this user
         await pool.execute('UPDATE password_resets SET used = 1 WHERE usuario_id = ? AND used = 0', [user.id]);
 
         await pool.execute(
-            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, ?)',
-            [user.id, tokenHash, expiresAt]
+            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))',
+            [user.id, tokenHash]
         );
 
         const appUrl = process.env.APP_URL || 'http://localhost:3000';
@@ -431,6 +447,27 @@ app.post('/api/recover', async (req, res) => {
     } catch (error) {
         console.error('Error in /api/recover. Check server logs.');
         res.status(500).json({ error: 'Error interno del servidor durante la recuperación.' });
+    }
+});
+
+app.get('/api/verify-reset-token/:token', async (req, res) => {
+    try {
+        const token = req.params.token;
+        if (!token) {
+            return res.status(400).json({ error: 'Falta token' });
+        }
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const [rows] = await pool.execute(
+            'SELECT id FROM password_resets WHERE token_hash = ? AND used = 0 AND expires_at > NOW()',
+            [tokenHash]
+        );
+        if (rows.length > 0) {
+            res.status(200).json({ valid: true });
+        } else {
+            res.status(400).json({ valid: false, error: 'El token de recuperación es inválido, ha caducado o ya fue utilizado.' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Error interno.' });
     }
 });
 
@@ -1356,10 +1393,24 @@ app.get('/api/ideas', async (req, res) => {
         const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
-        const [ideas] = await pool.execute(
-            'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
-            [usuario_id]
-        );
+        const { estado, q } = req.query;
+        let query = 'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
+        const params = [usuario_id];
+
+        if (estado) {
+            query += ' AND estado = ?';
+            params.push(estado);
+        }
+
+        if (q) {
+            query += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
+            const likeQuery = `%${q}%`;
+            params.push(likeQuery, likeQuery);
+        }
+
+        query += ' ORDER BY fecha DESC';
+
+        const [ideas] = await pool.execute(query, params);
 
         res.status(200).json({ ideas });
     } catch (error) {
