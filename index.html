@@ -2066,6 +2066,7 @@
                                 outputAudioTranscription: {}
                             }
                         };
+                        console.log("[DEBUG IDEALITA 1] Sending setup message with tools:", setupMessage.setup.tools[0].functionDeclarations.map(d => d.name));
                         liveWebSocket.send(JSON.stringify(setupMessage));
 
 
@@ -2241,10 +2242,12 @@
                         const response = JSON.parse(textData);
 
                         // Debug log for all incoming messages for diagnostics
+                        console.log("[DEBUG IDEALITA 3] Received Gemini response keys:", Object.keys(response));
                         console.log("Gemini Live API response received:", Object.keys(response));
 
                         // Debug log for incoming messages
                         if (response.setupComplete) {
+                            console.log("[DEBUG IDEALITA 2] Setup complete received.");
                             console.log("Gemini Live Setup Complete:", response.setupComplete);
                             isSetupComplete = true;
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
@@ -2285,6 +2288,7 @@
                         }
 
                         if (response.toolCall && response.toolCall.functionCalls) {
+                            console.log("[DEBUG IDEALITA 4] Received toolCall with functionCalls:", response.toolCall.functionCalls.map(c => c.name));
                             let toolResponse = {
                                 functionResponses: []
                             };
@@ -2297,6 +2301,7 @@
                                 };
 
                                 if (call.name === "consultar_ideas_usuario") {
+                                    console.log("[DEBUG IDEALITA 5] Tool consultar_ideas_usuario called with args:", JSON.stringify(call.args || {}));
                                     try {
                                         let url = '/api/ideas?';
                                         const params = new URLSearchParams();
@@ -2304,11 +2309,15 @@
                                         if (call.args && call.args.palabra_clave) params.append('q', call.args.palabra_clave);
                                         url += params.toString();
 
+                                        console.log("[DEBUG IDEALITA 6a] Fetching ideas from URL:", url);
                                         const ideasRes = await fetch(url);
+                                        console.log("[DEBUG IDEALITA 6b] Fetch response status:", ideasRes.status);
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
+                                            console.log("[DEBUG IDEALITA 6c] Fetch ideas quantity:", ideasData.ideas ? ideasData.ideas.length : 0);
                                             functionResponseItem.response = { result: ideasData.ideas };
                                         } else {
+                                            console.log("[DEBUG IDEALITA 6d] Fetch error response status:", ideasRes.status);
                                             functionResponseItem.response = { error: 'No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado.' };
                                         }
                                     } catch (e) {
@@ -2332,10 +2341,12 @@
                                 toolResponse.functionResponses.push(functionResponseItem);
                             }
 
+                            console.log("[DEBUG IDEALITA 7] Sending toolResponse to Gemini:", JSON.stringify(toolResponse).substring(0, 100) + '...');
                             liveWebSocket.send(JSON.stringify({ toolResponse }));
                         }
 
                         if (response.serverContent) {
+                            console.log("[DEBUG IDEALITA 8] Received serverContent response");
                             const content = response.serverContent;
 
                             if (content.modelTurn && content.modelTurn.parts) {
