@@ -2035,6 +2035,10 @@
                                                 parameters: {
                                                     type: "OBJECT",
                                                     properties: {
+                                                        tipo_consulta: {
+                                                            type: "STRING",
+                                                            description: "Obligatorio. Usa 'todas' si el usuario pide todas sus ideas o cantidad, o 'filtradas' si busca algo específico."
+                                                        },
                                                         estado: {
                                                             type: "STRING",
                                                             description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
@@ -2043,7 +2047,8 @@
                                                             type: "STRING",
                                                             description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
                                                         }
-                                                    }
+                                                    },
+                                                    required: ["tipo_consulta"]
                                                 }
                                             },{
                                                 name: "consultar_documentacion",

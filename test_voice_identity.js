@@ -231,7 +231,7 @@ setTimeout(() => {
                     const initialMessagesCount = MockWebSocket.messagesSent.length;
                     wsInstance.onmessage({
                         data: JSON.stringify({
-                            toolCall: { functionCalls: [ { id: "call_123", name: "consultar_ideas_usuario" } ] }
+                            toolCall: { functionCalls: [ { id: "call_123", name: "consultar_ideas_usuario", args: { tipo_consulta: "todas" } } ] }
                         })
                     });
 
@@ -249,7 +249,7 @@ setTimeout(() => {
                             const beforeFailCount = MockWebSocket.messagesSent.length;
                             wsInstance.onmessage({
                                 data: JSON.stringify({
-                                    toolCall: { functionCalls: [ { id: "call_456", name: "consultar_ideas_usuario" } ] }
+                                    toolCall: { functionCalls: [ { id: "call_456", name: "consultar_ideas_usuario", args: { tipo_consulta: "todas" } } ] }
                                 })
                             });
 
@@ -265,7 +265,7 @@ setTimeout(() => {
                                     const beforeArgsCount = MockWebSocket.messagesSent.length;
                                     wsInstance.onmessage({
                                         data: JSON.stringify({
-                                            toolCall: { functionCalls: [ { id: "call_789", name: "consultar_ideas_usuario", args: { estado: "pendiente", palabra_clave: "test" } } ] }
+                                            toolCall: { functionCalls: [ { id: "call_789", name: "consultar_ideas_usuario", args: { tipo_consulta: "filtradas", estado: "pendiente", palabra_clave: "test" } } ] }
                                         })
                                     });
 

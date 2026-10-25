@@ -101,6 +101,10 @@ const idealandiaTools = [{
             parameters: {
                 type: "OBJECT",
                 properties: {
+                    tipo_consulta: {
+                        type: "STRING",
+                        description: "Requerido. Indica si se desean todas las ideas ('todas') o un subconjunto filtrado ('filtradas')."
+                    },
                     estado: {
                         type: "STRING",
                         description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
@@ -109,7 +113,8 @@ const idealandiaTools = [{
                         type: "STRING",
                         description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
                     }
-                }
+                },
+                required: ["tipo_consulta"]
             }
         },
         {
