@@ -1877,12 +1877,14 @@
                         await startLive(false);
                     }
 
-                    liveWebSocket.send(JSON.stringify({
+                    const userMsg = {
                         clientContent: {
                             turns: [{ role: "user", parts: [{ text: text }] }],
                             turnComplete: true
                         }
-                    }));
+                    };
+                    console.log(`[DEBUG WS TEXT SEND] WS readyState: ${liveWebSocket.readyState} | Payload:`, JSON.stringify(userMsg));
+                    liveWebSocket.send(JSON.stringify(userMsg));
 
                     if (!window.currentLiveMessageDiv) {
                         window.currentLiveMessageDiv = addMessage('', 'idealita');
@@ -2103,6 +2105,7 @@
                                 // To avoid spamming, only log one in every 50 chunks
                                 chunkCount++;
                                 if (chunkCount % 50 === 0) {
+                                    console.log(`[DEBUG WS AUDIO SEND] chunkCount: ${chunkCount}, WS readyState: ${liveWebSocket.readyState}, Audio MimeType: ${msg.realtimeInput.audio.mimeType}, Payload size: ~${base64Data.length} chars`);
                                     console.log("Sending PCM audio chunk... (logged 1 every 50)");
                                 }
 
@@ -2428,14 +2431,14 @@
                     };
 
                     liveWebSocket.onerror = (err) => {
-                        console.error("Live API WS Error:", err);
+                        console.error("[DEBUG WS ERROR] Live API WS Error encountered. Message details (if any):", err.message || "No error message provided");
                         updateLiveStatus("Error en la conexión.");
                         stopLive();
                         reject(err);
                     };
 
-                    liveWebSocket.onclose = () => {
-                        console.log("Live API WS Closed.");
+                    liveWebSocket.onclose = (event) => {
+                        console.log(`[DEBUG WS CLOSE] Live API WS Closed. Code: ${event.code}, Reason: "${event.reason}", wasClean: ${event.wasClean}`);
                         stopLive();
                         reject(new Error("Connection closed"));
                     };
