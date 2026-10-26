@@ -2262,6 +2262,37 @@
                             isSetupComplete = true;
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
+                            // Enviar mensajes iniciales de identidad y contexto una vez que el setup se completa
+                            try {
+                                const manualRes = await fetch('/docs/idealandia_manual.md');
+                                if (manualRes.ok) {
+                                    const manualText = await manualRes.text();
+                                    liveWebSocket.send(JSON.stringify({
+                                        clientContent: {
+                                            turns: [{ role: "user", parts: [{ text: `Aquí tienes el contexto de Idealandia, úsalo para responder preguntas sobre la plataforma:\n\n${manualText}` }] }],
+                                            turnComplete: false
+                                        }
+                                    }));
+                                }
+                            } catch (e) {
+                                console.error("Could not load manual context:", e);
+                            }
+
+                            if (window.currentUser) {
+                                const userName = window.currentUser.nombre || window.currentUser.usuario;
+                                liveWebSocket.send(JSON.stringify({
+                                    clientContent: {
+                                        turns: [{ role: "user", parts: [{ text: `Soy ${userName}` }] }],
+                                        turnComplete: false
+                                    }
+                                }));
+                                liveWebSocket.send(JSON.stringify({
+                                    clientContent: {
+                                        turns: [{ role: "user", parts: [{ text: "Tú eres Idealita." }] }],
+                                        turnComplete: false
+                                    }
+                                }));
+                            }
 
                             resolve();
                         }
