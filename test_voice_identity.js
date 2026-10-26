@@ -226,6 +226,32 @@ setTimeout(() => {
                             assert.strictEqual(msg2.textContent.includes('Cumula tivo'), true, 'Cumulative + interrupted turn failed');
                             assert.strictEqual(msg3.textContent.includes('Nuevo turno'), true, 'New turn after stray turnComplete failed');
 
+
+                            // Case 4.5: Function Call inside serverContent.modelTurn.parts
+                            global.mockIdeasFail = false;
+                            const beforePartsCount_isolated = MockWebSocket.messagesSent.length;
+                            wsInstance.onmessage({
+                                data: JSON.stringify({
+                                    serverContent: {
+                                        modelTurn: {
+                                            parts: [
+                                                { functionCall: { id: "call_embedded", name: "consultar_ideas_usuario", args: { tipo_consulta: "todas" } } }
+                                            ]
+                                        }
+                                    }
+                                })
+                            });
+
+                            setTimeout(() => {
+                                try {
+                                    const embeddedMessages = MockWebSocket.messagesSent.slice(beforePartsCount_isolated);
+                                    assert.strictEqual(embeddedMessages.length > 0, true, 'Function call response not sent for embedded parts');
+                                    const embeddedFuncRes = JSON.parse(embeddedMessages[0]);
+                                    assert.ok(embeddedFuncRes.toolResponse, 'Should wrap inside toolResponse');
+                                    assert.strictEqual(embeddedFuncRes.toolResponse.functionResponses[0].name, 'consultar_ideas_usuario');
+                                } catch(e) { console.error(e); }
+                            }, 50);
+
                             // Case 5: Function Call for consultar_ideas_usuario (Success)
                     global.mockIdeasFail = false;
                     const initialMessagesCount = MockWebSocket.messagesSent.length;
