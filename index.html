@@ -1074,7 +1074,6 @@
                 }
             }
 
-            let lastUserId = null;
             async function checkAuthStatus() {
                 try {
                     const response = await fetch('/api/me');
@@ -1082,29 +1081,15 @@
                         const data = await response.json();
                         const user = data.user;
 
-                        const isNewUser = (lastUserId !== null && lastUserId !== user.id);
-                        lastUserId = user.id;
                         window.currentUser = user;
-
                         document.getElementById('auth-container-guest').style.display = 'none';
                         document.getElementById('auth-container-user').style.display = 'flex';
                         document.getElementById('user-greeting').textContent = `Bienvenido, ${user.nombre || user.usuario}`;
-
-                        if (isNewUser && typeof stopLive === 'function') {
-                            console.log("Cambio de usuario detectado. Reinicializando sesión de Idealita...");
-                            stopLive();
-                        }
                     } else {
                         document.getElementById('auth-container-guest').style.display = 'flex';
                         document.getElementById('auth-container-user').style.display = 'none';
                         document.getElementById('user-greeting').textContent = '';
                         window.currentUser = null;
-
-                        if (lastUserId !== null && typeof stopLive === 'function') {
-                            console.log("Sesión cerrada. Reinicializando sesión de Idealita...");
-                            stopLive();
-                        }
-                        lastUserId = null;
                     }
 
                     // Build menu after determining auth status
@@ -1127,6 +1112,7 @@
                     try {
                         const response = await fetch('/api/logout', { method: 'POST' });
                         if (response.ok) {
+                            if (typeof stopLive === 'function') stopLive();
                             checkAuthStatus();
                             document.querySelector('a[data-section="inicio"]').click();
                         }
@@ -1549,6 +1535,7 @@
                             document.getElementById('login-usuario').value = '';
                             document.getElementById('login-password').value = '';
 
+                            if (typeof stopLive === 'function') stopLive();
                             // Switch view to home or chat, and update UI
                             checkAuthStatus();
                             document.querySelector('a[data-section="inicio"]').click();
@@ -2024,39 +2011,7 @@
 
                                         updateLiveStatus("Conectando con Gemini...");
 
-                    // Fetch user ideas to inject into the initial context WITHOUT causing turn overflow
-                    let userContextStr = "";
-                    if (window.currentUser) {
-                        try {
-                            const ideasRes = await fetch('/api/ideas');
-                            if (ideasRes.ok) {
-                                const ideasData = await ideasRes.json();
-                                if (ideasData.ideas && ideasData.ideas.length > 0) {
-                                    userContextStr = "\n\n--- CONTEXTO PERSONAL DEL USUARIO AUTENTICADO ---\n";
-                                    userContextStr += `Cantidad total de ideas recuperadas: ${ideasData.ideas.length}\n\n`;
 
-                                    const maxIdeasEnContexto = 5;
-                                    const ideasAMostrar = ideasData.ideas.slice(0, maxIdeasEnContexto);
-                                    ideasAMostrar.forEach((idea, index) => {
-                                        userContextStr += `Idea ${index + 1}:\n`;
-                                        userContextStr += `- Título: ${idea.titulo}\n`;
-                                        userContextStr += `- Estado: ${idea.estado}\n`;
-                                        userContextStr += `- Descripción: ${idea.descripcion}\n\n`;
-                                    });
-                                    if (ideasData.ideas.length > maxIdeasEnContexto) {
-                                        userContextStr += `(Solo se muestran las últimas ${maxIdeasEnContexto} ideas para ahorrar memoria. Usa la herramienta consultar_ideas_usuario para ver las demás o buscar algo específico).\n\n`;
-                                    }
-                                    userContextStr += "NOTA PARA IDEALITA: Las ideas listadas arriba corresponden al usuario autenticado de esta sesión. Puedes utilizar estos datos para responder de inmediato preguntas sobre sus ideas. Distingue entre estos datos reales y tus propias sugerencias. No inventes ideas, cantidades, estados ni descripciones. Si te piden todas las ideas y hay más de las listadas, usa la herramienta consultar_ideas_usuario.\n";
-                                } else {
-                                    userContextStr = "\n\n--- CONTEXTO PERSONAL DEL USUARIO AUTENTICADO ---\nEl usuario actualmente no tiene ideas registradas.\n";
-                                }
-                            } else {
-                                userContextStr = "\n\n--- CONTEXTO PERSONAL DEL USUARIO AUTENTICADO ---\nNo se pudieron consultar las ideas en este momento por un error de conexión.\n";
-                            }
-                        } catch (e) {
-                            console.error("Error cargando contexto de ideas:", e);
-                        }
-                    }
 
                     const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
                     liveWebSocket = new WebSocket(wsUrl);
@@ -2068,10 +2023,7 @@
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
                         let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. DEBES usar la herramienta consultar_ideas_usuario obligatoriamente siempre que el usuario te pregunte por sus ideas, la cantidad de ellas, o busque alguna idea en específico y no lo sepas. NUNCA digas que no puedes ver las ideas o que el usuario debe ir a otra sección. TIENES PERMISO TOTAL para usar la herramienta consultar_ideas_usuario y debes hacerlo para obtener la respuesta. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
-                            sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
-                        }
-                        if (userContextStr) {
-                            sysInstruction += userContextStr;
+                            sysInstruction += " Estás conversando con " + userName + ", quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.";
                         }
 
                         const setupMessage = {
@@ -2319,33 +2271,53 @@
                             // Enviar mensajes iniciales de identidad y contexto una vez que el setup se completa
                             try {
                                 const manualRes = await fetch('/docs/idealandia_manual.md');
-                                if (manualRes.ok) {
-                                    const manualText = await manualRes.text();
-                                    liveWebSocket.send(JSON.stringify({
-                                        clientContent: {
-                                            turns: [{ role: "user", parts: [{ text: `Aquí tienes el contexto de Idealandia, úsalo para responder preguntas sobre la plataforma:\n\n${manualText}` }] }],
-                                            turnComplete: false
-                                        }
-                                    }));
-                                }
-                            } catch (e) {
-                                console.error("Could not load manual context:", e);
-                            }
+                                const manualText = manualRes.ok ? await manualRes.text() : "Manual no disponible.";
 
-                            if (window.currentUser) {
-                                const userName = window.currentUser.nombre || window.currentUser.usuario;
+                                let ideasContext = "El usuario actualmente no tiene ideas registradas.";
+                                if (window.currentUser) {
+                                    const ideasRes = await fetch('/api/ideas');
+                                    if (ideasRes.ok) {
+                                        const ideasData = await ideasRes.json();
+                                        if (ideasData.ideas && ideasData.ideas.length > 0) {
+                                            const formattedIdeas = ideasData.ideas.map(idea =>
+                                                `ID: ${idea.id} | Título: ${idea.titulo} | Estado: ${idea.estado}\nDescripción: ${idea.descripcion}`
+                                            ).join("\n\n");
+                                            ideasContext = `CONTEXTO PERSONAL DEL USUARIO AUTENTICADO: Aquí están las ideas actuales del usuario:\n\n${formattedIdeas}`;
+                                        }
+                                    } else {
+                                        ideasContext = "No se pudieron obtener las ideas del usuario por un error del servidor.";
+                                    }
+                                }
+
+                                const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : "Usuario";
+
+                                const combinedContext = `IDENTIDAD Y REGLAS DE NEGOCIO (IDEALITA):
+Eres Idealita, la asistente de Idealandia. Estás hablando con ${userName}.
+
+Aquí tienes el contexto general de la plataforma:
+${manualText}
+
+${ideasContext}
+
+Usa este contexto para responder a las preguntas del usuario.`;
+
                                 liveWebSocket.send(JSON.stringify({
                                     clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: `Soy ${userName}` }] }],
+                                        turns: [
+                                            {
+                                                role: "user",
+                                                parts: [
+                                                    { text: combinedContext }
+                                                ]
+                                            }
+                                        ],
                                         turnComplete: false
                                     }
                                 }));
-                                liveWebSocket.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: "Tú eres Idealita." }] }],
-                                        turnComplete: false
-                                    }
-                                }));
+
+                                console.log("[DEBUG IDEALITA 2b] Unified context sent successfully.");
+                            } catch (e) {
+                                console.error("Could not load combined context:", e);
                             }
 
                             resolve();
@@ -2534,9 +2506,7 @@
             function playPcmAudio(base64Data) {
                 if (!pcmPlaybackContext) return;
 
-                if (pcmPlaybackContext.state === 'suspended') {
-                    pcmPlaybackContext.resume();
-                }
+
 
                 const buffer = base64ToArrayBuffer(base64Data);
                 const int16Array = new Int16Array(buffer);
