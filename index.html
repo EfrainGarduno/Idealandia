@@ -2033,18 +2033,18 @@
                                                 name: "consultar_ideas_usuario",
                                                 description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Debes proporcionar siempre el parámetro tipo_consulta.",
                                                 parameters: {
-                                                    type: "OBJECT",
+                                                    type: "object",
                                                     properties: {
                                                         tipo_consulta: {
-                                                            type: "STRING",
+                                                            type: "string",
                                                             description: "Obligatorio. Usa 'todas' si el usuario pide todas sus ideas o cantidad, o 'filtradas' si busca algo específico."
                                                         },
                                                         estado: {
-                                                            type: "STRING",
+                                                            type: "string",
                                                             description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
                                                         },
                                                         palabra_clave: {
-                                                            type: "STRING",
+                                                            type: "string",
                                                             description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
                                                         }
                                                     },
@@ -2054,10 +2054,10 @@
                                                 name: "consultar_documentacion",
                                                 description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
                                                 parameters: {
-                                                    type: "OBJECT",
+                                                    type: "object",
                                                     properties: {
                                                         tema: {
-                                                            type: "STRING",
+                                                            type: "string",
                                                             description: "Palabra clave o tema a buscar en la documentación (ej. 'ideas', 'pensión', 'administrador', 'menú', 'login')."
                                                         }
                                                     },

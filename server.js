@@ -99,18 +99,18 @@ const idealandiaTools = [{
             name: "consultar_ideas_usuario",
             description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles. Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Debes proporcionar siempre el parámetro tipo_consulta.",
             parameters: {
-                type: "OBJECT",
+                type: "object",
                 properties: {
                     tipo_consulta: {
-                        type: "STRING",
+                        type: "string",
                         description: "Requerido. Indica si se desean todas las ideas ('todas') o un subconjunto filtrado ('filtradas')."
                     },
                     estado: {
-                        type: "STRING",
+                        type: "string",
                         description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
                     },
                     palabra_clave: {
-                        type: "STRING",
+                        type: "string",
                         description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
                     }
                 },
@@ -121,10 +121,10 @@ const idealandiaTools = [{
             name: "consultar_documentacion",
             description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
             parameters: {
-                type: "OBJECT",
+                type: "object",
                 properties: {
                     tema: {
-                        type: "STRING",
+                        type: "string",
                         description: "Palabra clave o tema a buscar en la documentación."
                     }
                 },
@@ -218,9 +218,38 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
-        if (functionCall && functionName === 'consultar_documentacion') {
-            const query = functionCall.args.tema || message;
-            const docResult = await searchKnowledge(pool, userId, query);
+        let toolResult = null;
+        if (functionCall) {
+            if (functionName === 'consultar_documentacion') {
+                const query = functionCall.args.tema || message;
+                toolResult = await searchKnowledge(pool, userId, query);
+            } else if (functionName === 'consultar_ideas_usuario') {
+                if (!userId) {
+                    toolResult = "El usuario no está autenticado. No se pueden consultar sus ideas.";
+                } else {
+                    const estado = functionCall.args.estado;
+                    const palabra_clave = functionCall.args.palabra_clave;
+
+                    let sqlQuery = 'SELECT titulo, estado FROM ideas WHERE usuario_id = ?';
+                    const sqlParams = [userId];
+
+                    if (estado) {
+                        sqlQuery += ' AND estado = ?';
+                        sqlParams.push(estado);
+                    }
+                    if (palabra_clave) {
+                        sqlQuery += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
+                        sqlParams.push(`%${palabra_clave}%`, `%${palabra_clave}%`);
+                    }
+
+                    try {
+                        const [rows] = await pool.execute(sqlQuery, sqlParams);
+                        toolResult = rows;
+                    } catch (e) {
+                        toolResult = "Error al consultar la base de datos de ideas.";
+                    }
+                }
+            }
 
             // Second turn: send tool result back
             const secondTurnStream = await ai.models.generateContentStream({
@@ -233,7 +262,7 @@ app.post('/api/chat', async (req, res) => {
                         parts: [{
                             functionResponse: {
                                 name: functionName,
-                                response: { result: docResult }
+                                response: { result: toolResult }
                             }
                         }]
                     }
