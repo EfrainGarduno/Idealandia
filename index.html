@@ -1880,7 +1880,7 @@
                     const userMsg = {
                         clientContent: {
                             turns: [{ role: "user", parts: [{ text: text }] }],
-                            turnComplete: false
+                            turnComplete: true
                         }
                     };
                     console.log(`[DEBUG WS TEXT SEND] WS readyState: ${liveWebSocket.readyState} | Payload:`, JSON.stringify(userMsg));
@@ -2033,18 +2033,18 @@
                                                 name: "consultar_ideas_usuario",
                                                 description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Debes proporcionar siempre el parámetro tipo_consulta.",
                                                 parameters: {
-                                                    type: "object",
+                                                    type: "OBJECT",
                                                     properties: {
                                                         tipo_consulta: {
-                                                            type: "string",
+                                                            type: "STRING",
                                                             description: "Obligatorio. Usa 'todas' si el usuario pide todas sus ideas o cantidad, o 'filtradas' si busca algo específico."
                                                         },
                                                         estado: {
-                                                            type: "string",
+                                                            type: "STRING",
                                                             description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
                                                         },
                                                         palabra_clave: {
-                                                            type: "string",
+                                                            type: "STRING",
                                                             description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
                                                         }
                                                     },
@@ -2054,10 +2054,10 @@
                                                 name: "consultar_documentacion",
                                                 description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
                                                 parameters: {
-                                                    type: "object",
+                                                    type: "OBJECT",
                                                     properties: {
                                                         tema: {
-                                                            type: "string",
+                                                            type: "STRING",
                                                             description: "Palabra clave o tema a buscar en la documentación (ej. 'ideas', 'pensión', 'administrador', 'menú', 'login')."
                                                         }
                                                     },
@@ -2270,7 +2270,7 @@
                                     liveWebSocket.send(JSON.stringify({
                                         clientContent: {
                                             turns: [{ role: "user", parts: [{ text: `Aquí tienes el contexto de Idealandia, úsalo para responder preguntas sobre la plataforma:\n\n${manualText}` }] }],
-                                            turnComplete: false
+                                            turnComplete: true
                                         }
                                     }));
                                 }

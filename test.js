@@ -116,7 +116,7 @@ class MockWebSocket {
                 setTimeout(() => {
                     if (this.onmessage) {
                         const responseText = parsed.clientContent.turns[0].parts[0].text === 'Hello Idealita' ? "Soy Idealita, tu asistente de IA." : "Entiendo, has enviado otro mensaje.";
-                        if (parsed.clientContent.turnComplete !== undefined) { // allow both true and false
+                        if (parsed.clientContent.turnComplete) {
                             this.onmessage({ data: JSON.stringify({ serverContent: { outputTranscription: { text: responseText }, turnComplete: true } }) });
                         }
                     }

@@ -99,18 +99,18 @@ const idealandiaTools = [{
             name: "consultar_ideas_usuario",
             description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles. Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Debes proporcionar siempre el parámetro tipo_consulta.",
             parameters: {
-                type: "object",
+                type: "OBJECT",
                 properties: {
                     tipo_consulta: {
-                        type: "string",
+                        type: "STRING",
                         description: "Requerido. Indica si se desean todas las ideas ('todas') o un subconjunto filtrado ('filtradas')."
                     },
                     estado: {
-                        type: "string",
+                        type: "STRING",
                         description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
                     },
                     palabra_clave: {
-                        type: "string",
+                        type: "STRING",
                         description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
                     }
                 },
@@ -121,10 +121,10 @@ const idealandiaTools = [{
             name: "consultar_documentacion",
             description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
             parameters: {
-                type: "object",
+                type: "OBJECT",
                 properties: {
                     tema: {
-                        type: "string",
+                        type: "STRING",
                         description: "Palabra clave o tema a buscar en la documentación."
                     }
                 },
