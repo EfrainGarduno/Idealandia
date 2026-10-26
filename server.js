@@ -232,7 +232,7 @@ app.post('/api/chat', async (req, res) => {
                     const estado = functionCall.args.estado;
                     const palabra_clave = functionCall.args.palabra_clave;
 
-                    let sqlQuery = 'SELECT titulo, estado FROM ideas WHERE usuario_id = ?';
+                    let sqlQuery = 'SELECT id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
                     const sqlParams = [userId];
 
                     if (estado) {

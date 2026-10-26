@@ -2006,7 +2006,42 @@
                     const data = await res.json();
                     const token = data.token;
 
-                    updateLiveStatus("Conectando con Gemini...");
+                                        updateLiveStatus("Conectando con Gemini...");
+
+                    // Fetch user ideas to inject into the initial context WITHOUT causing turn overflow
+                    let userContextStr = "";
+                    if (window.currentUser) {
+                        try {
+                            const ideasRes = await fetch('/api/ideas');
+                            if (ideasRes.ok) {
+                                const ideasData = await ideasRes.json();
+                                if (ideasData.ideas && ideasData.ideas.length > 0) {
+                                    userContextStr = "\n\n--- CONTEXTO PERSONAL DEL USUARIO AUTENTICADO ---\n";
+                                    userContextStr += `Cantidad total de ideas recuperadas: ${ideasData.ideas.length}\n\n`;
+
+                                    const maxIdeasEnContexto = 5;
+                                    const ideasAMostrar = ideasData.ideas.slice(0, maxIdeasEnContexto);
+                                    ideasAMostrar.forEach((idea, index) => {
+                                        userContextStr += `Idea ${index + 1}:\n`;
+                                        userContextStr += `- Título: ${idea.titulo}\n`;
+                                        userContextStr += `- Estado: ${idea.estado}\n`;
+                                        userContextStr += `- Descripción: ${idea.descripcion}\n\n`;
+                                    });
+                                    if (ideasData.ideas.length > maxIdeasEnContexto) {
+                                        userContextStr += `(Solo se muestran las últimas ${maxIdeasEnContexto} ideas para ahorrar memoria. Usa la herramienta consultar_ideas_usuario para ver las demás o buscar algo específico).\n\n`;
+                                    }
+                                    userContextStr += "NOTA PARA IDEALITA: Las ideas listadas arriba corresponden al usuario autenticado de esta sesión. Puedes utilizar estos datos para responder de inmediato preguntas sobre sus ideas. Distingue entre estos datos reales y tus propias sugerencias. No inventes ideas, cantidades, estados ni descripciones. Si te piden todas las ideas y hay más de las listadas, usa la herramienta consultar_ideas_usuario.\n";
+                                } else {
+                                    userContextStr = "\n\n--- CONTEXTO PERSONAL DEL USUARIO AUTENTICADO ---\nEl usuario actualmente no tiene ideas registradas.\n";
+                                }
+                            } else {
+                                userContextStr = "\n\n--- CONTEXTO PERSONAL DEL USUARIO AUTENTICADO ---\nNo se pudieron consultar las ideas en este momento por un error de conexión.\n";
+                            }
+                        } catch (e) {
+                            console.error("Error cargando contexto de ideas:", e);
+                        }
+                    }
+
                     const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
                     liveWebSocket = new WebSocket(wsUrl);
 
@@ -2015,9 +2050,12 @@
 
                         // Send initial setup
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
-                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. DEBES usar la herramienta consultar_ideas_usuario obligatoriamente siempre que el usuario te pregunte por sus ideas, la cantidad de ellas, o busque alguna idea en específico. Tienes permiso total de consultar estas ideas por él. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
+                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. DEBES usar la herramienta consultar_ideas_usuario obligatoriamente siempre que el usuario te pregunte por sus ideas, la cantidad de ellas, o busque alguna idea en específico y no lo sepas. NUNCA digas que no puedes ver las ideas o que el usuario debe ir a otra sección. TIENES PERMISO TOTAL para usar la herramienta consultar_ideas_usuario y debes hacerlo para obtener la respuesta. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
                             sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
+                        }
+                        if (userContextStr) {
+                            sysInstruction += userContextStr;
                         }
 
                         const setupMessage = {
