@@ -1880,7 +1880,7 @@
                     const userMsg = {
                         clientContent: {
                             turns: [{ role: "user", parts: [{ text: text }] }],
-                            turnComplete: true
+                            turnComplete: false
                         }
                     };
                     console.log(`[DEBUG WS TEXT SEND] WS readyState: ${liveWebSocket.readyState} | Payload:`, JSON.stringify(userMsg));
