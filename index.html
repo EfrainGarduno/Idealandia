@@ -2303,33 +2303,48 @@
                             // Enviar mensajes iniciales de identidad y contexto una vez que el setup se completa
                             try {
                                 const manualRes = await fetch('/docs/idealandia_manual.md');
-                                if (manualRes.ok) {
-                                    const manualText = await manualRes.text();
-                                    liveWebSocket.send(JSON.stringify({
-                                        clientContent: {
-                                            turns: [{ role: "user", parts: [{ text: `Aquí tienes el contexto de Idealandia, úsalo para responder preguntas sobre la plataforma:\n\n${manualText}` }] }],
-                                            turnComplete: false
-                                        }
-                                    }));
-                                }
-                            } catch (e) {
-                                console.error("Could not load manual context:", e);
-                            }
+                                const manualText = manualRes.ok ? await manualRes.text() : "No manual available.";
 
-                            if (window.currentUser) {
-                                const userName = window.currentUser.nombre || window.currentUser.usuario;
+                                const ideasReq = await fetch('/api/ideas');
+                                let ideasContext = "El usuario no tiene ideas registradas.";
+                                if (ideasReq.ok) {
+                                    const ideasData = await ideasReq.json();
+                                    if (ideasData.ideas && ideasData.ideas.length > 0) {
+                                         const formattedIdeas = ideasData.ideas.slice(0, 5).map(idea =>
+                                             `ID: ${idea.id} | Título: ${idea.titulo} | Estado: ${idea.estado}\nDescripción: ${idea.descripcion}`
+                                         ).join("\n\n");
+                                         ideasContext = `CONTEXTO PERSONAL DEL USUARIO AUTENTICADO: Aquí están algunas de las ideas actuales del usuario (limitado a 5, usar consultar_ideas_usuario para más):\n\n${formattedIdeas}`;
+                                    }
+                                }
+
+                                const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : "Usuario";
+
+                                const combinedContext = `IDENTIDAD Y REGLAS DE NEGOCIO (IDEALITA):
+Eres Idealita, el asistente de Idealandia. Estás hablando con ${userName}.
+
+${manualText}
+
+${ideasContext}
+
+Usa este contexto para responder a las preguntas del usuario.`;
+
                                 liveWebSocket.send(JSON.stringify({
                                     clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: `Soy ${userName}` }] }],
+                                        turns: [
+                                            {
+                                                role: "user",
+                                                parts: [
+                                                    { text: combinedContext }
+                                                ]
+                                            }
+                                        ],
                                         turnComplete: false
                                     }
                                 }));
-                                liveWebSocket.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: "Tú eres Idealita." }] }],
-                                        turnComplete: false
-                                    }
-                                }));
+
+                                console.log("[DEBUG IDEALITA 2b] Unified context sent successfully.");
+                            } catch (error) {
+                                console.error("[DEBUG IDEALITA ERROR] Error sending unified context:", error);
                             }
 
                             resolve();
