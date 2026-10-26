@@ -2251,6 +2251,8 @@
 
                         // Debug log for all incoming messages for diagnostics
                         console.log("[DEBUG IDEALITA 3] Received Gemini response keys:", Object.keys(response));
+                        if (response.toolCall) { console.log("[DEBUG IDEALITA 3a] toolCall object:", JSON.stringify(response.toolCall)); }
+                        if (response.toolCallCancellation) { console.log("[DEBUG IDEALITA 3b] toolCallCancellation object:", JSON.stringify(response.toolCallCancellation)); }
                         console.log("Gemini Live API response received:", Object.keys(response));
 
                         // Debug log for incoming messages
@@ -2295,13 +2297,30 @@
                             resolve();
                         }
 
+                        let pendingFunctionCalls = [];
+
+                        // Extract from root toolCall array
                         if (response.toolCall && response.toolCall.functionCalls) {
-                            console.log("[DEBUG IDEALITA 4] Received toolCall with functionCalls:", response.toolCall.functionCalls.map(c => c.name));
+                            pendingFunctionCalls = pendingFunctionCalls.concat(response.toolCall.functionCalls);
+                        }
+
+                        // Extract from serverContent.modelTurn.parts
+                        if (response.serverContent && response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
+                            for (const part of response.serverContent.modelTurn.parts) {
+                                if (part.functionCall) {
+                                    pendingFunctionCalls.push(part.functionCall);
+                                    console.log("[DEBUG IDEALITA 8a] Extracted functionCall from parts:", part.functionCall.name);
+                                }
+                            }
+                        }
+
+                        if (pendingFunctionCalls.length > 0) {
+                            console.log("[DEBUG IDEALITA 4] Executing pending function calls:", pendingFunctionCalls.map(c => c.name));
                             let toolResponse = {
                                 functionResponses: []
                             };
 
-                            for (const call of response.toolCall.functionCalls) {
+                            for (const call of pendingFunctionCalls) {
                                 let functionResponseItem = {
                                     id: call.id,
                                     name: call.name,
@@ -2359,6 +2378,7 @@
 
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for (const part of content.modelTurn.parts) {
+                                    if (part.functionCall) { console.log("[DEBUG IDEALITA 8a] Found functionCall in parts:", part.functionCall.name); }
                                     if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
                                         if (window.isCurrentVoiceMode !== false) {
                                             updateLiveStatus("Hablando...");
