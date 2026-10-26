@@ -97,7 +97,7 @@ const idealandiaTools = [{
     functionDeclarations: [
         {
             name: "consultar_ideas_usuario",
-            description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles. Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Si el usuario no pide un filtro, omite los parámetros.",
+            description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles. Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Debes proporcionar siempre el parámetro tipo_consulta.",
             parameters: {
                 type: "OBJECT",
                 properties: {
