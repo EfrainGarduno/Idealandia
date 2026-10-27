@@ -1993,7 +1993,7 @@
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
                         let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
-                            sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. Dirígete a él o ella por su nombre cuando resulte natural.`;
+                            sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. ¡Importante! Siempre, al inicio de la conversación, debes saludar al usuario por su nombre de forma amigable (ejemplo: \'¡Hola, ${userName}!\', o variaciones). Dirígete a él o ella por su nombre también durante la conversación cuando resulte natural.`;
                         }
 
                         const setupMessage = {
@@ -2007,7 +2007,24 @@
                                         functionDeclarations: [
                                             {
                                                 name: "consultar_ideas_usuario",
-                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas."
+                                                description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles (título, estado, etc). Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas.",
+                                                parameters: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        tipo_consulta: {
+                                                            type: "STRING",
+                                                            description: "El tipo de consulta, puede ser 'todas' o 'filtradas'."
+                                                        },
+                                                        estado: {
+                                                            type: "STRING",
+                                                            description: "Opcional. Filtrar por estado de la idea (ej. 'pendiente', 'completada')."
+                                                        },
+                                                        palabra_clave: {
+                                                            type: "STRING",
+                                                            description: "Opcional. Palabra clave para buscar en el título o descripción."
+                                                        }
+                                                    }
+                                                }
                                             },{
                                                 name: "consultar_documentacion",
                                                 description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones (como el panel administrador).",
@@ -2263,7 +2280,17 @@
 
                                 if (call.name === "consultar_ideas_usuario") {
                                     try {
-                                        const ideasRes = await fetch('/api/ideas');
+                                        let ideasUrl = '/api/ideas';
+                                        if (call.args) {
+                                            const params = new URLSearchParams();
+                                            if (call.args.estado) params.append('estado', call.args.estado);
+                                            if (call.args.palabra_clave) params.append('q', call.args.palabra_clave);
+                                            const qs = params.toString();
+                                            if (qs) {
+                                                ideasUrl += '?' + qs;
+                                            }
+                                        }
+                                        const ideasRes = await fetch(ideasUrl);
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
                                             functionResponseItem.response = { result: ideasData.ideas };
