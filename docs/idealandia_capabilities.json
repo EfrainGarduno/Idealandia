@@ -18,9 +18,7 @@
     "requisitos_acceso": "Requiere autenticación (Usuario logueado).",
     "estado_implementacion": "Completo",
     "referencia_manual": "4",
-    "dependencias_relevantes": [
-      "Base de datos (tabla ideas)"
-    ]
+    "dependencias_relevantes": ["Base de datos (tabla ideas)"]
   },
   {
     "id": "cap_pensiones",
@@ -41,11 +39,7 @@
     "requisitos_acceso": "Requiere autenticación.",
     "estado_implementacion": "Completo (Chat tradicional y Gemini Live)",
     "referencia_manual": "7",
-    "dependencias_relevantes": [
-      "Gemini AI API",
-      "Three.js",
-      "@pixiv/three-vrm"
-    ]
+    "dependencias_relevantes": ["Gemini AI API", "Three.js", "@pixiv/three-vrm"]
   },
   {
     "id": "cap_admin",
@@ -56,10 +50,7 @@
     "requisitos_acceso": "Requiere autenticación y Rol con permisos de Administrador.",
     "estado_implementacion": "Completo",
     "referencia_manual": "4",
-    "dependencias_relevantes": [
-      "Middleware requireAdmin",
-      "Tablas RBAC"
-    ]
+    "dependencias_relevantes": ["Middleware requireAdmin", "Tablas RBAC"]
   },
   {
     "id": "cap_auth",
@@ -70,78 +61,6 @@
     "requisitos_acceso": "Público.",
     "estado_implementacion": "Completo",
     "referencia_manual": "6",
-    "dependencias_relevantes": [
-      "Nodemailer (SMTP) para recuperación"
-    ]
-  },
-  {
-    "id": "cap_emprendimientos",
-    "nombre_visible": "Emprendimientos",
-    "descripcion": "Sección para apoyar y dar seguimiento a emprendimientos.",
-    "ubicacion_menu": "Servicios > Emprendimientos",
-    "finalidad_pasos": "Ingresar a Servicios, seleccionar Emprendimientos para acceder a la gestión.",
-    "requisitos_acceso": "Requiere autenticación.",
-    "estado_implementacion": "Pendiente",
-    "referencia_manual": "4"
-  },
-  {
-    "id": "cap_ideas_innovadoras",
-    "nombre_visible": "Ideas Innovadoras",
-    "descripcion": "Sección para explorar ideas de vanguardia.",
-    "ubicacion_menu": "Servicios > Ideas Innovadoras",
-    "finalidad_pasos": "Ingresar a Servicios, seleccionar Ideas Innovadoras.",
-    "requisitos_acceso": "Requiere autenticación.",
-    "estado_implementacion": "Pendiente",
-    "referencia_manual": "4"
-  },
-  {
-    "id": "cap_clases_ingles",
-    "nombre_visible": "Clases de Inglés",
-    "descripcion": "Acceso a material y sesiones de clases de inglés.",
-    "ubicacion_menu": "Servicios > Clases de Inglés",
-    "finalidad_pasos": "Ingresar a Servicios, seleccionar Clases de Inglés.",
-    "requisitos_acceso": "Requiere autenticación.",
-    "estado_implementacion": "Pendiente",
-    "referencia_manual": "4"
-  },
-  {
-    "id": "cap_perfilamiento",
-    "nombre_visible": "Perfilamiento",
-    "descripcion": "Herramienta para perfilar usuarios y proyectos.",
-    "ubicacion_menu": "Servicios > Perfilamiento",
-    "finalidad_pasos": "Ingresar a Servicios, seleccionar Perfilamiento.",
-    "requisitos_acceso": "Requiere autenticación.",
-    "estado_implementacion": "Pendiente",
-    "referencia_manual": "4"
-  },
-  {
-    "id": "cap_recursos_gratis",
-    "nombre_visible": "Recursos Gratis",
-    "descripcion": "Biblioteca de herramientas y recursos gratuitos.",
-    "ubicacion_menu": "Recursos Gratis",
-    "finalidad_pasos": "Navegar al menú de Recursos Gratis.",
-    "requisitos_acceso": "Público.",
-    "estado_implementacion": "Pendiente",
-    "referencia_manual": "6"
-  },
-  {
-    "id": "cap_contacto",
-    "nombre_visible": "Contáctanos",
-    "descripcion": "Formulario e información de contacto.",
-    "ubicacion_menu": "Contáctanos",
-    "finalidad_pasos": "Hacer clic en Contáctanos en el menú para enviar un mensaje.",
-    "requisitos_acceso": "Público.",
-    "estado_implementacion": "Pendiente",
-    "referencia_manual": "7"
-  },
-  {
-    "id": "cap_acerca_de",
-    "nombre_visible": "Acerca de",
-    "descripcion": "Información sobre Idealandia y su equipo.",
-    "ubicacion_menu": "Acerca de",
-    "finalidad_pasos": "Hacer clic en Acerca de.",
-    "requisitos_acceso": "Público.",
-    "estado_implementacion": "Completo",
-    "referencia_manual": "8"
+    "dependencias_relevantes": ["Nodemailer (SMTP) para recuperación"]
   }
 ]

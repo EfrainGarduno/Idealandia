@@ -96,28 +96,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const idealandiaTools = [{
     functionDeclarations: [
         {
-            name: "consultar_ideas_usuario",
-            description: "Consulta las ideas reales del usuario autenticado en Idealandia. Devuelve la cantidad de ideas y sus detalles. Úsalo cuando el usuario pregunte cuántas ideas tiene, o cuáles son sus ideas. Debes proporcionar siempre el parámetro tipo_consulta.",
-            parameters: {
-                type: "OBJECT",
-                properties: {
-                    tipo_consulta: {
-                        type: "STRING",
-                        description: "Requerido. Indica si se desean todas las ideas ('todas') o un subconjunto filtrado ('filtradas')."
-                    },
-                    estado: {
-                        type: "STRING",
-                        description: "Opcional. Estado de la idea a buscar (ej. 'pendiente', 'en progreso', 'completada', 'descartada'). Omítelo si no aplica."
-                    },
-                    palabra_clave: {
-                        type: "STRING",
-                        description: "Opcional. Palabras clave para buscar en título o descripción de la idea. Omítelo si no aplica."
-                    }
-                },
-                required: ["tipo_consulta"]
-            }
-        },
-        {
             name: "consultar_documentacion",
             description: "Busca en el manual y catálogo de funcionalidades de Idealandia. Úsalo cuando el usuario pregunte sobre qué puede hacer en la plataforma, qué opciones del menú existen, cómo utilizar una herramienta, o si tiene acceso a ciertas funciones.",
             parameters: {
@@ -134,7 +112,7 @@ const idealandiaTools = [{
     ]
 }];
 
-const chatSysInstr = "Eres Idealita, la asistente personal de Idealandia, una asistente de inteligencia artificial conversacional, amable, natural y útil.  Tu propósito es conversar con los usuarios sobre cualquier tema apropiado utilizando tus conocimientos generales (cultura, ciencia, historia, tecnología, filosofía, naturaleza, desarrollo personal, etc.), y además, ayudarles de manera experta dentro de Idealandia. Siempre debes presentarte y responder como 'Idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. No rechaces una pregunta únicamente porque el tema no esté relacionado con Idealandia; responde normalmente utilizando tus conocimientos generales. Cuando el usuario pregunte sobre Idealandia, sus funcionalidades, o sus propias ideas, utiliza las herramientas disponibles o el contexto provisto. Si la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función'. NO INVENTES pasos ni ideas. El manual y las ideas son fuentes de contexto especializado, no límites temáticos de la conversación. No estás obligada a encontrar todas las respuestas dentro del manual si te preguntan sobre el mundo real.";
+const chatSysInstr = "Eres 'idealita', un asistente virtual de Idealandia. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
 
 // Keep the old object for backward compatibility if needed, but we'll use ai.models.generateContentStream in the POST
 const chat = ai.chats.create({
@@ -156,9 +134,7 @@ app.get('/api/live-token', async (req, res) => {
                 liveConnectConstraints: {
                     model: 'models/gemini-3.8-live',
                     config: {
-                        responseModalities: ['AUDIO'],
-                        systemInstruction: chatSysInstr,
-                        tools: idealandiaTools
+                        responseModalities: ['AUDIO']
                     }
                 }
             }
@@ -190,33 +166,23 @@ app.post('/api/chat', async (req, res) => {
         // Ensure we know who is asking
         const token = req.cookies.auth_token;
         let userId = null;
-        let userName = null;
         if (token) {
             try {
                 const decoded = await verifyToken(token, pool);
                 userId = decoded.id;
-                const [rows] = await pool.execute('SELECT nombre, usuario FROM usuarios WHERE id = ?', [userId]);
-                if (rows.length > 0) {
-                    userName = rows[0].nombre || rows[0].usuario;
-                }
             } catch (e) {}
-        }
-
-        let dynamicSysInstr = chatSysInstr;
-        if (userName) {
-            dynamicSysInstr += ` Estás conversando con ${userName}, quien ha iniciado sesión. Inicia la conversación saludándolo por su nombre de forma amable.`;
         }
 
         let aiResponseStream = await ai.models.generateContentStream({
             model: 'gemini-3.6-flash',
             contents: [{ role: 'user', parts: [{ text: message }] }],
             config: {
-                systemInstruction: dynamicSysInstr,
+                systemInstruction: chatSysInstr,
                 tools: idealandiaTools
             }
         });
 
-        // Collect function calls if they occur first (dummy line to match end of replacement)
+        // Collect function calls if they occur first
         let functionCall = null;
         let functionName = null;
 
@@ -230,38 +196,9 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
-        let toolResult = null;
-        if (functionCall) {
-            if (functionName === 'consultar_documentacion') {
-                const query = functionCall.args.tema || message;
-                toolResult = await searchKnowledge(pool, userId, query);
-            } else if (functionName === 'consultar_ideas_usuario') {
-                if (!userId) {
-                    toolResult = "El usuario no está autenticado. No se pueden consultar sus ideas.";
-                } else {
-                    const estado = functionCall.args.estado;
-                    const palabra_clave = functionCall.args.palabra_clave;
-
-                    let sqlQuery = 'SELECT id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
-                    const sqlParams = [userId];
-
-                    if (estado) {
-                        sqlQuery += ' AND estado = ?';
-                        sqlParams.push(estado);
-                    }
-                    if (palabra_clave) {
-                        sqlQuery += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
-                        sqlParams.push(`%${palabra_clave}%`, `%${palabra_clave}%`);
-                    }
-
-                    try {
-                        const [rows] = await pool.execute(sqlQuery, sqlParams);
-                        toolResult = rows;
-                    } catch (e) {
-                        toolResult = "Error al consultar la base de datos de ideas.";
-                    }
-                }
-            }
+        if (functionCall && functionName === 'consultar_documentacion') {
+            const query = functionCall.args.tema || message;
+            const docResult = await searchKnowledge(pool, userId, query);
 
             // Second turn: send tool result back
             const secondTurnStream = await ai.models.generateContentStream({
@@ -274,7 +211,7 @@ app.post('/api/chat', async (req, res) => {
                         parts: [{
                             functionResponse: {
                                 name: functionName,
-                                response: { result: toolResult }
+                                response: { result: docResult }
                             }
                         }]
                     }
@@ -458,13 +395,14 @@ app.post('/api/recover', async (req, res) => {
         const user = users[0];
         const token = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
         // Invalidate previous pending tokens for this user
         await pool.execute('UPDATE password_resets SET used = 1 WHERE usuario_id = ? AND used = 0', [user.id]);
 
         await pool.execute(
-            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))',
-            [user.id, tokenHash]
+            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, ?)',
+            [user.id, tokenHash, expiresAt]
         );
 
         const appUrl = process.env.APP_URL || 'http://localhost:3000';
@@ -493,27 +431,6 @@ app.post('/api/recover', async (req, res) => {
     } catch (error) {
         console.error('Error in /api/recover. Check server logs.');
         res.status(500).json({ error: 'Error interno del servidor durante la recuperación.' });
-    }
-});
-
-app.get('/api/verify-reset-token/:token', async (req, res) => {
-    try {
-        const token = req.params.token;
-        if (!token) {
-            return res.status(400).json({ error: 'Falta token' });
-        }
-        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const [rows] = await pool.execute(
-            'SELECT id FROM password_resets WHERE token_hash = ? AND used = 0 AND expires_at > NOW()',
-            [tokenHash]
-        );
-        if (rows.length > 0) {
-            res.status(200).json({ valid: true });
-        } else {
-            res.status(400).json({ valid: false, error: 'El token de recuperación es inválido, ha caducado o ya fue utilizado.' });
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Error interno.' });
     }
 });
 
@@ -1439,24 +1356,10 @@ app.get('/api/ideas', async (req, res) => {
         const decoded = await verifyToken(token, pool);
         const usuario_id = decoded.id;
 
-        const { estado, q } = req.query;
-        let query = 'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ?';
-        const params = [usuario_id];
-
-        if (estado) {
-            query += ' AND estado = ?';
-            params.push(estado);
-        }
-
-        if (q) {
-            query += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
-            const likeQuery = `%${q}%`;
-            params.push(likeQuery, likeQuery);
-        }
-
-        query += ' ORDER BY fecha DESC';
-
-        const [ideas] = await pool.execute(query, params);
+        const [ideas] = await pool.execute(
+            'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
+            [usuario_id]
+        );
 
         res.status(200).json({ ideas });
     } catch (error) {

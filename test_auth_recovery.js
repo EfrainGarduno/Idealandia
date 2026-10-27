@@ -69,22 +69,42 @@ async function runTests() {
             if (resets.length === 0) throw new Error("No reset token found in DB.");
             const savedHash = resets[0].token_hash;
 
-            // We mock the original token by directly feeding the API the raw token if we had it, but we only have the hash.
-            // Since we know the backend hashes it via sha256, we can't reverse it.
-            // So we'll inject a known token into the DB.
             const crypto = require('crypto');
+
+            // --- Expiration Tests ---
+
+            // 1. Test token with more than 10 minutes age is rejected
+            const expiredToken = crypto.randomBytes(32).toString('hex');
+            const expiredTokenHash = crypto.createHash('sha256').update(expiredToken).digest('hex');
+
+            await pool.execute(
+                "INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (200, ?, DATE_SUB(NOW(), INTERVAL 1 MINUTE))",
+                [expiredTokenHash]
+            );
+
+            let resetExpired = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: expiredToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
+            if (resetExpired.status !== 400) throw new Error("Expired token was not rejected.");
+
+            // 2. Test exact boundary condition (10 mins)
+            const boundaryToken = crypto.randomBytes(32).toString('hex');
+            const boundaryTokenHash = crypto.createHash('sha256').update(boundaryToken).digest('hex');
+
+            // Set expiration to exactly now, which should fail because the query is strictly `> NOW()`
+            await pool.execute(
+                "INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (200, ?, NOW())",
+                [boundaryTokenHash]
+            );
+
+            let resetBoundary = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: boundaryToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
+            if (resetBoundary.status !== 400) throw new Error("Boundary token (exactly NOW) was not rejected.");
+
+
+            // --- Success Test ---
+
             const knownToken = crypto.randomBytes(32).toString('hex');
             const knownTokenHash = crypto.createHash('sha256').update(knownToken).digest('hex');
 
-            // Force the token to be 11 minutes old
-            await pool.execute("UPDATE password_resets SET token_hash = ?, expires_at = DATE_SUB(NOW(), INTERVAL 11 MINUTE) WHERE usuario_id = 200", [knownTokenHash]);
-
-            // Test reset with expired token
-            let reset0 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
-            if (reset0.status !== 400) throw new Error("Expired reset token was not rejected.");
-
-            // Now make it valid (10 minutes in the future)
-            await pool.execute("UPDATE password_resets SET expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE) WHERE usuario_id = 200");
+            await pool.execute("UPDATE password_resets SET token_hash = ? WHERE usuario_id = 200", [knownTokenHash]);
 
             // Test reset with valid token
             let reset1 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'newpassword123', passwordConfirm: 'newpassword123' }));
@@ -110,15 +130,19 @@ async function runTests() {
             let reset2 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: knownToken, password: 'anotherpassword', passwordConfirm: 'anotherpassword' }));
             if (reset2.status !== 400) throw new Error("Reusing a token should fail.");
 
+
+            // 3. Test token invalidation on new request
+            let rec2 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/recover', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '192.168.1.2' } }, JSON.stringify({ email: 'testrec@test.com' }));
+
+            const [pendingResets] = await pool.execute("SELECT * FROM password_resets WHERE usuario_id = 200 AND used = 0");
+            if (pendingResets.length !== 1) throw new Error("There should only be 1 pending token after a new request, older ones should be invalidated.");
+
+
             // Test Rate Limit Spoofing (X-Forwarded-For should be ignored because 'trust proxy' is 'loopback' and we are simulating external IP spoofing)
             for (let i = 0; i < 4; i++) {
                  await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
             }
-            // 5th total on localhost (we already did 6 earlier, wait, the rate limiter tracks per IP. '127.0.0.1' did 6, so it's already blocked).
-            // Actually, because 'trust proxy' is 'loopback', X-Forwarded-For is IGNORED when the connection comes from localhost (127.0.0.1 is loopback so it MIGHT trust it).
-            // If it trusts it, it uses '8.8.8.8'. Let's see if 8.8.8.8 gets blocked.
             let rateLimitSpoof = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
-            // We sent 4 to 8.8.8.8. If we send a 5th, it should pass, 6th should fail.
             await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
             let blockCheck = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '8.8.8.8' } }, JSON.stringify({ usuario: 'testrec@test.com', password: 'testpassword' }));
 

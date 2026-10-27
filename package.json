@@ -4,7 +4,7 @@
   "description": "Plataforma Idealandia con asistente Idealita y servicios digitales",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js && node test_pension.js && node test_voice_identity.js && node test_menu_api_integration.js && node test_admin_visitas.js && node test_smtp_config.js && node test_recovery_ui.js && node test_knowledge.js && node test_ideas_api.js",
+    "test": "node test.js && node test_pension.js && node test_voice_identity.js && node test_menu_api_integration.js && node test_admin_visitas.js && node test_smtp_config.js && node test_recovery_ui.js && node test_knowledge.js",
     "test:responsive": "node verify_viewports.js",
     "start:prod": "./scripts/start-idealandia.sh"
   },
@@ -32,7 +32,8 @@
     "jsdom": "^29.1.1",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.24.5",
-    "nodemailer": "^10.1.2"
+    "nodemailer": "^10.1.2",
+    "sinon": "^22.1.0"
   },
   "devDependencies": {
     "playwright": "^1.64.0"
