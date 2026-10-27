@@ -2,5 +2,3 @@ node_modules/
 .env
 visitas.json
 *.tmp*
-
-visitas.json.tmp.*

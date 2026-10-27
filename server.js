@@ -134,7 +134,7 @@ const idealandiaTools = [{
     ]
 }];
 
-const chatSysInstr = "Eres Idealita, la asistente personal de Idealandia, una asistente de inteligencia artificial conversacional, amable, natural y útil.  Tu propósito es conversar con los usuarios sobre cualquier tema apropiado utilizando tus conocimientos generales (cultura, ciencia, historia, tecnología, filosofía, naturaleza, desarrollo personal, etc.), y además, ayudarles de manera experta dentro de Idealandia. Siempre debes presentarte y responder como 'Idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. No rechaces una pregunta únicamente porque el tema no esté relacionado con Idealandia; responde normalmente utilizando tus conocimientos generales. Cuando el usuario pregunte sobre Idealandia, sus funcionalidades, o sus propias ideas, utiliza las herramientas disponibles o el contexto provisto. Si la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función'. NO INVENTES pasos ni ideas. El manual y las ideas son fuentes de contexto especializado, no límites temáticos de la conversación. No estás obligada a encontrar todas las respuestas dentro del manual si te preguntan sobre el mundo real.";
+const chatSysInstr = "Eres 'idealita', un asistente virtual de Idealandia. Siempre debes presentarte y responder como 'idealita'. Nunca menciones que eres Gemini, un modelo de lenguaje grande, o una IA de Google. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
 
 // Keep the old object for backward compatibility if needed, but we'll use ai.models.generateContentStream in the POST
 const chat = ai.chats.create({
@@ -190,23 +190,33 @@ app.post('/api/chat', async (req, res) => {
         // Ensure we know who is asking
         const token = req.cookies.auth_token;
         let userId = null;
+        let userName = null;
         if (token) {
             try {
                 const decoded = await verifyToken(token, pool);
                 userId = decoded.id;
+                const [rows] = await pool.execute('SELECT nombre, usuario FROM usuarios WHERE id = ?', [userId]);
+                if (rows.length > 0) {
+                    userName = rows[0].nombre || rows[0].usuario;
+                }
             } catch (e) {}
+        }
+
+        let dynamicSysInstr = chatSysInstr;
+        if (userName) {
+            dynamicSysInstr += ` Estás conversando con ${userName}, quien ha iniciado sesión. Inicia la conversación saludándolo por su nombre de forma amable.`;
         }
 
         let aiResponseStream = await ai.models.generateContentStream({
             model: 'gemini-3.6-flash',
             contents: [{ role: 'user', parts: [{ text: message }] }],
             config: {
-                systemInstruction: chatSysInstr,
+                systemInstruction: dynamicSysInstr,
                 tools: idealandiaTools
             }
         });
 
-        // Collect function calls if they occur first
+        // Collect function calls if they occur first (dummy line to match end of replacement)
         let functionCall = null;
         let functionName = null;
 
