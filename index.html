@@ -1886,7 +1886,6 @@
                             turnComplete: true
                         }
                     };
-                    console.log(`[DEBUG WS TEXT SEND] WS readyState: ${liveWebSocket.readyState} | Payload:`, JSON.stringify(userMsg));
                     liveWebSocket.send(JSON.stringify(userMsg));
 
                     if (!window.currentLiveMessageDiv) {
@@ -2079,7 +2078,6 @@
                                 outputAudioTranscription: {}
                             }
                         };
-                        console.log("[DEBUG IDEALITA 1] Sending setup message with tools:", setupMessage.setup.tools[0].functionDeclarations.map(d => d.name));
                         liveWebSocket.send(JSON.stringify(setupMessage));
 
 
@@ -2116,8 +2114,6 @@
                                 // To avoid spamming, only log one in every 50 chunks
                                 chunkCount++;
                                 if (chunkCount % 50 === 0) {
-                                    console.log(`[DEBUG WS AUDIO SEND] chunkCount: ${chunkCount}, WS readyState: ${liveWebSocket.readyState}, Audio MimeType: ${msg.realtimeInput.audio.mimeType}, Payload size: ~${base64Data.length} chars`);
-                                    console.log("Sending PCM audio chunk... (logged 1 every 50)");
                                 }
 
                                 liveWebSocket.send(JSON.stringify(msg));
@@ -2256,14 +2252,10 @@
                         const response = JSON.parse(textData);
 
                         // Debug log for all incoming messages for diagnostics
-                        console.log("[DEBUG IDEALITA 3] Received Gemini response keys:", Object.keys(response));
-                        if (response.toolCall) { console.log("[DEBUG IDEALITA 3a] toolCall object:", JSON.stringify(response.toolCall)); }
-                        if (response.toolCallCancellation) { console.log("[DEBUG IDEALITA 3b] toolCallCancellation object:", JSON.stringify(response.toolCallCancellation)); }
                         console.log("Gemini Live API response received:", Object.keys(response));
 
                         // Debug log for incoming messages
                         if (response.setupComplete) {
-                            console.log("[DEBUG IDEALITA 2] Setup complete received.");
                             console.log("Gemini Live Setup Complete:", response.setupComplete);
                             isSetupComplete = true;
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
@@ -2314,7 +2306,6 @@ ${ideasContext}`;
                                     }
                                 }));
 
-                                console.log("[DEBUG IDEALITA 2b] Unified context sent successfully.");
                             } catch (e) {
                                 console.error("Could not load combined context:", e);
                             }
@@ -2334,13 +2325,11 @@ ${ideasContext}`;
                             for (const part of response.serverContent.modelTurn.parts) {
                                 if (part.functionCall) {
                                     pendingFunctionCalls.push(part.functionCall);
-                                    console.log("[DEBUG IDEALITA 8a] Extracted functionCall from parts:", part.functionCall.name);
                                 }
                             }
                         }
 
                         if (pendingFunctionCalls.length > 0) {
-                            console.log("[DEBUG IDEALITA 4] Executing pending function calls:", pendingFunctionCalls.map(c => c.name));
                             let toolResponse = {
                                 functionResponses: []
                             };
@@ -2353,7 +2342,6 @@ ${ideasContext}`;
                                 };
 
                                 if (call.name === "consultar_ideas_usuario") {
-                                    console.log("[DEBUG IDEALITA 5] Tool consultar_ideas_usuario called with args:", JSON.stringify(call.args || {}));
                                     try {
                                         let url = '/api/ideas?';
                                         const params = new URLSearchParams();
@@ -2361,15 +2349,11 @@ ${ideasContext}`;
                                         if (call.args && call.args.palabra_clave) params.append('q', call.args.palabra_clave);
                                         url += params.toString();
 
-                                        console.log("[DEBUG IDEALITA 6a] Fetching ideas from URL:", url);
                                         const ideasRes = await fetch(url);
-                                        console.log("[DEBUG IDEALITA 6b] Fetch response status:", ideasRes.status);
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
-                                            console.log("[DEBUG IDEALITA 6c] Fetch ideas quantity:", ideasData.ideas ? ideasData.ideas.length : 0);
                                             functionResponseItem.response = { result: ideasData.ideas };
                                         } else {
-                                            console.log("[DEBUG IDEALITA 6d] Fetch error response status:", ideasRes.status);
                                             functionResponseItem.response = { error: 'No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado.' };
                                         }
                                     } catch (e) {
@@ -2393,17 +2377,14 @@ ${ideasContext}`;
                                 toolResponse.functionResponses.push(functionResponseItem);
                             }
 
-                            console.log("[DEBUG IDEALITA 7] Sending toolResponse to Gemini:", JSON.stringify(toolResponse).substring(0, 100) + '...');
                             liveWebSocket.send(JSON.stringify({ toolResponse }));
                         }
 
                         if (response.serverContent) {
-                            console.log("[DEBUG IDEALITA 8] Received serverContent response");
                             const content = response.serverContent;
 
                             if (content.modelTurn && content.modelTurn.parts) {
                                 for (const part of content.modelTurn.parts) {
-                                    if (part.functionCall) { console.log("[DEBUG IDEALITA 8a] Found functionCall in parts:", part.functionCall.name); }
                                     if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
                                         if (window.isCurrentVoiceMode !== false) {
                                             updateLiveStatus("Hablando...");
