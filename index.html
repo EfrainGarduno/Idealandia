@@ -1111,6 +1111,21 @@
                     try {
                         const response = await fetch('/api/logout', { method: 'POST' });
                         if (response.ok) {
+                            // Terminate live session so context gets cleared
+                            if (typeof stopLive === 'function') {
+                                stopLive();
+                            }
+
+                            // Reset chat history to prevent leak
+                            const chatHistory = document.getElementById('chat-history');
+                            if (chatHistory) {
+                                chatHistory.innerHTML = `
+                                    <div class="message idealita-message">
+                                        ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
+                                    </div>
+                                `;
+                            }
+
                             checkAuthStatus();
                             document.querySelector('a[data-section="inicio"]').click();
                         }
@@ -1510,6 +1525,21 @@
                             showModal(data.message);
                             document.getElementById('login-usuario').value = '';
                             document.getElementById('login-password').value = '';
+
+                            // Terminate live session so context gets cleared
+                            if (typeof stopLive === 'function') {
+                                stopLive();
+                            }
+
+                            // Reset chat history to prevent leak
+                            const chatHistory = document.getElementById('chat-history');
+                            if (chatHistory) {
+                                chatHistory.innerHTML = `
+                                    <div class="message idealita-message">
+                                        ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
+                                    </div>
+                                `;
+                            }
 
                             // Switch view to home or chat, and update UI
                             checkAuthStatus();
@@ -1968,8 +1998,13 @@
             }
 
             async function startLive(isVoiceMode = true) {
+                if (window.isLiveConnecting) {
+                    console.log("Ya hay un intento de conexión en progreso.");
+                    return Promise.resolve();
+                }
                 return new Promise(async (resolve, reject) => {
                     try {
+                        window.isLiveConnecting = true;
                         window.isCurrentVoiceMode = isVoiceMode;
                     if (!window.threeJsAnimationFrameId && typeof window.init3DAvatar === "function") {
                         window.init3DAvatar();
@@ -2233,17 +2268,25 @@
 
                             // Send Initial identity, manual and ideas messages once setup is complete
                             try {
+                                console.time('LiveContextLoad');
                                 let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 
-                                // 1. Cargar el manual
+                                // 1. Cargar el manual (optimizado con caché)
                                 try {
-                                    const manualRes = await fetch('/docs/idealandia_manual.md');
-                                    if (manualRes.ok) {
-                                        contextText += "--- MANUAL IDEALANDIA ---\n" + (await manualRes.text()) + "\n\n";
-                                        console.log("Manual de Idealandia cargado en el contexto.");
+                                    if (!window.cachedManualText) {
+                                        const manualRes = await fetch('/docs/idealandia_manual.md');
+                                        if (manualRes.ok) {
+                                            window.cachedManualText = await manualRes.text();
+                                        } else {
+                                            console.warn("No se pudo obtener el manual (no ok).");
+                                        }
+                                    }
+
+                                    if (window.cachedManualText) {
+                                        contextText += "--- MANUAL IDEALANDIA ---\n" + window.cachedManualText + "\n\n";
+                                        console.log("Manual de Idealandia cargado en el contexto desde caché.");
                                     } else {
                                         contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
-                                        console.warn("No se pudo obtener el manual (no ok).");
                                     }
                                 } catch (e) {
                                     console.error("Excepción al cargar el manual:", e);
@@ -2291,10 +2334,12 @@
                                     }
                                 }));
                                 console.log("Contexto inicial enviado exitosamente a Gemini.");
+                                console.timeEnd('LiveContextLoad');
 
                             } catch (e) {
                                 console.error("Error crítico construyendo el contexto inicial:", e);
                             }
+                            window.isLiveConnecting = false;
                             resolve();
                         }
 
@@ -2438,12 +2483,14 @@
                         console.error("Live API WS Error:", err);
                         updateLiveStatus("Error en la conexión.");
                         stopLive();
+                        window.isLiveConnecting = false;
                         reject(err);
                     };
 
                     liveWebSocket.onclose = () => {
                         console.log("Live API WS Closed.");
                         stopLive();
+                        window.isLiveConnecting = false;
                         reject(new Error("Connection closed"));
                     };
 
@@ -2451,6 +2498,7 @@
                         console.error("Failed to start live:", err);
                         showModal("No se pudo iniciar Idealita Live. Revisa los permisos de micrófono o tu conexión.");
                         updateLiveStatus("Desconectado");
+                        window.isLiveConnecting = false;
                         reject(err);
                     }
                 });

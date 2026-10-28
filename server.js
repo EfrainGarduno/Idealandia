@@ -395,14 +395,13 @@ app.post('/api/recover', async (req, res) => {
         const user = users[0];
         const token = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
         // Invalidate previous pending tokens for this user
         await pool.execute('UPDATE password_resets SET used = 1 WHERE usuario_id = ? AND used = 0', [user.id]);
 
         await pool.execute(
-            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, ?)',
-            [user.id, tokenHash, expiresAt]
+            'INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))',
+            [user.id, tokenHash]
         );
 
         const appUrl = process.env.APP_URL || 'http://localhost:3000';

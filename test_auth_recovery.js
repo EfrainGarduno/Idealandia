@@ -71,6 +71,34 @@ async function runTests() {
 
             const crypto = require('crypto');
 
+            // --- Expiration and Concurrency Tests ---
+
+            // Test concurrent resets for the same token
+            const concurrentToken = crypto.randomBytes(32).toString('hex');
+            const concurrentTokenHash = crypto.createHash('sha256').update(concurrentToken).digest('hex');
+
+            await pool.execute(
+                "INSERT INTO password_resets (usuario_id, token_hash, expires_at) VALUES (200, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))",
+                [concurrentTokenHash]
+            );
+
+            // Execute two reset requests concurrently
+            let resetReq1 = request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: concurrentToken, password: 'racepassword123', passwordConfirm: 'racepassword123' }));
+            let resetReq2 = request({ hostname: 'localhost', port: TEST_PORT, path: '/api/reset', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ token: concurrentToken, password: 'racepassword456', passwordConfirm: 'racepassword456' }));
+
+            let results = await Promise.all([resetReq1, resetReq2]);
+
+            // Only one should succeed (200), the other should fail (400 - Invalid or expired token)
+            let successCount = 0;
+            let failureCount = 0;
+            for (let res of results) {
+                if (res.status === 200) successCount++;
+                if (res.status === 400) failureCount++;
+            }
+            if (successCount !== 1 || failureCount !== 1) {
+                throw new Error("Concurrency failure: One and only one reset should succeed.");
+            }
+
             // --- Expiration Tests ---
 
             // 1. Test token with more than 10 minutes age is rejected
