@@ -32,14 +32,22 @@ window.VRMLoaderPlugin = class {};
 // Mock fetch for /api/live-token
 dom.window.eval('window.currentUser = { id: 1, usuario: "testuser", nombre: "Test User" };');
 
+global.fetchSpyArgs = [];
 window.fetch = async (url) => {
-    if (url === '/api/ideas') {
+    global.fetchSpyArgs.push(url);
+    if (url.startsWith('/api/ideas')) {
         if (global.mockIdeasFail) {
             return { ok: false };
         }
         return {
             ok: true,
             json: async () => ({ ideas: [{ id: 1, titulo: 'Idea mock', estado: 'pendiente' }] })
+        };
+    }
+    if (url === '/docs/idealandia_manual.md') {
+        return {
+            ok: true,
+            text: async () => "# Manual Idealandia Mock"
         };
     }
     if (url === '/api/live-token') {
@@ -175,12 +183,33 @@ setTimeout(() => {
             const instructionText = parsed.setup.systemInstruction.parts[0].text;
 
             assert.ok(instructionText.includes('Eres Idealita, la asistente personal de Idealandia'), 'Should contain correct identity intro');
-            assert.ok(instructionText.includes('Dirígete a él o ella por su nombre cuando resulte natural.'), 'Should contain specific purpose');
+            assert.ok(instructionText.includes('Dirígete a él o ella por su nombre también durante la conversación cuando resulte natural.'), 'Should contain specific purpose');
             assert.ok(instructionText.includes('NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje'), 'Should contain strict negative command');
             assert.ok(parsed.setup.generationConfig, 'Setup should have generationConfig');
 
 
             assert.ok(parsed.setup.generationConfig.responseModalities.includes("AUDIO"), 'Should request AUDIO modality');
+
+            // Wait a moment for the setup complete to send the initial context message
+            setTimeout(() => {
+                const contextMessages = MockWebSocket.messagesSent.filter(msg => {
+                    try {
+                        const parsedMsg = JSON.parse(msg);
+                        if (parsedMsg.clientContent && parsedMsg.clientContent.turns) {
+                             const text = parsedMsg.clientContent.turns[0].parts[0].text;
+                             return text && text.includes("Aquí tienes el contexto");
+                        }
+                    } catch(e){}
+                    return false;
+                });
+
+                assert.ok(contextMessages.length > 0, 'Should send initial context message containing manual and ideas');
+                const contextMsg = JSON.parse(contextMessages[0]).clientContent.turns[0].parts[0].text;
+                assert.ok(contextMsg.includes('MANUAL IDEALANDIA'), 'Context should include manual section');
+                assert.ok(contextMsg.includes('Test User'), 'Context should include the user identity');
+                assert.ok(contextMsg.includes('IDEAS DEL USUARIO'), 'Context should include ideas section');
+                assert.ok(contextMsg.includes('Idea mock'), 'Context should include the mocked ideas');
+            }, 500);
 
             // Simulate incoming WebSocket messages to test transcription logic
             setTimeout(() => {
@@ -229,7 +258,7 @@ setTimeout(() => {
                     const initialMessagesCount = MockWebSocket.messagesSent.length;
                     wsInstance.onmessage({
                         data: JSON.stringify({
-                            toolCall: { functionCalls: [ { id: "call_123", name: "consultar_ideas_usuario" } ] }
+                            toolCall: { functionCalls: [ { id: "call_123", name: "consultar_ideas_usuario", args: { tipo_consulta: "todas" } } ] }
                         })
                     });
 
@@ -247,7 +276,7 @@ setTimeout(() => {
                             const beforeFailCount = MockWebSocket.messagesSent.length;
                             wsInstance.onmessage({
                                 data: JSON.stringify({
-                                    toolCall: { functionCalls: [ { id: "call_456", name: "consultar_ideas_usuario" } ] }
+                                    toolCall: { functionCalls: [ { id: "call_456", name: "consultar_ideas_usuario", args: { tipo_consulta: "todas" } } ] }
                                 })
                             });
 
@@ -258,8 +287,32 @@ setTimeout(() => {
                                     assert.ok(failRes.toolResponse.functionResponses[0].response.error);
                                     assert.ok(failRes.toolResponse.functionResponses[0].response.error.includes("no esté autenticado"));
 
-                                    console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
-                                    process.exit(0);
+                                    // Case 7: Function Call with query parameters for filtering
+                                    global.mockIdeasFail = false;
+                                    const beforeArgsCount = MockWebSocket.messagesSent.length;
+                                    wsInstance.onmessage({
+                                        data: JSON.stringify({
+                                            toolCall: { functionCalls: [ { id: "call_789", name: "consultar_ideas_usuario", args: { tipo_consulta: "filtradas", estado: "pendiente", palabra_clave: "test" } } ] }
+                                        })
+                                    });
+
+                                    setTimeout(() => {
+                                        try {
+                                            const argsMessages = MockWebSocket.messagesSent.slice(beforeArgsCount);
+                                            assert.strictEqual(argsMessages.length > 0, true, 'Function call response not sent for args');
+
+                                            // Validate fetchSpy tracking in global
+                                            assert.ok(global.fetchSpyArgs.some(url => url && url.includes("estado=pendiente")), "Fetch URL missing state");
+                                            assert.ok(global.fetchSpyArgs.some(url => url.includes('q=test')), "Fetch URL missing q");
+
+                                            console.log('Voice identity, transcription deduplication, and Tool Function Call tests passed successfully.');
+                                            process.exit(0);
+                                        } catch (e) {
+                                            console.error('Tool function test failed (args case):', e);
+                                            process.exit(1);
+                                        }
+                                    }, 50);
+
                                 } catch (e) {
                                     console.error('Tool function test failed (fail case):', e);
                                     process.exit(1);
