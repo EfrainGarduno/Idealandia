@@ -1,0 +1,144 @@
+155-+                <button id="btn-recover" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #6c40f7; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Enviar enlace</button>
+156-+                <div style="margin-top: 15px; text-align: center;">
+157-+                    <a href="#" data-section="login" style="font-size: 14px; color: #555; text-decoration: none;">Volver al Login</a>
+158-+                </div>
+159-+            </div>
+160-+        </section>
+161-+
+162-+        <section id="reset" class="content-section" style="display: none;">
+163-+            <h2>Restablecer Contraseña</h2>
+164-+            <div class="pension-form">
+165:+                <input type="hidden" id="reset-token" name="reset-token">
+166-+                <div class="form-group">
+167-+                    <label for="reset-password">Nueva Contraseña:</label>
+168-+                    <div style="position: relative; width: 100%;">
+169-+                        <input type="password" id="reset-password" name="reset-password" style="width: 100%; padding-right: 40px;">
+170-+                        <button type="button" id="btn-toggle-reset-password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #555;">
+171-+                            <i class="fas fa-eye"></i>
+172-+                        </button>
+173-+                    </div>
+174-+                </div>
+175-+                <div class="form-group">
+176-+                    <label for="reset-password-confirm">Confirmar Contraseña:</label>
+177-+                    <div style="position: relative; width: 100%;">
+178-+                        <input type="password" id="reset-password-confirm" name="reset-password-confirm" style="width: 100%; padding-right: 40px;">
+179-+                        <button type="button" id="btn-toggle-reset-password-confirm" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #555;">
+180-+                            <i class="fas fa-eye"></i>
+181-+                        </button>
+182-+                    </div>
+183-+                </div>
+184-+                <button id="btn-reset" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Actualizar contraseña</button>
+185-+            </div>
+186-+        </section>
+187-+
+188-+        <section id="register" class="content-section" style="display: none;">
+189-+            <h2>Registrarse</h2>
+190-+            <div class="pension-form">
+191-+                <div class="form-group">
+192-+                    <label for="reg-usuario">Usuario:</label>
+193-+                    <input type="text" id="reg-usuario" name="reg-usuario">
+194-+                </div>
+195-+                <div class="form-group">
+196-+                    <label for="reg-password">Contraseña:</label>
+197-+                    <input type="password" id="reg-password" name="reg-password">
+198-+                </div>
+199-+                <div class="form-group">
+200-+                    <label for="reg-password-rep">Repetir contraseña:</label>
+201-+                    <input type="password" id="reg-password-rep" name="reg-password-rep">
+202-+                </div>
+203-+                <div class="form-group">
+204-+                    <label for="reg-nombre">Nombre:</label>
+205-+                    <input type="text" id="reg-nombre" name="reg-nombre">
+206-+                </div>
+207-+                <div class="form-group">
+208-+                    <label for="reg-correo">Correo:</label>
+209-+                    <input type="email" id="reg-correo" name="reg-correo">
+210-+                </div>
+211-+                <div class="form-group">
+212-+                    <label for="reg-telefono">Teléfono:</label>
+213-+                    <input type="tel" id="reg-telefono" name="reg-telefono">
+214-+                </div>
+215-+                <button id="btn-register" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Registrarse</button>
+--
+1413-+                        console.error('Error durante la recuperación:', error);
+1414-+                        showModal('Error al procesar la solicitud.');
+1415-+                    }
+1416-+                });
+1417-+            }
+1418-+
+1419-+            // Check for reset token in URL
+1420-+            const urlParams = new URLSearchParams(window.location.search);
+1421-+            const token = urlParams.get('token');
+1422-+            if (token) {
+1423:+                document.getElementById('reset-token').value = token;
+1424-+                // Use a slight timeout to ensure DOM is ready
+1425-+                setTimeout(() => {
+1426-+                    const sections = document.querySelectorAll('.content-section');
+1427-+                    sections.forEach(section => {
+1428-+                        if (section.id === 'reset') {
+1429-+                            section.style.display = 'flex';
+1430-+                        } else {
+1431-+                            section.style.display = 'none';
+1432-+                        }
+1433-+                    });
+1434-+                    // Clean URL
+1435-+                    window.history.replaceState({}, document.title, window.location.pathname);
+1436-+                }, 100);
+1437-+            }
+1438-+
+1439-+            // Reset Password Logic
+1440-+            const btnReset = document.getElementById('btn-reset');
+1441-+            if (btnReset) {
+1442-+                btnReset.addEventListener('click', async (e) => {
+1443-+                    e.preventDefault();
+1444:+                    const token = document.getElementById('reset-token').value;
+1445-+                    const password = document.getElementById('reset-password').value;
+1446-+                    const passwordConfirm = document.getElementById('reset-password-confirm').value;
+1447-+
+1448-+                    if (!password || !passwordConfirm) {
+1449-+                        showModal('Por favor, completa ambas contraseñas.');
+1450-+                        return;
+1451-+                    }
+1452-+
+1453-+                    if (password !== passwordConfirm) {
+1454-+                        showModal('Las contraseñas no coinciden.');
+1455-+                        return;
+1456-+                    }
+1457-+
+1458-+                    try {
+1459-+                        const response = await fetch('/api/reset', {
+1460-+                            method: 'POST',
+1461-+                            headers: { 'Content-Type': 'application/json' },
+1462-+                            body: JSON.stringify({ token, password, passwordConfirm })
+1463-+                        });
+1464-+                        const data = await response.json();
+1465-+
+1466-+                        if (response.ok) {
+1467-+                            showModal('Contraseña restablecida correctamente. Ya puedes iniciar sesión.');
+1468-+                            document.querySelector('a[data-section="login"]').click();
+1469-+                            document.getElementById('reset-password').value = '';
+1470-+                            document.getElementById('reset-password-confirm').value = '';
+1471-+                        } else {
+1472-+                            showModal(`Error: ${data.error}`);
+1473-+                        }
+1474-+                    } catch (error) {
+1475-+                        console.error('Error durante el restablecimiento:', error);
+1476-+                        showModal('Error al restablecer la contraseña.');
+1477-+                    }
+1478-+                });
+1479-+            }
+1480-+
+1481-+            // Password Toggle Logic
+1482-+            const btnTogglePassword = document.getElementById('btn-toggle-password');
+1483-+            const loginPasswordInput = document.getElementById('login-password');
+1484-+            if (btnTogglePassword && loginPasswordInput) {
+1485-+                btnTogglePassword.addEventListener('click', () => {
+1486-+                    const type = loginPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+1487-+                    loginPasswordInput.setAttribute('type', type);
+1488-+                    btnTogglePassword.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+1489-+                });
+1490-+            }
+1491-+
+1492-+            const btnToggleResetPassword = document.getElementById('btn-toggle-reset-password');
+1493-+            const resetPasswordInput = document.getElementById('reset-password');
+1494-+            if (btnToggleResetPassword && resetPasswordInput) {
