@@ -1408,19 +1408,41 @@
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
             if (token) {
-                document.getElementById('reset-token').value = token;
                 // Use a slight timeout to ensure DOM is ready
-                setTimeout(() => {
-                    const sections = document.querySelectorAll('.content-section');
-                    sections.forEach(section => {
-                        if (section.id === 'reset') {
-                            section.style.display = 'flex';
+                setTimeout(async () => {
+                    try {
+                        const response = await fetch(`/api/verify-reset-token/${token}`);
+                        const data = await response.json();
+
+                        if (response.ok && data.valid) {
+                            document.getElementById('reset-token').value = token;
+                            const sections = document.querySelectorAll('.content-section');
+                            sections.forEach(section => {
+                                if (section.id === 'reset') {
+                                    section.style.display = 'flex';
+                                } else {
+                                    section.style.display = 'none';
+                                }
+                            });
                         } else {
-                            section.style.display = 'none';
+                            // Show error message and redirect to login
+                            showModal(data.error || 'Este enlace de recuperación ha caducado. Solicita uno nuevo.');
+                            const sections = document.querySelectorAll('.content-section');
+                            sections.forEach(section => {
+                                if (section.id === 'login') {
+                                    section.style.display = 'flex';
+                                } else {
+                                    section.style.display = 'none';
+                                }
+                            });
                         }
-                    });
-                    // Clean URL
-                    window.history.replaceState({}, document.title, window.location.pathname);
+                    } catch (error) {
+                        console.error('Error verificando el token:', error);
+                        showModal('Error al verificar el enlace de recuperación.');
+                    } finally {
+                        // Clean URL
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
                 }, 100);
             }
 

@@ -433,6 +433,42 @@ app.post('/api/recover', async (req, res) => {
     }
 });
 
+app.get('/api/verify-reset-token/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        if (!token) {
+            return res.status(400).json({ error: 'Falta el token de recuperación.' });
+        }
+
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+        const [resets] = await pool.execute(
+            'SELECT used, expires_at, (expires_at > NOW()) as is_valid FROM password_resets WHERE token_hash = ?',
+            [tokenHash]
+        );
+
+        if (resets.length === 0) {
+            return res.status(404).json({ error: 'El enlace de recuperación es inválido.' });
+        }
+
+        const resetRecord = resets[0];
+
+        if (resetRecord.used === 1) {
+            return res.status(400).json({ error: 'El enlace de recuperación ya fue utilizado. Solicita uno nuevo.' });
+        }
+
+        if (!resetRecord.is_valid) {
+            return res.status(400).json({ error: 'Este enlace de recuperación ha caducado. Solicita uno nuevo.' });
+        }
+
+        res.status(200).json({ valid: true });
+
+    } catch (error) {
+        console.error('Error in /api/verify-reset-token. Check server logs.', error);
+        res.status(500).json({ error: 'Error interno del servidor durante la verificación.' });
+    }
+});
+
 app.post('/api/reset', async (req, res) => {
     try {
         const { token, password, passwordConfirm } = req.body;
