@@ -8,13 +8,18 @@ La arquitectura de Idealandia se divide en dos capas principales:
 - **Frontend (SPA):** Una aplicación de página única desarrollada con HTML, CSS y JavaScript (Vanilla). Utiliza `Three.js` y `@pixiv/three-vrm` cargados vía CDN para el renderizado del avatar 3D de Idealita. No utiliza bundlers tradicionales. El enrutamiento se maneja mostrando/ocultando secciones (`.content-section`).
 - **Backend (Node.js/Express):** Servidor REST que maneja la autenticación basada en JWT, la integración con la base de datos MySQL, y la conexión con APIs externas (como Gemini AI para Idealita). Implementa Control de Acceso Basado en Roles (RBAC).
 
+
 ## 3. Menú principal y submenús
 El menú principal se genera de forma dinámica desde la base de datos (tabla `menu_items`), dependiendo de los permisos y estado de autenticación del usuario. Opciones principales observadas:
 - **Inicio:** Página principal de bienvenida.
 - **Ideas:** Sección para registrar y consultar ideas generadas por el usuario.
-- **Servicios:** Contiene submenús, actualmente enfocado en *Asesoría en Pensiones*.
-- **Administrador:** Panel de control con submenús para gestionar *Usuarios*, *Roles*, *Permisos*, *Funcionalidades* y *Menús*.
+- **Servicios:** Contiene submenús, actualmente enfocado en *Asesoría en Pensiones*,*Ideas Innovadoras*,*Emprendimientos*,*Clases de inglés*,*Perfilamiento*.
+- **Recursos Gratis:**Aquí encontrarás diversos recursos de manera gratuita disponibles en internet.
+- **Contáctanos:** Por este medio puedes dejar tus datos y nuestro personal se pondrá en contacto contigo para apoyarte en lo que necesites.
+- **Acerca de:** En esta opcion podras tener todo el contexto de quienes somos y que es idealandia en varios rubros.
+- **Administración:** Panel de control con submenús para gestionar *Usuarios*, *Roles*, *Permisos*, *Funcionalidades* y *Menús*, y toda la administracion y configuración de la plataforma Idealandia.
 - **CHAT:** Sección fija para interactuar con Idealita.
+
 
 ## 4. Descripción funcional de cada opción
 - **Inicio:** Presenta la plataforma y opciones básicas.
