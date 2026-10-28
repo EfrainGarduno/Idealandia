@@ -931,43 +931,84 @@
         font-size: 16px;
     }
 }
-.acerca-item {
+#acerca {
+    background-image: url('public/img/fondo_acerca_gen.webp');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    padding: 40px 20px;
+    border-radius: 8px;
+}
+.acerca-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+.acerca-item-card {
     display: flex;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #eee;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
-.acerca-item:last-child {
-    border-bottom: none;
-}
-.acerca-item img {
-    width: 150px;
+.acerca-item-card img {
+    width: 200px;
     height: auto;
     border-radius: 8px;
-    margin-right: 20px;
+    margin-right: 30px;
     flex-shrink: 0;
+}
+.acerca-text {
+    flex-grow: 1;
 }
 .acerca-text h3 {
     margin-top: 0;
-    margin-bottom: 5px;
+    margin-bottom: 15px;
     color: #333;
-    font-size: 1.1em;
+    font-size: 1.5em;
 }
-.acerca-text p {
+.acerca-text p, .acerca-text ul {
     margin: 0;
-    color: #555;
-    line-height: 1.5;
+    color: #444;
+    line-height: 1.6;
+    font-size: 1em;
+}
+.acerca-text ul {
+    padding-left: 20px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+.acerca-text ul li {
+    margin-bottom: 5px;
+}
+.frase-destacada {
+    color: #6c40f7;
+    margin-top: 15px !important;
+    font-size: 1.1em !important;
+}
+.acerca-btn {
+    margin-top: 20px;
+    display: inline-block;
 }
 @media (max-width: 768px) {
-    .acerca-item {
+    #acerca {
+        padding: 20px 10px;
+        background-attachment: scroll;
+    }
+    .acerca-item-card {
         flex-direction: column;
         align-items: flex-start;
+        padding: 20px;
     }
-    .acerca-item img {
+    .acerca-item-card img {
         margin-right: 0;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
         width: 100%;
+        max-width: 300px;
+        align-self: center;
         max-width: 250px;
     }
 }
