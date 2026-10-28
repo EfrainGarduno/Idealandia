@@ -44,6 +44,12 @@ window.fetch = async (url) => {
             json: async () => ({ ideas: [{ id: 1, titulo: 'Idea mock', estado: 'pendiente' }] })
         };
     }
+    if (url === '/docs/idealandia_manual.md') {
+        return {
+            ok: true,
+            text: async () => "# Manual Idealandia Mock"
+        };
+    }
     if (url === '/api/live-token') {
         return {
             ok: true,
@@ -183,6 +189,27 @@ setTimeout(() => {
 
 
             assert.ok(parsed.setup.generationConfig.responseModalities.includes("AUDIO"), 'Should request AUDIO modality');
+
+            // Wait a moment for the setup complete to send the initial context message
+            setTimeout(() => {
+                const contextMessages = MockWebSocket.messagesSent.filter(msg => {
+                    try {
+                        const parsedMsg = JSON.parse(msg);
+                        if (parsedMsg.clientContent && parsedMsg.clientContent.turns) {
+                             const text = parsedMsg.clientContent.turns[0].parts[0].text;
+                             return text && text.includes("Aquí tienes el contexto");
+                        }
+                    } catch(e){}
+                    return false;
+                });
+
+                assert.ok(contextMessages.length > 0, 'Should send initial context message containing manual and ideas');
+                const contextMsg = JSON.parse(contextMessages[0]).clientContent.turns[0].parts[0].text;
+                assert.ok(contextMsg.includes('MANUAL IDEALANDIA'), 'Context should include manual section');
+                assert.ok(contextMsg.includes('Test User'), 'Context should include the user identity');
+                assert.ok(contextMsg.includes('IDEAS DEL USUARIO'), 'Context should include ideas section');
+                assert.ok(contextMsg.includes('Idea mock'), 'Context should include the mocked ideas');
+            }, 500);
 
             // Simulate incoming WebSocket messages to test transcription logic
             setTimeout(() => {

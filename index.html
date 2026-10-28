@@ -2231,37 +2231,69 @@
                             isSetupComplete = true;
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
-                            // Send Initial identity messages once setup is complete
+                            // Send Initial identity, manual and ideas messages once setup is complete
                             try {
-                                const manualRes = await fetch('/docs/idealandia_manual.md');
-                                if (manualRes.ok) {
-                                    const manualText = await manualRes.text();
-                                    liveWebSocket.send(JSON.stringify({
-                                        clientContent: {
-                                            turns: [{ role: "user", parts: [{ text: `Aquí tienes el contexto de Idealandia, úsalo para responder preguntas sobre la plataforma:\n\n${manualText}` }] }],
-                                            turnComplete: false
-                                        }
-                                    }));
+                                let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
+
+                                // 1. Cargar el manual
+                                try {
+                                    const manualRes = await fetch('/docs/idealandia_manual.md');
+                                    if (manualRes.ok) {
+                                        contextText += "--- MANUAL IDEALANDIA ---\n" + (await manualRes.text()) + "\n\n";
+                                        console.log("Manual de Idealandia cargado en el contexto.");
+                                    } else {
+                                        contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
+                                        console.warn("No se pudo obtener el manual (no ok).");
+                                    }
+                                } catch (e) {
+                                    console.error("Excepción al cargar el manual:", e);
+                                    contextText += "Error al cargar el manual de Idealandia.\n\n";
                                 }
+
+                                // 2. Cargar usuario e ideas
+                                if (window.currentUser) {
+                                    const userName = window.currentUser.nombre || window.currentUser.usuario;
+                                    contextText += `--- INFORMACIÓN DEL USUARIO ---\nEl usuario autenticado es: ${userName}\n\n`;
+                                    console.log("Usuario autenticado añadido al contexto.");
+
+                                    try {
+                                        const ideasRes = await fetch('/api/ideas');
+                                        if (ideasRes.ok) {
+                                            const ideasData = await ideasRes.json();
+                                            if (ideasData.ideas && ideasData.ideas.length > 0) {
+                                                contextText += "--- IDEAS DEL USUARIO ---\nAquí están las ideas registradas de este usuario:\n";
+                                                ideasData.ideas.forEach(idea => {
+                                                    contextText += `- ID: ${idea.id || 'N/A'}, Título: "${idea.titulo || ''}", Estado: "${idea.estado || ''}", Descripción: "${idea.descripcion || ''}"\n`;
+                                                });
+                                                console.log(`Se cargaron ${ideasData.ideas.length} ideas en el contexto inicial.`);
+                                            } else {
+                                                contextText += "El usuario autenticado no tiene ideas registradas actualmente.\n";
+                                                console.log("El usuario no tiene ideas registradas.");
+                                            }
+                                        } else {
+                                            contextText += "No se pudieron obtener las ideas del usuario.\n";
+                                            console.warn("No se pudieron obtener las ideas (no ok).");
+                                        }
+                                    } catch(e) {
+                                        console.error("Excepción al cargar ideas:", e);
+                                        contextText += "Ocurrió un error al cargar las ideas del usuario.\n";
+                                    }
+                                } else {
+                                    contextText += "El usuario actual NO está autenticado. No se dispone de datos de usuario ni ideas.\n";
+                                    console.log("Usuario no autenticado, se omiten ideas en el contexto inicial.");
+                                }
+
+                                // 3. Enviar todo el contexto junto
+                                liveWebSocket.send(JSON.stringify({
+                                    clientContent: {
+                                        turns: [{ role: "user", parts: [{ text: contextText }] }],
+                                        turnComplete: false
+                                    }
+                                }));
+                                console.log("Contexto inicial enviado exitosamente a Gemini.");
+
                             } catch (e) {
-                                console.error("Could not load manual context:", e);
-                            }
-
-
-                            if (window.currentUser) {
-                                const userName = window.currentUser.nombre || window.currentUser.usuario;
-                                liveWebSocket.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: `Soy ${userName}` }] }],
-                                        turnComplete: false
-                                    }
-                                }));
-                                liveWebSocket.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: "Tú eres Idealita." }] }],
-                                        turnComplete: false
-                                    }
-                                }));
+                                console.error("Error crítico construyendo el contexto inicial:", e);
                             }
                             resolve();
                         }
