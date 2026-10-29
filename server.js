@@ -377,6 +377,34 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = { app, initMailTransporter };
 }
 
+
+// Endpoint de contacto
+app.post('/api/contacto', async (req, res) => {
+    const { nombre, correo, mensaje } = req.body;
+    if (!nombre || !correo || !mensaje) {
+        return res.status(400).json({ message: "Todos los campos son obligatorios." });
+    }
+
+    if (!mailTransporter) {
+        return res.status(500).json({ message: "Servicio de correo no configurado." });
+    }
+
+    const mailOptions = {
+        from: '"Idealandia Contacto" <' + process.env.SMTP_USER + '>',
+        to: 'idealandiamx@gmail.com',
+        subject: 'Nuevo mensaje de contacto: ' + nombre,
+        text: 'Nombre: ' + nombre.replace(/</g, "&lt;").replace(/>/g, "&gt;") + '\nCorreo: ' + correo.replace(/</g, "&lt;").replace(/>/g, "&gt;") + '\n\nMensaje:\n' + mensaje.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    };
+
+    try {
+        await mailTransporter.sendMail(mailOptions);
+        res.status(200).json({ message: "Mensaje enviado correctamente." });
+    } catch (error) {
+        console.error("Error sending contact email:", error);
+        res.status(500).json({ message: "Error interno al enviar el correo." });
+    }
+});
+
 app.post('/api/recover', async (req, res) => {
     try {
         const { email } = req.body;
