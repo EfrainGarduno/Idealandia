@@ -208,7 +208,7 @@
             <h2>Asesoría en Pensiones</h2>
             <p>Conoce nuestros servicios.</p>
             <div class="servicio-item" id="btn-estimacion">
-                <h3>Estimación de Cálculo de Pensión Régimen ley 73</h3>
+                <h3>Estimación de Cálculo de pensión</h3>
             </div>
             <div id="form-estimacion" style="display: none;" class="pension-form">
                 <fieldset>
@@ -276,7 +276,7 @@
             </div>
         </section>
 
-                        <section id="contacto" class="content-section" style="display: none;">
+                <section id="contacto" class="content-section" style="display: none;">
             <h2>Contáctanos</h2>
             <form id="form-contacto">
                 <div class="form-group">
@@ -301,7 +301,7 @@
                 <div class="acerca-item-card">
                     <img src="img/acerca_1.png" alt="¿Qué es Idealandia?">
                     <div class="acerca-text">
-                        <h3>1. ¿Qué es Idealandia?</h3>
+                        <h3>Un lugar para transformar ideas en posibilidades.</h3>
                         <p>Idealandia es un espacio digital creado para explorar ideas, adquirir conocimientos, encontrar soluciones y descubrir nuevas oportunidades.</p>
                         <p>Aquí puedes pasar de una inquietud a una respuesta, de una idea a un proyecto y de una posibilidad a un plan de acción. Queremos reunir en un mismo lugar herramientas, recursos y experiencias que te ayuden a aprender, crear y avanzar.</p>
                         <p>Porque una idea puede ser el comienzo de algo extraordinario cuando encuentra el conocimiento y las herramientas adecuadas.</p>
@@ -312,7 +312,7 @@
                 <div class="acerca-item-card">
                     <img src="img/acerca_2.png" alt="Nuestra filosofía y propósito">
                     <div class="acerca-text">
-                        <h3>2. Nuestra filosofía y propósito</h3>
+                        <h3>Crecer comienza con una pregunta.</h3>
                         <p>Creemos que todas las personas pueden aprender, desarrollar su creatividad y encontrar nuevas formas de resolver los desafíos de su vida personal y profesional.</p>
                         <p>Nuestro propósito es facilitar ese proceso mediante el conocimiento, la reflexión, la tecnología y la creatividad. No se trata únicamente de acumular información, sino de comprenderla, cuestionarla y convertirla en decisiones y acciones útiles.</p>
                         <p>En Idealandia valoramos la curiosidad, el pensamiento crítico, la iniciativa y el aprendizaje continuo. Cada persona tiene circunstancias, capacidades y aspiraciones distintas; por eso, buscamos ofrecer herramientas que ayuden a descubrir posibilidades y construir un camino propio.</p>
@@ -323,7 +323,7 @@
                 <div class="acerca-item-card">
                     <img src="img/acerca_3.png" alt="Servicios y soluciones">
                     <div class="acerca-text">
-                        <h3>3. Servicios y soluciones</h3>
+                        <h3>Ideas que se convierten en acciones.</h3>
                         <p>Idealandia reúne y desarrolla herramientas para ayudarte a resolver necesidades concretas, explorar alternativas y llevar tus proyectos al siguiente nivel.</p>
                         <p>Presenta las siguientes áreas:</p>
                         <ul>
@@ -339,9 +339,9 @@
                 </div>
 
                 <div class="acerca-item-card">
-                    <img src="img/idealita.png" alt="Idealita, nuestra asistente virtual">
+                    <img src="img/idealita-avatar-new.png" alt="Idealita, nuestra asistente virtual">
                     <div class="acerca-text">
-                        <h3>4. Idealita, nuestra asistente virtual</h3>
+                        <h3>Tus preguntas merecen un espacio para explorar.</h3>
                         <p>Idealita es la asistente virtual de Idealandia. Está diseñada para ayudarte a descubrir las posibilidades de la plataforma, resolver dudas, consultar información y explorar tus ideas mediante una conversación natural.</p>
                         <p>Puedes escribirle tus preguntas en el chat o utilizar el modo de voz para conversar con ella. Según la funcionalidad disponible, también puede ayudarte a localizar recursos, consultar la documentación de Idealandia y orientarte sobre las herramientas a las que tienes acceso.</p>
                         <p>Idealita forma parte de una experiencia que busca hacer la tecnología más cercana, útil y sencilla. No pretende sustituir tu criterio: su función es ayudarte a comprender opciones, organizar pensamientos y avanzar con mayor claridad.</p>
@@ -353,7 +353,7 @@
                 <div class="acerca-item-card">
                     <img src="img/acerca_5.png" alt="Recursos gratuitos y comunidad">
                     <div class="acerca-text">
-                        <h3>5. Recursos gratuitos y comunidad</h3>
+                        <h3>El conocimiento abre caminos.</h3>
                         <p>A veces, para avanzar, solo necesitas encontrar el recurso adecuado.</p>
                         <p>En Idealandia queremos facilitar el acceso a recursos gratuitos de aprendizaje y creación: herramientas digitales, bibliotecas de contenidos, materiales educativos, plataformas para desarrollar proyectos y sitios que inspiran nuevas ideas.</p>
                         <p>También queremos construir un espacio donde las personas puedan organizar sus ideas, descubrir otras perspectivas y aprovechar herramientas que favorezcan su crecimiento.</p>
@@ -1097,55 +1097,7 @@
                 }
             }
 
-
-
-    // Fix submit for contacto
-    document.addEventListener('DOMContentLoaded', () => {
-        const formContacto = document.getElementById('form-contacto');
-        if (formContacto) {
-            formContacto.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const btn = document.getElementById('btn-enviar-contacto');
-                const feedback = document.getElementById('contacto-feedback');
-
-                btn.disabled = true;
-                btn.textContent = 'Enviando...';
-                feedback.style.display = 'none';
-
-                const formData = new FormData(formContacto);
-                const nombre = formData.get('contacto-nombre');
-                const correo = formData.get('contacto-correo');
-                const mensaje = formData.get('contacto-mensaje');
-
-                try {
-                    const response = await fetch('/api/contacto', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ nombre, correo, mensaje })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        feedback.innerHTML = '<span style="color: green;">' + data.message + '</span>';
-                        formContacto.reset();
-                    } else {
-                        feedback.innerHTML = '<span style="color: red;">' + (data.message || 'Error al enviar el mensaje.') + '</span>';
-                    }
-                } catch (error) {
-                    feedback.innerHTML = '<span style="color: red;">Error de red. Intenta de nuevo más tarde.</span>';
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = 'Enviar Datos';
-                    feedback.style.display = 'block';
-                }
-            });
-        }
-    });
-
-    async function checkAuthStatus() {
+            async function checkAuthStatus() {
                 try {
                     const response = await fetch('/api/me');
                     if (response.ok) {
@@ -2729,6 +2681,51 @@
                 });
             }
 
+
+        // Manejador del formulario de contacto
+        const formContacto = document.getElementById('form-contacto');
+        if (formContacto) {
+            formContacto.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btn-enviar-contacto');
+                const feedback = document.getElementById('contacto-feedback');
+
+                btn.disabled = true;
+                btn.textContent = 'Enviando...';
+                feedback.style.display = 'none';
+
+                const formData = new FormData(formContacto);
+                const nombre = formData.get('contacto-nombre');
+                const correo = formData.get('contacto-correo');
+                const mensaje = formData.get('contacto-mensaje');
+
+                try {
+                    const response = await fetch('/api/contacto', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ nombre, correo, mensaje })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        feedback.innerHTML = '<span style="color: green;">' + data.message + '</span>';
+                        formContacto.reset();
+                    } else {
+                        feedback.innerHTML = '<span style="color: red;">' + (data.message || 'Error al procesar la solicitud.') + '</span>';
+                    }
+                } catch (error) {
+                    feedback.innerHTML = '<span style="color: red;">Error de red. Intenta de nuevo más tarde.</span>';
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Enviar Datos';
+                    feedback.style.display = 'block';
+                }
+            });
+        }
+
             // Mobile menu logic
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const sidebar = document.getElementById('sidebar');
@@ -2753,7 +2750,6 @@
         </div>
     </div>
 
-    <script src="admin.js">
-</script>
+    <script src="admin.js"></script>
 </body>
 </html>
