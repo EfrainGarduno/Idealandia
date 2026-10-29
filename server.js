@@ -391,7 +391,7 @@ app.post('/api/contacto', async (req, res) => {
 
     const mailOptions = {
         from: '"Idealandia Contacto" <' + process.env.SMTP_USER + '>',
-        to: 'idealandiamx@gmail.com',
+        to: 'idealandia@outlook.com',
         subject: 'Nuevo mensaje de contacto: ' + nombre,
         text: 'Nombre: ' + nombre.replace(/</g, "&lt;").replace(/>/g, "&gt;") + '\nCorreo: ' + correo.replace(/</g, "&lt;").replace(/>/g, "&gt;") + '\n\nMensaje:\n' + mensaje.replace(/</g, "&lt;").replace(/>/g, "&gt;")
     };

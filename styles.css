@@ -2,7 +2,7 @@
             box-sizing: border-box;
         }
         html, body {
-            background-image: url("img/fondo_global.webp");
+            background-image: url("img/fondo.png");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
