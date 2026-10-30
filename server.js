@@ -352,6 +352,10 @@ let mailTransporter = null;
 
 // Exportable for testing
 function initMailTransporter(env = process.env) {
+    if (env && env.sendMail) {
+        mailTransporter = env;
+        return;
+    }
     let transporter = null;
 
     if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
@@ -370,12 +374,88 @@ function initMailTransporter(env = process.env) {
     }
     return transporter;
 }
-mailTransporter = initMailTransporter();
+if (!global.__TESTING__) mailTransporter = initMailTransporter();
 
 // Export for test_smtp_config.js
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { app, initMailTransporter };
 }
+
+
+
+
+// Definir control de IP muy básico en memoria para rate limiting
+const contactoIPs = {};
+
+// Endpoint de contacto
+app.post('/api/contacto', async (req, res) => {
+    const { nombre, correo, mensaje } = req.body;
+
+    // Rate limiting básico (max 5 solicitudes por hora por IP)
+    const clientIP = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    if (contactoIPs[clientIP]) {
+        contactoIPs[clientIP] = contactoIPs[clientIP].filter(time => now - time < 3600000);
+        if (contactoIPs[clientIP].length >= 5) {
+            return res.status(429).json({ message: "Has excedido el límite de envíos. Intenta más tarde." });
+        }
+    } else {
+        contactoIPs[clientIP] = [];
+    }
+    contactoIPs[clientIP].push(now);
+
+    if (!nombre || !correo || !mensaje) {
+        return res.status(400).json({ message: "Todos los campos (nombre, correo y descripción) son obligatorios." });
+    }
+
+    // Limitación de tamaño de campos
+    if (nombre.length > 100 || correo.length > 100 || mensaje.length > 2000) {
+        return res.status(400).json({ message: "La longitud de alguno de los campos excede el límite permitido." });
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(correo)) {
+         return res.status(400).json({ message: "Formato de correo no válido." });
+    }
+
+    if (!mailTransporter) {
+        return res.status(500).json({ message: "Servicio de correo no configurado en el servidor." });
+    }
+
+    const safeName = nombre.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeEmail = correo.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeMessage = mensaje.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    const mailOptionsIdealandia = {
+        from: '"Idealandia Contacto" <' + process.env.SMTP_USER + '>',
+        to: 'idealandia@outlook.com',
+        subject: 'Nueva solicitud de contacto — Idealandia',
+        text: `Se ha recibido una nueva solicitud de contacto.\n\nNombre: ${safeName}\nCorreo: ${safeEmail}\nFecha: ${new Date().toLocaleString()}\n\nMensaje:\n${safeMessage}`
+    };
+
+    const mailOptionsUser = {
+        from: '"Equipo Idealandia" <' + process.env.SMTP_USER + '>',
+        to: correo,
+        subject: 'Hemos recibido tu mensaje — Idealandia',
+        text: `Hola, ${safeName}:\n\nGracias por ponerte en contacto con Idealandia.\n\nTe confirmamos que hemos recibido tu mensaje y que nuestro equipo revisará tu solicitud. Nos pondremos en contacto contigo a través del correo electrónico que nos proporcionaste.\n\nEste mensaje es una confirmación automática de recepción, no una respuesta personalizada a tu consulta.\n\nGracias por tu interés en Idealandia.\n\nAtentamente,\nEquipo de Idealandia\nidealandia.com.mx`
+    };
+
+    try {
+        await mailTransporter.sendMail(mailOptionsIdealandia);
+
+        try {
+            await mailTransporter.sendMail(mailOptionsUser);
+            res.status(200).json({ message: "Mensaje enviado y confirmación enviada a tu correo." });
+        } catch (userMailError) {
+            console.error("Error sending contact email to user:", userMailError);
+            res.status(207).json({ message: "Mensaje enviado a Idealandia, pero falló el envío de confirmación a tu correo." });
+        }
+    } catch (idealandiaMailError) {
+        console.error("Error sending contact email to Idealandia:", idealandiaMailError);
+        res.status(500).json({ message: "Error interno: no se pudo enviar el mensaje a Idealandia." });
+    }
+});
 
 app.post('/api/recover', async (req, res) => {
     try {

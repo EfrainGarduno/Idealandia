@@ -208,7 +208,7 @@
             <h2>Asesoría en Pensiones</h2>
             <p>Conoce nuestros servicios.</p>
             <div class="servicio-item" id="btn-estimacion">
-                <h3>Estimación de Cálculo de pensión</h3>
+                <h3>Estimación de Cálculo de Pensión Régimen ley 73</h3>
             </div>
             <div id="form-estimacion" style="display: none;" class="pension-form">
                 <fieldset>
@@ -276,68 +276,91 @@
             </div>
         </section>
 
-        <section id="contacto" class="content-section" style="display: none;">
+                <section id="contacto" class="content-section" style="display: none;">
             <h2>Contáctanos</h2>
-            <p>Creado por Efrain Garduño Flores</p>
-            <p>Contáctame por whatsapp: <a href="https://wa.link/lzv33g">https://wa.link/lzv33g</a></p>
-            <button id="btn-registrarse">Registrarse</button>
-            <div id="form-registro" style="display: none; margin-top: 20px;">
+            <form id="form-contacto">
                 <div class="form-group">
-                    <label for="registro-nombre">Nombre:</label>
-                    <input type="text" id="registro-nombre" name="registro-nombre">
+                    <label for="contacto-nombre">Nombre:</label>
+                    <input type="text" id="contacto-nombre" name="contacto-nombre" required>
                 </div>
                 <div class="form-group">
-                    <label for="registro-correo">Correo:</label>
-                    <input type="email" id="registro-correo" name="registro-correo">
+                    <label for="contacto-correo">Correo:</label>
+                    <input type="email" id="contacto-correo" name="contacto-correo" required>
                 </div>
                 <div class="form-group">
-                    <label for="registro-telefono">Teléfono:</label>
-                    <input type="tel" id="registro-telefono" name="registro-telefono">
+                    <label for="contacto-mensaje">Descripción:</label>
+                    <textarea id="contacto-mensaje" name="contacto-mensaje" rows="4" required></textarea>
                 </div>
-                <button id="btn-enviar-registro">Enviar Datos</button>
-            </div>
+                <button type="submit" id="btn-enviar-contacto">Enviar Datos</button>
+            </form>
+            <div id="contacto-feedback" style="margin-top: 10px; display: none;"></div>
         </section>
 
                 <section id="acerca" class="content-section" style="display: none;">
-            <h2>¿Qué debería incluir «Acerca de»?</h2>
-
-            <div class="acerca-item">
-                <img src="img/acerca_1.png" alt="¿Qué es Idealandia?">
-                <div class="acerca-text">
-                    <h3>1. ¿Qué es Idealandia?</h3>
-                    <p>La presentación del proyecto: un espacio para transformar ideas en conocimientos, soluciones y oportunidades reales.</p>
+            <div class="acerca-container">
+                <div class="acerca-item-card">
+                    <img src="img/acerca_1.png" alt="¿Qué es Idealandia?">
+                    <div class="acerca-text">
+                        <h3><strong>1. ¿Qué es Idealandia?</strong></h3>
+                        <p>Idealandia es un espacio digital creado para explorar ideas, adquirir conocimientos, encontrar soluciones y descubrir nuevas oportunidades.</p>
+                        <p>Aquí puedes pasar de una inquietud a una respuesta, de una idea a un proyecto y de una posibilidad a un plan de acción. Queremos reunir en un mismo lugar herramientas, recursos y experiencias que te ayuden a aprender, crear y avanzar.</p>
+                        <p>Porque una idea puede ser el comienzo de algo extraordinario cuando encuentra el conocimiento y las herramientas adecuadas.</p>
+                        <p class="frase-destacada"><strong>Tu próxima gran idea puede comenzar aquí.</strong></p>
+                    </div>
                 </div>
-            </div>
 
-            <div class="acerca-item">
-                <img src="img/acerca_2.png" alt="Nuestra filosofía y propósito">
-                <div class="acerca-text">
-                    <h3>2. Nuestra filosofía y propósito</h3>
-                    <p>Por qué nació Idealandia, qué problema busca resolver y cómo impulsa la creatividad, el aprendizaje y la innovación.</p>
+                <div class="acerca-item-card">
+                    <img src="img/acerca_2.png" alt="Nuestra filosofía y propósito">
+                    <div class="acerca-text">
+                        <h3><strong>2. Nuestra filosofía y propósito</strong></h3>
+                        <p>Creemos que todas las personas pueden aprender, desarrollar su creatividad y encontrar nuevas formas de resolver los desafíos de su vida personal y profesional.</p>
+                        <p>Nuestro propósito es facilitar ese proceso mediante el conocimiento, la reflexión, la tecnología y la creatividad. No se trata únicamente de acumular información, sino de comprenderla, cuestionarla y convertirla en decisiones y acciones útiles.</p>
+                        <p>En Idealandia valoramos la curiosidad, el pensamiento crítico, la iniciativa y el aprendizaje continuo. Cada persona tiene circunstancias, capacidades y aspiraciones distintas; por eso, buscamos ofrecer herramientas que ayuden a descubrir posibilidades y construir un camino propio.</p>
+                        <p class="frase-destacada"><strong>Pregunta, aprende, experimenta y transforma.</strong></p>
+                    </div>
                 </div>
-            </div>
 
-            <div class="acerca-item">
-                <img src="img/acerca_3.png" alt="Servicios y soluciones">
-                <div class="acerca-text">
-                    <h3>3. Servicios y soluciones</h3>
-                    <p>Asesorías financieras y de pensiones, ideas innovadoras, emprendimientos, clases de inglés y perfilamiento.</p>
+                <div class="acerca-item-card">
+                    <img src="img/acerca_3.png" alt="Servicios y soluciones">
+                    <div class="acerca-text">
+                        <h3><strong>3. Servicios y soluciones</strong></h3>
+                        <p>Idealandia reúne y desarrolla herramientas para ayudarte a resolver necesidades concretas, explorar alternativas y llevar tus proyectos al siguiente nivel.</p>
+                        <p>Presenta las siguientes áreas:</p>
+                        <ul>
+                            <li><strong>Pensiones y orientación financiera:</strong> herramientas de estimación y orientación para comprender mejor determinados escenarios financieros y de retiro.</li>
+                            <li><strong>Creatividad y emprendimiento:</strong> apoyo para explorar ideas, estructurar proyectos e identificar oportunidades.</li>
+                            <li><strong>Aprendizaje y desarrollo personal:</strong> recursos para ampliar conocimientos, practicar habilidades y descubrir nuevas perspectivas.</li>
+                            <li><strong>Herramientas digitales:</strong> soluciones que facilitan tareas, organizan información y ayudan a convertir una necesidad en un plan.</li>
+                            <li><strong>Perfilamiento y proyectos personales:</strong> espacios para identificar intereses, objetivos y posibles rutas de desarrollo.</li>
+                        </ul>
+                        <p>Los servicios y sus alcances se irán presentando de forma clara, para que sepas qué puedes hacer, cómo acceder y qué información necesitas.</p>
+                        <p class="frase-destacada"><strong>Encuentra la herramienta que necesitas para dar el siguiente paso.</strong></p>
+                    </div>
                 </div>
-            </div>
 
-            <div class="acerca-item">
-                <img src="img/acerca_4.png" alt="Idealita, nuestra asistente virtual">
-                <div class="acerca-text">
-                    <h3>4. Idealita, nuestra asistente virtual</h3>
-                    <p>Presentarla como la compañera digital para explorar ideas, resolver dudas y ayudar a los usuarios. El chat seguirá en su opción «CHAT».</p>
+                <div class="acerca-item-card">
+                    <img src="img/idealita.png" alt="Idealita, nuestra asistente virtual">
+                    <div class="acerca-text">
+                        <h3><strong>4. Idealita, nuestra asistente virtual</strong></h3>
+                        <p>Idealita es la asistente virtual de Idealandia. Está diseñada para ayudarte a descubrir las posibilidades de la plataforma, resolver dudas, consultar información y explorar tus ideas mediante una conversación natural.</p>
+                        <p>Puedes escribirle tus preguntas en el chat o utilizar el modo de voz para conversar con ella. Según la funcionalidad disponible, también puede ayudarte a localizar recursos, consultar la documentación de Idealandia y orientarte sobre las herramientas a las que tienes acceso.</p>
+                        <p>Idealita forma parte de una experiencia que busca hacer la tecnología más cercana, útil y sencilla. No pretende sustituir tu criterio: su función es ayudarte a comprender opciones, organizar pensamientos y avanzar con mayor claridad.</p>
+                        <p class="frase-destacada"><strong>Cuéntale qué quieres resolver, aprender o crear.</strong></p>
+                        <a href="#" class="acerca-btn" onclick="document.querySelector('[data-section=\'chat\']').click(); return false;">Conocer a Idealita</a>
+                    </div>
                 </div>
-            </div>
 
-            <div class="acerca-item">
-                <img src="img/acerca_5.png" alt="Recursos gratuitos y comunidad">
-                <div class="acerca-text">
-                    <h3>5. Recursos gratuitos y comunidad</h3>
-                    <p>Explicar el acceso a recursos útiles de Internet y la posibilidad de aprender, compartir ideas y descubrir nuevas oportunidades.</p>
+                <div class="acerca-item-card">
+                    <img src="img/acerca_5.png" alt="Recursos gratuitos y comunidad">
+                    <div class="acerca-text">
+                        <h3><strong>5. Recursos gratuitos y comunidad</strong></h3>
+                        <p>A veces, para avanzar, solo necesitas encontrar el recurso adecuado.</p>
+                        <p>En Idealandia queremos facilitar el acceso a recursos gratuitos de aprendizaje y creación: herramientas digitales, bibliotecas de contenidos, materiales educativos, plataformas para desarrollar proyectos y sitios que inspiran nuevas ideas.</p>
+                        <p>También queremos construir un espacio donde las personas puedan organizar sus ideas, descubrir otras perspectivas y aprovechar herramientas que favorezcan su crecimiento.</p>
+                        <p>Nuestro objetivo es que estos recursos sean un punto de partida para aprender por tu cuenta, experimentar y desarrollar tus propios proyectos. La disponibilidad y las condiciones de cada recurso externo dependen de su proveedor.</p>
+                        <p class="frase-destacada"><strong>Explora lo que existe, aprende algo nuevo y crea algo propio.</strong></p>
+                        <a href="#" class="acerca-btn" onclick="document.querySelector('[data-section=\'gratis\']').click(); return false;">Explorar recursos gratuitos</a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -2657,6 +2680,51 @@
                     }
                 });
             }
+
+
+        // Manejador del formulario de contacto
+        const formContacto = document.getElementById('form-contacto');
+        if (formContacto) {
+            formContacto.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btn-enviar-contacto');
+                const feedback = document.getElementById('contacto-feedback');
+
+                btn.disabled = true;
+                btn.textContent = 'Enviando...';
+                feedback.style.display = 'none';
+
+                const formData = new FormData(formContacto);
+                const nombre = formData.get('contacto-nombre');
+                const correo = formData.get('contacto-correo');
+                const mensaje = formData.get('contacto-mensaje');
+
+                try {
+                    const response = await fetch('/api/contacto', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ nombre, correo, mensaje })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        feedback.innerHTML = '<span style="color: green;">' + data.message + '</span>';
+                        formContacto.reset();
+                    } else {
+                        feedback.innerHTML = '<span style="color: red;">' + (data.message || 'Error al procesar la solicitud.') + '</span>';
+                    }
+                } catch (error) {
+                    feedback.innerHTML = '<span style="color: red;">Error de red. Intenta de nuevo más tarde.</span>';
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Enviar Datos';
+                    feedback.style.display = 'block';
+                }
+            });
+        }
 
             // Mobile menu logic
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
