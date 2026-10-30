@@ -11,7 +11,7 @@ const mockMenuItems = [
     { id: 2, nombre: 'Ideas', funcionalidad_id: 2, parent_id: null, publico: 1, orden: 2 },
     { id: 3, nombre: 'Servicios', funcionalidad_id: null, parent_id: null, publico: 1, orden: 3 },
     { id: 16, nombre: 'Asesorías Financieras', funcionalidad_id: 9, parent_id: 3, publico: 1, orden: 1 },
-    { id: 17, nombre: 'Asesoría de Pensiones', funcionalidad_id: 10, parent_id: 3, publico: 1, orden: 2 },
+    { id: 17, nombre: 'Estimación Cálculo de Pensión bajo Régimen Ley 73', funcionalidad_id: 10, parent_id: 3, publico: 1, orden: 2 },
     { id: 18, nombre: 'Ideas Innovadoras', funcionalidad_id: 11, parent_id: 3, publico: 1, orden: 3 },
     { id: 19, nombre: 'Emprendimientos', funcionalidad_id: 12, parent_id: 3, publico: 1, orden: 4 },
     { id: 20, nombre: 'Clases de Inglés', funcionalidad_id: 13, parent_id: 3, publico: 1, orden: 5 },
