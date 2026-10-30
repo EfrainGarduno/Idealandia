@@ -383,12 +383,34 @@ if (typeof module !== 'undefined' && module.exports) {
 
 
 
+
+// Definir control de IP muy básico en memoria para rate limiting
+const contactoIPs = {};
+
 // Endpoint de contacto
 app.post('/api/contacto', async (req, res) => {
     const { nombre, correo, mensaje } = req.body;
 
+    // Rate limiting básico (max 5 solicitudes por hora por IP)
+    const clientIP = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    if (contactoIPs[clientIP]) {
+        contactoIPs[clientIP] = contactoIPs[clientIP].filter(time => now - time < 3600000);
+        if (contactoIPs[clientIP].length >= 5) {
+            return res.status(429).json({ message: "Has excedido el límite de envíos. Intenta más tarde." });
+        }
+    } else {
+        contactoIPs[clientIP] = [];
+    }
+    contactoIPs[clientIP].push(now);
+
     if (!nombre || !correo || !mensaje) {
-        return res.status(400).json({ message: "Todos los campos son obligatorios." });
+        return res.status(400).json({ message: "Todos los campos (nombre, correo y descripción) son obligatorios." });
+    }
+
+    // Limitación de tamaño de campos
+    if (nombre.length > 100 || correo.length > 100 || mensaje.length > 2000) {
+        return res.status(400).json({ message: "La longitud de alguno de los campos excede el límite permitido." });
     }
 
     // Basic email validation
@@ -398,7 +420,7 @@ app.post('/api/contacto', async (req, res) => {
     }
 
     if (!mailTransporter) {
-        return res.status(500).json({ message: "Servicio de correo no configurado." });
+        return res.status(500).json({ message: "Servicio de correo no configurado en el servidor." });
     }
 
     const safeName = nombre.replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -424,14 +446,14 @@ app.post('/api/contacto', async (req, res) => {
 
         try {
             await mailTransporter.sendMail(mailOptionsUser);
-            res.status(200).json({ message: "Mensaje enviado correctamente." });
+            res.status(200).json({ message: "Mensaje enviado y confirmación enviada a tu correo." });
         } catch (userMailError) {
             console.error("Error sending contact email to user:", userMailError);
             res.status(207).json({ message: "Mensaje enviado a Idealandia, pero falló el envío de confirmación a tu correo." });
         }
     } catch (idealandiaMailError) {
         console.error("Error sending contact email to Idealandia:", idealandiaMailError);
-        res.status(500).json({ message: "Error interno al enviar el correo." });
+        res.status(500).json({ message: "Error interno: no se pudo enviar el mensaje a Idealandia." });
     }
 });
 
