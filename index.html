@@ -650,7 +650,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
 
-
+            window.cachedUserIdeas = null;
 
             window.threeJsAnimationFrameId = null;
             window.targetMouthScaleY = 1;
@@ -1134,6 +1134,7 @@
                     try {
                         const response = await fetch('/api/logout', { method: 'POST' });
                         if (response.ok) {
+                            window.cachedUserIdeas = null;
                             // Terminate live session so context gets cleared
                             if (typeof stopLive === 'function') {
                                 stopLive();
@@ -1567,6 +1568,7 @@
                         const data = await response.json();
 
                         if (response.ok) {
+                            window.cachedUserIdeas = null;
                             showModal(data.message);
                             document.getElementById('login-usuario').value = '';
                             document.getElementById('login-password').value = '';
@@ -1673,6 +1675,7 @@
                     if (response.ok) {
                         const data = await response.json();
                         const ideas = data.ideas;
+                        window.cachedUserIdeas = ideas;
 
                         if (ideas.length === 0) {
                             ideasMessage.textContent = 'Aún no tienes ideas guardadas.';
@@ -2316,27 +2319,8 @@
                                 console.time('LiveContextLoad');
                                 let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 
-                                // 1. Cargar el manual (optimizado con caché)
-                                try {
-                                    if (!window.cachedManualText) {
-                                        const manualRes = await fetch('/docs/idealandia_manual.md');
-                                        if (manualRes.ok) {
-                                            window.cachedManualText = await manualRes.text();
-                                        } else {
-                                            console.warn("No se pudo obtener el manual (no ok).");
-                                        }
-                                    }
-
-                                    if (window.cachedManualText) {
-                                        contextText += "--- MANUAL IDEALANDIA ---\n" + window.cachedManualText + "\n\n";
-                                        console.log("Manual de Idealandia cargado en el contexto desde caché.");
-                                    } else {
-                                        contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
-                                    }
-                                } catch (e) {
-                                    console.error("Excepción al cargar el manual:", e);
-                                    contextText += "Error al cargar el manual de Idealandia.\n\n";
-                                }
+                                // 1. Documentación
+                                contextText += "El manual y catálogo de funcionalidades de Idealandia está disponible mediante la herramienta 'consultar_documentacion'. Úsala cuando sea necesario.\n\n";
 
                                 // 2. Cargar usuario e ideas
                                 if (window.currentUser) {
@@ -2348,14 +2332,17 @@
                                         const ideasRes = await fetch('/api/ideas');
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
-                                            if (ideasData.ideas && ideasData.ideas.length > 0) {
+                                            window.cachedUserIdeas = ideasData.ideas;
+                                            if (window.cachedUserIdeas && window.cachedUserIdeas.length > 0) {
                                                 contextText += "--- IDEAS DEL USUARIO ---\nAquí están las ideas registradas de este usuario:\n";
-                                                ideasData.ideas.forEach(idea => {
+                                                window.cachedUserIdeas.forEach(idea => {
                                                     contextText += `- ID: ${idea.id || 'N/A'}, Título: "${idea.titulo || ''}", Estado: "${idea.estado || ''}", Descripción: "${idea.descripcion || ''}"\n`;
                                                 });
-                                                console.log(`Se cargaron ${ideasData.ideas.length} ideas en el contexto inicial.`);
+                                                contextText += "\nNota importante: La lista de ideas anterior representa el estado inicial. El usuario puede crear, modificar o eliminar ideas durante esta sesión sin recargar. Si el usuario te hace alguna pregunta sobre sus ideas (por ejemplo, cuántas tiene, cuáles son, etc.), DEBES utilizar obligatoriamente la herramienta 'consultar_ideas_usuario' para asegurarte de obtener la información vigente, no confíes únicamente en este estado inicial.\n";
+                                                console.log(`Se cargaron ${window.cachedUserIdeas.length} ideas en el contexto inicial.`);
                                             } else {
                                                 contextText += "El usuario autenticado no tiene ideas registradas actualmente.\n";
+                                                contextText += "\nNota importante: El usuario puede crear ideas durante esta sesión sin recargar. Si el usuario te hace alguna pregunta sobre sus ideas (por ejemplo, cuántas tiene, o si ha creado una nueva), DEBES utilizar obligatoriamente la herramienta 'consultar_ideas_usuario' para asegurarte de obtener la información vigente.\n";
                                                 console.log("El usuario no tiene ideas registradas.");
                                             }
                                         } else {
