@@ -1079,6 +1079,59 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
     }
 });
 
+app.delete('/api/admin/roles/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [rolCheck] = await pool.execute('SELECT id, nombre FROM roles WHERE id = ?', [id]);
+        if (rolCheck.length === 0) {
+            return res.status(404).json({ error: 'El rol proporcionado no existe.' });
+        }
+
+        // Prevent deletion of essential roles like admin
+        if (rolCheck[0].nombre.toLowerCase() === 'admin' || rolCheck[0].nombre.toLowerCase() === 'administrador') {
+             return res.status(400).json({ error: 'No se puede eliminar un rol protegido.' });
+        }
+
+        const [userCheck] = await pool.execute('SELECT usuario_id FROM usuario_roles WHERE rol_id = ? LIMIT 1', [id]);
+        if (userCheck.length > 0) {
+            return res.status(400).json({ error: 'El rol tiene usuarios asignados y no puede ser eliminado.' });
+        }
+
+        const connection = await pool.getConnection();
+        let lockAcquired = false;
+
+        try {
+            const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_roles_delete', 5) as L");
+            if (lockResult[0].L !== 1) {
+                return res.status(409).json({ error: 'El sistema está ocupado. Intenta nuevamente.' });
+            }
+            lockAcquired = true;
+
+            await connection.beginTransaction();
+
+            await connection.execute('DELETE FROM rol_permisos WHERE rol_id = ?', [id]);
+            await connection.execute('DELETE FROM roles WHERE id = ?', [id]);
+
+            await connection.commit();
+            res.status(200).json({ message: 'Rol eliminado exitosamente.' });
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            if (lockAcquired) {
+                await connection.execute("SELECT RELEASE_LOCK('admin_roles_delete')");
+            }
+            connection.release();
+        }
+
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/roles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 app.get('/api/admin/permisos', requireAdmin, async (req, res) => {
     try {
         const [permisos] = await pool.execute('SELECT id, codigo, nombre, descripcion, activo FROM permisos');
@@ -1089,12 +1142,117 @@ app.get('/api/admin/permisos', requireAdmin, async (req, res) => {
     }
 });
 
+app.post('/api/admin/permisos', requireAdmin, async (req, res) => {
+    try {
+        const { codigo, nombre, descripcion, activo } = req.body;
+        if (!codigo || !nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        const [existing] = await pool.execute('SELECT id FROM permisos WHERE codigo = ?', [codigo]);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'El código del permiso ya existe.' });
+        }
+
+        const [result] = await pool.execute(
+            'INSERT INTO permisos (codigo, nombre, descripcion, activo) VALUES (?, ?, ?, ?)',
+            [codigo, nombre, descripcion, activo ? 1 : 0]
+        );
+        res.status(201).json({ message: 'Permiso creado exitosamente.', id: result.insertId });
+    } catch (error) {
+        console.error('Error in POST /api/admin/permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/permisos/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { codigo, nombre, descripcion, activo } = req.body;
+
+        if (!codigo || !nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        const [permisoCheck] = await pool.execute('SELECT id, codigo FROM permisos WHERE id = ?', [id]);
+        if (permisoCheck.length === 0) {
+            return res.status(404).json({ error: 'El permiso proporcionado no existe.' });
+        }
+
+        if (permisoCheck[0].codigo !== codigo) {
+            const [existing] = await pool.execute('SELECT id FROM permisos WHERE codigo = ? AND id != ?', [codigo, id]);
+            if (existing.length > 0) {
+                return res.status(400).json({ error: 'El código del permiso ya existe en otro registro.' });
+            }
+        }
+
+        await pool.execute(
+            'UPDATE permisos SET codigo = ?, nombre = ?, descripcion = ?, activo = ? WHERE id = ?',
+            [codigo, nombre, descripcion, activo ? 1 : 0, id]
+        );
+        res.status(200).json({ message: 'Permiso actualizado exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.delete('/api/admin/permisos/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [permisoCheck] = await pool.execute('SELECT id FROM permisos WHERE id = ?', [id]);
+        if (permisoCheck.length === 0) {
+            return res.status(404).json({ error: 'El permiso proporcionado no existe.' });
+        }
+
+        const [rolCheck] = await pool.execute('SELECT rol_id FROM rol_permisos WHERE permiso_id = ? LIMIT 1', [id]);
+        if (rolCheck.length > 0) {
+            return res.status(400).json({ error: 'El permiso está asignado a roles y no puede ser eliminado.' });
+        }
+
+        const [funcCheck] = await pool.execute('SELECT funcionalidad_id FROM funcionalidad_permisos WHERE permiso_id = ? LIMIT 1', [id]);
+        if (funcCheck.length > 0) {
+            return res.status(400).json({ error: 'El permiso está asociado a funcionalidades y no puede ser eliminado.' });
+        }
+
+        await pool.execute('DELETE FROM permisos WHERE id = ?', [id]);
+        res.status(200).json({ message: 'Permiso eliminado exitosamente.' });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 app.get('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
     try {
         const [funcionalidades] = await pool.execute('SELECT id, codigo, nombre, descripcion, ruta, activo FROM funcionalidades');
         res.status(200).json(funcionalidades);
     } catch (error) {
         console.error('Error in GET /api/admin/funcionalidades:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
+    try {
+        const { codigo, nombre, descripcion, ruta, activo } = req.body;
+        if (!codigo || !nombre || !descripcion) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        const [existing] = await pool.execute('SELECT id FROM funcionalidades WHERE codigo = ?', [codigo]);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'El código de la funcionalidad ya existe.' });
+        }
+
+        const [result] = await pool.execute(
+            'INSERT INTO funcionalidades (codigo, nombre, descripcion, ruta, activo) VALUES (?, ?, ?, ?, ?)',
+            [codigo, nombre, descripcion, ruta || null, activo ? 1 : 0]
+        );
+        res.status(201).json({ message: 'Funcionalidad creada exitosamente.', id: result.insertId });
+    } catch (error) {
+        console.error('Error in POST /api/admin/funcionalidades:', error);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
@@ -1120,6 +1278,33 @@ app.put('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
         res.status(200).json({ message: 'Funcionalidad actualizada exitosamente.' });
     } catch (error) {
         console.error('Error in PUT /api/admin/funcionalidades:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.delete('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [funcCheck] = await pool.execute('SELECT id FROM funcionalidades WHERE id = ?', [id]);
+        if (funcCheck.length === 0) {
+            return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
+        }
+
+        const [menuCheck] = await pool.execute('SELECT id FROM menu_items WHERE funcionalidad_id = ? LIMIT 1', [id]);
+        if (menuCheck.length > 0) {
+            return res.status(400).json({ error: 'La funcionalidad está asignada a menús y no puede ser eliminada.' });
+        }
+
+        const [permCheck] = await pool.execute('SELECT permiso_id FROM funcionalidad_permisos WHERE funcionalidad_id = ? LIMIT 1', [id]);
+        if (permCheck.length > 0) {
+            return res.status(400).json({ error: 'La funcionalidad tiene permisos asociados y no puede ser eliminada.' });
+        }
+
+        await pool.execute('DELETE FROM funcionalidades WHERE id = ?', [id]);
+        res.status(200).json({ message: 'Funcionalidad eliminada exitosamente.' });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/funcionalidades:', error);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
@@ -1202,6 +1387,28 @@ app.post('/api/admin/menus', requireAdmin, async (req, res) => {
         res.status(201).json({ message: 'Menú creado exitosamente.', id: result.insertId });
     } catch (error) {
         console.error('Error in POST /api/admin/menus:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.delete('/api/admin/menus/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [menuCheck] = await pool.execute('SELECT id FROM menu_items WHERE id = ?', [id]);
+        if (menuCheck.length === 0) {
+            return res.status(404).json({ error: 'El menú proporcionado no existe.' });
+        }
+
+        const [childCheck] = await pool.execute('SELECT id FROM menu_items WHERE parent_id = ? LIMIT 1', [id]);
+        if (childCheck.length > 0) {
+            return res.status(400).json({ error: 'El menú tiene submenús hijos y no puede ser eliminado.' });
+        }
+
+        await pool.execute('DELETE FROM menu_items WHERE id = ?', [id]);
+        res.status(200).json({ message: 'Menú eliminado exitosamente.' });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/menus:', error);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
