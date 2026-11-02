@@ -236,7 +236,7 @@ app.post('/api/chat', async (req, res) => {
             const secondTurnStream = await ai.models.generateContentStream({
                 model: 'gemini-3.6-flash',
                 contents: [
-                    { role: 'user', parts: [{ text: message }] },
+                    ...requestContents,
                     { role: 'model', parts: [{ functionCall: functionCall }] },
                     {
                         role: 'user',
@@ -249,7 +249,7 @@ app.post('/api/chat', async (req, res) => {
                     }
                 ],
                 config: {
-                    systemInstruction: chatSysInstr,
+                    systemInstruction: dynamicSysInstr,
                     tools: idealandiaTools
                 }
             });
