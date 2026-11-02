@@ -149,7 +149,12 @@ app.get('/api/live-token', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message } = req.body;
+        const { message, history } = req.body;
+
+        // Ensure history has valid structure
+        if (history && !Array.isArray(history)) {
+            return res.status(400).json({ error: 'History must be an array' });
+        }
 
         if (!message) {
             return res.status(400).json({
@@ -166,18 +171,45 @@ app.post('/api/chat', async (req, res) => {
         // Ensure we know who is asking
         const token = req.cookies.auth_token;
         let userId = null;
+        let dynamicSysInstr = chatSysInstr;
         if (token) {
             try {
                 const decoded = await verifyToken(token, pool);
                 userId = decoded.id;
+
+                const [userRows] = await pool.query('SELECT nombre, usuario FROM usuarios WHERE id = ?', [userId]);
+                if (userRows.length > 0) {
+                    const userName = userRows[0].nombre || userRows[0].usuario;
+                    dynamicSysInstr += "\n--- INFORMACIÓN DEL USUARIO ---\nEl usuario autenticado es: " + userName + "\n";
+
+                    const [ideaRows] = await pool.query('SELECT id, titulo, estado, descripcion FROM ideas WHERE usuario_id = ?', [userId]);
+                    if (ideaRows.length > 0) {
+                        dynamicSysInstr += "El usuario tiene " + ideaRows.length + " ideas.\n";
+                        ideaRows.forEach(idea => {
+                            dynamicSysInstr += `- ID: ${idea.id}, Título: "${idea.titulo}"\n`;
+                        });
+                    } else {
+                        dynamicSysInstr += "El usuario no tiene ideas registradas.\n";
+                    }
+                }
             } catch (e) {}
+        }
+
+        let requestContents = [];
+        if (history && history.length > 0) {
+            // Validate roles before passing to API
+            const validHistory = history.filter(h => h.role === 'user' || h.role === 'model');
+            requestContents = validHistory;
+            // The frontend already appended the user message to history
+        } else {
+            requestContents = [{ role: 'user', parts: [{ text: message }] }];
         }
 
         let aiResponseStream = await ai.models.generateContentStream({
             model: 'gemini-3.6-flash',
-            contents: [{ role: 'user', parts: [{ text: message }] }],
+            contents: requestContents,
             config: {
-                systemInstruction: chatSysInstr,
+                systemInstruction: dynamicSysInstr,
                 tools: idealandiaTools
             }
         });

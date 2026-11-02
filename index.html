@@ -648,9 +648,12 @@
         window.VRMLoaderPlugin = VRMLoaderPlugin;
     </script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+                await initIdealandia();
 
-            window.cachedUserIdeas = null;
+            window.cachedUserIdeas = [];
+            window.conversationHistory = [];
+            window.idealandiaGeneralContext = "";
 
             window.threeJsAnimationFrameId = null;
             window.targetMouthScaleY = 1;
@@ -1097,29 +1100,53 @@
                 }
             }
 
-            async function checkAuthStatus() {
+
+            async function initIdealandia() {
                 try {
-                    const response = await fetch('/api/me');
-                    if (response.ok) {
-                        const data = await response.json();
-                        const user = data.user;
-                        window.currentUser = user;
-                        document.getElementById('auth-container-guest').style.display = 'none';
-                        document.getElementById('auth-container-user').style.display = 'flex';
-                        document.getElementById('user-greeting').textContent = `Bienvenido, ${user.nombre || user.usuario}`;
-                    } else {
-                        document.getElementById('auth-container-guest').style.display = 'flex';
-                        document.getElementById('auth-container-user').style.display = 'none';
-                        document.getElementById('user-greeting').textContent = '';
-                        window.currentUser = null;
+                    let manualText = sessionStorage.getItem('idealandiaManual');
+                    if (!manualText) {
+                        const manualRes = await fetch('/api/knowledge?query=all');
+                        if (manualRes.ok) {
+                            const manualData = await manualRes.json();
+                            manualText = manualData.result;
+                            sessionStorage.setItem('idealandiaManual', manualText);
+                        } else {
+                            manualText = "Manual no disponible.";
+                        }
                     }
+                    window.idealandiaGeneralContext = manualText;
 
-                    // Build menu after determining auth status
-                    await buildMenu();
-
-                } catch (error) {
-                    console.error('Error checking auth status:', error);
+                    const authRes = await fetch('/api/me');
+                    if (authRes.ok) {
+                        const authData = await authRes.json();
+                        if (authData.user) {
+                            window.currentUser = authData.user;
+                            const ideasRes = await fetch('/api/ideas');
+                            if (ideasRes.ok) {
+                                const ideasData = await ideasRes.json();
+                                window.cachedUserIdeas = ideasData.ideas || [];
+                            }
+                        }
+                    }
+                } catch(e) {
+                    console.error("Error en initIdealandia:", e);
+                } finally {
+                    window.isIdealandiaInitialized = true;
+                    console.log("Idealandia initial loading complete.");
                 }
+            }
+
+            async function checkAuthStatus() {
+                if (window.currentUser) {
+                    document.getElementById('auth-container-guest').style.display = 'none';
+                    document.getElementById('auth-container-user').style.display = 'flex';
+                    document.getElementById('user-greeting').textContent = `Bienvenido, ${window.currentUser.nombre || window.currentUser.usuario}`;
+                } else {
+                    document.getElementById('auth-container-guest').style.display = 'flex';
+                    document.getElementById('auth-container-user').style.display = 'none';
+                    document.getElementById('user-greeting').textContent = '';
+                }
+                await buildMenu();
             }
 
             // Check auth status on load
@@ -1134,23 +1161,20 @@
                     try {
                         const response = await fetch('/api/logout', { method: 'POST' });
                         if (response.ok) {
-                            window.cachedUserIdeas = null;
-                            // Terminate live session so context gets cleared
-                            if (typeof stopLive === 'function') {
-                                stopLive();
-                            }
-
-                            // Reset chat history to prevent leak
+                            window.cachedUserIdeas = [];
+                            window.conversationHistory = [];
+                            window.currentUser = null;
                             const chatHistory = document.getElementById('chat-history');
                             if (chatHistory) {
                                 chatHistory.innerHTML = `
                                     <div class="message idealita-message">
                                         ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
-                                    </div>
-                                `;
+                                    </div>`;
                             }
-
-                            checkAuthStatus();
+                            if (typeof stopLive === 'function') {
+                                stopLive();
+                            }
+                            await checkAuthStatus();
                             document.querySelector('a[data-section="inicio"]').click();
                         }
                     } catch (error) {
@@ -1568,28 +1592,31 @@
                         const data = await response.json();
 
                         if (response.ok) {
-                            window.cachedUserIdeas = null;
                             showModal(data.message);
                             document.getElementById('login-usuario').value = '';
                             document.getElementById('login-password').value = '';
 
-                            // Terminate live session so context gets cleared
-                            if (typeof stopLive === 'function') {
-                                stopLive();
-                            }
-
-                            // Reset chat history to prevent leak
+                            window.conversationHistory = [];
                             const chatHistory = document.getElementById('chat-history');
                             if (chatHistory) {
                                 chatHistory.innerHTML = `
                                     <div class="message idealita-message">
                                         ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
-                                    </div>
-                                `;
+                                    </div>`;
                             }
 
-                            // Switch view to home or chat, and update UI
-                            checkAuthStatus();
+                            if (typeof stopLive === 'function') {
+                                stopLive();
+                            }
+
+                            await checkAuthStatus();
+
+                            const ideasRes = await fetch('/api/ideas');
+                            if (ideasRes.ok) {
+                                const ideasData = await ideasRes.json();
+                                window.cachedUserIdeas = ideasData.ideas || [];
+                            }
+
                             document.querySelector('a[data-section="inicio"]').click();
                         } else {
                             showModal(`Error: ${data.error}`);
@@ -1913,43 +1940,52 @@
 
             async function handleSend() {
                 const text = userInput.value.trim();
+                if (text === '') return;
 
-                if (text === '') {
-                    return;
-                }
-
-                // Mostrar pregunta del usuario
                 addMessage(text, 'user');
-
-                // Limpiar campo
                 userInput.value = '';
-
-                // Bloquear controles mientras responde
                 sendBtn.disabled = true;
                 userInput.disabled = true;
 
+                if (window.conversationHistory && window.conversationHistory.length > 0 && window.conversationHistory[window.conversationHistory.length - 1].role === "user") {
+                    window.conversationHistory[window.conversationHistory.length - 1].parts[0].text += "\n" + text;
+                } else {
+                    window.conversationHistory.push({ role: "user", parts: [{ text: text }] });
+                }
+
                 try {
-                    if (!liveWebSocket || liveWebSocket.readyState !== WebSocket.OPEN) {
-                        await startLive(false);
-                    }
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: text,
+                            history: window.conversationHistory
+                        })
+                    });
 
-                    liveWebSocket.send(JSON.stringify({
-                        clientContent: {
-                            turns: [{ role: "user", parts: [{ text: text }] }],
-                            turnComplete: true
+                    if (response.ok) {
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder('utf-8');
+                        let aiResponse = '';
+                        let currentMessageDiv = addMessage('', 'idealita');
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            const chunk = decoder.decode(value, { stream: true });
+                            aiResponse += chunk;
+                            currentMessageDiv.innerHTML = parseMarkdown(aiResponse);
                         }
-                    }));
 
-                    if (!window.currentLiveMessageDiv) {
-                        window.currentLiveMessageDiv = addMessage('', 'idealita');
-                        window.currentLiveMessageText = '';
+                        if (window.conversationHistory.length > 0 && window.conversationHistory[window.conversationHistory.length - 1].role === "model") {
+                            window.conversationHistory[window.conversationHistory.length - 1].parts[0].text += "\n" + aiResponse;
+                        } else {
+                            window.conversationHistory.push({ role: "model", parts: [{ text: aiResponse }] });
+                        }
                     }
-
-                } catch (error) {
-                    console.error('Error fetching chat response:', error);
-                    addMessage('Lo siento, hubo un error al conectar con el servidor.', 'idealita');
+                } catch(e) {
+                    addMessage('Error de conexión con el servidor.', 'idealita');
                 } finally {
-                    // Reactivar controles
                     sendBtn.disabled = false;
                     userInput.disabled = false;
                     userInput.focus();
@@ -2079,12 +2115,25 @@
                             sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. ¡Importante! Siempre, al inicio de la conversación, debes saludar al usuario por su nombre de forma amigable (ejemplo: \'¡Hola, ${userName}!\', o variaciones). Dirígete a él o ella por su nombre también durante la conversación cuando resulte natural.`;
                         }
 
-                        const setupMessage = {
-                            setup: {
-                                model: "models/gemini-3.8-live",
-                                systemInstruction: {
-                                    parts: [{ text: sysInstruction }]
-                                },
+                                            let contextText = window.idealandiaGeneralContext || "Eres Idealita, el asistente virtual de Idealandia.\n";
+                    if (window.currentUser) {
+                        const userName = window.currentUser.nombre || window.currentUser.usuario;
+                        contextText += "\n--- INFORMACION DEL USUARIO ---\nEl usuario autenticado es: " + userName + "\n";
+                        if (window.cachedUserIdeas && window.cachedUserIdeas.length > 0) {
+                            contextText += "El usuario tiene " + window.cachedUserIdeas.length + " ideas.\n";
+                        } else {
+                            contextText += "El usuario no tiene ideas registradas.\n";
+                        }
+                    }
+                    contextText += "\nIMPORTANTE: No uses datos en caché si el usuario pregunta por detalles de sus ideas, usa siempre consultar_ideas_usuario.\n";
+                    contextText += "Usa consultar_documentacion si necesitas detalles del manual.\n";
+
+                    const setupMessage = {
+                        setup: {
+                            model: "models/gemini-3.8-live",
+                            systemInstruction: {
+                                parts: [{ text: contextText }]
+                            },
                                 tools: [
                                     {
                                         functionDeclarations: [
@@ -2317,56 +2366,33 @@
                             // Send Initial identity, manual and ideas messages once setup is complete
                             try {
                                 console.time('LiveContextLoad');
-                                let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 
-                                // 1. Documentación
-                                contextText += "El manual y catálogo de funcionalidades de Idealandia está disponible mediante la herramienta 'consultar_documentacion'. Úsala cuando sea necesario.\n\n";
-
-                                // 2. Cargar usuario e ideas
+                                let contextText = window.idealandiaGeneralContext || "Eres Idealita, el asistente virtual de Idealandia.\n";
                                 if (window.currentUser) {
                                     const userName = window.currentUser.nombre || window.currentUser.usuario;
-                                    contextText += `--- INFORMACIÓN DEL USUARIO ---\nEl usuario autenticado es: ${userName}\n\n`;
-                                    console.log("Usuario autenticado añadido al contexto.");
-
-                                    try {
-                                        const ideasRes = await fetch('/api/ideas');
-                                        if (ideasRes.ok) {
-                                            const ideasData = await ideasRes.json();
-                                            window.cachedUserIdeas = ideasData.ideas;
-                                            if (window.cachedUserIdeas && window.cachedUserIdeas.length > 0) {
-                                                contextText += "--- IDEAS DEL USUARIO ---\nAquí están las ideas registradas de este usuario:\n";
-                                                window.cachedUserIdeas.forEach(idea => {
-                                                    contextText += `- ID: ${idea.id || 'N/A'}, Título: "${idea.titulo || ''}", Estado: "${idea.estado || ''}", Descripción: "${idea.descripcion || ''}"\n`;
-                                                });
-                                                contextText += "\nNota importante: La lista de ideas anterior representa el estado inicial. El usuario puede crear, modificar o eliminar ideas durante esta sesión sin recargar. Si el usuario te hace alguna pregunta sobre sus ideas (por ejemplo, cuántas tiene, cuáles son, etc.), DEBES utilizar obligatoriamente la herramienta 'consultar_ideas_usuario' para asegurarte de obtener la información vigente, no confíes únicamente en este estado inicial.\n";
-                                                console.log(`Se cargaron ${window.cachedUserIdeas.length} ideas en el contexto inicial.`);
-                                            } else {
-                                                contextText += "El usuario autenticado no tiene ideas registradas actualmente.\n";
-                                                contextText += "\nNota importante: El usuario puede crear ideas durante esta sesión sin recargar. Si el usuario te hace alguna pregunta sobre sus ideas (por ejemplo, cuántas tiene, o si ha creado una nueva), DEBES utilizar obligatoriamente la herramienta 'consultar_ideas_usuario' para asegurarte de obtener la información vigente.\n";
-                                                console.log("El usuario no tiene ideas registradas.");
-                                            }
-                                        } else {
-                                            contextText += "No se pudieron obtener las ideas del usuario.\n";
-                                            console.warn("No se pudieron obtener las ideas (no ok).");
-                                        }
-                                    } catch(e) {
-                                        console.error("Excepción al cargar ideas:", e);
-                                        contextText += "Ocurrió un error al cargar las ideas del usuario.\n";
+                                    contextText += "\n--- INFORMACION DEL USUARIO ---\nEl usuario autenticado es: " + userName + "\n";
+                                    if (window.cachedUserIdeas && window.cachedUserIdeas.length > 0) {
+                                        contextText += "El usuario tiene " + window.cachedUserIdeas.length + " ideas.\n";
+                                    } else {
+                                        contextText += "El usuario no tiene ideas registradas.\n";
                                     }
-                                } else {
-                                    contextText += "El usuario actual NO está autenticado. No se dispone de datos de usuario ni ideas.\n";
-                                    console.log("Usuario no autenticado, se omiten ideas en el contexto inicial.");
                                 }
+                                contextText += "\nIMPORTANTE: No uses datos en caché si el usuario pregunta por detalles de sus ideas, usa siempre consultar_ideas_usuario.\n";
+                                contextText += "Usa consultar_documentacion si necesitas detalles del manual.\n";
 
-                                // 3. Enviar todo el contexto junto
-                                liveWebSocket.send(JSON.stringify({
-                                    clientContent: {
-                                        turns: [{ role: "user", parts: [{ text: contextText }] }],
-                                        turnComplete: false
+                                try {
+                                    if (window.conversationHistory && window.conversationHistory.length > 0) {
+                                        liveWebSocket.send(JSON.stringify({
+                                            clientContent: {
+                                                turns: window.conversationHistory,
+                                                turnComplete: false
+                                            }
+                                        }));
+                                        console.log("Contexto de historia restaurado.");
                                     }
-                                }));
-                                console.log("Contexto inicial enviado exitosamente a Gemini.");
-                                console.timeEnd('LiveContextLoad');
+                                } catch(e) {
+                                    console.error("Error al enviar historial de conversación", e);
+                                }
 
                             } catch (e) {
                                 console.error("Error crítico construyendo el contexto inicial:", e);
@@ -2449,8 +2475,22 @@
                             // the official source for text is outputTranscription. We ignore modelTurn text
                             // to avoid race conditions or duplicates.
                             let newText = '';
+                            if (content.inputTranscription && content.inputTranscription.text) {
+                                let userTranscript = content.inputTranscription.text;
+                                if (window.conversationHistory.length > 0 && window.conversationHistory[window.conversationHistory.length - 1].role === "user") {
+                                    window.conversationHistory[window.conversationHistory.length - 1].parts[0].text += "\n" + userTranscript;
+                                } else {
+                                    window.conversationHistory.push({ role: "user", parts: [{ text: userTranscript }] });
+                                }
+                            }
                             if (content.outputTranscription && content.outputTranscription.text) {
                                 newText = content.outputTranscription.text;
+                            } else if (content.modelTurn && content.modelTurn.parts) {
+                                for (const part of content.modelTurn.parts) {
+                                    if (part.text) {
+                                        newText += part.text;
+                                    }
+                                }
                             }
 
                             if (newText !== '') {
@@ -2486,6 +2526,13 @@
                             }
 
                             if (content.turnComplete) {
+                                if (window.currentLiveMessageText) {
+                                    if (window.conversationHistory.length > 0 && window.conversationHistory[window.conversationHistory.length - 1].role === "model") {
+                                        window.conversationHistory[window.conversationHistory.length - 1].parts[0].text += "\n" + window.currentLiveMessageText;
+                                    } else {
+                                        window.conversationHistory.push({ role: "model", parts: [{ text: window.currentLiveMessageText }] });
+                                    }
+                                }
                                 window.currentLiveMessageDiv = null;
                                 window.currentLiveMessageText = '';
                             }
