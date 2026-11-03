@@ -10,7 +10,7 @@ async function getUserMenuCapabilities(pool, userId) {
     let allowedFunctionalityIds = new Set();
     if (userId) {
         const query = `
-            SELECT fp.funcionalidad_id
+            SELECT f.id as funcionalidad_id
             FROM usuario_roles ur
             JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
             JOIN rol_permisos rp ON r.id = rp.rol_id

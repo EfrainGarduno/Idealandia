@@ -644,7 +644,7 @@ app.get('/api/menu', async (req, res) => {
         let allowedFunctionalityIds = new Set();
         if (userId) {
             const query = `
-                SELECT fp.funcionalidad_id
+                SELECT f.id, f.ruta
                 FROM usuario_roles ur
                 JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
                 JOIN rol_permisos rp ON r.id = rp.rol_id
@@ -660,8 +660,8 @@ app.get('/api/menu', async (req, res) => {
                   AND uf.estado = 'activo'
                   AND (uf.tipo_acceso = 'permanente' OR (uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW()))
             `;
-            const [allowed] = await pool.execute(query, [userId]);
-            allowed.forEach(row => allowedFunctionalityIds.add(row.funcionalidad_id));
+            const [allowed] = await pool.execute(query, [userId, userId]);
+            allowed.forEach(row => allowedFunctionalityIds.add(row.id || row.funcionalidad_id));
         }
 
         const buildTree = (parentId = null) => {
