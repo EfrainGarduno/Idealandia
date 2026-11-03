@@ -170,8 +170,16 @@ async function loadRoles() {
             editBtn.textContent = 'Editar';
 
             editBtn.className = 'btn btn-primary btn-sm';
+            editBtn.style.marginRight = '5px';
             editBtn.onclick = () => showEditRolModal(r);
             td.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Eliminar';
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.onclick = () => showDeleteRolModal(r);
+            td.appendChild(deleteBtn);
+
             tr.appendChild(td);
 
             tbody.appendChild(tr);
@@ -199,6 +207,23 @@ async function loadPermisos() {
             td = document.createElement('td'); td.textContent = p.nombre; tr.appendChild(td);
             td = document.createElement('td'); td.textContent = p.descripcion; tr.appendChild(td);
             td = document.createElement('td'); td.textContent = p.activo ? 'Sí' : 'No'; tr.appendChild(td);
+
+            td = document.createElement('td');
+
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Editar';
+            editBtn.className = 'btn btn-secondary';
+            editBtn.style.marginRight = '5px';
+            editBtn.onclick = () => showEditPermisoModal(p);
+            td.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Eliminar';
+            deleteBtn.className = 'btn btn-danger';
+            deleteBtn.onclick = () => showDeletePermisoModal(p);
+            td.appendChild(deleteBtn);
+
+            tr.appendChild(td);
 
             tbody.appendChild(tr);
         }
@@ -229,6 +254,14 @@ async function loadFuncionalidades() {
 
 
             td = document.createElement('td');
+
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Editar';
+            editBtn.className = 'btn btn-primary btn-sm';
+            editBtn.style.marginRight = '5px';
+            editBtn.onclick = () => showEditFuncionalidadModal(f);
+            td.appendChild(editBtn);
+
             const permBtn = document.createElement('button');
             permBtn.textContent = 'Permisos';
             permBtn.className = 'btn btn-secondary btn-sm';
@@ -236,12 +269,12 @@ async function loadFuncionalidades() {
             permBtn.onclick = () => showEditFuncPermisosModal(f.id, f.nombre);
             td.appendChild(permBtn);
 
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Editar';
-            editBtn.className = 'btn btn-primary btn-sm';
-            editBtn.onclick = () => showEditFuncionalidadModal(f);
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Eliminar';
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.onclick = () => showDeleteFuncionalidadModal(f);
+            td.appendChild(deleteBtn);
 
-            td.appendChild(editBtn);
             tr.appendChild(td);
 
             tbody.appendChild(tr);
@@ -284,6 +317,7 @@ async function loadMenus() {
             const toggleBtn = document.createElement('button');
             toggleBtn.textContent = m.activo ? 'Desactivar' : 'Activar';
             toggleBtn.className = m.activo ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm';
+            toggleBtn.style.marginRight = '5px';
             toggleBtn.onclick = async () => {
                 try {
                     const res = await fetch(`/api/admin/menus/${m.id}`, {
@@ -304,6 +338,12 @@ async function loadMenus() {
                 }
             };
             td.appendChild(toggleBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Eliminar';
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.onclick = () => showDeleteMenuModal(m);
+            td.appendChild(deleteBtn);
 
             tr.appendChild(td);
             tbody.appendChild(tr);
@@ -505,7 +545,316 @@ async function showEditPermisosModal(rolId, rolName) {
     }
 }
 
+function showCreatePermisoModal() {
+    const html = `
+        <div style="text-align: left;">
+            <label>Código:</label>
+            <input type="text" id="create-permiso-codigo" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Nombre:</label>
+            <input type="text" id="create-permiso-nombre" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Descripción:</label>
+            <input type="text" id="create-permiso-desc" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>
+                <input type="checkbox" id="create-permiso-activo" checked> Activo
+            </label>
+            <br>
+            <button id="btn-save-new-permiso" class="btn btn-primary" style="margin-top: 10px;">Guardar</button>
+            <button id="btn-cancel-new-permiso" class="btn btn-secondary" style="margin-top: 10px;">Cancelar</button>
+        </div>
+    `;
+
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Crear Nuevo Permiso</h3>` + html;
+    buttonsContainer.innerHTML = '';
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-new-permiso').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-save-new-permiso').onclick = async () => {
+        const codigo = document.getElementById('create-permiso-codigo').value;
+        const nombre = document.getElementById('create-permiso-nombre').value;
+        const descripcion = document.getElementById('create-permiso-desc').value;
+        const activo = document.getElementById('create-permiso-activo').checked;
+
+        try {
+            const res = await fetch('/api/admin/permisos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo, nombre, descripcion, activo })
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Permiso creado.');
+                loadPermisos();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al crear permiso.');
+        }
+    };
+}
+
+function showEditPermisoModal(p) {
+    const html = `
+        <div style="text-align: left;">
+            <label>Código:</label>
+            <input type="text" id="edit-permiso-codigo" value="${escapeHTML(p.codigo)}" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Nombre:</label>
+            <input type="text" id="edit-permiso-nombre" value="${escapeHTML(p.nombre)}" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Descripción:</label>
+            <input type="text" id="edit-permiso-desc" value="${escapeHTML(p.descripcion)}" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>
+                <input type="checkbox" id="edit-permiso-activo" ${p.activo ? 'checked' : ''}> Activo
+            </label>
+            <br>
+            <button id="btn-save-edit-permiso" class="btn btn-primary" style="margin-top: 10px;">Guardar</button>
+            <button id="btn-cancel-edit-permiso" class="btn btn-secondary" style="margin-top: 10px;">Cancelar</button>
+        </div>
+    `;
+
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Editar Permiso (ID: ${p.id})</h3>` + html;
+    buttonsContainer.innerHTML = '';
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-edit-permiso').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-save-edit-permiso').onclick = async () => {
+        const codigo = document.getElementById('edit-permiso-codigo').value;
+        const nombre = document.getElementById('edit-permiso-nombre').value;
+        const descripcion = document.getElementById('edit-permiso-desc').value;
+        const activo = document.getElementById('edit-permiso-activo').checked;
+
+        try {
+            const res = await fetch(`/api/admin/permisos/${p.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo, nombre, descripcion, activo })
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Permiso actualizado.');
+                loadPermisos();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al actualizar permiso.');
+        }
+    };
+}
+
+function showDeletePermisoModal(p) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Eliminar Permiso</h3><p>¿Estás seguro de que deseas eliminar el permiso "${escapeHTML(p.codigo)}"?</p>`;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-confirm-delete-permiso" class="btn btn-danger">Eliminar</button>
+        <button id="btn-cancel-delete-permiso" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-delete-permiso').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-confirm-delete-permiso').onclick = async () => {
+        try {
+            const res = await fetch(`/api/admin/permisos/${p.id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Permiso eliminado.');
+                loadPermisos();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al eliminar permiso.');
+        }
+    };
+}
+
+function showCreateFuncionalidadModal() {
+    const html = `
+        <div style="text-align: left;">
+            <label>Código:</label>
+            <input type="text" id="create-func-codigo" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Nombre:</label>
+            <input type="text" id="create-func-nombre" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Descripción:</label>
+            <input type="text" id="create-func-desc" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>Ruta (Opcional):</label>
+            <input type="text" id="create-func-ruta" class="form-input" style="width: 100%; margin-bottom: 10px;">
+            <label>
+                <input type="checkbox" id="create-func-activo" checked> Activo
+            </label>
+            <br>
+            <button id="btn-save-new-func" class="btn btn-primary" style="margin-top: 10px;">Guardar</button>
+            <button id="btn-cancel-new-func" class="btn btn-secondary" style="margin-top: 10px;">Cancelar</button>
+        </div>
+    `;
+
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Crear Nueva Funcionalidad</h3>` + html;
+    buttonsContainer.innerHTML = '';
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-new-func').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-save-new-func').onclick = async () => {
+        const codigo = document.getElementById('create-func-codigo').value;
+        const nombre = document.getElementById('create-func-nombre').value;
+        const descripcion = document.getElementById('create-func-desc').value;
+        const ruta = document.getElementById('create-func-ruta').value;
+        const activo = document.getElementById('create-func-activo').checked;
+
+        try {
+            const res = await fetch('/api/admin/funcionalidades', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo, nombre, descripcion, ruta, activo })
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Funcionalidad creada.');
+                loadFuncionalidades();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al crear funcionalidad.');
+        }
+    };
+}
+
+function showDeleteFuncionalidadModal(f) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Eliminar Funcionalidad</h3><p>¿Estás seguro de que deseas eliminar la funcionalidad "${escapeHTML(f.codigo)}"?</p>`;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-confirm-delete-func" class="btn btn-danger">Eliminar</button>
+        <button id="btn-cancel-delete-func" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-delete-func').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-confirm-delete-func').onclick = async () => {
+        try {
+            const res = await fetch(`/api/admin/funcionalidades/${f.id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Funcionalidad eliminada.');
+                loadFuncionalidades();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al eliminar funcionalidad.');
+        }
+    };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    const permisosTab = document.getElementById('admin-permisos');
+    if (permisosTab) {
+        const btn = document.getElementById('admin-btn-create-permiso');
+        if (btn) {
+            const controlsDiv = document.createElement('div');
+            controlsDiv.style.display = 'flex';
+            controlsDiv.style.gap = '10px';
+            controlsDiv.style.marginBottom = '10px';
+            controlsDiv.style.flexWrap = 'wrap';
+
+            btn.parentNode.insertBefore(controlsDiv, btn);
+            controlsDiv.appendChild(btn);
+
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.id = 'search-permisos';
+            searchInput.placeholder = 'Buscar permisos...';
+            searchInput.className = 'form-input';
+
+            controlsDiv.appendChild(searchInput);
+
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                const rows = document.querySelectorAll('#admin-permisos-tbody tr');
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
+                });
+            });
+        }
+    }
+
+    const funcionalidadesTab = document.getElementById('admin-funcionalidades');
+    if (funcionalidadesTab) {
+        const btn = document.getElementById('admin-btn-create-funcionalidad');
+        if (btn) {
+            const controlsDiv = document.createElement('div');
+            controlsDiv.style.display = 'flex';
+            controlsDiv.style.gap = '10px';
+            controlsDiv.style.marginBottom = '10px';
+            controlsDiv.style.flexWrap = 'wrap';
+
+            btn.parentNode.insertBefore(controlsDiv, btn);
+            controlsDiv.appendChild(btn);
+
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.id = 'search-funcionalidades';
+            searchInput.placeholder = 'Buscar funcionalidades...';
+            searchInput.className = 'form-input';
+
+            controlsDiv.appendChild(searchInput);
+
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                const rows = document.querySelectorAll('#admin-funcionalidades-tbody tr');
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
+                });
+            });
+        }
+    }
+
+    const btnCreateFuncionalidad = document.getElementById('admin-btn-create-funcionalidad');
+    if (btnCreateFuncionalidad) {
+        btnCreateFuncionalidad.addEventListener('click', showCreateFuncionalidadModal);
+    }
+
+    const btnCreatePermiso = document.getElementById('admin-btn-create-permiso');
+    if (btnCreatePermiso) {
+        btnCreatePermiso.addEventListener('click', showCreatePermisoModal);
+    }
+
     const btnCreateRol = document.getElementById('admin-btn-create-rol');
     if (btnCreateRol) {
         btnCreateRol.addEventListener('click', () => {
@@ -560,6 +909,41 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function showDeleteRolModal(r) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Eliminar Rol</h3><p>¿Estás seguro de que deseas eliminar el rol "${escapeHTML(r.nombre)}"?</p>`;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-confirm-delete-rol" class="btn btn-danger">Eliminar</button>
+        <button id="btn-cancel-delete-rol" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-delete-rol').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-confirm-delete-rol').onclick = async () => {
+        try {
+            const res = await fetch(`/api/admin/roles/${r.id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Rol eliminado.');
+                loadRoles();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al eliminar rol.');
+        }
+    };
+}
 
 function showEditRolModal(r) {
     const html = `
@@ -748,7 +1132,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const menusTab = document.getElementById('admin-menus');
     if (menusTab) {
-        menusTab.insertBefore(btnCreateMenu, menusTab.querySelector('h3').nextSibling);
+        const controlsDiv = document.createElement('div');
+        controlsDiv.style.display = 'flex';
+        controlsDiv.style.gap = '10px';
+        controlsDiv.style.marginBottom = '10px';
+        controlsDiv.style.flexWrap = 'wrap';
+
+        menusTab.insertBefore(controlsDiv, menusTab.querySelector('h3').nextSibling);
+        controlsDiv.appendChild(btnCreateMenu);
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = 'search-menus';
+        searchInput.placeholder = 'Buscar menús...';
+        searchInput.className = 'form-input';
+
+        controlsDiv.appendChild(searchInput);
+
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#admin-menus-tbody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(term) ? '' : 'none';
+            });
+        });
     }
 
 // Add create user button and search input to Users tab
@@ -945,6 +1353,41 @@ async function showEditFuncPermisosModal(funcId, funcName) {
     }
 }
 
+
+function showDeleteMenuModal(m) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Eliminar Menú</h3><p>¿Estás seguro de que deseas eliminar el menú "${escapeHTML(m.nombre)}"?</p>`;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-confirm-delete-menu" class="btn btn-danger">Eliminar</button>
+        <button id="btn-cancel-delete-menu" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-delete-menu').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-confirm-delete-menu').onclick = async () => {
+        try {
+            const res = await fetch(`/api/admin/menus/${m.id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Menú eliminado.');
+                loadMenus();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al eliminar menú.');
+        }
+    };
+}
 
 function showCreateMenuModal() {
     const html = `
