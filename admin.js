@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetId === 'admin-roles') loadRoles();
             if (targetId === 'admin-permisos') loadPermisos();
             if (targetId === 'admin-funcionalidades') loadFuncionalidades();
+            loadAccesos();
             if (targetId === 'admin-menus') loadMenus();
         });
     });
@@ -230,6 +231,191 @@ async function loadPermisos() {
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar permisos.');
+    }
+}
+
+
+
+async function loadAccesos() {
+    try {
+        const response = await fetch('/api/admin/accesos');
+        if (!response.ok) throw new Error('Error al cargar accesos');
+        const accesos = await response.json();
+
+        const tbody = document.getElementById('admin-accesos-tbody');
+        tbody.innerHTML = '';
+
+        for (const a of accesos) {
+            const tr = document.createElement('tr');
+
+            let td = document.createElement('td'); td.textContent = a.id; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.usuario_nombre; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.funcionalidad_nombre; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.tipo_acceso; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.fecha_inicio ? new Date(a.fecha_inicio).toLocaleString() : 'N/A'; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.fecha_fin ? new Date(a.fecha_fin).toLocaleString() : 'N/A'; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.estado; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.asignado_por_nombre || 'N/A'; tr.appendChild(td);
+
+            td = document.createElement('td');
+            if (a.estado === 'activo') {
+                const revokeBtn = document.createElement('button');
+                revokeBtn.textContent = 'Revocar';
+                revokeBtn.className = 'btn btn-danger btn-sm';
+                revokeBtn.onclick = () => showRevokeAccesoModal(a);
+                td.appendChild(revokeBtn);
+            }
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        }
+    } catch (error) {
+        console.error(error);
+        if (window.showModal) window.showModal('Error al cargar accesos.');
+    }
+}
+
+function showRevokeAccesoModal(a) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Revocar Acceso</h3><p>¿Estás seguro de que deseas revocar este acceso para el usuario ${escapeHTML(a.usuario_nombre)} a la funcionalidad ${escapeHTML(a.funcionalidad_nombre)}?</p>`;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-confirm-revoke-acceso" class="btn btn-danger">Revocar</button>
+        <button id="btn-cancel-revoke-acceso" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-revoke-acceso').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-confirm-revoke-acceso').onclick = async () => {
+        try {
+            const res = await fetch(`/api/admin/accesos/${a.id}/revocar`, {
+                method: 'PUT'
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Acceso revocado.');
+                loadAccesos();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al revocar acceso.');
+        }
+    };
+}
+
+async function showCreateAccesoModal() {
+    try {
+        const [funcRes, userRes] = await Promise.all([
+            fetch('/api/admin/funcionalidades'),
+            fetch('/api/admin/usuarios')
+        ]);
+        if (!funcRes.ok || !userRes.ok) throw new Error('Error al cargar datos necesarios');
+
+        const funcionalidades = await funcRes.json();
+        const usuarios = await userRes.json();
+
+        let userOptions = usuarios.map(u => `
+            <div>
+                <input type="checkbox" id="user-cb-${u.id}" value="${escapeHTML(u.id)}">
+                <label for="user-cb-${u.id}">${escapeHTML(u.nombre)} (${escapeHTML(u.usuario)})</label>
+            </div>
+        `).join('');
+
+        let funcOptions = '<option value="">-- Seleccionar --</option>' + funcionalidades.map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.nombre)}</option>`).join('');
+
+        const html = `
+            <div style="text-align: left; max-height: 400px; overflow-y: auto;">
+                <label>Usuarios (Selecciona uno o más):</label>
+                <div style="max-height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; margin-bottom: 10px;">
+                    ${userOptions}
+                </div>
+
+                <label>Funcionalidad:</label>
+                <select id="create-acceso-func" class="form-input" style="width: 100%; margin-bottom: 10px;">
+                    ${funcOptions}
+                </select>
+
+                <label>Tipo de Acceso:</label>
+                <select id="create-acceso-tipo" class="form-input" style="width: 100%; margin-bottom: 10px;" onchange="toggleAccesoDates()">
+                    <option value="temporal">Temporal</option>
+                    <option value="permanente">Permanente</option>
+                </select>
+
+                <div id="create-acceso-fechas">
+                    <label>Fecha y Hora de Inicio:</label>
+                    <input type="datetime-local" id="create-acceso-inicio" class="form-input" style="width: 100%; margin-bottom: 10px;">
+
+                    <label>Fecha y Hora de Fin:</label>
+                    <input type="datetime-local" id="create-acceso-fin" class="form-input" style="width: 100%; margin-bottom: 10px;">
+                </div>
+            </div>
+        `;
+
+        const overlay = document.getElementById('custom-modal');
+        const textElement = document.getElementById('custom-modal-message');
+        const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+        textElement.innerHTML = `<h3>Otorgar Acceso a Funcionalidad</h3>` + html;
+
+        buttonsContainer.innerHTML = `
+            <button id="btn-save-acceso" class="btn btn-primary">Asignar</button>
+            <button id="btn-cancel-acceso" class="btn btn-secondary">Cancelar</button>
+        `;
+
+        overlay.classList.add('active');
+
+        window.toggleAccesoDates = () => {
+             const tipo = document.getElementById('create-acceso-tipo').value;
+             document.getElementById('create-acceso-fechas').style.display = tipo === 'temporal' ? 'block' : 'none';
+        };
+
+        document.getElementById('btn-cancel-acceso').onclick = () => overlay.classList.remove('active');
+        document.getElementById('btn-save-acceso').onclick = async () => {
+            const selectedUsers = Array.from(document.querySelectorAll('input[id^="user-cb-"]:checked')).map(cb => parseInt(cb.value));
+            const funcionalidad_id = parseInt(document.getElementById('create-acceso-func').value);
+            const tipo_acceso = document.getElementById('create-acceso-tipo').value;
+            const fecha_inicio = document.getElementById('create-acceso-inicio').value;
+            const fecha_fin = document.getElementById('create-acceso-fin').value;
+
+            if (selectedUsers.length === 0 || !funcionalidad_id) {
+                window.showModal('Selecciona al menos un usuario y una funcionalidad.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/accesos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        usuarios: selectedUsers,
+                        funcionalidad_id,
+                        tipo_acceso,
+                        fecha_inicio: fecha_inicio ? new Date(fecha_inicio).toISOString() : null,
+                        fecha_fin: fecha_fin ? new Date(fecha_fin).toISOString() : null
+                    })
+                });
+                const data = await res.json();
+                overlay.classList.remove('active');
+                if (res.ok) {
+                    window.showModal('Accesos otorgados exitosamente.');
+                    loadAccesos();
+                } else {
+                    window.showModal(`Error: ${data.error}`);
+                }
+            } catch (e) {
+                console.error(e);
+                window.showModal('Error al otorgar accesos.');
+            }
+        };
+    } catch (e) {
+        console.error(e);
+        window.showModal('Error al preparar el formulario de accesos.');
     }
 }
 
@@ -850,6 +1036,10 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCreateFuncionalidad.addEventListener('click', showCreateFuncionalidadModal);
     }
 
+    const btnCreateAcceso = document.getElementById('admin-btn-create-acceso');
+    if (btnCreateAcceso) {
+        btnCreateAcceso.addEventListener('click', showCreateAccesoModal);
+    }
     const btnCreatePermiso = document.getElementById('admin-btn-create-permiso');
     if (btnCreatePermiso) {
         btnCreatePermiso.addEventListener('click', showCreatePermisoModal);
@@ -1288,7 +1478,7 @@ async function showEditFuncPermisosModal(funcId, funcName) {
     try {
         const [funcPermsRes, allPermsRes] = await Promise.all([
             fetch(`/api/admin/funcionalidad_permisos/${funcId}`),
-            fetch('/api/admin/permisos')
+            fetch(`/api/admin/funcionalidades/${funcId}/permisos_disponibles`)
         ]);
 
         if (!funcPermsRes.ok || !allPermsRes.ok) throw new Error('Error al obtener datos');

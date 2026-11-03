@@ -79,6 +79,11 @@ mysql.createPool = function(config) {
             if (q.startsWith("SELECT FUNCIONALIDAD_ID FROM FUNCIONALIDAD_PERMISOS WHERE PERMISO_ID")) {
                 return [[]];
             }
+            if (q.startsWith("SELECT CODIGO FROM FUNCIONALIDADES WHERE ID = ?")) {
+                if (params[0] === 999) return [[]];
+                if (params[0] === 2) return [[{ codigo: 'ideas' }]];
+                return [[{ codigo: 'admin' }]];
+            }
 
             // FUNCIONALIDAD checks
             if (q.startsWith("SELECT ID FROM FUNCIONALIDADES WHERE ID = ?")) {
@@ -92,6 +97,24 @@ mysql.createPool = function(config) {
             if (q.startsWith("SELECT PERMISO_ID FROM FUNCIONALIDAD_PERMISOS WHERE FUNCIONALIDAD_ID")) {
                  return [[]];
             }
+
+            if (q.startsWith("SELECT ID FROM FUNCIONALIDADES WHERE CODIGO = ?")) {
+                if (params[0] === 'existente') return [[{id: 1}]];
+                return [[]];
+            }
+            if (q.startsWith("INSERT INTO FUNCIONALIDADES")) return [[{insertId: 1}]];
+            if (q.startsWith("UPDATE FUNCIONALIDADES")) return [[{affectedRows: 1}]];
+
+            if (q.startsWith("INSERT INTO MENU_ITEMS")) return [[{insertId: 1}]];
+            if (q.startsWith("UPDATE MENU_ITEMS")) return [[{affectedRows: 1}]];
+
+            if (q.startsWith("SELECT ID FROM USUARIO_FUNCIONALIDADES WHERE USUARIO_ID = ? AND FUNCIONALIDAD_ID = ? AND ESTADO = \"ACTIVO\"")) return [[]];
+            if (q.startsWith("UPDATE USUARIO_FUNCIONALIDADES")) {
+                if (params && params[0] === 999) return [[{ affectedRows: 0 }]]; // Not found
+                return [[{ affectedRows: 1 }]];
+            }
+            if (q.startsWith("INSERT INTO USUARIO_FUNCIONALIDADES")) return [[{insertId: 1}]];
+
             if (q.startsWith("SELECT ID FROM MENU_ITEMS WHERE PARENT_ID = ? LIMIT 1")) {
                  if (mockRoleDeps > 0) return [[{ id: 1 }]];
                  return [[]];
@@ -200,6 +223,63 @@ async function testRBACAdmin() {
              throw new Error(`Expected 200 for successful menu deletion, got ${res.status}`);
         }
 
+
+
+        // CREATE FUNCIONALIDAD
+        res = await makeRequest('POST', '/api/admin/funcionalidades', {
+            codigo: 'nueva_func',
+            nombre: 'Nueva Funcionalidad',
+            descripcion: 'Test desc'
+        });
+        if (res.status !== 201) {
+            throw new Error(`Expected 201 for functionality creation, got ${res.status}`);
+        }
+
+        // UPDATE FUNCIONALIDAD
+        res = await makeRequest('PUT', '/api/admin/funcionalidades/2', {
+            codigo: 'updated_func',
+            nombre: 'Updated Funcionalidad',
+            descripcion: 'Updated desc'
+        });
+        if (res.status !== 200) {
+            throw new Error(`Expected 200 for functionality update, got ${res.status}`);
+        }
+
+        // CREATE MENU
+        res = await makeRequest('POST', '/api/admin/menus', {
+            nombre: 'Nuevo Menu',
+            orden: 10
+        });
+        if (res.status !== 201) {
+            throw new Error(`Expected 201 for menu creation, got ${res.status}`);
+        }
+
+        // UPDATE MENU
+        res = await makeRequest('PUT', '/api/admin/menus/2', {
+            nombre: 'Updated Menu',
+            orden: 20
+        });
+        if (res.status !== 200) {
+            throw new Error(`Expected 200 for menu update, got ${res.status}`);
+        }
+
+        // TEST TEMPORARY ACCESS ASSIGNMENT
+        res = await makeRequest('POST', '/api/admin/accesos', {
+            usuarios: [1, 2],
+            funcionalidad_id: 2,
+            tipo_acceso: 'temporal',
+            fecha_inicio: '2025-01-01 00:00:00',
+            fecha_fin: '2025-12-31 23:59:59'
+        });
+        if (res.status !== 201) {
+             throw new Error(`Expected 201 for temporary access assignment, got ${res.status}`);
+        }
+
+        // TEST TEMPORARY ACCESS REVOCATION
+        res = await makeRequest('PUT', '/api/admin/accesos/1/revocar');
+        if (res.status !== 200) {
+             throw new Error(`Expected 200 for temporary access revocation, got ${res.status}`);
+        }
 
         console.log("All Admin RBAC integration tests passed successfully.");
         process.exit(0);

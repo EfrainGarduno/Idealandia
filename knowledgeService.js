@@ -18,8 +18,15 @@ async function getUserMenuCapabilities(pool, userId) {
             JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
             JOIN funcionalidades f ON fp.funcionalidad_id = f.id AND f.activo = TRUE
             WHERE ur.usuario_id = ?
+            UNION
+            SELECT uf.funcionalidad_id
+            FROM usuario_funcionalidades uf
+            JOIN funcionalidades f ON uf.funcionalidad_id = f.id AND f.activo = TRUE
+            WHERE uf.usuario_id = ?
+              AND uf.estado = 'activo'
+              AND (uf.tipo_acceso = 'permanente' OR (uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW()))
         `;
-        const [allowed] = await pool.execute(query, [userId]);
+        const [allowed] = await pool.execute(query, [userId, userId]);
         allowed.forEach(row => allowedFunctionalityIds.add(row.funcionalidad_id));
     }
 
