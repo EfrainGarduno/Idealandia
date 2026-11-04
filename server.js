@@ -74,6 +74,8 @@ const FUNCIONALIDAD_PERMISOS_MAPPING = {
     'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
 };
 
+
+
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
@@ -982,6 +984,41 @@ app.post('/api/admin/accesos', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Error in POST /api/admin/accesos:', error);
         res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+
+app.put('/api/admin/accesos/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { tipo_acceso, fecha_inicio, fecha_fin } = req.body;
+
+        if (!tipo_acceso) {
+            return res.status(400).json({ error: 'Falta tipo_acceso.' });
+        }
+
+        if (tipo_acceso === 'temporal') {
+             if (!fecha_inicio || !fecha_fin) {
+                 return res.status(400).json({ error: 'Las fechas de inicio y fin son obligatorias para acceso temporal.' });
+             }
+             if (new Date(fecha_fin) <= new Date(fecha_inicio)) {
+                 return res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio.' });
+             }
+        }
+
+        const [existing] = await pool.execute('SELECT id FROM usuario_funcionalidades WHERE id = ?', [id]);
+        if (existing.length === 0) {
+            return res.status(404).json({ error: 'Acceso no encontrado.' });
+        }
+
+        await pool.execute(
+            'UPDATE usuario_funcionalidades SET tipo_acceso = ?, fecha_inicio = ?, fecha_fin = ? WHERE id = ?',
+            [tipo_acceso, tipo_acceso === 'temporal' ? fecha_inicio : null, tipo_acceso === 'temporal' ? fecha_fin : null, id]
+        );
+        res.status(200).json({ message: 'Acceso actualizado exitosamente.' });
+    } catch (error) {
+         console.error('Error in PUT /api/admin/accesos/:id:', error);
+         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 

@@ -30,7 +30,9 @@ async function runTests() {
 
     assert.strictEqual(res1.status, 200, `Expected status 200 but got ${res1.status}. Body: ${JSON.stringify(res1.body)}`);
     assert.strictEqual(sentMails.length, 2, "Should have sent exactly 2 emails");
-    console.log("Test 1 passed: Successful submission sends 2 emails");
+    const adminEmailNoPhone = sentMails.find(m => m.to === 'idealandia@outlook.com');
+    assert.ok(adminEmailNoPhone.text.includes('Teléfono: No proporcionado'), "Admin email should state 'No proporcionado' when phone is absent");
+    console.log("Test 1 passed: Successful submission sends 2 emails, absent phone is 'No proporcionado'");
 
     sentMails = [];
     const res2 = await request(app)
@@ -55,7 +57,9 @@ async function runTests() {
         .send({ nombre: 'Test User', correo: 'test@example.com', mensaje: 'Hello World', telefono: '+52 55 1234 5678' });
     assert.strictEqual(resTelValid.status, 200, "Should accept valid phone number");
     assert.strictEqual(sentMails.length, 2, "Should have sent emails with valid phone");
-    console.log("Test 3.1 passed: Valid phone number accepted");
+    const adminEmailWithPhone = sentMails.find(m => m.to === 'idealandia@outlook.com');
+    assert.ok(adminEmailWithPhone.text.includes('Teléfono: +52 55 1234 5678'), "Admin email should contain the provided phone number");
+    console.log("Test 3.1 passed: Valid phone number accepted and correctly included in email payload");
 
     const resTelInvalid = await request(app)
         .post('/api/contacto')
