@@ -81,11 +81,15 @@ mysql.createPool = function(config) {
             }
             if (q.startsWith("SELECT CODIGO FROM FUNCIONALIDADES WHERE ID = ?")) {
                 if (params[0] === 999) return [[]];
-                if (params[0] === 2) return [[{ codigo: 'ideas' }]];
+                if (params[0] == 2) return [[{ codigo: 'ideas' }]];
                 return [[{ codigo: 'admin' }]];
             }
 
             // FUNCIONALIDAD checks
+            if (q.startsWith("SELECT ID, CODIGO, NOMBRE FROM PERMISOS WHERE CODIGO IN (")) {
+                const permits = params;
+                return [permits.map((p, i) => ({id: i + 1, codigo: p, nombre: p}))];
+            }
             if (q.startsWith("SELECT ID FROM FUNCIONALIDADES WHERE ID = ?")) {
                  if (params[0] === 999) return [[]]; // Not found
                  return [[{ id: params[0] }]];
@@ -276,6 +280,20 @@ async function testRBACAdmin() {
         }
 
         // TEST TEMPORARY ACCESS REVOCATION
+
+
+        // TEST PERMISOS DISPONIBLES (FUNCIONALIDAD = IDEAS)
+        res = await makeRequest('GET', '/api/admin/funcionalidades/2/permisos_disponibles');
+        if (res.status !== 200 || res.data.length !== 4) {
+             throw new Error(`Expected 200 and 4 permissions for ideas, got ${res.status} and ${res.data ? res.data.length : 'none'}`);
+        }
+
+        // TEST PERMISOS DISPONIBLES (FUNCIONALIDAD = ADMIN)
+        res = await makeRequest('GET', '/api/admin/funcionalidades/3/permisos_disponibles');
+        if (res.status !== 200 || res.data.length < 5) {
+             throw new Error(`Expected 200 and >5 permissions for admin, got ${res.status} and ${res.data ? res.data.length : 'none'}`);
+        }
+
         res = await makeRequest('PUT', '/api/admin/accesos/1/revocar');
         if (res.status !== 200) {
              throw new Error(`Expected 200 for temporary access revocation, got ${res.status}`);

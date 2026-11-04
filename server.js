@@ -67,6 +67,13 @@ if (!process.env.AUTH_SECRET) {
 }
 
 // Database Connection Pool
+
+const FUNCIONALIDAD_PERMISOS_MAPPING = {
+    'admin': ['admin.access', 'usuarios.read', 'usuarios.create', 'usuarios.update', 'usuarios.delete', 'roles.read', 'roles.create', 'roles.update', 'roles.delete', 'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete', 'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete', 'menus.read', 'menus.create', 'menus.update', 'menus.delete', 'reportes.read'],
+    'ideas': ['ideas.read', 'ideas.create', 'ideas.update', 'ideas.delete'],
+    'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
+};
+
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
@@ -435,11 +442,13 @@ app.post('/api/contacto', async (req, res) => {
     const safeEmail = correo.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const safeMessage = mensaje.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+    const safePhone = telefono ? telefono.replace(/</g, "&lt;").replace(/>/g, "&gt;") : 'No proporcionado';
+
     const mailOptionsIdealandia = {
         from: '"Idealandia Contacto" <' + process.env.SMTP_USER + '>',
         to: 'idealandia@outlook.com',
         subject: 'Nueva solicitud de contacto — Idealandia',
-        text: `Se ha recibido una nueva solicitud de contacto.\n\nNombre: ${safeName}\nCorreo: ${safeEmail}\nFecha: ${new Date().toLocaleString()}\n\nMensaje:\n${safeMessage}`
+        text: `Se ha recibido una nueva solicitud de contacto.\n\nNombre: ${safeName}\nCorreo: ${safeEmail}\nTeléfono: ${safePhone}\nFecha: ${new Date().toLocaleString()}\n\nMensaje:\n${safeMessage}`
     };
 
     const mailOptionsUser = {
@@ -939,7 +948,7 @@ app.post('/api/admin/accesos', requireAdmin, async (req, res) => {
              }
         }
 
-        const asignado_por = req.user ? req.user.id : null;
+        const asignado_por = req.userId || null;
         const connection = await pool.getConnection();
 
         try {

@@ -107,7 +107,33 @@
                     </div>
                 </div>
             </div>
-        </section>
+
+            <div class="admin-tab-content" id="admin-accesos">
+                <div class="admin-header">
+                    <h3>Accesos Temporales a Funcionalidades</h3>
+                    <button id="admin-btn-create-acceso" class="btn">Otorgar Acceso</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuario</th>
+                                <th>Funcionalidad</th>
+                                <th>Tipo</th>
+                                <th>Inicio</th>
+                                <th>Fin</th>
+                                <th>Estado</th>
+                                <th>Asignado Por</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-accesos-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            </section>
 
         <section id="login" class="content-section" style="display: none;">
             <h2>Iniciar Sesión</h2>
@@ -377,6 +403,7 @@
                 <button class="admin-tab-btn" data-tab="admin-permisos">Permisos</button>
                 <button class="admin-tab-btn" data-tab="admin-funcionalidades">Funcionalidades</button>
                 <button class="admin-tab-btn" data-tab="admin-menus">Menús</button>
+                <button class="admin-tab-btn" data-tab="admin-accesos">Accesos Temporales</button>
             </div>
 
             <div class="admin-tab-content active" id="admin-usuarios">
