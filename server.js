@@ -67,6 +67,13 @@ if (!process.env.AUTH_SECRET) {
 }
 
 // Database Connection Pool
+
+const FUNCIONALIDAD_PERMISOS_MAPPING = {
+    'admin': ['admin.access', 'usuarios.read', 'usuarios.create', 'usuarios.update', 'usuarios.delete', 'roles.read', 'roles.create', 'roles.update', 'roles.delete', 'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete', 'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete', 'menus.read', 'menus.create', 'menus.update', 'menus.delete', 'reportes.read'],
+    'ideas': ['ideas.read', 'ideas.create', 'ideas.update', 'ideas.delete'],
+    'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
+};
+
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
@@ -389,7 +396,7 @@ const contactoIPs = {};
 
 // Endpoint de contacto
 app.post('/api/contacto', async (req, res) => {
-    const { nombre, correo, mensaje } = req.body;
+    const { nombre, correo, mensaje, telefono } = req.body;
 
     // Rate limiting básico (max 5 solicitudes por hora por IP)
     const clientIP = req.ip || req.connection.remoteAddress;
@@ -409,8 +416,16 @@ app.post('/api/contacto', async (req, res) => {
     }
 
     // Limitación de tamaño de campos
-    if (nombre.length > 100 || correo.length > 100 || mensaje.length > 2000) {
+    if (nombre.length > 100 || correo.length > 100 || mensaje.length > 2000 || (telefono && telefono.length > 20)) {
         return res.status(400).json({ message: "La longitud de alguno de los campos excede el límite permitido." });
+    }
+
+
+    if (telefono) {
+        const telRegex = /^\+?[0-9\s\-()]{7,20}$/;
+        if (!telRegex.test(telefono)) {
+             return res.status(400).json({ message: "Formato de teléfono no válido." });
+        }
     }
 
     // Basic email validation
@@ -427,11 +442,13 @@ app.post('/api/contacto', async (req, res) => {
     const safeEmail = correo.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const safeMessage = mensaje.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+    const safePhone = telefono ? telefono.replace(/</g, "&lt;").replace(/>/g, "&gt;") : 'No proporcionado';
+
     const mailOptionsIdealandia = {
         from: '"Idealandia Contacto" <' + process.env.SMTP_USER + '>',
         to: 'idealandia@outlook.com',
         subject: 'Nueva solicitud de contacto — Idealandia',
-        text: `Se ha recibido una nueva solicitud de contacto.\n\nNombre: ${safeName}\nCorreo: ${safeEmail}\nFecha: ${new Date().toLocaleString()}\n\nMensaje:\n${safeMessage}`
+        text: `Se ha recibido una nueva solicitud de contacto.\n\nNombre: ${safeName}\nCorreo: ${safeEmail}\nTeléfono: ${safePhone}\nFecha: ${new Date().toLocaleString()}\n\nMensaje:\n${safeMessage}`
     };
 
     const mailOptionsUser = {
@@ -636,7 +653,7 @@ app.get('/api/menu', async (req, res) => {
         let allowedFunctionalityIds = new Set();
         if (userId) {
             const query = `
-                SELECT fp.funcionalidad_id
+                SELECT f.id, f.ruta
                 FROM usuario_roles ur
                 JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
                 JOIN rol_permisos rp ON r.id = rp.rol_id
@@ -644,9 +661,16 @@ app.get('/api/menu', async (req, res) => {
                 JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
                 JOIN funcionalidades f ON fp.funcionalidad_id = f.id AND f.activo = TRUE
                 WHERE ur.usuario_id = ?
+                UNION
+                SELECT f.id, f.ruta
+                FROM usuario_funcionalidades uf
+                JOIN funcionalidades f ON uf.funcionalidad_id = f.id AND f.activo = TRUE
+                WHERE uf.usuario_id = ?
+                  AND uf.estado = 'activo'
+                  AND (uf.tipo_acceso = 'permanente' OR (uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW()))
             `;
-            const [allowed] = await pool.execute(query, [userId]);
-            allowed.forEach(row => allowedFunctionalityIds.add(row.funcionalidad_id));
+            const [allowed] = await pool.execute(query, [userId, userId]);
+            allowed.forEach(row => allowedFunctionalityIds.add(row.id || row.funcionalidad_id));
         }
 
         const buildTree = (parentId = null) => {
@@ -784,6 +808,33 @@ app.get('/api/admin/usuarios', requireAdmin, async (req, res) => {
     }
 });
 
+
+app.get('/api/admin/funcionalidades/:funcId/permisos_disponibles', requireAdmin, async (req, res) => {
+    try {
+        const { funcId } = req.params;
+        const [func] = await pool.execute('SELECT codigo FROM funcionalidades WHERE id = ?', [funcId]);
+        if (func.length === 0) return res.status(404).json({ error: 'Funcionalidad no encontrada' });
+
+        const codigo = func[0].codigo.toLowerCase();
+        let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || [];
+        if (!FUNCIONALIDAD_PERMISOS_MAPPING[codigo] && !codigo.startsWith('admin')) {
+             permitidos = [`${codigo}.read`, `${codigo}.create`, `${codigo}.update`, `${codigo}.delete`];
+        }
+
+        if (permitidos.length === 0) {
+            return res.status(200).json([]);
+        }
+
+        const placeholders = permitidos.map(() => '?').join(',');
+        const [permisos] = await pool.execute(`SELECT id, codigo, nombre FROM permisos WHERE codigo IN (${placeholders})`, permitidos);
+
+        res.status(200).json(permisos);
+    } catch (error) {
+        console.error('Error in GET /api/admin/funcionalidades/:funcId/permisos_disponibles:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 app.get('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, res) => {
     try {
         const { funcId } = req.params;
@@ -808,23 +859,39 @@ app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, 
         try {
             await connection.beginTransaction();
 
-            const [funcCheck] = await connection.execute('SELECT id FROM funcionalidades WHERE id = ?', [funcId]);
-            if (funcCheck.length === 0) {
+
+            const [func] = await connection.execute('SELECT codigo FROM funcionalidades WHERE id = ?', [funcId]);
+            if (func.length === 0) {
                 await connection.rollback();
                 return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
+            }
+
+            const codigo = func[0].codigo.toLowerCase();
+            let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || [];
+            if (!FUNCIONALIDAD_PERMISOS_MAPPING[codigo] && !codigo.startsWith('admin')) {
+                permitidos = [`${codigo}.read`, `${codigo}.create`, `${codigo}.update`, `${codigo}.delete`];
             }
 
             if (permisos.length > 0) {
                 const placeholders = permisos.map(() => '?').join(',');
                 const [permisosCheck] = await connection.execute(
-                    `SELECT COUNT(*) as count FROM permisos WHERE id IN (${placeholders})`,
+                    `SELECT COUNT(*) as count, GROUP_CONCAT(codigo) as codes FROM permisos WHERE id IN (${placeholders})`,
                     permisos
                 );
+
                 if (parseInt(permisosCheck[0].count) !== permisos.length) {
                     await connection.rollback();
                     return res.status(400).json({ error: 'Uno o más permisos proporcionados no existen.' });
                 }
+
+                const codes = (permisosCheck[0].codes || '').split(',');
+                const invalid = codes.filter(c => !permitidos.includes(c));
+                if (invalid.length > 0) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: 'Permisos no válidos para esta funcionalidad: ' + invalid.join(', ') });
+                }
             }
+
 
             await connection.execute('DELETE FROM funcionalidad_permisos WHERE funcionalidad_id = ?', [funcId]);
             if (permisos.length > 0) {
@@ -845,6 +912,128 @@ app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, 
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
+
+
+app.get('/api/admin/accesos', requireAdmin, async (req, res) => {
+    try {
+        const [accesos] = await pool.execute(`
+            SELECT uf.*, u.nombre as usuario_nombre, f.nombre as funcionalidad_nombre, u2.nombre as asignado_por_nombre
+            FROM usuario_funcionalidades uf
+            JOIN usuarios u ON uf.usuario_id = u.id
+            JOIN funcionalidades f ON uf.funcionalidad_id = f.id
+            LEFT JOIN usuarios u2 ON uf.asignado_por = u2.id
+            ORDER BY uf.created_at DESC
+        `);
+        res.status(200).json(accesos);
+    } catch (error) {
+        console.error('Error in GET /api/admin/accesos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/admin/accesos', requireAdmin, async (req, res) => {
+    try {
+        const { usuarios, funcionalidad_id, tipo_acceso, fecha_inicio, fecha_fin } = req.body;
+
+        if (!Array.isArray(usuarios) || usuarios.length === 0 || !funcionalidad_id || !tipo_acceso) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+        }
+
+        if (tipo_acceso === 'temporal') {
+             if (!fecha_inicio || !fecha_fin) {
+                 return res.status(400).json({ error: 'Las fechas de inicio y fin son obligatorias para acceso temporal.' });
+             }
+             if (new Date(fecha_fin) <= new Date(fecha_inicio)) {
+                 return res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio.' });
+             }
+        }
+
+        const asignado_por = req.userId || null;
+        const connection = await pool.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            for (const usuario_id of usuarios) {
+                // Check if an active grant already exists for this exact pair
+                const [existing] = await connection.execute(
+                    'SELECT id FROM usuario_funcionalidades WHERE usuario_id = ? AND funcionalidad_id = ? AND estado = "activo"',
+                    [usuario_id, funcionalidad_id]
+                );
+
+                if (existing.length > 0) {
+                   await connection.execute('UPDATE usuario_funcionalidades SET estado = "revocado" WHERE usuario_id = ? AND funcionalidad_id = ? AND estado = "activo"', [usuario_id, funcionalidad_id]);
+                }
+
+                await connection.execute(
+                    'INSERT INTO usuario_funcionalidades (usuario_id, funcionalidad_id, tipo_acceso, fecha_inicio, fecha_fin, estado, asignado_por) VALUES (?, ?, ?, ?, ?, "activo", ?)',
+                    [usuario_id, funcionalidad_id, tipo_acceso, tipo_acceso === 'temporal' ? fecha_inicio : null, tipo_acceso === 'temporal' ? fecha_fin : null, asignado_por]
+                );
+            }
+
+            await connection.commit();
+            res.status(201).json({ message: 'Accesos asignados exitosamente.' });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/accesos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+
+app.put('/api/admin/accesos/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { tipo_acceso, fecha_inicio, fecha_fin } = req.body;
+
+        if (!tipo_acceso) {
+            return res.status(400).json({ error: 'Falta tipo_acceso.' });
+        }
+
+        if (tipo_acceso === 'temporal') {
+             if (!fecha_inicio || !fecha_fin) {
+                 return res.status(400).json({ error: 'Las fechas de inicio y fin son obligatorias para acceso temporal.' });
+             }
+             if (new Date(fecha_fin) <= new Date(fecha_inicio)) {
+                 return res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio.' });
+             }
+        }
+
+        const [existing] = await pool.execute('SELECT id FROM usuario_funcionalidades WHERE id = ?', [id]);
+        if (existing.length === 0) {
+            return res.status(404).json({ error: 'Acceso no encontrado.' });
+        }
+
+        await pool.execute(
+            'UPDATE usuario_funcionalidades SET tipo_acceso = ?, fecha_inicio = ?, fecha_fin = ? WHERE id = ?',
+            [tipo_acceso, tipo_acceso === 'temporal' ? fecha_inicio : null, tipo_acceso === 'temporal' ? fecha_fin : null, id]
+        );
+        res.status(200).json({ message: 'Acceso actualizado exitosamente.' });
+    } catch (error) {
+         console.error('Error in PUT /api/admin/accesos/:id:', error);
+         res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.put('/api/admin/accesos/:id/revocar', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [result] = await pool.execute('UPDATE usuario_funcionalidades SET estado = "revocado" WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Acceso no encontrado.' });
+        }
+        res.status(200).json({ message: 'Acceso revocado exitosamente.' });
+    } catch (error) {
+         console.error('Error in PUT /api/admin/accesos/:id/revocar:', error);
+         res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 
 app.post('/api/admin/usuarios', requireAdmin, async (req, res) => {
     try {
