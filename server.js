@@ -52,8 +52,16 @@ const authLimiter = rateLimit({
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-app.use('/api/login', authLimiter);
-app.use('/api/recover', authLimiter);
+const disableAuthRateLimit =
+    process.env.NODE_ENV === 'development' &&
+    process.env.DISABLE_AUTH_RATE_LIMIT === 'true';
+
+if (disableAuthRateLimit) {
+    console.warn('⚠️ Rate limit de autenticación desactivado en desarrollo local.');
+} else {
+    app.use('/api/login', authLimiter);
+    app.use('/api/recover', authLimiter);
+}
 
 // Check if API key is provided
 if (!process.env.GEMINI_API_KEY) {

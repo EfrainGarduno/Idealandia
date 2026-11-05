@@ -433,8 +433,8 @@ async function showCreateAccesoModal() {
                         usuarios: selectedUsers,
                         funcionalidad_id,
                         tipo_acceso,
-                        fecha_inicio: fecha_inicio ? new Date(fecha_inicio).toISOString() : null,
-                        fecha_fin: fecha_fin ? new Date(fecha_fin).toISOString() : null
+                        fecha_inicio: fecha_inicio ? fecha_inicio.replace('T', ' ') + ':00' : null,
+                        fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null
                     })
                 });
                 const data = await res.json();
@@ -1732,8 +1732,8 @@ function showEditAccesoModal(a) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     tipo_acceso,
-                    fecha_inicio: fecha_inicio ? new Date(fecha_inicio).toISOString() : null,
-                    fecha_fin: fecha_fin ? new Date(fecha_fin).toISOString() : null
+                    fecha_inicio: fecha_inicio ? fecha_inicio.replace('T', ' ') + ':00' : null,
+                    fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null
                 })
             });
             const data = await res.json();
