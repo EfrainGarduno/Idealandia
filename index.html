@@ -279,27 +279,35 @@
         </section>
 
                 <section id="contacto" class="content-section" style="display: none;">
-            <h2>Contáctanos</h2>
-            <form id="form-contacto">
-                <div class="form-group">
-                    <label for="contacto-nombre">Nombre:</label>
-                    <input type="text" id="contacto-nombre" name="contacto-nombre" required>
+            <h2>Contáctanos o escanea el código QR</h2>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                <form id="form-contacto" style="flex: 1; min-width: 300px;">
+                    <div class="form-group">
+                        <label for="contacto-nombre">Nombre:</label>
+                        <input type="text" id="contacto-nombre" name="contacto-nombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contacto-telefono">Teléfono (Opcional):</label>
+                        <input type="tel" id="contacto-telefono" name="contacto-telefono">
+                    </div>
+                    <div class="form-group">
+                        <label for="contacto-correo">Correo:</label>
+                        <input type="email" id="contacto-correo" name="contacto-correo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contacto-mensaje">Descripción:</label>
+                        <textarea id="contacto-mensaje" name="contacto-mensaje" rows="4" required></textarea>
+                    </div>
+                    <button type="submit" id="btn-enviar-contacto">Enviar Datos</button>
+                    <div id="contacto-feedback" style="margin-top: 10px; display: none;"></div>
+                </form>
+                <div style="flex: 1; min-width: 300px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <a href="https://wa.link/66yh07" target="_blank">
+                        <img src="img/whatsapp-qr.png" alt="Código QR para contactar por WhatsApp" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    </a>
+                    <p style="margin-top: 15px; font-weight: 600; color: #555;">Escanea el código QR para contactarnos por WhatsApp</p>
                 </div>
-                <div class="form-group">
-                    <label for="contacto-telefono">Teléfono (Opcional):</label>
-                    <input type="tel" id="contacto-telefono" name="contacto-telefono">
-                </div>
-                <div class="form-group">
-                    <label for="contacto-correo">Correo:</label>
-                    <input type="email" id="contacto-correo" name="contacto-correo" required>
-                </div>
-                <div class="form-group">
-                    <label for="contacto-mensaje">Descripción:</label>
-                    <textarea id="contacto-mensaje" name="contacto-mensaje" rows="4" required></textarea>
-                </div>
-                <button type="submit" id="btn-enviar-contacto">Enviar Datos</button>
-            </form>
-            <div id="contacto-feedback" style="margin-top: 10px; display: none;"></div>
+            </div>
         </section>
 
                 <section id="acerca" class="content-section" style="display: none;">
@@ -1578,59 +1586,83 @@
             }
 
             // Login logic
+            let isLoggingIn = false;
+
+            async function executeLogin(e) {
+                if (e) e.preventDefault();
+                if (isLoggingIn) return;
+
+                const usuario = document.getElementById('login-usuario').value;
+                const password = document.getElementById('login-password').value;
+
+                if (!usuario || !password) {
+                    showModal('Por favor, ingresa tu usuario y contraseña.');
+                    return;
+                }
+
+                isLoggingIn = true;
+
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ usuario, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        showModal(data.message);
+                        document.getElementById('login-usuario').value = '';
+                        document.getElementById('login-password').value = '';
+
+                        // Terminate live session so context gets cleared
+                        if (typeof stopLive === 'function') {
+                            stopLive();
+                        }
+
+                        // Reset chat history to prevent leak
+                        const chatHistory = document.getElementById('chat-history');
+                        if (chatHistory) {
+                            chatHistory.innerHTML = `
+                                <div class="message idealita-message">
+                                    ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
+                                </div>
+                            `;
+                        }
+
+                        // Switch view to home or chat, and update UI
+                        checkAuthStatus();
+                        document.querySelector('a[data-section="inicio"]').click();
+                    } else {
+                        showModal(`Error: ${data.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error durante el login:', error);
+                    showModal('Error al intentar iniciar sesión.');
+                } finally {
+                    isLoggingIn = false;
+                }
+            }
+
             const btnLogin = document.getElementById('btn-login');
             if (btnLogin) {
-                btnLogin.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    const usuario = document.getElementById('login-usuario').value;
-                    const password = document.getElementById('login-password').value;
+                btnLogin.addEventListener('click', executeLogin);
+            }
 
-                    if (!usuario || !password) {
-                        showModal('Por favor, ingresa tu usuario y contraseña.');
-                        return;
-                    }
+            const loginUsuarioInput = document.getElementById('login-usuario');
+            if (loginUsuarioInput) {
+                loginUsuarioInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') executeLogin(e);
+                });
+            }
 
-                    try {
-                        const response = await fetch('/api/login', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ usuario, password })
-                        });
-
-                        const data = await response.json();
-
-                        if (response.ok) {
-                            showModal(data.message);
-                            document.getElementById('login-usuario').value = '';
-                            document.getElementById('login-password').value = '';
-
-                            // Terminate live session so context gets cleared
-                            if (typeof stopLive === 'function') {
-                                stopLive();
-                            }
-
-                            // Reset chat history to prevent leak
-                            const chatHistory = document.getElementById('chat-history');
-                            if (chatHistory) {
-                                chatHistory.innerHTML = `
-                                    <div class="message idealita-message">
-                                        ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
-                                    </div>
-                                `;
-                            }
-
-                            // Switch view to home or chat, and update UI
-                            checkAuthStatus();
-                            document.querySelector('a[data-section="inicio"]').click();
-                        } else {
-                            showModal(`Error: ${data.error}`);
-                        }
-                    } catch (error) {
-                        console.error('Error durante el login:', error);
-                        showModal('Error al intentar iniciar sesión.');
-                    }
+            const loginPasswordInputEnter = document.getElementById('login-password');
+            if (loginPasswordInputEnter) {
+                loginPasswordInputEnter.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') executeLogin(e);
                 });
             }
 
