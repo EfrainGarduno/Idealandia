@@ -107,7 +107,9 @@
                     </div>
                 </div>
             </div>
-        </section>
+
+
+            </section>
 
         <section id="login" class="content-section" style="display: none;">
             <h2>Iniciar Sesión</h2>
@@ -284,6 +286,10 @@
                     <input type="text" id="contacto-nombre" name="contacto-nombre" required>
                 </div>
                 <div class="form-group">
+                    <label for="contacto-telefono">Teléfono (Opcional):</label>
+                    <input type="tel" id="contacto-telefono" name="contacto-telefono">
+                </div>
+                <div class="form-group">
                     <label for="contacto-correo">Correo:</label>
                     <input type="email" id="contacto-correo" name="contacto-correo" required>
                 </div>
@@ -373,6 +379,7 @@
                 <button class="admin-tab-btn" data-tab="admin-permisos">Permisos</button>
                 <button class="admin-tab-btn" data-tab="admin-funcionalidades">Funcionalidades</button>
                 <button class="admin-tab-btn" data-tab="admin-menus">Menús</button>
+                <button class="admin-tab-btn" data-tab="admin-accesos">Accesos Temporales</button>
             </div>
 
             <div class="admin-tab-content active" id="admin-usuarios">
@@ -473,6 +480,31 @@
                             </tr>
                         </thead>
                         <tbody id="admin-menus-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="admin-tab-content" id="admin-accesos">
+                <div class="admin-header">
+                    <h3>Accesos Temporales a Funcionalidades</h3>
+                    <button id="admin-btn-create-acceso" class="btn">Otorgar Acceso</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuario</th>
+                                <th>Funcionalidad</th>
+                                <th>Tipo</th>
+                                <th>Inicio</th>
+                                <th>Fin</th>
+                                <th>Estado</th>
+                                <th>Asignado Por</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-accesos-tbody"></tbody>
                     </table>
                 </div>
             </div>
@@ -634,7 +666,7 @@
                 <a href="#" class="social-icon youtube" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
                 <a href="#" class="social-icon twitter" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
                 <a href="#" class="social-icon instagram" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
-                <a href="https://wa.link/lzv33g" target="_blank" class="social-icon whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+                <a href="https://wa.link/66yh07" target="_blank" class="social-icon whatsapp" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
             </div>
         </div>
     </footer>
@@ -2700,6 +2732,7 @@
                 const formData = new FormData(formContacto);
                 const nombre = formData.get('contacto-nombre');
                 const correo = formData.get('contacto-correo');
+                const telefono = formData.get('contacto-telefono');
                 const mensaje = formData.get('contacto-mensaje');
 
                 try {
@@ -2708,7 +2741,7 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ nombre, correo, mensaje })
+                        body: JSON.stringify({ nombre, correo, mensaje, telefono })
                     });
 
                     const data = await response.json();
@@ -2754,5 +2787,12 @@
     </div>
 
     <script src="admin.js"></script>
+
+<div id="custom-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div id="custom-modal-message"></div>
+        <div id="custom-modal-buttons"></div>
+    </div>
+</div>
 </body>
 </html>

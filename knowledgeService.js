@@ -10,7 +10,7 @@ async function getUserMenuCapabilities(pool, userId) {
     let allowedFunctionalityIds = new Set();
     if (userId) {
         const query = `
-            SELECT fp.funcionalidad_id
+            SELECT f.id as funcionalidad_id
             FROM usuario_roles ur
             JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
             JOIN rol_permisos rp ON r.id = rp.rol_id
@@ -18,8 +18,15 @@ async function getUserMenuCapabilities(pool, userId) {
             JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
             JOIN funcionalidades f ON fp.funcionalidad_id = f.id AND f.activo = TRUE
             WHERE ur.usuario_id = ?
+            UNION
+            SELECT uf.funcionalidad_id
+            FROM usuario_funcionalidades uf
+            JOIN funcionalidades f ON uf.funcionalidad_id = f.id AND f.activo = TRUE
+            WHERE uf.usuario_id = ?
+              AND uf.estado = 'activo'
+              AND (uf.tipo_acceso = 'permanente' OR (uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW()))
         `;
-        const [allowed] = await pool.execute(query, [userId]);
+        const [allowed] = await pool.execute(query, [userId, userId]);
         allowed.forEach(row => allowedFunctionalityIds.add(row.funcionalidad_id));
     }
 

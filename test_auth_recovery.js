@@ -35,7 +35,16 @@ async function runTests() {
 
     const TEST_PORT = 3006;
     const { spawn } = require('child_process');
-    const serverProcess = spawn('node', ['server.js'], { env: { ...process.env, AUTH_SECRET: 'testnode', PORT: TEST_PORT } });
+
+    const serverProcess = spawn('node', ['server.js'], {
+        env: {
+            ...process.env,
+            AUTH_SECRET: 'testnode',
+            PORT: TEST_PORT,
+            NODE_ENV: 'test',
+            DISABLE_AUTH_RATE_LIMIT: 'false'
+        }
+    });
     await new Promise(r => setTimeout(r, 2000));
 
     try {
@@ -142,7 +151,16 @@ async function runTests() {
             const oldJwtCookie = login2.headers['set-cookie'][0].split(';')[0];
 
             // Verify password actually changed
-            let login3 = await request({ hostname: 'localhost', port: TEST_PORT, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json' } }, JSON.stringify({ usuario: 'testrec', password: 'newpassword123' }));
+            let login3 = await request({
+                hostname: 'localhost',
+                port: TEST_PORT,
+                path: '/api/login',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Forwarded-For': '10.10.10.10'
+                }
+            }, JSON.stringify({ usuario: 'testrec', password: 'newpassword123' }));
             if (login3.status !== 200) throw new Error("Login with new password failed.");
 
             // Verify new JWT works

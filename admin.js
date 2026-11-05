@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetId === 'admin-roles') loadRoles();
             if (targetId === 'admin-permisos') loadPermisos();
             if (targetId === 'admin-funcionalidades') loadFuncionalidades();
+            if (targetId === 'admin-accesos') loadAccesos();
             if (targetId === 'admin-menus') loadMenus();
         });
     });
@@ -230,6 +231,228 @@ async function loadPermisos() {
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar permisos.');
+    }
+}
+
+
+
+async function loadAccesos() {
+    try {
+        const response = await fetch('/api/admin/accesos');
+        if (!response.ok) throw new Error('Error al cargar accesos');
+        const accesos = await response.json();
+
+        const tbody = document.getElementById('admin-accesos-tbody');
+        tbody.innerHTML = '';
+
+        if (accesos.length === 0) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 9;
+            td.textContent = 'No hay accesos temporales asignados o encontrados.';
+            td.style.textAlign = 'center';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        }
+
+        for (const a of accesos) {
+            const tr = document.createElement('tr');
+
+            let td = document.createElement('td'); td.textContent = a.id; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.usuario_nombre; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.funcionalidad_nombre; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.tipo_acceso; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.fecha_inicio ? new Date(a.fecha_inicio).toLocaleString() : 'N/A'; tr.appendChild(td);
+            td = document.createElement('td'); td.textContent = a.fecha_fin ? new Date(a.fecha_fin).toLocaleString() : 'N/A'; tr.appendChild(td);
+
+            let computedEstado = a.estado;
+            if (computedEstado === 'activo' && a.tipo_acceso === 'temporal') {
+                const now = new Date();
+                if (a.fecha_inicio && new Date(a.fecha_inicio) > now) {
+                    computedEstado = 'programado';
+                } else if (a.fecha_fin && new Date(a.fecha_fin) < now) {
+                    computedEstado = 'expirado';
+                }
+            }
+            td = document.createElement('td');
+            td.textContent = computedEstado;
+
+            // Highlight specific statuses for better UX
+            if (computedEstado === 'programado') td.style.color = '#FFA500';
+            if (computedEstado === 'expirado') td.style.color = '#808080';
+            if (computedEstado === 'revocado') td.style.color = '#FF0000';
+
+            tr.appendChild(td);
+
+            td = document.createElement('td'); td.textContent = a.asignado_por_nombre || 'N/A'; tr.appendChild(td);
+
+            td = document.createElement('td');
+
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Editar';
+            editBtn.className = 'btn btn-secondary btn-sm';
+            editBtn.style.marginRight = '5px';
+            editBtn.onclick = () => showEditAccesoModal(a);
+            td.appendChild(editBtn);
+
+            if (a.estado === 'activo') {
+                const revokeBtn = document.createElement('button');
+                revokeBtn.textContent = 'Revocar';
+                revokeBtn.className = 'btn btn-danger btn-sm';
+                revokeBtn.onclick = () => showRevokeAccesoModal(a);
+                td.appendChild(revokeBtn);
+            }
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        }
+    } catch (error) {
+        console.error(error);
+        if (window.showModal) window.showModal('Error al cargar accesos.');
+    }
+}
+
+function showRevokeAccesoModal(a) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Revocar Acceso</h3><p>¿Estás seguro de que deseas revocar este acceso para el usuario ${escapeHTML(a.usuario_nombre)} a la funcionalidad ${escapeHTML(a.funcionalidad_nombre)}?</p>`;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-confirm-revoke-acceso" class="btn btn-danger">Revocar</button>
+        <button id="btn-cancel-revoke-acceso" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-revoke-acceso').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-confirm-revoke-acceso').onclick = async () => {
+        try {
+            const res = await fetch(`/api/admin/accesos/${a.id}/revocar`, {
+                method: 'PUT'
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Acceso revocado.');
+                loadAccesos();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al revocar acceso.');
+        }
+    };
+}
+
+async function showCreateAccesoModal() {
+    try {
+        const [funcRes, userRes] = await Promise.all([
+            fetch('/api/admin/funcionalidades'),
+            fetch('/api/admin/usuarios')
+        ]);
+        if (!funcRes.ok || !userRes.ok) throw new Error('Error al cargar datos necesarios');
+
+        const funcionalidades = await funcRes.json();
+        const usuarios = await userRes.json();
+
+        let userOptions = usuarios.map(u => `
+            <div>
+                <input type="checkbox" id="user-cb-${u.id}" value="${escapeHTML(u.id)}">
+                <label for="user-cb-${u.id}">${escapeHTML(u.nombre)} (${escapeHTML(u.usuario)})</label>
+            </div>
+        `).join('');
+
+        let funcOptions = '<option value="">-- Seleccionar --</option>' + funcionalidades.map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.nombre)}</option>`).join('');
+
+        const html = `
+            <div style="text-align: left; max-height: 400px; overflow-y: auto;">
+                <label>Usuarios (Selecciona uno o más):</label>
+                <div style="max-height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; margin-bottom: 10px;">
+                    ${userOptions}
+                </div>
+
+                <label>Funcionalidad:</label>
+                <select id="create-acceso-func" class="form-input" style="width: 100%; margin-bottom: 10px;">
+                    ${funcOptions}
+                </select>
+
+                <label>Tipo de Acceso:</label>
+                <select id="create-acceso-tipo" class="form-input" style="width: 100%; margin-bottom: 10px;" onchange="toggleAccesoDates()">
+                    <option value="temporal">Temporal</option>
+                    <option value="permanente">Permanente</option>
+                </select>
+
+                <div id="create-acceso-fechas">
+                    <label>Fecha y Hora de Inicio:</label>
+                    <input type="datetime-local" id="create-acceso-inicio" class="form-input" style="width: 100%; margin-bottom: 10px;">
+
+                    <label>Fecha y Hora de Fin:</label>
+                    <input type="datetime-local" id="create-acceso-fin" class="form-input" style="width: 100%; margin-bottom: 10px;">
+                </div>
+            </div>
+        `;
+
+        const overlay = document.getElementById('custom-modal');
+        const textElement = document.getElementById('custom-modal-message');
+        const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+        textElement.innerHTML = `<h3>Otorgar Acceso a Funcionalidad</h3>` + html;
+
+        buttonsContainer.innerHTML = `
+            <button id="btn-save-acceso" class="btn btn-primary">Asignar</button>
+            <button id="btn-cancel-acceso" class="btn btn-secondary">Cancelar</button>
+        `;
+
+        overlay.classList.add('active');
+
+        window.toggleAccesoDates = () => {
+             const tipo = document.getElementById('create-acceso-tipo').value;
+             document.getElementById('create-acceso-fechas').style.display = tipo === 'temporal' ? 'block' : 'none';
+        };
+
+        document.getElementById('btn-cancel-acceso').onclick = () => overlay.classList.remove('active');
+        document.getElementById('btn-save-acceso').onclick = async () => {
+            const selectedUsers = Array.from(document.querySelectorAll('input[id^="user-cb-"]:checked')).map(cb => parseInt(cb.value));
+            const funcionalidad_id = parseInt(document.getElementById('create-acceso-func').value);
+            const tipo_acceso = document.getElementById('create-acceso-tipo').value;
+            const fecha_inicio = document.getElementById('create-acceso-inicio').value;
+            const fecha_fin = document.getElementById('create-acceso-fin').value;
+
+            if (selectedUsers.length === 0 || !funcionalidad_id) {
+                window.showModal('Selecciona al menos un usuario y una funcionalidad.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/accesos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        usuarios: selectedUsers,
+                        funcionalidad_id,
+                        tipo_acceso,
+                        fecha_inicio: fecha_inicio ? fecha_inicio.replace('T', ' ') + ':00' : null,
+                        fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null
+                    })
+                });
+                const data = await res.json();
+                overlay.classList.remove('active');
+                if (res.ok) {
+                    window.showModal('Accesos otorgados exitosamente.');
+                    loadAccesos();
+                } else {
+                    window.showModal(`Error: ${data.error}`);
+                }
+            } catch (e) {
+                console.error(e);
+                window.showModal('Error al otorgar accesos.');
+            }
+        };
+    } catch (e) {
+        console.error(e);
+        window.showModal('Error al preparar el formulario de accesos.');
     }
 }
 
@@ -850,6 +1073,10 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCreateFuncionalidad.addEventListener('click', showCreateFuncionalidadModal);
     }
 
+    const btnCreateAcceso = document.getElementById('admin-btn-create-acceso');
+    if (btnCreateAcceso) {
+        btnCreateAcceso.addEventListener('click', showCreateAccesoModal);
+    }
     const btnCreatePermiso = document.getElementById('admin-btn-create-permiso');
     if (btnCreatePermiso) {
         btnCreatePermiso.addEventListener('click', showCreatePermisoModal);
@@ -1288,7 +1515,7 @@ async function showEditFuncPermisosModal(funcId, funcName) {
     try {
         const [funcPermsRes, allPermsRes] = await Promise.all([
             fetch(`/api/admin/funcionalidad_permisos/${funcId}`),
-            fetch('/api/admin/permisos')
+            fetch(`/api/admin/funcionalidades/${funcId}/permisos_disponibles`)
         ]);
 
         if (!funcPermsRes.ok || !allPermsRes.ok) throw new Error('Error al obtener datos');
@@ -1455,3 +1682,104 @@ function showCreateMenuModal() {
         }
     };
 }
+
+function showEditAccesoModal(a) {
+    const html = `
+        <div style="text-align: left;">
+            <label>Tipo de Acceso:</label>
+            <select id="edit-acceso-tipo" class="form-input" style="width: 100%; margin-bottom: 10px;" onchange="toggleEditAccesoDates()">
+                <option value="temporal" ${a.tipo_acceso === 'temporal' ? 'selected' : ''}>Temporal</option>
+                <option value="permanente" ${a.tipo_acceso === 'permanente' ? 'selected' : ''}>Permanente</option>
+            </select>
+
+            <div id="edit-acceso-fechas" style="display: ${a.tipo_acceso === 'temporal' ? 'block' : 'none'};">
+                <label>Fecha y Hora de Inicio:</label>
+                <input type="datetime-local" id="edit-acceso-inicio" class="form-input" style="width: 100%; margin-bottom: 10px;" value="${a.fecha_inicio ? new Date(new Date(a.fecha_inicio).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}">
+
+                <label>Fecha y Hora de Fin:</label>
+                <input type="datetime-local" id="edit-acceso-fin" class="form-input" style="width: 100%; margin-bottom: 10px;" value="${a.fecha_fin ? new Date(new Date(a.fecha_fin).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}">
+            </div>
+        </div>
+    `;
+
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Editar Acceso de ${escapeHTML(a.usuario_nombre)} a ${escapeHTML(a.funcionalidad_nombre)}</h3>` + html;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-save-edit-acceso" class="btn btn-primary">Guardar</button>
+        <button id="btn-cancel-edit-acceso" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    window.toggleEditAccesoDates = () => {
+         const tipo = document.getElementById('edit-acceso-tipo').value;
+         document.getElementById('edit-acceso-fechas').style.display = tipo === 'temporal' ? 'block' : 'none';
+    };
+
+    document.getElementById('btn-cancel-edit-acceso').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-save-edit-acceso').onclick = async () => {
+        const tipo_acceso = document.getElementById('edit-acceso-tipo').value;
+        const fecha_inicio = document.getElementById('edit-acceso-inicio').value;
+        const fecha_fin = document.getElementById('edit-acceso-fin').value;
+
+        try {
+            const res = await fetch(`/api/admin/accesos/${a.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tipo_acceso,
+                    fecha_inicio: fecha_inicio ? fecha_inicio.replace('T', ' ') + ':00' : null,
+                    fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null
+                })
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                window.showModal('Acceso actualizado exitosamente.');
+                loadAccesos();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            window.showModal('Error al actualizar el acceso.');
+        }
+    };
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Search for Accesos
+    const accesosTabContent = document.getElementById('admin-accesos');
+    if (accesosTabContent) {
+        const header = accesosTabContent.querySelector('.admin-header');
+        if (header) {
+            const controlsDiv = document.createElement('div');
+            controlsDiv.className = 'admin-controls';
+            controlsDiv.style.marginBottom = '15px';
+
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.id = 'search-accesos';
+            searchInput.placeholder = 'Buscar accesos...';
+            searchInput.className = 'form-input';
+
+            controlsDiv.appendChild(searchInput);
+            header.after(controlsDiv);
+
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                const rows = document.querySelectorAll('#admin-accesos-tbody tr');
+                rows.forEach(row => {
+                    if (row.children.length === 1 && row.children[0].colSpan > 1) return; // skip empty state
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
+                });
+            });
+        }
+    }
+});

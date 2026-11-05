@@ -30,7 +30,9 @@ async function runTests() {
 
     assert.strictEqual(res1.status, 200, `Expected status 200 but got ${res1.status}. Body: ${JSON.stringify(res1.body)}`);
     assert.strictEqual(sentMails.length, 2, "Should have sent exactly 2 emails");
-    console.log("Test 1 passed: Successful submission sends 2 emails");
+    const adminEmailNoPhone = sentMails.find(m => m.to === 'idealandia@outlook.com');
+    assert.ok(adminEmailNoPhone.text.includes('Teléfono: No proporcionado'), "Admin email should state 'No proporcionado' when phone is absent");
+    console.log("Test 1 passed: Successful submission sends 2 emails, absent phone is 'No proporcionado'");
 
     sentMails = [];
     const res2 = await request(app)
@@ -49,6 +51,24 @@ async function runTests() {
     console.log("Test 3 passed: Missing fields rejected");
 
     sentMails = [];
+    const resTelValid = await request(app)
+        .post('/api/contacto')
+        .set('X-Forwarded-For', '127.0.0.3')
+        .send({ nombre: 'Test User', correo: 'test@example.com', mensaje: 'Hello World', telefono: '+52 55 1234 5678' });
+    assert.strictEqual(resTelValid.status, 200, "Should accept valid phone number");
+    assert.strictEqual(sentMails.length, 2, "Should have sent emails with valid phone");
+    const adminEmailWithPhone = sentMails.find(m => m.to === 'idealandia@outlook.com');
+    assert.ok(adminEmailWithPhone.text.includes('Teléfono: +52 55 1234 5678'), "Admin email should contain the provided phone number");
+    console.log("Test 3.1 passed: Valid phone number accepted and correctly included in email payload");
+
+    const resTelInvalid = await request(app)
+        .post('/api/contacto')
+        .set('X-Forwarded-For', '127.0.0.2')
+        .send({ nombre: 'Test User', correo: 'test@example.com', mensaje: 'Hello World', telefono: 'invalid-phone-string-too-long-or-letters' });
+    assert.strictEqual(resTelInvalid.status, 400, "Should reject invalid phone number");
+    console.log("Test 3.2 passed: Invalid phone number rejected");
+
+    sentMails = [];
     let callCount = 0;
     const mockTransporterPartialFail = {
         sendMail: async (mailOptions) => {
@@ -64,6 +84,7 @@ async function runTests() {
 
     const res4 = await request(app)
         .post('/api/contacto')
+        .set('X-Forwarded-For', '127.0.0.1')
         .send({ nombre: 'Test User', correo: 'test@example.com', mensaje: 'Hello World' });
 
     assert.strictEqual(res4.status, 207, "Should return 207 for partial success");
