@@ -1170,11 +1170,79 @@
                 }
             }
 
+            let rbacExpirationTimeout = null;
+            let rbacActivationTimeout = null;
+
+            function scheduleRbacTimers(vencimientoIso, activacionIso) {
+                if (rbacExpirationTimeout) clearTimeout(rbacExpirationTimeout);
+                if (rbacActivationTimeout) clearTimeout(rbacActivationTimeout);
+
+                if (vencimientoIso) {
+                    const targetTime = new Date(vencimientoIso).getTime();
+                    const now = Date.now();
+                    const delay = Math.max(0, targetTime - now) + 500;
+                    if (delay > 0 && delay < 2147483647) {
+                        rbacExpirationTimeout = setTimeout(async () => {
+                            console.log('RBAC timer: vigencia vencida, sincronizando estado...');
+                            await syncRbacState();
+                        }, delay);
+                    }
+                }
+
+                if (activacionIso) {
+                    const targetTime = new Date(activacionIso).getTime();
+                    const now = Date.now();
+                    const delay = Math.max(0, targetTime - now) + 500;
+                    if (delay > 0 && delay < 2147483647) {
+                        rbacActivationTimeout = setTimeout(async () => {
+                            console.log('RBAC timer: vigencia activada, sincronizando estado...');
+                            await syncRbacState();
+                        }, delay);
+                    }
+                }
+            }
+
+            async function syncRbacState() {
+                try {
+                    await buildMenu();
+
+                    const activeSection = Array.from(document.querySelectorAll('.content-section'))
+                        .find(sec => sec.style.display !== 'none' && sec.id !== 'inicio');
+
+                    if (activeSection) {
+                        const secId = activeSection.id;
+                        const isRestricted = ['ideas', 'admin', 'clases-ingles', 'ideas-innovadoras', 'emprendimientos', 'perfilamiento'].includes(secId);
+                        if (isRestricted) {
+                            const hasLink = document.querySelector(`a[data-section="${secId}"]`) !== null ||
+                                            document.querySelector(`a[data-submenu="${secId}"]`) !== null;
+                            if (!hasLink) {
+                                if (typeof showModal === 'function') {
+                                    showModal('Tu acceso a esta sección ha vencido o ha sido modificado.');
+                                }
+                                const inicioLink = document.querySelector('a[data-section="inicio"]');
+                                if (inicioLink) inicioLink.click();
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error in syncRbacState:', err);
+                }
+            }
+
             async function buildMenu() {
                 try {
                     const response = await fetch('/api/menu');
                     if (!response.ok) throw new Error('Error al obtener el menú');
                     const menuData = await response.json();
+
+                    const proximoVencimiento = (response.headers && response.headers.get) ? 
+                        response.headers.get('X-Proximo-Vencimiento') : (menuData.proximo_vencimiento || null);
+                    const proximaActivacion = (response.headers && response.headers.get) ? 
+                        response.headers.get('X-Proxima-Activacion') : (menuData.proxima_activacion || null);
+
+                    scheduleRbacTimers(proximoVencimiento, proximaActivacion);
+
+                    const items = Array.isArray(menuData) ? menuData : (menuData.menu || []);
 
                     const menuList = document.getElementById('dynamic-menu-list');
                     if (!menuList) return;
@@ -1207,7 +1275,7 @@
                         'Perfilamiento': 'perfilamiento'
                     };
 
-                    menuData.forEach(item => {
+                    items.forEach(item => {
                         const li = document.createElement('li');
                         const a = document.createElement('a');
                         a.href = '#';
@@ -2914,6 +2982,55 @@
                 });
             }
 
+            // Global 403 Response Interceptor for RBAC
+            if (typeof window !== 'undefined' && window.fetch) {
+                const _origFetch = window.fetch;
+                window.fetch = async function(...args) {
+                    const res = await _origFetch.apply(this, args);
+                    if (res && res.status === 403) {
+                        try {
+                            const cloned = res.clone();
+                            cloned.json().then(data => {
+                                if (data && data.code === 'RBAC_ACCESS_DENIED') {
+                                    if (typeof showModal === 'function') {
+                                        showModal(data.error || 'Tu acceso a esta funcionalidad ha vencido o no está autorizado.');
+                                    }
+                                    const inicioLink = document.querySelector('a[data-section="inicio"]');
+                                    if (inicioLink) inicioLink.click();
+                                    if (typeof buildMenu === 'function') buildMenu();
+                                }
+                            }).catch(() => {});
+                        } catch (e) {}
+                    }
+                    return res;
+                };
+            }
+
+            // Periodic heartbeat (every 45s) for remote revocations
+            setInterval(() => {
+                syncRbacState();
+            }, 45000);
+
+            // Visibility and focus listeners
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    syncRbacState();
+                }
+            });
+
+            window.addEventListener('focus', () => {
+                syncRbacState();
+            });
+
+            // Multi-tab synchronization via BroadcastChannel
+            if (typeof BroadcastChannel !== 'undefined') {
+                const rbacChannel = new BroadcastChannel('idealandia_rbac');
+                rbacChannel.onmessage = (event) => {
+                    if (event.data && event.data.type === 'RBAC_UPDATE') {
+                        syncRbacState();
+                    }
+                };
+            }
 
         });
     </script>

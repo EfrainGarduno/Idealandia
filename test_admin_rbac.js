@@ -46,7 +46,13 @@ mysql.createPool = function(config) {
                 return [[{ jwt_version: 1 }]];
             }
 
-            // Allow admin access in requireAdmin
+            // Allow admin access in requireAdmin / requireFunctionality / requirePermission
+            if (q.includes("UNION") && (q.includes("USUARIO_ROLES") || q.includes("USUARIO_FUNCIONALIDADES"))) {
+                return [[{ id: 1, codigo: 'admin', ruta: '/admin' }]];
+            }
+            if (q.includes("FROM USUARIO_ROLES UR") && (q.includes("P.CODIGO = ?") || q.includes("P.CODIGO = 'ADMIN.ACCESS'"))) {
+                return [[{ id: 1, codigo: params ? params[1] : 'admin.access', nombre: 'admin.access' }]];
+            }
             if (q.includes("P.CODIGO = 'ADMIN.ACCESS'")) {
                 return [[{ nombre: 'admin.access' }]];
             }
