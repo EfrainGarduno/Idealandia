@@ -91,7 +91,7 @@ const ADMIN_PERMISOS = [
     'roles.read', 'roles.create', 'roles.update', 'roles.delete',
     'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete',
     'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete',
-    'menus.read', 'menus.create', 'menus.update', 'menus.delete', 'reportes.read'
+    'menus.read', 'menus.create', 'menus.update', 'menus.delete'
 ];
 
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
