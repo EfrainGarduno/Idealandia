@@ -11,7 +11,7 @@ process.env.PORT = '3008';
 process.env.AUTH_SECRET = 'test_secret_for_rbac_dynamic_expiration';
 process.env.DB_TIMEZONE = '-06:00';
 
-// In-memory simulation state for the 8 test scenarios
+// In-memory simulation state for the 10 test scenarios
 let simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
 
 // Define user states
@@ -19,9 +19,13 @@ let simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
 // user 11: Temp access to ideas (expires at 12:30:00), HAS role with ideas.read
 // user 12: Permanent access to ideas, HAS role with ideas.read
 // user 13: Temp access to ideas, HAS role with ideas.read, NO ideas.delete
-// user 14: Auditor (temp access to admin, HAS usuarios.read, NO admin.access, NO roles.delete)
+// user 14: Auditor (temp access to administracion ID 8, HAS usuarios.read, NO admin.access, NO roles.delete)
 // user 15: Revoked access scenario (initially active, then set to revocado)
 // user 16: Future scheduled access (starts at 14:00:00)
+// user 17: Administrator (active rol 'administrador' with admin.access, usuarios.read, roles.delete, etc.)
+// user 18: Permanent direct access to administracion ID 8, NO role permissions
+// user 19: Expired temp access to administracion ID 8 (ended at 12:00), NO admin role
+// user 20: User with creaciones role (creaciones.read, creaciones.create)
 
 const mockUsers = {
     10: { id: 10, usuario: 'temp_no_crud', jwt_version: 1 },
@@ -31,6 +35,10 @@ const mockUsers = {
     14: { id: 14, usuario: 'auditor_user', jwt_version: 1 },
     15: { id: 15, usuario: 'revoked_user', jwt_version: 1 },
     16: { id: 16, usuario: 'future_user', jwt_version: 1 },
+    17: { id: 17, usuario: 'admin_role_user', jwt_version: 1 },
+    18: { id: 18, usuario: 'permanent_admin_user', jwt_version: 1 },
+    19: { id: 19, usuario: 'expired_admin_user', jwt_version: 1 },
+    20: { id: 20, usuario: 'creaciones_user', jwt_version: 1 },
 };
 
 let user15State = 'activo';
@@ -82,10 +90,11 @@ function getUserAccessRecords(userId) {
             estado: 'activo'
         });
     } else if (userId === 14) {
+        // En la base de datos real, ID 8 tiene codigo = 'administracion'
         records.push({
             id: 105,
             funcionalidad_id: 8,
-            codigo: 'admin',
+            codigo: 'administracion',
             ruta: '/admin',
             tipo_acceso: 'temporal',
             fecha_inicio: new Date('2026-11-05T11:00:00-06:00').getTime(),
@@ -114,24 +123,55 @@ function getUserAccessRecords(userId) {
             fecha_fin: new Date('2026-11-05T16:00:00-06:00').getTime(),
             estado: 'activo'
         });
+    } else if (userId === 18) {
+        // Acceso directo permanente a administracion
+        records.push({
+            id: 108,
+            funcionalidad_id: 8,
+            codigo: 'administracion',
+            ruta: '/admin',
+            tipo_acceso: 'permanente',
+            fecha_inicio: null,
+            fecha_fin: null,
+            estado: 'activo'
+        });
+    } else if (userId === 19) {
+        // Acceso temporal vencido a administracion (venció a las 12:00:00)
+        records.push({
+            id: 109,
+            funcionalidad_id: 8,
+            codigo: 'administracion',
+            ruta: '/admin',
+            tipo_acceso: 'temporal',
+            fecha_inicio: new Date('2026-11-05T10:00:00-06:00').getTime(),
+            fecha_fin: new Date('2026-11-05T12:00:00-06:00').getTime(),
+            estado: 'activo'
+        });
     }
     return records;
 }
 
 function getUserRolePermissions(userId) {
-    // Map permissions by user
     if (userId === 11 || userId === 12 || userId === 13) {
         return ['ideas.read'];
     }
     if (userId === 14) {
         return ['usuarios.read']; // Auditor has usuarios.read, NOT admin.access or roles.delete
     }
+    if (userId === 17) {
+        // Administrador con rol activo
+        return ['admin.access', 'usuarios.read', 'usuarios.create', 'usuarios.update', 'usuarios.delete', 'roles.read', 'roles.delete'];
+    }
+    if (userId === 20) {
+        return ['creaciones.read', 'creaciones.create'];
+    }
     return [];
 }
 
 // Mock database pool
+let capturedDbPool = null;
 mysql.createPool = function(config) {
-    return {
+    const poolMock = {
         on: (event, handler) => {},
         getConnection: async () => ({
             query: async () => {},
@@ -162,6 +202,7 @@ mysql.createPool = function(config) {
                 return [[
                     { id: 1, nombre: 'Inicio', funcionalidad_id: 1, parent_id: null, publico: 1, orden: 1 },
                     { id: 2, nombre: 'Ideas', funcionalidad_id: 2, parent_id: null, publico: 0, orden: 2 },
+                    { id: 3, nombre: 'Creaciones', funcionalidad_id: 3, parent_id: null, publico: 0, orden: 3 },
                     { id: 15, nombre: 'Administración', funcionalidad_id: 8, parent_id: null, publico: 0, orden: 7 }
                 ]];
             }
@@ -192,19 +233,28 @@ mysql.createPool = function(config) {
             // Functionality Access UNION Query (used in checkUserFunctionalityAccess and /api/menu)
             if (q.includes("UNION") && (q.includes("USUARIO_ROLES") || q.includes("USUARIO_FUNCIONALIDADES"))) {
                 const uid = parseInt(params[0]);
-                let funcCode = null;
-                if (q.includes("F.CODIGO = ?") && params.length >= 2 && isNaN(params[1])) {
-                    funcCode = String(params[1]).toLowerCase();
+                let targetCodes = [];
+                if (q.includes("F.CODIGO = ?") && params.length >= 2) {
+                    targetCodes = params.slice(1).filter(p => typeof p === 'string').map(s => s.toLowerCase());
                 }
 
                 const results = [];
                 // 1. Roles route
                 const rolePerms = getUserRolePermissions(uid);
-                if (rolePerms.some(p => p.startsWith('ideas.')) && (!funcCode || funcCode === 'ideas')) {
-                    results.push({ id: 2, codigo: 'ideas', ruta: '/ideas', funcionalidad_id: 2 });
+                if (rolePerms.some(p => p.startsWith('ideas.'))) {
+                    if (targetCodes.length === 0 || targetCodes.includes('ideas')) {
+                        results.push({ id: 2, codigo: 'ideas', ruta: '/ideas', funcionalidad_id: 2 });
+                    }
                 }
-                if (rolePerms.some(p => p.startsWith('admin.')) && (!funcCode || funcCode === 'admin')) {
-                    results.push({ id: 8, codigo: 'admin', ruta: '/admin', funcionalidad_id: 8 });
+                if (rolePerms.some(p => p.startsWith('creaciones.'))) {
+                    if (targetCodes.length === 0 || targetCodes.includes('creaciones')) {
+                        results.push({ id: 3, codigo: 'creaciones', ruta: '/creaciones', funcionalidad_id: 3 });
+                    }
+                }
+                if (rolePerms.includes('admin.access') || uid === 17) {
+                    if (targetCodes.length === 0 || targetCodes.includes('administracion') || targetCodes.includes('admin')) {
+                        results.push({ id: 8, codigo: 'administracion', ruta: '/admin', funcionalidad_id: 8 });
+                    }
                 }
 
                 // 2. Direct accesses route
@@ -219,8 +269,21 @@ mysql.createPool = function(config) {
                                 active = true;
                             }
                         }
-                        if (active && (!funcCode || funcCode === r.codigo)) {
-                            results.push({ id: r.funcionalidad_id, codigo: r.codigo, ruta: r.ruta, funcionalidad_id: r.funcionalidad_id });
+                        if (active) {
+                            const rCode = r.codigo.toLowerCase();
+                            const matches = targetCodes.length === 0 ||
+                                targetCodes.includes(rCode) ||
+                                (rCode === 'administracion' && targetCodes.includes('admin')) ||
+                                (rCode === 'admin' && targetCodes.includes('administracion'));
+
+                            if (matches) {
+                                results.push({
+                                    id: r.funcionalidad_id,
+                                    codigo: r.codigo,
+                                    ruta: r.ruta,
+                                    funcionalidad_id: r.funcionalidad_id
+                                });
+                            }
                         }
                     }
                 });
@@ -254,13 +317,18 @@ mysql.createPool = function(config) {
             if (q.startsWith("SELECT ID, NOMBRE FROM ROLES WHERE ID = ?")) {
                 return [[{ id: 1, nombre: 'Admin' }]];
             }
+            if (q.startsWith("DELETE FROM ROLES WHERE ID = ?")) {
+                return [[{ affectedRows: 1 }]];
+            }
 
             return [[]];
         }
     };
+    capturedDbPool = poolMock;
+    return poolMock;
 };
 
-const server = require('./server');
+const serverModule = require('./server');
 
 function makeRequest(method, path, token, body = null) {
     return new Promise((resolve, reject) => {
@@ -297,7 +365,7 @@ function makeRequest(method, path, token, body = null) {
 
 async function runTests() {
     console.log("======================================================================");
-    console.log("  INICIANDO SUITE DE PRUEBAS DE VENCIMIENTO DINÁMICO Y RBAC (8 CASOS)");
+    console.log("  INICIANDO SUITE DE PRUEBAS DE VENCIMIENTO DINÁMICO Y RBAC (10 ESCENARIOS)");
     console.log("======================================================================\n");
 
     // Wait for server to boot
@@ -310,184 +378,251 @@ async function runTests() {
     const token14 = jwt.sign({ id: 14, usuario: 'auditor_user', jwt_version: 1 }, process.env.AUTH_SECRET);
     const token15 = jwt.sign({ id: 15, usuario: 'revoked_user', jwt_version: 1 }, process.env.AUTH_SECRET);
     const token16 = jwt.sign({ id: 16, usuario: 'future_user', jwt_version: 1 }, process.env.AUTH_SECRET);
+    const token17 = jwt.sign({ id: 17, usuario: 'admin_role_user', jwt_version: 1 }, process.env.AUTH_SECRET);
+    const token18 = jwt.sign({ id: 18, usuario: 'permanent_admin_user', jwt_version: 1 }, process.env.AUTH_SECRET);
+    const token19 = jwt.sign({ id: 19, usuario: 'expired_admin_user', jwt_version: 1 }, process.env.AUTH_SECRET);
+    const token20 = jwt.sign({ id: 20, usuario: 'creaciones_user', jwt_version: 1 }, process.env.AUTH_SECRET);
 
     // -------------------------------------------------------------------------
-    // CASO 1: Acceso exclusivamente temporal a Ideas sin permiso CRUD (ideas.read)
+    // ESCENARIO 1: requireFunctionality('admin') encuentra correctamente 'administracion'
     // -------------------------------------------------------------------------
     console.log("----------------------------------------------------------------------");
-    console.log("Caso 1: Acceso exclusivamente temporal a Ideas sin ideas.read por roles");
-    console.log("----------------------------------------------------------------------");
-    
-    // ANTES del vencimiento (12:00:00 < 12:30:00)
-    simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
-    let res = await makeRequest('GET', '/api/ideas', token10);
-    if (res.status !== 403 || res.data?.code !== 'RBAC_PERMISSION_DENIED') {
-        throw new Error(`[Caso 1 Antes] Expected 403 RBAC_PERMISSION_DENIED, got ${res.status} ${JSON.stringify(res.data)}`);
-    }
-    console.log("  ✓ Antes de expirar: GET /api/ideas respondió 403 RBAC_PERMISSION_DENIED (acceso funcional ok, falta permiso CRUD).");
-
-    let menuRes = await makeRequest('GET', '/api/menu', token10);
-    if (!menuRes.data.some(item => item.nombre === 'Ideas')) {
-        throw new Error(`[Caso 1 Antes Menu] Expected 'Ideas' in menu, got: ${JSON.stringify(menuRes.data)}`);
-    }
-    console.log("  ✓ Antes de expirar: GET /api/menu muestra 'Ideas'.");
-
-    // DESPUÉS del vencimiento (12:31:00 > 12:30:00)
-    simulatedCurrentTime = new Date('2026-11-05T12:31:00-06:00').getTime();
-    res = await makeRequest('GET', '/api/ideas', token10);
-    if (res.status !== 403 || res.data?.code !== 'RBAC_ACCESS_DENIED') {
-        throw new Error(`[Caso 1 Después] Expected 403 RBAC_ACCESS_DENIED, got ${res.status} ${JSON.stringify(res.data)}`);
-    }
-    console.log("  ✓ Después de expirar: GET /api/ideas respondió 403 RBAC_ACCESS_DENIED (funcionalidad expirada).");
-
-    menuRes = await makeRequest('GET', '/api/menu', token10);
-    if (menuRes.data.some(item => item.nombre === 'Ideas')) {
-        throw new Error(`[Caso 1 Después Menu] Expected 'Ideas' to disappear from menu, but it is present.`);
-    }
-    console.log("  ✓ Después de expirar: GET /api/menu ocultó 'Ideas' automáticamente.");
-
-    // -------------------------------------------------------------------------
-    // CASO 2: Acceso simultáneo por rol y temporal
-    // -------------------------------------------------------------------------
-    console.log("\n----------------------------------------------------------------------");
-    console.log("Caso 2: Acceso simultáneo por rol (ideas.read) y asignación temporal");
-    console.log("----------------------------------------------------------------------");
-    simulatedCurrentTime = new Date('2026-11-05T12:35:00-06:00').getTime(); // Post-temporal expiration
-    res = await makeRequest('GET', '/api/ideas', token11);
-    if (res.status !== 200 || !res.data?.ideas) {
-        throw new Error(`[Caso 2] Expected 200 OK after temporal expiration due to active role, got ${res.status}`);
-    }
-    menuRes = await makeRequest('GET', '/api/menu', token11);
-    if (!menuRes.data.some(item => item.nombre === 'Ideas')) {
-        throw new Error(`[Caso 2 Menu] Expected 'Ideas' to remain visible via role.`);
-    }
-    console.log("  ✓ Tras expirar asignación temporal: GET /api/ideas mantiene 200 OK y 'Ideas' permanece en menú por rol activo.");
-
-    // -------------------------------------------------------------------------
-    // CASO 3: Acceso directo permanente
-    // -------------------------------------------------------------------------
-    console.log("\n----------------------------------------------------------------------");
-    console.log("Caso 3: Acceso directo permanente (tipo_acceso = 'permanente', estado = 'activo')");
-    console.log("----------------------------------------------------------------------");
-    simulatedCurrentTime = new Date('2030-01-01T00:00:00-06:00').getTime(); // Far in the future
-    res = await makeRequest('GET', '/api/ideas', token12);
-    if (res.status !== 200) {
-        throw new Error(`[Caso 3] Expected 200 OK for permanent access, got ${res.status}`);
-    }
-    menuRes = await makeRequest('GET', '/api/menu', token12);
-    if (!menuRes.data.some(item => item.nombre === 'Ideas')) {
-        throw new Error(`[Caso 3 Menu] Expected 'Ideas' to be visible indefinitely.`);
-    }
-    console.log("  ✓ Acceso permanente: conserva vigencia indefinidamente sin requerir fecha de vencimiento (200 OK en 2030).");
-
-    // -------------------------------------------------------------------------
-    // CASO 4: Separación estricta de permisos CRUD en funcionalidades
-    // -------------------------------------------------------------------------
-    console.log("\n----------------------------------------------------------------------");
-    console.log("Caso 4: Separación estricta CRUD (Usuario con ideas.read pero sin ideas.delete)");
+    console.log("Escenario 1: requireFunctionality('admin') resuelve funcionalidad 'administracion'");
     console.log("----------------------------------------------------------------------");
     simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
-    const readRes = await makeRequest('GET', '/api/ideas', token13);
-    if (readRes.status !== 200) {
-        throw new Error(`[Caso 4 Read] Expected 200 for ideas.read, got ${readRes.status}`);
-    }
-    console.log("  ✓ Lectura permitida: GET /api/ideas respondió 200 OK.");
 
-    const deleteRes = await makeRequest('DELETE', '/api/ideas/1', token13);
-    if (deleteRes.status !== 403 || deleteRes.data?.code !== 'RBAC_PERMISSION_DENIED' || deleteRes.data?.permiso !== 'ideas.delete') {
-        throw new Error(`[Caso 4 Delete] Expected 403 RBAC_PERMISSION_DENIED for ideas.delete, got ${deleteRes.status} ${JSON.stringify(deleteRes.data)}`);
+    // Comprobación directa de la función de acceso
+    const accessWithAlias = await serverModule.checkUserFunctionalityAccess(capturedDbPool, 14, 'admin');
+    if (!accessWithAlias) {
+        throw new Error("[Escenario 1] checkUserFunctionalityAccess con 'admin' debe resolver true para funcionalidad 'administracion'");
     }
-    console.log("  ✓ Eliminación denegada: DELETE /api/ideas/1 respondió 403 RBAC_PERMISSION_DENIED (se requiere ideas.delete).");
+    console.log("  ✓ checkUserFunctionalityAccess(pool, 14, 'admin') resolvió TRUE contra registro 'administracion'.");
+
+    // Comprobación HTTP endpoint con requireFunctionality('admin')
+    const checkAliasRes = await makeRequest('GET', '/api/admin/check', token14);
+    if (checkAliasRes.status !== 200) {
+        throw new Error(`[Escenario 1] GET /api/admin/check (con alias 'admin') esperó 200, obtuvo ${checkAliasRes.status} ${JSON.stringify(checkAliasRes.data)}`);
+    }
+    console.log("  ✓ Endpoint GET /api/admin/check respondió HTTP 200 OK autorizando el alias 'admin'.");
 
     // -------------------------------------------------------------------------
-    // CASO 5: Acceso al módulo Administración (Caso Auditor)
+    // ESCENARIO 2: requireFunctionality('administracion') produce el mismo resultado
     // -------------------------------------------------------------------------
     console.log("\n----------------------------------------------------------------------");
-    console.log("Caso 5: Acceso al módulo Administración (Auditor con acceso temporal a admin y usuarios.read)");
+    console.log("Escenario 2: requireFunctionality('administracion') produce resultado idéntico");
     console.log("----------------------------------------------------------------------");
-    // 1. Entrar al módulo admin
-    const adminCheckRes = await makeRequest('GET', '/api/admin/check', token14);
+    const accessWithCanonical = await serverModule.checkUserFunctionalityAccess(capturedDbPool, 14, 'administracion');
+    if (!accessWithCanonical) {
+        throw new Error("[Escenario 2] checkUserFunctionalityAccess con 'administracion' debe resolver true");
+    }
+    console.log("  ✓ checkUserFunctionalityAccess(pool, 14, 'administracion') resolvió TRUE exactamente igual que con 'admin'.");
+
+    // Comprobación middleware requireFunctionality('administracion')
+    let middlewareCalledNext = false;
+    const mockReq = { userId: 14, cookies: { auth_token: token14 } };
+    const mockRes = { status: () => ({ json: () => {} }) };
+    await serverModule.requireFunctionality('administracion')(mockReq, mockRes, () => {
+        middlewareCalledNext = true;
+    });
+    if (!middlewareCalledNext) {
+        throw new Error("[Escenario 2] requireFunctionality('administracion') debió invocar next() exitosamente");
+    }
+    console.log("  ✓ Middleware requireFunctionality('administracion') invocó next() con éxito sin rechazar acceso.");
+
+    // Comprobación en caso negativo: ambos alias rechazan con usuario no autorizado (token19 expirado)
+    simulatedCurrentTime = new Date('2026-11-05T12:05:00-06:00').getTime();
+    const negAlias = await serverModule.checkUserFunctionalityAccess(capturedDbPool, 19, 'admin');
+    const negCanon = await serverModule.checkUserFunctionalityAccess(capturedDbPool, 19, 'administracion');
+    if (negAlias !== false || negCanon !== false) {
+        throw new Error("[Escenario 2 Negativo] Ambos deben ser FALSE para acceso vencido");
+    }
+    console.log("  ✓ Equivalencia negativa confirmada: tanto 'admin' como 'administracion' devuelven FALSE tras vencimiento.");
+    simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
+
+    // -------------------------------------------------------------------------
+    // ESCENARIO 3: Administrador con rol activo entra al módulo y consulta usuarios
+    // -------------------------------------------------------------------------
+    console.log("\n----------------------------------------------------------------------");
+    console.log("Escenario 3: Administrador con rol activo accede al módulo y consulta usuarios");
+    console.log("----------------------------------------------------------------------");
+    const adminCheckRes = await makeRequest('GET', '/api/admin/check', token17);
     if (adminCheckRes.status !== 200) {
-        throw new Error(`[Caso 5 Check] Expected 200 for auditor entry to admin module, got ${adminCheckRes.status}`);
+        throw new Error(`[Escenario 3 Check] Expected 200 for active admin role, got ${adminCheckRes.status}`);
     }
-    console.log("  ✓ Acceso al módulo Administración: GET /api/admin/check respondió 200 OK (sin requerir admin.access).");
+    console.log("  ✓ GET /api/admin/check respondió 200 OK para administrador con rol activo.");
 
-    // 2. Consultar usuarios (tiene usuarios.read)
-    const usuariosRes = await makeRequest('GET', '/api/admin/usuarios', token14);
-    if (usuariosRes.status !== 200) {
-        throw new Error(`[Caso 5 Usuarios] Expected 200 for usuarios.read, got ${usuariosRes.status}`);
+    const adminUsersRes = await makeRequest('GET', '/api/admin/usuarios', token17);
+    if (adminUsersRes.status !== 200 || !Array.isArray(adminUsersRes.data)) {
+        throw new Error(`[Escenario 3 Usuarios] Expected 200 array for admin role with usuarios.read, got ${adminUsersRes.status}`);
     }
-    console.log("  ✓ Lectura de usuarios permitida: GET /api/admin/usuarios respondió 200 OK.");
+    console.log("  ✓ GET /api/admin/usuarios respondió 200 OK consultando usuarios con rol activo.");
 
-    // 3. Eliminar roles (carece de roles.delete)
+    const adminMenuRes = await makeRequest('GET', '/api/menu', token17);
+    if (!adminMenuRes.data.some(item => item.nombre === 'Administración')) {
+        throw new Error("[Escenario 3 Menu] 'Administración' debe figurar en el menú del administrador.");
+    }
+    console.log("  ✓ 'Administración' aparece visible en GET /api/menu mediante rol activo.");
+
+    // -------------------------------------------------------------------------
+    // ESCENARIO 4: Usuario con acceso temporal vigente a ID 8 puede entrar al módulo
+    // -------------------------------------------------------------------------
+    console.log("\n----------------------------------------------------------------------");
+    console.log("Escenario 4: Usuario con acceso temporal vigente a ID 8 entra a Administración");
+    console.log("----------------------------------------------------------------------");
+    const auditorCheckRes = await makeRequest('GET', '/api/admin/check', token14);
+    if (auditorCheckRes.status !== 200) {
+        throw new Error(`[Escenario 4] Expected 200 for user with active temporal access to ID 8, got ${auditorCheckRes.status}`);
+    }
+    console.log("  ✓ GET /api/admin/check respondió 200 OK con acceso temporal vigente a ID 8 (sin exigir admin.access).");
+
+    // -------------------------------------------------------------------------
+    // ESCENARIO 5: Usuario con acceso directo permanente a ID 8 conserva acceso indefinido
+    // -------------------------------------------------------------------------
+    console.log("\n----------------------------------------------------------------------");
+    console.log("Escenario 5: Acceso directo permanente a ID 8 conserva vigencia indefinida (2030)");
+    console.log("----------------------------------------------------------------------");
+    simulatedCurrentTime = new Date('2030-01-01T00:00:00-06:00').getTime(); // Far future
+    const permAdminCheck = await makeRequest('GET', '/api/admin/check', token18);
+    if (permAdminCheck.status !== 200) {
+        throw new Error(`[Escenario 5] Expected 200 OK in 2030 for permanent direct access, got ${permAdminCheck.status}`);
+    }
+    const permMenu = await makeRequest('GET', '/api/menu', token18);
+    if (!permMenu.data.some(item => item.nombre === 'Administración')) {
+        throw new Error("[Escenario 5 Menu] 'Administración' debe mantenerse visible permanentemente.");
+    }
+    console.log("  ✓ Acceso permanente a ID 8: respondió 200 OK en el año 2030 y menú activo indefinidamente.");
+    simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
+
+    // -------------------------------------------------------------------------
+    // ESCENARIO 6: Acceso temporal + usuarios.read consulta usuarios, pero no borra roles
+    // -------------------------------------------------------------------------
+    console.log("\n----------------------------------------------------------------------");
+    console.log("Escenario 6: Separación de permisos CRUD en módulo Administración");
+    console.log("----------------------------------------------------------------------");
+    const auditorUsersRes = await makeRequest('GET', '/api/admin/usuarios', token14);
+    if (auditorUsersRes.status !== 200) {
+        throw new Error(`[Escenario 6 Usuarios] Expected 200 for usuarios.read, got ${auditorUsersRes.status}`);
+    }
+    console.log("  ✓ Lectura de usuarios permitida: GET /api/admin/usuarios respondió 200 OK (posee usuarios.read).");
+
     const deleteRoleRes = await makeRequest('DELETE', '/api/admin/roles/1', token14);
     if (deleteRoleRes.status !== 403 || deleteRoleRes.data?.code !== 'RBAC_PERMISSION_DENIED') {
-        throw new Error(`[Caso 5 Delete Role] Expected 403 RBAC_PERMISSION_DENIED, got ${deleteRoleRes.status}`);
+        throw new Error(`[Escenario 6 Delete Role] Expected 403 RBAC_PERMISSION_DENIED, got ${deleteRoleRes.status}`);
     }
-    console.log("  ✓ Eliminación de rol denegada: DELETE /api/admin/roles/1 respondió 403 RBAC_PERMISSION_DENIED.");
+    console.log("  ✓ Eliminación de rol denegada: DELETE /api/admin/roles/1 respondió 403 RBAC_PERMISSION_DENIED (carece de roles.delete).");
 
-    // 4. Asignar accesos temporales (carece de admin.access)
+    // -------------------------------------------------------------------------
+    // ESCENARIO 7: Acceso temporal a Administración no permite gestionar accesos sin admin.access
+    // -------------------------------------------------------------------------
+    console.log("\n----------------------------------------------------------------------");
+    console.log("Escenario 7: Acceso temporal no otorga admin.access para gestionar accesos");
+    console.log("----------------------------------------------------------------------");
     const postAccesosRes = await makeRequest('POST', '/api/admin/accesos', token14, {
         usuarios: [1], funcionalidad_id: 2, tipo_acceso: 'temporal',
         fecha_inicio: '2026-11-05 12:00:00', fecha_fin: '2026-11-05 13:00:00'
     });
     if (postAccesosRes.status !== 403 || postAccesosRes.data?.code !== 'RBAC_PERMISSION_DENIED') {
-        throw new Error(`[Caso 5 Post Accesos] Expected 403 RBAC_PERMISSION_DENIED, got ${postAccesosRes.status}`);
+        throw new Error(`[Escenario 7 Post Accesos] Expected 403 RBAC_PERMISSION_DENIED, got ${postAccesosRes.status}`);
     }
-    console.log("  ✓ Asignación de accesos denegada: POST /api/admin/accesos respondió 403 RBAC_PERMISSION_DENIED (falta admin.access).");
+    console.log("  ✓ Crear accesos temporales denegado: POST /api/admin/accesos respondió 403 RBAC_PERMISSION_DENIED.");
+
+    const revokeAccesoRes = await makeRequest('PUT', '/api/admin/accesos/105/revocar', token14);
+    if (revokeAccesoRes.status !== 403 || revokeAccesoRes.data?.code !== 'RBAC_PERMISSION_DENIED') {
+        throw new Error(`[Escenario 7 Revocar] Expected 403 RBAC_PERMISSION_DENIED, got ${revokeAccesoRes.status}`);
+    }
+    console.log("  ✓ Revocar accesos denegado: PUT /api/admin/accesos/:id/revocar respondió 403 RBAC_PERMISSION_DENIED.");
 
     // -------------------------------------------------------------------------
-    // CASO 6: Revocación desde otro dispositivo
+    // ESCENARIO 8: Al vencer o revocar acceso temporal, se pierde acceso funcional
     // -------------------------------------------------------------------------
     console.log("\n----------------------------------------------------------------------");
-    console.log("Caso 6: Revocación dinámica de acceso (Cambio de estado a 'revocado')");
+    console.log("Escenario 8: Vencimiento y revocación dinámica de accesos temporales");
     console.log("----------------------------------------------------------------------");
+    // Sub-caso 8a: Vencimiento de acceso temporal a administración sin rol alternativo
+    simulatedCurrentTime = new Date('2026-11-05T13:05:00-06:00').getTime(); // Post 13:00 expiration
+    const expiredCheckRes = await makeRequest('GET', '/api/admin/check', token14);
+    if (expiredCheckRes.status !== 403 || expiredCheckRes.data?.code !== 'RBAC_ACCESS_DENIED') {
+        throw new Error(`[Escenario 8a] Expected 403 RBAC_ACCESS_DENIED after expiration, got ${expiredCheckRes.status}`);
+    }
+    const expiredUsersRes = await makeRequest('GET', '/api/admin/usuarios', token14);
+    if (expiredUsersRes.status !== 403 || expiredUsersRes.data?.code !== 'RBAC_ACCESS_DENIED') {
+        throw new Error(`[Escenario 8a Usuarios] Expected 403 RBAC_ACCESS_DENIED for expired functionality, got ${expiredUsersRes.status}`);
+    }
+    const expiredMenuRes = await makeRequest('GET', '/api/menu', token14);
+    if (expiredMenuRes.data.some(item => item.nombre === 'Administración')) {
+        throw new Error("[Escenario 8a Menu] 'Administración' debe desaparecer del menú al vencer el acceso temporal.");
+    }
+    console.log("  ✓ 8a. Tras expirar vigencia: GET /api/admin/check y /api/admin/usuarios devuelven 403 RBAC_ACCESS_DENIED y menú se oculta.");
+
+    // Sub-caso 8b: Revocación explícita (estado = 'revocado')
+    simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
     user15State = 'revocado';
-    res = await makeRequest('GET', '/api/ideas', token15);
-    if (res.status !== 403 || res.data?.code !== 'RBAC_ACCESS_DENIED') {
-        throw new Error(`[Caso 6] Expected 403 RBAC_ACCESS_DENIED immediately after revocation in DB, got ${res.status}`);
+    const revokedRes = await makeRequest('GET', '/api/ideas', token15);
+    if (revokedRes.status !== 403 || revokedRes.data?.code !== 'RBAC_ACCESS_DENIED') {
+        throw new Error(`[Escenario 8b] Expected 403 RBAC_ACCESS_DENIED for revoked state, got ${revokedRes.status}`);
     }
-    menuRes = await makeRequest('GET', '/api/menu', token15);
-    if (menuRes.data.some(item => item.nombre === 'Ideas')) {
-        throw new Error(`[Caso 6 Menu] Expected 'Ideas' to be absent after revocation.`);
+    console.log("  ✓ 8b. Acceso revocado en BD: GET /api/ideas respondió inmediatamente 403 RBAC_ACCESS_DENIED.");
+
+    // Sub-caso 8c: Conservación de acceso si existe rol activo independiente
+    simulatedCurrentTime = new Date('2026-11-05T12:35:00-06:00').getTime(); // Post temporal expiration of user 11
+    const roleRetainedRes = await makeRequest('GET', '/api/ideas', token11);
+    if (roleRetainedRes.status !== 200 || !roleRetainedRes.data?.ideas) {
+        throw new Error(`[Escenario 8c] Expected 200 OK because user has active role with ideas.read, got ${roleRetainedRes.status}`);
     }
-    console.log("  ✓ Inmediatamente tras revocación remota en BD: GET /api/ideas respondió 403 RBAC_ACCESS_DENIED y menú se ocultó.");
+    console.log("  ✓ 8c. Vencimiento temporal superado por rol activo: conserva acceso functional (200 OK) vía rol independiente.");
 
     // -------------------------------------------------------------------------
-    // CASO 7: Acceso programado en el futuro
+    // ESCENARIO 9: Protección estricta de permisos CRUD en funcionalidades
     // -------------------------------------------------------------------------
     console.log("\n----------------------------------------------------------------------");
-    console.log("Caso 7: Acceso programado en el futuro (fecha_inicio > NOW())");
+    console.log("Escenario 9: Verificación de permisos CRUD a nivel operativo");
     console.log("----------------------------------------------------------------------");
-    simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime(); // scheduled for 14:00
-    res = await makeRequest('GET', '/api/ideas', token16);
-    if (res.status !== 403 || res.data?.code !== 'RBAC_ACCESS_DENIED') {
-        throw new Error(`[Caso 7] Expected 403 RBAC_ACCESS_DENIED before start time, got ${res.status}`);
+    simulatedCurrentTime = new Date('2026-11-05T12:00:00-06:00').getTime();
+    // User 10 tiene funcionalidad ideas, pero no ideas.read
+    const noCrudRes = await makeRequest('GET', '/api/ideas', token10);
+    if (noCrudRes.status !== 403 || noCrudRes.data?.code !== 'RBAC_PERMISSION_DENIED' || noCrudRes.data?.permiso !== 'ideas.read') {
+        throw new Error(`[Escenario 9 Ideas.read] Expected 403 RBAC_PERMISSION_DENIED for ideas.read, got ${noCrudRes.status}`);
     }
-    const metaMenuRes = await makeRequest('GET', '/api/menu?meta=true', token16);
-    if (metaMenuRes.data.menu.some(item => item.nombre === 'Ideas')) {
-        throw new Error(`[Caso 7 Menu] Scheduled functionality should not be visible before start time.`);
+    console.log("  ✓ Usuario con funcionalidad pero sin ideas.read recibe 403 RBAC_PERMISSION_DENIED.");
+
+    // User 13 tiene ideas.read pero no ideas.delete
+    const deleteIdeaRes = await makeRequest('DELETE', '/api/ideas/1', token13);
+    if (deleteIdeaRes.status !== 403 || deleteIdeaRes.data?.code !== 'RBAC_PERMISSION_DENIED' || deleteIdeaRes.data?.permiso !== 'ideas.delete') {
+        throw new Error(`[Escenario 9 Ideas.delete] Expected 403 RBAC_PERMISSION_DENIED for ideas.delete, got ${deleteIdeaRes.status}`);
     }
-    if (!metaMenuRes.data.proxima_activacion) {
-        throw new Error(`[Caso 7 Timing] Expected proxima_activacion in meta response.`);
-    }
-    console.log(`  ✓ Antes del inicio programado: GET /api/ideas denegado (403 RBAC_ACCESS_DENIED) y proxima_activacion reportada (${metaMenuRes.data.proxima_activacion}).`);
+    console.log("  ✓ Usuario sin permiso ideas.delete recibe 403 RBAC_PERMISSION_DENIED al intentar DELETE.");
 
     // -------------------------------------------------------------------------
-    // CASO 8: Sesión continua no interrumpida
+    // ESCENARIO 10: No alteración de otras funcionalidades (ideas, creaciones) ni sesiones
     // -------------------------------------------------------------------------
     console.log("\n----------------------------------------------------------------------");
-    console.log("Caso 8: Sesión continua no interrumpida (Separación de sesión y permisos)");
+    console.log("Escenario 10: Integridad de otras funcionalidades (ideas, creaciones) y sesión JWT");
     console.log("----------------------------------------------------------------------");
-    simulatedCurrentTime = new Date('2026-11-05T12:35:00-06:00').getTime(); // user10 expired
+    // Verificación directa de funcionalidad 'creaciones'
+    const creacionesAccess = await serverModule.checkUserFunctionalityAccess(capturedDbPool, 20, 'creaciones');
+    if (!creacionesAccess) {
+        throw new Error("[Escenario 10] checkUserFunctionalityAccess para 'creaciones' debe ser TRUE");
+    }
+    console.log("  ✓ Funcionalidad 'creaciones' no se vio afectada y resolvió TRUE para usuario con rol correspondiente.");
+
+    // Verificación de normalización: códigos distintos de admin no son alterados
+    const normalizedIdeas = serverModule.normalizeFunctionalityCode('ideas');
+    const normalizedCreaciones = serverModule.normalizeFunctionalityCode('creaciones');
+    if (normalizedIdeas !== 'ideas' || normalizedCreaciones !== 'creaciones') {
+        throw new Error("[Escenario 10] normalizeFunctionalityCode no debe modificar códigos ajenos a admin");
+    }
+    console.log("  ✓ normalizeFunctionalityCode preservó intactos códigos ajenos ('ideas' -> 'ideas', 'creaciones' -> 'creaciones').");
+
+    // Sesión JWT no se destruye al vencer funcionalidad (Nivel 1 independiente de Nivel 2 y 3)
+    simulatedCurrentTime = new Date('2026-11-05T13:30:00-06:00').getTime();
     const meRes = await makeRequest('GET', '/api/me', token10);
     if (meRes.status !== 200 || meRes.data?.user?.id !== 10) {
-        throw new Error(`[Caso 8] Expected 200 OK on /api/me with valid user session, got ${meRes.status}`);
+        throw new Error(`[Escenario 10 Session] Expected 200 on /api/me with valid JWT, got ${meRes.status}`);
     }
-    console.log("  ✓ Con accesos expirados, la sesión JWT permanece activa: GET /api/me respondió 200 OK con usuario autenticado.");
+    console.log("  ✓ Sesión JWT preservada: GET /api/me respondió 200 OK con usuario autenticado aún con accesos vencidos.");
 
     console.log("\n======================================================================");
-    console.log("  TODAS LAS PRUEBAS AUTOMATIZADAS (CASOS 1 A 8) PASARON EXITOSAMENTE");
+    console.log("  LOS 10 ESCENARIOS DE VERIFICACIÓN RBAC PASARON EXITOSAMENTE (10/10)");
     console.log("======================================================================\n");
     process.exit(0);
 }

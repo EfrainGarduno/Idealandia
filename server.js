@@ -76,8 +76,27 @@ if (!process.env.AUTH_SECRET) {
 
 // Database Connection Pool
 
+const FUNCIONALIDAD_CODE_ALIASES = {
+    'admin': 'administracion'
+};
+
+function normalizeFunctionalityCode(code) {
+    if (!code) return code;
+    const lower = String(code).toLowerCase().trim();
+    return FUNCIONALIDAD_CODE_ALIASES[lower] || lower;
+}
+
+const ADMIN_PERMISOS = [
+    'admin.access', 'usuarios.read', 'usuarios.create', 'usuarios.update', 'usuarios.delete',
+    'roles.read', 'roles.create', 'roles.update', 'roles.delete',
+    'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete',
+    'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete',
+    'menus.read', 'menus.create', 'menus.update', 'menus.delete', 'reportes.read'
+];
+
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
-    'admin': ['admin.access', 'usuarios.read', 'usuarios.create', 'usuarios.update', 'usuarios.delete', 'roles.read', 'roles.create', 'roles.update', 'roles.delete', 'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete', 'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete', 'menus.read', 'menus.create', 'menus.update', 'menus.delete', 'reportes.read'],
+    'administracion': ADMIN_PERMISOS,
+    'admin': ADMIN_PERMISOS,
     'ideas': ['ideas.read', 'ideas.create', 'ideas.update', 'ideas.delete'],
     'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
 };
@@ -146,6 +165,8 @@ function formatMySqlDateTime(dateVal) {
 
 async function checkUserFunctionalityAccess(connectionPool, userId, funcCode) {
     if (!userId) return false;
+    const canonicalCode = normalizeFunctionalityCode(funcCode);
+    const rawCode = String(funcCode || '').toLowerCase().trim();
     const query = `
         SELECT f.id, f.codigo, f.ruta
         FROM usuario_roles ur
@@ -154,19 +175,22 @@ async function checkUserFunctionalityAccess(connectionPool, userId, funcCode) {
         JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
         JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
         JOIN funcionalidades f ON fp.funcionalidad_id = f.id AND f.activo = TRUE
-        WHERE ur.usuario_id = ? AND f.codigo = ?
+        WHERE ur.usuario_id = ? AND (f.codigo = ? OR f.codigo = ?)
         UNION
         SELECT f.id, f.codigo, f.ruta
         FROM usuario_funcionalidades uf
         JOIN funcionalidades f ON uf.funcionalidad_id = f.id AND f.activo = TRUE
-        WHERE uf.usuario_id = ? AND f.codigo = ?
+        WHERE uf.usuario_id = ? AND (f.codigo = ? OR f.codigo = ?)
           AND uf.estado = 'activo'
           AND (
               uf.tipo_acceso = 'permanente'
               OR (uf.tipo_acceso = 'temporal' AND uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW())
           )
     `;
-    const [rows] = await connectionPool.execute(query, [userId, funcCode, userId, funcCode]);
+    const [rows] = await connectionPool.execute(query, [
+        userId, canonicalCode, rawCode,
+        userId, canonicalCode, rawCode
+    ]);
     return rows && rows.length > 0;
 }
 
@@ -886,6 +910,7 @@ app.post('/api/logout', (req, res) => {
 });
 
 const requireFunctionality = (funcCode) => {
+    const canonicalCode = normalizeFunctionalityCode(funcCode);
     return async (req, res, next) => {
         try {
             if (!req.userId) {
@@ -898,18 +923,18 @@ const requireFunctionality = (funcCode) => {
                 req.user = decoded;
             }
 
-            const hasAccess = await checkUserFunctionalityAccess(pool, req.userId, funcCode);
+            const hasAccess = await checkUserFunctionalityAccess(pool, req.userId, canonicalCode);
             if (!hasAccess) {
                 return res.status(403).json({
                     error: 'Acceso no autorizado o vencido para esta funcionalidad.',
                     code: 'RBAC_ACCESS_DENIED',
-                    funcionalidad: funcCode
+                    funcionalidad: canonicalCode
                 });
             }
 
             next();
         } catch (error) {
-            console.error(`Error in requireFunctionality (${funcCode}):`, error);
+            console.error(`Error in requireFunctionality (${canonicalCode}):`, error);
             if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado') {
                 return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
             }
@@ -952,7 +977,7 @@ const requirePermission = (permCode) => {
 };
 
 // requireAdmin: validates entry to the 'admin' functionality (Level 2)
-const requireAdmin = requireFunctionality('admin');
+const requireAdmin = requireFunctionality('administracion');
 
 app.get('/api/admin/check', requireFunctionality('admin'), async (req, res) => {
     res.status(200).json({ message: 'Acceso de administrador concedido.' });
@@ -977,10 +1002,11 @@ app.get('/api/admin/funcionalidades/:funcId/permisos_disponibles', requireFuncti
         const [func] = await pool.execute('SELECT codigo FROM funcionalidades WHERE id = ?', [funcId]);
         if (func.length === 0) return res.status(404).json({ error: 'Funcionalidad no encontrada' });
 
-        const codigo = func[0].codigo.toLowerCase();
-        let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || [];
-        if (!FUNCIONALIDAD_PERMISOS_MAPPING[codigo] && !codigo.startsWith('admin')) {
-             permitidos = [`${codigo}.read`, `${codigo}.create`, `${codigo}.update`, `${codigo}.delete`];
+        const rawCodigo = func[0].codigo.toLowerCase();
+        const codigo = normalizeFunctionalityCode(rawCodigo);
+        let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || FUNCIONALIDAD_PERMISOS_MAPPING[rawCodigo] || [];
+        if (!permitidos.length && !codigo.startsWith('admin') && !codigo.startsWith('administra')) {
+             permitidos = [`${rawCodigo}.read`, `${rawCodigo}.create`, `${rawCodigo}.update`, `${rawCodigo}.delete`];
         }
 
         if (permitidos.length === 0) {
@@ -1028,10 +1054,11 @@ app.post('/api/admin/funcionalidad_permisos/:funcId', requireFunctionality('admi
                 return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
             }
 
-            const codigo = func[0].codigo.toLowerCase();
-            let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || [];
-            if (!FUNCIONALIDAD_PERMISOS_MAPPING[codigo] && !codigo.startsWith('admin')) {
-                permitidos = [`${codigo}.read`, `${codigo}.create`, `${codigo}.update`, `${codigo}.delete`];
+            const rawCodigo = func[0].codigo.toLowerCase();
+            const codigo = normalizeFunctionalityCode(rawCodigo);
+            let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || FUNCIONALIDAD_PERMISOS_MAPPING[rawCodigo] || [];
+            if (!permitidos.length && !codigo.startsWith('admin') && !codigo.startsWith('administra')) {
+                permitidos = [`${rawCodigo}.read`, `${rawCodigo}.create`, `${rawCodigo}.update`, `${rawCodigo}.delete`];
             }
 
             if (permisos.length > 0) {
@@ -2157,3 +2184,16 @@ app.put('/api/ideas/:id/estado', requireFunctionality('ideas'), requirePermissio
 });
 
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        app,
+        initMailTransporter,
+        normalizeFunctionalityCode,
+        checkUserFunctionalityAccess,
+        checkUserPermission,
+        requireFunctionality,
+        FUNCIONALIDAD_CODE_ALIASES
+    };
+}
+
