@@ -2,7 +2,8 @@
 -- Rollback SQL: Reconciliación Integral del Catálogo RBAC y Permisos
 -- Proyecto: Idealandia
 -- Rama: feature/rbac-dynamic-expiration (PR #94)
--- Reversión quirúrgica, atómica y protegida frente a ON DELETE CASCADE
+-- Reversión quirúrgica, atómica, protegida frente a modificaciones concurrentes
+-- (SELECT ... FOR UPDATE) y blindada contra borrados accidentales por ON DELETE CASCADE.
 -- =============================================================================
 
 DROP PROCEDURE IF EXISTS sp_rollback_rbac_reconciliation;
@@ -25,7 +26,23 @@ BEGIN
     START TRANSACTION;
 
     -- =========================================================================
-    -- 1. COMPROBACIÓN PREVENTIVA: PROTECCIÓN FRENTE A ON DELETE CASCADE
+    -- 1. BLOQUEO TRANSACCIONAL DE PERMISOS AUDITADOS (FOR UPDATE)
+    -- =========================================================================
+    -- Adquirir bloqueo exclusivo (X-lock) sobre las filas de permisos creadas por
+    -- esta migración. Esto impide que transacciones concurrentes agreguen
+    -- relaciones en rol_permisos o funcionalidad_permisos (cuyas comprobaciones FK
+    -- requieren un S-lock sobre el registro padre en permisos) mientras se evalúa
+    -- y ejecuta la reversión. El bloqueo se mantiene activo hasta el COMMIT o ROLLBACK.
+    SELECT p.id, p.codigo
+    FROM permisos p
+    JOIN _migration_rbac_audit a_perm 
+      ON a_perm.migration_batch = 'reconciliacion_rbac_20261105'
+     AND a_perm.table_name = 'permisos'
+     AND p.id = a_perm.record_id
+    FOR UPDATE;
+
+    -- =========================================================================
+    -- 2. COMPROBACIÓN PREVENTIVA: PROTECCIÓN FRENTE A ON DELETE CASCADE
     -- =========================================================================
     -- Las tablas rol_permisos y funcionalidad_permisos definen ON DELETE CASCADE
     -- hacia permisos(id). Si después de la migración otros roles o funcionalidades
@@ -66,7 +83,7 @@ BEGIN
     END IF;
 
     -- =========================================================================
-    -- 2. REVERSIÓN QUIRÚRGICA DE ASIGNACIONES CREADAS POR LA MIGRACIÓN
+    -- 3. REVERSIÓN QUIRÚRGICA DE ASIGNACIONES CREADAS POR LA MIGRACIÓN
     -- =========================================================================
 
     -- A. Eliminar relaciones en funcionalidad_permisos creadas exclusivamente por este lote
@@ -102,7 +119,7 @@ BEGIN
     END IF;
 
     -- =========================================================================
-    -- 3. REVERSIÓN DE PERMISOS Y LIMPIEZA DE AUDITORÍA
+    -- 4. REVERSIÓN DE PERMISOS Y LIMPIEZA DE AUDITORÍA
     -- =========================================================================
 
     -- A. Eliminar los permisos creados exclusivamente por este lote
