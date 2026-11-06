@@ -304,15 +304,34 @@ async function loadAccesos() {
             editBtn.textContent = 'Editar';
             editBtn.className = 'btn btn-secondary btn-sm';
             editBtn.style.marginRight = '5px';
-            editBtn.onclick = () => showEditAccesoModal(a);
+            if (a.estado === 'revocado') {
+                editBtn.disabled = true;
+                editBtn.classList.add('disabled');
+                editBtn.style.cursor = 'not-allowed';
+                editBtn.style.opacity = '0.5';
+                editBtn.title = 'No se puede editar un acceso revocado';
+            } else {
+                editBtn.onclick = () => showEditAccesoModal(a);
+            }
             td.appendChild(editBtn);
 
             if (a.estado === 'activo') {
                 const revokeBtn = document.createElement('button');
                 revokeBtn.textContent = 'Revocar';
                 revokeBtn.className = 'btn btn-danger btn-sm';
+                revokeBtn.style.marginRight = '5px';
                 revokeBtn.onclick = () => showRevokeAccesoModal(a);
                 td.appendChild(revokeBtn);
+            }
+
+            // Botón Eliminar: SOLO se muestra en las filas cuyo estado permita eliminar (Vencido o Revocado)
+            const canDelete = (a.estado === 'revocado') || (computedEstado === 'expirado');
+            if (canDelete) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Eliminar';
+                deleteBtn.className = 'btn btn-danger btn-sm';
+                deleteBtn.onclick = () => showDeleteAccesoModal(a);
+                td.appendChild(deleteBtn);
             }
             tr.appendChild(td);
             tbody.appendChild(tr);
@@ -355,6 +374,53 @@ function showRevokeAccesoModal(a) {
         } catch (e) {
             console.error(e);
             window.showModal('Error al revocar acceso.');
+        }
+    };
+}
+
+function showDeleteAccesoModal(a) {
+    const isRevocado = a.estado === 'revocado';
+    let computedEstado = a.estado;
+    if (computedEstado === 'activo' && a.tipo_acceso === 'temporal' && a.fecha_fin && new Date(a.fecha_fin) < new Date()) {
+        computedEstado = 'expirado';
+    }
+
+    if (!isRevocado && computedEstado !== 'expirado') {
+        if (window.showModal) window.showModal('Solo se pueden eliminar accesos temporales vencidos o revocados.');
+        return;
+    }
+
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+
+    textElement.innerHTML = `<h3>Eliminar Acceso Temporal</h3><p>¿Estás seguro de que deseas eliminar permanentemente este registro de acceso de <strong>${escapeHTML(a.usuario_nombre)}</strong> a la funcionalidad <strong>${escapeHTML(a.funcionalidad_nombre)}</strong>?</p>`;
+
+    buttonsContainer.innerHTML = `
+        <button id="btn-confirm-delete-acceso" class="btn btn-danger">Eliminar</button>
+        <button id="btn-cancel-delete-acceso" class="btn btn-secondary">Cancelar</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('btn-cancel-delete-acceso').onclick = () => overlay.classList.remove('active');
+    document.getElementById('btn-confirm-delete-acceso').onclick = async () => {
+        try {
+            const res = await fetch(`/api/admin/accesos/${a.id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            overlay.classList.remove('active');
+            if (res.ok) {
+                if (window.showModal) window.showModal('Acceso temporal eliminado exitosamente.');
+                if (typeof broadcastRbacUpdate === 'function') broadcastRbacUpdate();
+                loadAccesos();
+            } else {
+                if (window.showModal) window.showModal(`Error: ${data.error || 'No se pudo eliminar el acceso.'}`);
+            }
+        } catch (e) {
+            console.error(e);
+            if (window.showModal) window.showModal('Error al eliminar acceso temporal.');
         }
     };
 }
@@ -1700,6 +1766,10 @@ function showCreateMenuModal() {
 }
 
 function showEditAccesoModal(a) {
+    if (a.estado === 'revocado') {
+        if (window.showModal) window.showModal('No se puede editar un acceso con estatus revocado.');
+        return;
+    }
     const html = `
         <div style="text-align: left;">
             <label>Tipo de Acceso:</label>
