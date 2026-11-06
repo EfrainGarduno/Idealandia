@@ -1,3 +1,15 @@
+function broadcastRbacUpdate() {
+    try {
+        if (typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('idealandia_rbac');
+            bc.postMessage({ type: 'RBAC_UPDATE', timestamp: Date.now() });
+            bc.close();
+        }
+    } catch (e) {
+        console.error('Error broadcasting RBAC update:', e);
+    }
+}
+
 
 function escapeHTML(str) {
     if (!str) return '';
@@ -335,6 +347,7 @@ function showRevokeAccesoModal(a) {
             overlay.classList.remove('active');
             if (res.ok) {
                 window.showModal('Acceso revocado.');
+                broadcastRbacUpdate();
                 loadAccesos();
             } else {
                 window.showModal(`Error: ${data.error}`);
@@ -441,6 +454,7 @@ async function showCreateAccesoModal() {
                 overlay.classList.remove('active');
                 if (res.ok) {
                     window.showModal('Accesos otorgados exitosamente.');
+                    broadcastRbacUpdate();
                     loadAccesos();
                 } else {
                     window.showModal(`Error: ${data.error}`);
@@ -683,6 +697,7 @@ async function showEditRolesModal(userId, username) {
                 overlay.classList.remove('active');
                 if (res.ok) {
                     window.showModal('Roles actualizados.');
+                    broadcastRbacUpdate();
                     loadUsuarios();
                 } else {
                     window.showModal(`Error: ${data.error}`);
@@ -752,6 +767,7 @@ async function showEditPermisosModal(rolId, rolName) {
                 overlay.classList.remove('active');
                 if (res.ok) {
                     window.showModal('Permisos actualizados.');
+                    broadcastRbacUpdate();
                     loadRoles();
                 } else {
                     window.showModal(`Error: ${data.error}`);
@@ -1740,6 +1756,7 @@ function showEditAccesoModal(a) {
             overlay.classList.remove('active');
             if (res.ok) {
                 window.showModal('Acceso actualizado exitosamente.');
+                broadcastRbacUpdate();
                 loadAccesos();
             } else {
                 window.showModal(`Error: ${data.error}`);

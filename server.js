@@ -76,13 +76,34 @@ if (!process.env.AUTH_SECRET) {
 
 // Database Connection Pool
 
+const FUNCIONALIDAD_CODE_ALIASES = {
+    'admin': 'administracion'
+};
+
+function normalizeFunctionalityCode(code) {
+    if (!code) return code;
+    const lower = String(code).toLowerCase().trim();
+    return FUNCIONALIDAD_CODE_ALIASES[lower] || lower;
+}
+
+const ADMIN_PERMISOS = [
+    'admin.access', 'usuarios.read', 'usuarios.create', 'usuarios.update', 'usuarios.delete',
+    'roles.read', 'roles.create', 'roles.update', 'roles.delete',
+    'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete',
+    'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete',
+    'menus.read', 'menus.create', 'menus.update', 'menus.delete'
+];
+
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
-    'admin': ['admin.access', 'usuarios.read', 'usuarios.create', 'usuarios.update', 'usuarios.delete', 'roles.read', 'roles.create', 'roles.update', 'roles.delete', 'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete', 'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete', 'menus.read', 'menus.create', 'menus.update', 'menus.delete', 'reportes.read'],
+    'administracion': ADMIN_PERMISOS,
+    'admin': ADMIN_PERMISOS,
     'ideas': ['ideas.read', 'ideas.create', 'ideas.update', 'ideas.delete'],
     'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
 };
 
 
+
+const DB_TIMEZONE = process.env.DB_TIMEZONE || '-06:00';
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
@@ -90,20 +111,102 @@ const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    timezone: DB_TIMEZONE,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
 
+// Configure session time_zone for all connections safely without altering global MySQL state
+if (pool && typeof pool.on === 'function') {
+    pool.on('connection', (connection) => {
+        const safeTz = DB_TIMEZONE.replace(/[^0-9:+-]/g, '');
+        if (typeof connection.query === 'function') {
+            connection.query(`SET time_zone = '${safeTz}'`, (err) => {
+                if (err) console.error('Error setting session time_zone:', err);
+            });
+        }
+    });
+}
+
 // Test Database Connection
 pool.getConnection()
-    .then(connection => {
+    .then(async (connection) => {
         console.log("Connected to MySQL database.");
+        try {
+            if (connection && typeof connection.query === 'function') {
+                const safeTz = DB_TIMEZONE.replace(/[^0-9:+-]/g, '');
+                connection.query(`SET time_zone = '${safeTz}'`, () => {});
+            }
+        } catch (e) {}
         connection.release();
     })
     .catch(err => {
         console.error("Error connecting to MySQL database:", err);
     });
+
+function formatMySqlDateTime(dateVal) {
+    if (!dateVal) return null;
+    if (typeof dateVal === 'string') {
+        let s = dateVal.trim().replace('T', ' ');
+        if (s.endsWith('Z')) s = s.slice(0, -1);
+        if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}$/.test(s)) {
+            s += ':00';
+        }
+        if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/.test(s)) {
+            return s.slice(0, 19);
+        }
+    }
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return null;
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+async function checkUserFunctionalityAccess(connectionPool, userId, funcCode) {
+    if (!userId) return false;
+    const canonicalCode = normalizeFunctionalityCode(funcCode);
+    const rawCode = String(funcCode || '').toLowerCase().trim();
+    const query = `
+        SELECT f.id, f.codigo, f.ruta
+        FROM usuario_roles ur
+        JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+        JOIN rol_permisos rp ON r.id = rp.rol_id
+        JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+        JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
+        JOIN funcionalidades f ON fp.funcionalidad_id = f.id AND f.activo = TRUE
+        WHERE ur.usuario_id = ? AND (f.codigo = ? OR f.codigo = ?)
+        UNION
+        SELECT f.id, f.codigo, f.ruta
+        FROM usuario_funcionalidades uf
+        JOIN funcionalidades f ON uf.funcionalidad_id = f.id AND f.activo = TRUE
+        WHERE uf.usuario_id = ? AND (f.codigo = ? OR f.codigo = ?)
+          AND uf.estado = 'activo'
+          AND (
+              uf.tipo_acceso = 'permanente'
+              OR (uf.tipo_acceso = 'temporal' AND uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW())
+          )
+    `;
+    const [rows] = await connectionPool.execute(query, [
+        userId, canonicalCode, rawCode,
+        userId, canonicalCode, rawCode
+    ]);
+    return rows && rows.length > 0;
+}
+
+async function checkUserPermission(connectionPool, userId, permCode) {
+    if (!userId) return false;
+    const query = `
+        SELECT p.id, p.codigo, p.nombre
+        FROM usuario_roles ur
+        JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+        JOIN rol_permisos rp ON r.id = rp.rol_id
+        JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+        WHERE ur.usuario_id = ? AND p.codigo = ?
+    `;
+    const [rows] = await connectionPool.execute(query, [userId, permCode]);
+    return rows && rows.length > 0;
+}
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // Initialize tools dynamically for the chat
@@ -718,6 +821,47 @@ app.get('/api/menu', async (req, res) => {
         };
 
         const finalMenuTree = filterEmptyContainers(menuTree);
+
+        let proximo_vencimiento = null;
+        let proxima_activacion = null;
+
+        if (userId) {
+            try {
+                const [timingRows] = await pool.execute(`
+                    SELECT 
+                        MIN(CASE WHEN tipo_acceso = 'temporal' AND fecha_inicio <= NOW() AND fecha_fin > NOW() THEN fecha_fin END) AS proximo_vencimiento,
+                        MIN(CASE WHEN tipo_acceso = 'temporal' AND fecha_inicio > NOW() THEN fecha_inicio END) AS proxima_activacion
+                    FROM usuario_funcionalidades
+                    WHERE usuario_id = ? AND estado = 'activo'
+                `, [userId]);
+
+                if (timingRows && timingRows.length > 0) {
+                    if (timingRows[0].proximo_vencimiento) {
+                        const d = new Date(timingRows[0].proximo_vencimiento);
+                        if (!isNaN(d.getTime())) proximo_vencimiento = d.toISOString();
+                    }
+                    if (timingRows[0].proxima_activacion) {
+                        const d = new Date(timingRows[0].proxima_activacion);
+                        if (!isNaN(d.getTime())) proxima_activacion = d.toISOString();
+                    }
+                }
+            } catch (timingErr) {
+                // If timing calculation fails, log and continue returning menu
+                console.warn('Could not calculate timing metadata in /api/menu:', timingErr.message);
+            }
+        }
+
+        if (proximo_vencimiento) res.setHeader('X-Proximo-Vencimiento', proximo_vencimiento);
+        if (proxima_activacion) res.setHeader('X-Proxima-Activacion', proxima_activacion);
+
+        if (req.query.meta === 'true' || req.query.metadata === 'true') {
+            return res.status(200).json({
+                menu: finalMenuTree,
+                proximo_vencimiento,
+                proxima_activacion
+            });
+        }
+
         res.status(200).json(finalMenuTree);
 
     } catch (error) {
@@ -765,50 +909,83 @@ app.post('/api/logout', (req, res) => {
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
 
-const requireAdmin = async (req, res, next) => {
-    try {
-        const token = req.cookies.auth_token;
-        if (!token) {
-            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
+const requireFunctionality = (funcCode) => {
+    const canonicalCode = normalizeFunctionalityCode(funcCode);
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = req.cookies.auth_token;
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            const hasAccess = await checkUserFunctionalityAccess(pool, req.userId, canonicalCode);
+            if (!hasAccess) {
+                return res.status(403).json({
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                    code: 'RBAC_ACCESS_DENIED',
+                    funcionalidad: canonicalCode
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error(`Error in requireFunctionality (${canonicalCode}):`, error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
         }
-
-        const decoded = await verifyToken(token, pool);
-        const userId = decoded.id;
-
-        // Verify if user has the admin.access permission
-        const query = `
-            SELECT p.nombre
-            FROM usuario_roles ur
-            JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
-            JOIN rol_permisos rp ON r.id = rp.rol_id
-            JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
-            WHERE ur.usuario_id = ? AND p.codigo = 'admin.access'
-        `;
-        const [permissions] = await pool.execute(query, [userId]);
-
-        if (permissions.length === 0) {
-            return res.status(403).json({ error: 'Forbidden. No tienes permisos de administrador.' });
-        }
-
-        req.userId = userId;
-        next();
-    } catch (error) {
-        console.error('Error in admin middleware:', error);
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado') {
-             res.status(401).json({ error: 'Token inválido o expirado.' });
-        } else {
-             res.status(500).json({ error: 'Error interno del servidor.' });
-        }
-    }
+    };
 };
 
-app.get('/api/admin/check', requireAdmin, async (req, res) => {
+const requirePermission = (permCode) => {
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = req.cookies.auth_token;
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            const hasPermission = await checkUserPermission(pool, req.userId, permCode);
+            if (!hasPermission) {
+                return res.status(403).json({
+                    error: `Permiso denegado: se requiere ${permCode}`,
+                    code: 'RBAC_PERMISSION_DENIED',
+                    permiso: permCode
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error(`Error in requirePermission (${permCode}):`, error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
+        }
+    };
+};
+
+// requireAdmin: validates entry to the 'admin' functionality (Level 2)
+const requireAdmin = requireFunctionality('administracion');
+
+app.get('/api/admin/check', requireFunctionality('admin'), async (req, res) => {
     res.status(200).json({ message: 'Acceso de administrador concedido.' });
 });
 
 // --- ADMIN ENDPOINTS ---
 
-app.get('/api/admin/usuarios', requireAdmin, async (req, res) => {
+app.get('/api/admin/usuarios', requireFunctionality('admin'), requirePermission('usuarios.read'), async (req, res) => {
     try {
         const [usuarios] = await pool.execute('SELECT id, usuario, nombre, telefono, email FROM usuarios');
         res.status(200).json(usuarios);
@@ -819,16 +996,17 @@ app.get('/api/admin/usuarios', requireAdmin, async (req, res) => {
 });
 
 
-app.get('/api/admin/funcionalidades/:funcId/permisos_disponibles', requireAdmin, async (req, res) => {
+app.get('/api/admin/funcionalidades/:funcId/permisos_disponibles', requireFunctionality('admin'), requirePermission('funcionalidades.read'), async (req, res) => {
     try {
         const { funcId } = req.params;
         const [func] = await pool.execute('SELECT codigo FROM funcionalidades WHERE id = ?', [funcId]);
         if (func.length === 0) return res.status(404).json({ error: 'Funcionalidad no encontrada' });
 
-        const codigo = func[0].codigo.toLowerCase();
-        let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || [];
-        if (!FUNCIONALIDAD_PERMISOS_MAPPING[codigo] && !codigo.startsWith('admin')) {
-             permitidos = [`${codigo}.read`, `${codigo}.create`, `${codigo}.update`, `${codigo}.delete`];
+        const rawCodigo = func[0].codigo.toLowerCase();
+        const codigo = normalizeFunctionalityCode(rawCodigo);
+        let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || FUNCIONALIDAD_PERMISOS_MAPPING[rawCodigo] || [];
+        if (!permitidos.length && !codigo.startsWith('admin') && !codigo.startsWith('administra')) {
+             permitidos = [`${rawCodigo}.read`, `${rawCodigo}.create`, `${rawCodigo}.update`, `${rawCodigo}.delete`];
         }
 
         if (permitidos.length === 0) {
@@ -845,7 +1023,7 @@ app.get('/api/admin/funcionalidades/:funcId/permisos_disponibles', requireAdmin,
     }
 });
 
-app.get('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, res) => {
+app.get('/api/admin/funcionalidad_permisos/:funcId', requireFunctionality('admin'), requirePermission('funcionalidades.read'), async (req, res) => {
     try {
         const { funcId } = req.params;
         const [permisos] = await pool.execute('SELECT permiso_id FROM funcionalidad_permisos WHERE funcionalidad_id = ?', [funcId]);
@@ -856,7 +1034,7 @@ app.get('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, r
     }
 });
 
-app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, res) => {
+app.post('/api/admin/funcionalidad_permisos/:funcId', requireFunctionality('admin'), requirePermission('funcionalidades.update'), async (req, res) => {
     try {
         const { funcId } = req.params;
         const { permisos } = req.body; // Array of permission IDs
@@ -876,10 +1054,11 @@ app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, 
                 return res.status(404).json({ error: 'La funcionalidad proporcionada no existe.' });
             }
 
-            const codigo = func[0].codigo.toLowerCase();
-            let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || [];
-            if (!FUNCIONALIDAD_PERMISOS_MAPPING[codigo] && !codigo.startsWith('admin')) {
-                permitidos = [`${codigo}.read`, `${codigo}.create`, `${codigo}.update`, `${codigo}.delete`];
+            const rawCodigo = func[0].codigo.toLowerCase();
+            const codigo = normalizeFunctionalityCode(rawCodigo);
+            let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || FUNCIONALIDAD_PERMISOS_MAPPING[rawCodigo] || [];
+            if (!permitidos.length && !codigo.startsWith('admin') && !codigo.startsWith('administra')) {
+                permitidos = [`${rawCodigo}.read`, `${rawCodigo}.create`, `${rawCodigo}.update`, `${rawCodigo}.delete`];
             }
 
             if (permisos.length > 0) {
@@ -924,7 +1103,7 @@ app.post('/api/admin/funcionalidad_permisos/:funcId', requireAdmin, async (req, 
 });
 
 
-app.get('/api/admin/accesos', requireAdmin, async (req, res) => {
+app.get('/api/admin/accesos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const [accesos] = await pool.execute(`
             SELECT uf.*, u.nombre as usuario_nombre, f.nombre as funcionalidad_nombre, u2.nombre as asignado_por_nombre
@@ -941,7 +1120,7 @@ app.get('/api/admin/accesos', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/accesos', requireAdmin, async (req, res) => {
+app.post('/api/admin/accesos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { usuarios, funcionalidad_id, tipo_acceso, fecha_inicio, fecha_fin } = req.body;
 
@@ -975,9 +1154,12 @@ app.post('/api/admin/accesos', requireAdmin, async (req, res) => {
                    await connection.execute('UPDATE usuario_funcionalidades SET estado = "revocado" WHERE usuario_id = ? AND funcionalidad_id = ? AND estado = "activo"', [usuario_id, funcionalidad_id]);
                 }
 
+                const formattedInicio = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_inicio) : null;
+                const formattedFin = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_fin) : null;
+
                 await connection.execute(
                     'INSERT INTO usuario_funcionalidades (usuario_id, funcionalidad_id, tipo_acceso, fecha_inicio, fecha_fin, estado, asignado_por) VALUES (?, ?, ?, ?, ?, "activo", ?)',
-                    [usuario_id, funcionalidad_id, tipo_acceso, tipo_acceso === 'temporal' ? fecha_inicio : null, tipo_acceso === 'temporal' ? fecha_fin : null, asignado_por]
+                    [usuario_id, funcionalidad_id, tipo_acceso, formattedInicio, formattedFin, asignado_por]
                 );
             }
 
@@ -996,7 +1178,7 @@ app.post('/api/admin/accesos', requireAdmin, async (req, res) => {
 });
 
 
-app.put('/api/admin/accesos/:id', requireAdmin, async (req, res) => {
+app.put('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { id } = req.params;
         const { tipo_acceso, fecha_inicio, fecha_fin } = req.body;
@@ -1019,9 +1201,12 @@ app.put('/api/admin/accesos/:id', requireAdmin, async (req, res) => {
             return res.status(404).json({ error: 'Acceso no encontrado.' });
         }
 
+        const formattedInicio = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_inicio) : null;
+        const formattedFin = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_fin) : null;
+
         await pool.execute(
             'UPDATE usuario_funcionalidades SET tipo_acceso = ?, fecha_inicio = ?, fecha_fin = ? WHERE id = ?',
-            [tipo_acceso, tipo_acceso === 'temporal' ? fecha_inicio : null, tipo_acceso === 'temporal' ? fecha_fin : null, id]
+            [tipo_acceso, formattedInicio, formattedFin, id]
         );
         res.status(200).json({ message: 'Acceso actualizado exitosamente.' });
     } catch (error) {
@@ -1030,7 +1215,7 @@ app.put('/api/admin/accesos/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/admin/accesos/:id/revocar', requireAdmin, async (req, res) => {
+app.put('/api/admin/accesos/:id/revocar', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await pool.execute('UPDATE usuario_funcionalidades SET estado = "revocado" WHERE id = ?', [id]);
@@ -1045,7 +1230,7 @@ app.put('/api/admin/accesos/:id/revocar', requireAdmin, async (req, res) => {
 });
 
 
-app.post('/api/admin/usuarios', requireAdmin, async (req, res) => {
+app.post('/api/admin/usuarios', requireFunctionality('admin'), requirePermission('usuarios.create'), async (req, res) => {
     try {
         const { usuario, password, nombre, telefono, email } = req.body;
         if (!usuario || !password || !nombre || !email) {
@@ -1070,7 +1255,7 @@ app.post('/api/admin/usuarios', requireAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
+app.put('/api/admin/usuarios/:id', requireFunctionality('admin'), requirePermission('usuarios.update'), async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre, telefono, email } = req.body;
@@ -1101,7 +1286,7 @@ app.put('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/usuarios/:id', requireFunctionality('admin'), requirePermission('usuarios.delete'), async (req, res) => {
     try {
         const userIdToDelete = Number(req.params.id);
         const requestingUserId = req.userId;
@@ -1182,7 +1367,7 @@ app.delete('/api/admin/usuarios/:id', requireAdmin, async (req, res) => {
 });
 
 
-app.get('/api/admin/roles', requireAdmin, async (req, res) => {
+app.get('/api/admin/roles', requireFunctionality('admin'), requirePermission('roles.read'), async (req, res) => {
     try {
         const [roles] = await pool.execute('SELECT id, nombre, descripcion, activo FROM roles');
         res.status(200).json(roles);
@@ -1192,7 +1377,7 @@ app.get('/api/admin/roles', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/roles', requireAdmin, async (req, res) => {
+app.post('/api/admin/roles', requireFunctionality('admin'), requirePermission('roles.create'), async (req, res) => {
     try {
         const { nombre, descripcion, activo } = req.body;
         if (!nombre || !descripcion) {
@@ -1209,7 +1394,7 @@ app.post('/api/admin/roles', requireAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
+app.put('/api/admin/roles/:id', requireFunctionality('admin'), requirePermission('roles.update'), async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre, descripcion, activo } = req.body;
@@ -1278,7 +1463,7 @@ app.put('/api/admin/roles/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/admin/roles/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/roles/:id', requireFunctionality('admin'), requirePermission('roles.delete'), async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -1331,7 +1516,7 @@ app.delete('/api/admin/roles/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/admin/permisos', requireAdmin, async (req, res) => {
+app.get('/api/admin/permisos', requireFunctionality('admin'), requirePermission('permisos.read'), async (req, res) => {
     try {
         const [permisos] = await pool.execute('SELECT id, codigo, nombre, descripcion, activo FROM permisos');
         res.status(200).json(permisos);
@@ -1341,7 +1526,7 @@ app.get('/api/admin/permisos', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/permisos', requireAdmin, async (req, res) => {
+app.post('/api/admin/permisos', requireFunctionality('admin'), requirePermission('permisos.create'), async (req, res) => {
     try {
         const { codigo, nombre, descripcion, activo } = req.body;
         if (!codigo || !nombre || !descripcion) {
@@ -1364,7 +1549,7 @@ app.post('/api/admin/permisos', requireAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/admin/permisos/:id', requireAdmin, async (req, res) => {
+app.put('/api/admin/permisos/:id', requireFunctionality('admin'), requirePermission('permisos.update'), async (req, res) => {
     try {
         const { id } = req.params;
         const { codigo, nombre, descripcion, activo } = req.body;
@@ -1396,7 +1581,7 @@ app.put('/api/admin/permisos/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/admin/permisos/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/permisos/:id', requireFunctionality('admin'), requirePermission('permisos.delete'), async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -1423,7 +1608,7 @@ app.delete('/api/admin/permisos/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
+app.get('/api/admin/funcionalidades', requireFunctionality('admin'), requirePermission('funcionalidades.read'), async (req, res) => {
     try {
         const [funcionalidades] = await pool.execute('SELECT id, codigo, nombre, descripcion, ruta, activo FROM funcionalidades');
         res.status(200).json(funcionalidades);
@@ -1433,7 +1618,7 @@ app.get('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
+app.post('/api/admin/funcionalidades', requireFunctionality('admin'), requirePermission('funcionalidades.create'), async (req, res) => {
     try {
         const { codigo, nombre, descripcion, ruta, activo } = req.body;
         if (!codigo || !nombre || !descripcion) {
@@ -1456,7 +1641,7 @@ app.post('/api/admin/funcionalidades', requireAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
+app.put('/api/admin/funcionalidades/:id', requireFunctionality('admin'), requirePermission('funcionalidades.update'), async (req, res) => {
     try {
         const { id } = req.params;
         const { codigo, nombre, descripcion, ruta, activo } = req.body;
@@ -1481,7 +1666,7 @@ app.put('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/funcionalidades/:id', requireFunctionality('admin'), requirePermission('funcionalidades.delete'), async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -1508,7 +1693,7 @@ app.delete('/api/admin/funcionalidades/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/admin/menus', requireAdmin, async (req, res) => {
+app.get('/api/admin/menus', requireFunctionality('admin'), requirePermission('menus.read'), async (req, res) => {
     try {
         const [menus] = await pool.execute('SELECT id, nombre, funcionalidad_id, parent_id, orden, publico, activo FROM menu_items ORDER BY parent_id, orden');
         res.status(200).json(menus);
@@ -1518,7 +1703,7 @@ app.get('/api/admin/menus', requireAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/admin/menus/:id', requireAdmin, async (req, res) => {
+app.put('/api/admin/menus/:id', requireFunctionality('admin'), requirePermission('menus.update'), async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre, funcionalidad_id, parent_id, orden, publico, activo } = req.body;
@@ -1557,7 +1742,7 @@ app.put('/api/admin/menus/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/menus', requireAdmin, async (req, res) => {
+app.post('/api/admin/menus', requireFunctionality('admin'), requirePermission('menus.create'), async (req, res) => {
     try {
         const { nombre, funcionalidad_id, parent_id, orden, publico, activo } = req.body;
 
@@ -1590,7 +1775,7 @@ app.post('/api/admin/menus', requireAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/admin/menus/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/menus/:id', requireFunctionality('admin'), requirePermission('menus.delete'), async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -1613,7 +1798,7 @@ app.delete('/api/admin/menus/:id', requireAdmin, async (req, res) => {
 });
 
 
-app.get('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
+app.get('/api/admin/usuario_roles/:userId', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { userId } = req.params;
         const [roles] = await pool.execute('SELECT rol_id FROM usuario_roles WHERE usuario_id = ?', [userId]);
@@ -1624,7 +1809,7 @@ app.get('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
+app.post('/api/admin/usuario_roles/:userId', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { userId } = req.params;
         const { roles } = req.body; // Array of role IDs
@@ -1701,7 +1886,7 @@ app.post('/api/admin/usuario_roles/:userId', requireAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
+app.get('/api/admin/rol_permisos/:rolId', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { rolId } = req.params;
         const [permisos] = await pool.execute('SELECT permiso_id FROM rol_permisos WHERE rol_id = ?', [rolId]);
@@ -1712,7 +1897,7 @@ app.get('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/rol_permisos/:rolId', requireAdmin, async (req, res) => {
+app.post('/api/admin/rol_permisos/:rolId', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { rolId } = req.params;
         const { permisos } = req.body; // Array of permission IDs
@@ -1866,16 +2051,9 @@ app.get('/api/knowledge', async (req, res) => {
     }
 });
 
-app.get('/api/ideas', async (req, res) => {
+app.get('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
     try {
-        const token = req.cookies.auth_token;
-        if (!token) {
-            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
-        }
-
-        const secret = process.env.AUTH_SECRET;
-        const decoded = await verifyToken(token, pool);
-        const usuario_id = decoded.id;
+        const usuario_id = req.userId;
 
         const [ideas] = await pool.execute(
             'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
@@ -1885,20 +2063,13 @@ app.get('/api/ideas', async (req, res) => {
         res.status(200).json({ ideas });
     } catch (error) {
         console.error('Error in /api/ideas (GET):', error);
-        res.status(401).json({ error: 'Token inválido o error al obtener ideas.' });
+        res.status(500).json({ error: 'Error al obtener ideas.' });
     }
 });
 
-app.post('/api/ideas', async (req, res) => {
+app.post('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.create'), async (req, res) => {
     try {
-        const token = req.cookies.auth_token;
-        if (!token) {
-            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
-        }
-
-        const secret = process.env.AUTH_SECRET;
-        const decoded = await verifyToken(token, pool);
-        const usuario_id = decoded.id;
+        const usuario_id = req.userId;
 
         let { titulo, descripcion, estado } = req.body;
 
@@ -1951,16 +2122,9 @@ app.post('/api/ideas', async (req, res) => {
 });
 
 
-app.delete('/api/ideas/:id', async (req, res) => {
+app.delete('/api/ideas/:id', requireFunctionality('ideas'), requirePermission('ideas.delete'), async (req, res) => {
     try {
-        const token = req.cookies.auth_token;
-        if (!token) {
-            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
-        }
-
-        const secret = process.env.AUTH_SECRET;
-        const decoded = await verifyToken(token, pool);
-        const usuario_id = decoded.id;
+        const usuario_id = req.userId;
         const idea_id = req.params.id;
 
         if (!idea_id || isNaN(idea_id)) {
@@ -1988,16 +2152,9 @@ app.delete('/api/ideas/:id', async (req, res) => {
     }
 });
 
-app.put('/api/ideas/:id/estado', async (req, res) => {
+app.put('/api/ideas/:id/estado', requireFunctionality('ideas'), requirePermission('ideas.update'), async (req, res) => {
     try {
-        const token = req.cookies.auth_token;
-        if (!token) {
-            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.' });
-        }
-
-        const secret = process.env.AUTH_SECRET;
-        const decoded = await verifyToken(token, pool);
-        const usuario_id = decoded.id;
+        const usuario_id = req.userId;
         const idea_id = req.params.id;
         const { estado } = req.body;
 
@@ -2027,3 +2184,16 @@ app.put('/api/ideas/:id/estado', async (req, res) => {
 });
 
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        app,
+        initMailTransporter,
+        normalizeFunctionalityCode,
+        checkUserFunctionalityAccess,
+        checkUserPermission,
+        requireFunctionality,
+        FUNCIONALIDAD_CODE_ALIASES
+    };
+}
+
