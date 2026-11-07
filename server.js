@@ -1196,9 +1196,13 @@ app.put('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermissi
              }
         }
 
-        const [existing] = await pool.execute('SELECT id FROM usuario_funcionalidades WHERE id = ?', [id]);
+        const [existing] = await pool.execute('SELECT id, estado FROM usuario_funcionalidades WHERE id = ?', [id]);
         if (existing.length === 0) {
             return res.status(404).json({ error: 'Acceso no encontrado.' });
+        }
+
+        if (existing[0].estado === 'revocado') {
+            return res.status(400).json({ error: 'No se puede editar un acceso con estatus revocado.' });
         }
 
         const formattedInicio = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_inicio) : null;
@@ -1226,6 +1230,38 @@ app.put('/api/admin/accesos/:id/revocar', requireFunctionality('admin'), require
     } catch (error) {
          console.error('Error in PUT /api/admin/accesos/:id/revocar:', error);
          res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.delete('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [existing] = await pool.execute(
+            'SELECT id, estado, tipo_acceso, fecha_inicio, fecha_fin, (fecha_fin < NOW()) AS is_vencido FROM usuario_funcionalidades WHERE id = ?',
+            [id]
+        );
+
+        if (existing.length === 0) {
+            return res.status(404).json({ error: 'Acceso no encontrado.' });
+        }
+
+        const acceso = existing[0];
+        const isRevocado = acceso.estado === 'revocado';
+        const isVencido = acceso.tipo_acceso === 'temporal' && (
+            Boolean(acceso.is_vencido) || (acceso.fecha_fin && new Date(acceso.fecha_fin).getTime() < Date.now())
+        );
+
+        if (!isRevocado && !isVencido) {
+            return res.status(400).json({
+                error: 'Solo se pueden eliminar accesos temporales con estatus vencido o revocado.'
+            });
+        }
+
+        await pool.execute('DELETE FROM usuario_funcionalidades WHERE id = ?', [id]);
+        res.status(200).json({ message: 'Acceso temporal eliminado exitosamente.' });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/accesos/:id:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 
