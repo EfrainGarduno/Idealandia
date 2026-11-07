@@ -813,6 +813,146 @@
             window.threeClock = null;
             window.avatarInitId = 0; // Prevent race conditions
 
+            // =========================================================================
+            // Gestor de Contexto en Memoria para Idealita (Manual, Usuario e Ideas)
+            // =========================================================================
+            window.idealitaContext = {
+                manual: null,       // Texto en caché de /docs/idealandia_manual.md
+                ideas: null,        // Lista de ideas del usuario autenticado (Array o null)
+                userId: null,       // ID del usuario asociado a las ideas en memoria
+                user: null,         // Datos del usuario autenticado
+                status: 'idle',     // 'idle' | 'loading' | 'ready' | 'error'
+                loadPromise: null   // Promesa en vuelo para evitar cargas concurrentes duplicadas
+            };
+            window.cachedManualText = null;
+
+            function clearIdealitaUserContext() {
+                window.idealitaContext.ideas = null;
+                window.idealitaContext.userId = null;
+                window.idealitaContext.user = null;
+                window.idealitaContext.status = 'idle';
+                window.idealitaContext.loadPromise = null;
+            }
+
+            function syncIdealitaIdeas(ideas) {
+                if (Array.isArray(ideas)) {
+                    window.idealitaContext.ideas = ideas;
+                    if (window.currentUser) {
+                        window.idealitaContext.userId = window.currentUser.id || window.currentUser.usuario;
+                        window.idealitaContext.user = window.currentUser;
+                    }
+                }
+            }
+
+            async function loadIdealitaContext(forceReload = false) {
+                if (window.idealitaContext.loadPromise && !forceReload) {
+                    return window.idealitaContext.loadPromise;
+                }
+
+                window.idealitaContext.loadPromise = (async () => {
+                    window.idealitaContext.status = 'loading';
+
+                    // 1. Cargar el manual si no está en memoria
+                    if (!window.idealitaContext.manual || forceReload) {
+                        try {
+                            const manualRes = await fetch('/docs/idealandia_manual.md');
+                            if (manualRes.ok) {
+                                window.idealitaContext.manual = await manualRes.text();
+                                window.cachedManualText = window.idealitaContext.manual;
+                                console.log("Manual de Idealandia cargado en memoria.");
+                            } else {
+                                console.warn("No se pudo obtener el manual (no ok).");
+                            }
+                        } catch (e) {
+                            console.error("Excepción al cargar el manual en memoria:", e);
+                        }
+                    }
+
+                    // 2. Cargar ideas si hay usuario autenticado
+                    if (window.currentUser) {
+                        const currentUserId = window.currentUser.id || window.currentUser.usuario;
+                        if (window.idealitaContext.ideas !== null && window.idealitaContext.userId === currentUserId && !forceReload) {
+                            console.log("Ideas del usuario ya disponibles en memoria.");
+                        } else {
+                            try {
+                                const ideasRes = await fetch('/api/ideas');
+                                if (ideasRes.ok) {
+                                    const ideasData = await ideasRes.json();
+                                    window.idealitaContext.ideas = Array.isArray(ideasData.ideas) ? ideasData.ideas : [];
+                                    window.idealitaContext.userId = currentUserId;
+                                    window.idealitaContext.user = window.currentUser;
+                                    console.log(`Se cargaron ${window.idealitaContext.ideas.length} ideas en memoria para el usuario ${currentUserId}.`);
+                                } else {
+                                    console.warn("No se pudieron obtener las ideas (no ok).");
+                                    window.idealitaContext.ideas = null;
+                                    window.idealitaContext.userId = null;
+                                }
+                            } catch (e) {
+                                console.error("Excepción al cargar ideas en memoria:", e);
+                            }
+                        }
+                    } else {
+                        // Usuario no autenticado: asegurar que no haya ideas de ningún usuario anterior
+                        window.idealitaContext.ideas = null;
+                        window.idealitaContext.userId = null;
+                        window.idealitaContext.user = null;
+                    }
+
+                    window.idealitaContext.status = 'ready';
+                    return window.idealitaContext;
+                })().finally(() => {
+                    window.idealitaContext.loadPromise = null;
+                });
+
+                return window.idealitaContext.loadPromise;
+            }
+
+            function buildIdealitaContextText() {
+                let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
+
+                // 1. Manual de Idealandia
+                const manual = window.idealitaContext.manual || window.cachedManualText;
+                if (manual) {
+                    contextText += "--- MANUAL IDEALANDIA ---\n" + manual + "\n\n";
+                    console.log("Manual de Idealandia cargado en el contexto desde memoria.");
+                } else {
+                    contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
+                }
+
+                // 2. Información del usuario e ideas
+                if (window.currentUser) {
+                    const userName = window.currentUser.nombre || window.currentUser.usuario;
+                    contextText += `--- INFORMACIÓN DEL USUARIO ---\nEl usuario autenticado es: ${userName}\n\n`;
+                    console.log("Usuario autenticado añadido al contexto.");
+
+                    const ideas = window.idealitaContext.ideas;
+                    if (ideas && ideas.length > 0) {
+                        contextText += "--- IDEAS DEL USUARIO ---\nAquí están las ideas registradas de este usuario:\n";
+                        ideas.forEach(idea => {
+                            contextText += `- ID: ${idea.id || 'N/A'}, Título: "${idea.titulo || ''}", Estado: "${idea.estado || ''}", Descripción: "${idea.descripcion || ''}"\n`;
+                        });
+                        console.log(`Se incluyeron ${ideas.length} ideas en el contexto inicial desde memoria.`);
+                    } else if (ideas && ideas.length === 0) {
+                        contextText += "El usuario autenticado no tiene ideas registradas actualmente.\n";
+                        console.log("El usuario no tiene ideas registradas.");
+                    } else {
+                        contextText += "No se pudieron obtener las ideas del usuario.\n";
+                        console.warn("No se pudieron obtener las ideas (no ok).");
+                    }
+                } else {
+                    contextText += "El usuario actual NO está autenticado. No se dispone de datos de usuario ni ideas.\n";
+                    console.log("Usuario no autenticado, se omiten ideas en el contexto inicial.");
+                }
+
+                return contextText;
+            }
+
+            // Exponer helpers en window para pruebas y sincronización externa
+            window.loadIdealitaContext = loadIdealitaContext;
+            window.clearIdealitaUserContext = clearIdealitaUserContext;
+            window.syncIdealitaIdeas = syncIdealitaIdeas;
+            window.buildIdealitaContextText = buildIdealitaContextText;
+
             let renderer, scene, camera;
 
             function applyIdealitaRestPose(vrm) {
@@ -1324,6 +1464,14 @@
                     if (response.ok) {
                         const data = await response.json();
                         const user = data.user;
+                        const prevUserId = window.currentUser ? (window.currentUser.id || window.currentUser.usuario) : null;
+                        const nextUserId = user ? (user.id || user.usuario) : null;
+
+                        // Si cambia de usuario en la misma pestaña, limpiar el contexto del anterior
+                        if (prevUserId && prevUserId !== nextUserId) {
+                            clearIdealitaUserContext();
+                        }
+
                         window.currentUser = user;
                         document.getElementById('auth-container-guest').style.display = 'none';
                         document.getElementById('auth-container-user').style.display = 'flex';
@@ -1333,7 +1481,11 @@
                         document.getElementById('auth-container-user').style.display = 'none';
                         document.getElementById('user-greeting').textContent = '';
                         window.currentUser = null;
+                        clearIdealitaUserContext();
                     }
+
+                    // Cargar contexto de Idealita en memoria tras determinar la sesión
+                    loadIdealitaContext();
 
                     // Build menu after determining auth status
                     await buildMenu();
@@ -1355,6 +1507,7 @@
                     try {
                         const response = await fetch('/api/logout', { method: 'POST' });
                         if (response.ok) {
+                            clearIdealitaUserContext();
                             // Terminate live session so context gets cleared
                             if (typeof stopLive === 'function') {
                                 stopLive();
@@ -1792,6 +1945,7 @@
                     const data = await response.json();
 
                     if (response.ok) {
+                        clearIdealitaUserContext();
                         showModal(data.message);
                         document.getElementById('login-usuario').value = '';
                         document.getElementById('login-password').value = '';
@@ -1918,6 +2072,7 @@
                     if (response.ok) {
                         const data = await response.json();
                         const ideas = data.ideas;
+                        syncIdealitaIdeas(ideas);
 
                         if (ideas.length === 0) {
                             ideasMessage.textContent = 'Aún no tienes ideas guardadas.';
@@ -1981,6 +2136,10 @@
                                         });
                                         const data = await res.json();
                                         if (res.ok) {
+                                            if (window.idealitaContext && window.idealitaContext.ideas) {
+                                                const cached = window.idealitaContext.ideas.find(i => i.id === idea.id);
+                                                if (cached) cached.estado = nuevoEstado;
+                                            }
                                             showModal('Estado de la idea actualizado correctamente.');
                                             fetchAndDisplayIdeas();
                                         } else {
@@ -2027,6 +2186,9 @@
                                                 });
                                                 const data = await res.json();
                                                 if (res.ok) {
+                                                    if (window.idealitaContext && window.idealitaContext.ideas) {
+                                                        window.idealitaContext.ideas = window.idealitaContext.ideas.filter(i => i.id !== idea.id);
+                                                    }
                                                     showModal('Idea eliminada correctamente.');
                                                     fetchAndDisplayIdeas();
                                                 } else {
@@ -2556,67 +2718,17 @@
                             isSetupComplete = true;
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
-                            // Send Initial identity, manual and ideas messages once setup is complete
+                            // Send Initial identity, manual and ideas messages once setup is complete using in-memory context
                             try {
                                 console.time('LiveContextLoad');
-                                let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 
-                                // 1. Cargar el manual (optimizado con caché)
-                                try {
-                                    if (!window.cachedManualText) {
-                                        const manualRes = await fetch('/docs/idealandia_manual.md');
-                                        if (manualRes.ok) {
-                                            window.cachedManualText = await manualRes.text();
-                                        } else {
-                                            console.warn("No se pudo obtener el manual (no ok).");
-                                        }
-                                    }
-
-                                    if (window.cachedManualText) {
-                                        contextText += "--- MANUAL IDEALANDIA ---\n" + window.cachedManualText + "\n\n";
-                                        console.log("Manual de Idealandia cargado en el contexto desde caché.");
-                                    } else {
-                                        contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
-                                    }
-                                } catch (e) {
-                                    console.error("Excepción al cargar el manual:", e);
-                                    contextText += "Error al cargar el manual de Idealandia.\n\n";
+                                // Asegurar que el contexto en memoria esté cargado sin hacer peticiones duplicadas
+                                if (!window.idealitaContext.manual || (window.currentUser && window.idealitaContext.ideas === null)) {
+                                    await loadIdealitaContext();
                                 }
 
-                                // 2. Cargar usuario e ideas
-                                if (window.currentUser) {
-                                    const userName = window.currentUser.nombre || window.currentUser.usuario;
-                                    contextText += `--- INFORMACIÓN DEL USUARIO ---\nEl usuario autenticado es: ${userName}\n\n`;
-                                    console.log("Usuario autenticado añadido al contexto.");
+                                const contextText = buildIdealitaContextText();
 
-                                    try {
-                                        const ideasRes = await fetch('/api/ideas');
-                                        if (ideasRes.ok) {
-                                            const ideasData = await ideasRes.json();
-                                            if (ideasData.ideas && ideasData.ideas.length > 0) {
-                                                contextText += "--- IDEAS DEL USUARIO ---\nAquí están las ideas registradas de este usuario:\n";
-                                                ideasData.ideas.forEach(idea => {
-                                                    contextText += `- ID: ${idea.id || 'N/A'}, Título: "${idea.titulo || ''}", Estado: "${idea.estado || ''}", Descripción: "${idea.descripcion || ''}"\n`;
-                                                });
-                                                console.log(`Se cargaron ${ideasData.ideas.length} ideas en el contexto inicial.`);
-                                            } else {
-                                                contextText += "El usuario autenticado no tiene ideas registradas actualmente.\n";
-                                                console.log("El usuario no tiene ideas registradas.");
-                                            }
-                                        } else {
-                                            contextText += "No se pudieron obtener las ideas del usuario.\n";
-                                            console.warn("No se pudieron obtener las ideas (no ok).");
-                                        }
-                                    } catch(e) {
-                                        console.error("Excepción al cargar ideas:", e);
-                                        contextText += "Ocurrió un error al cargar las ideas del usuario.\n";
-                                    }
-                                } else {
-                                    contextText += "El usuario actual NO está autenticado. No se dispone de datos de usuario ni ideas.\n";
-                                    console.log("Usuario no autenticado, se omiten ideas en el contexto inicial.");
-                                }
-
-                                // 3. Enviar todo el contexto junto
                                 liveWebSocket.send(JSON.stringify({
                                     clientContent: {
                                         turns: [{ role: "user", parts: [{ text: contextText }] }],
@@ -2892,9 +3004,10 @@
                 }
 
                 if(btnMuteMic) btnMuteMic.style.display = 'none';
-
-
             }
+
+            window.startLive = startLive;
+            window.stopLive = stopLive;
 
             if (btnStartLive) {
                 btnStartLive.addEventListener('click', async () => {
