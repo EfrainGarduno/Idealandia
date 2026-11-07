@@ -24,6 +24,61 @@ function escapeHTML(str) {
     );
 }
 
+/**
+ * Crea un botón de acción homogéneo y accesible para las tablas administrativas.
+ * @param {Object} options
+ * @param {string} options.type - Tipo de acción (edit, delete, revoke, toggle-active, toggle-inactive, perms, default)
+ * @param {string} options.icon - Clase de FontAwesome
+ * @param {string} options.title - Texto descriptivo para tooltip y aria-label
+ * @param {string} [options.srText] - Texto para lectores de pantalla y pruebas
+ * @param {boolean} [options.disabled=false] - Si el botón debe estar deshabilitado
+ * @param {string} [options.disabledTitle] - Tooltip alternativo para cuando está deshabilitado
+ * @param {Function} [options.onClick] - Manejador de clic
+ * @param {string} [options.className] - Clases adicionales
+ * @returns {HTMLButtonElement}
+ */
+function createAdminActionButton({
+    type = "default",
+    icon,
+    title,
+    srText,
+    disabled = false,
+    disabledTitle,
+    onClick,
+    className = ""
+}) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `admin-action-btn admin-action-btn--${type} ${className}`.trim();
+
+    const finalTitle = disabled && disabledTitle ? disabledTitle : title;
+    btn.title = finalTitle;
+    btn.setAttribute("aria-label", finalTitle);
+
+    const screenReaderLabel = srText || title;
+    btn.innerHTML = `<i class="${icon}" aria-hidden="true"></i><span class="sr-only">${escapeHTML(screenReaderLabel)}</span>`;
+
+    if (disabled) {
+        btn.disabled = true;
+        btn.classList.add("disabled");
+        btn.style.cursor = "not-allowed";
+    } else if (typeof onClick === "function") {
+        btn.onclick = onClick;
+    }
+
+    return btn;
+}
+
+/**
+ * Crea un contenedor agrupador para la barra compacta de acciones.
+ * @returns {HTMLDivElement}
+ */
+function createAdminActionsGroup() {
+    const group = document.createElement("div");
+    group.className = "admin-actions-group";
+    return group;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const adminSection = document.getElementById('admin');
 
@@ -96,45 +151,54 @@ async function loadUsuarios() {
             // Roles (fetch explicitly)
             td = document.createElement('td');
             const rolesBtn = document.createElement('button');
-            rolesBtn.textContent = 'Ver/Editar Roles';
-            rolesBtn.className = 'btn btn-secondary btn-sm';
+            rolesBtn.type = 'button';
+            rolesBtn.className = 'admin-pill-btn';
+            rolesBtn.title = `Gestionar roles de ${escapeHTML(u.usuario)}`;
+            rolesBtn.innerHTML = `<i class="fas fa-user-shield" aria-hidden="true"></i><span>Roles</span>`;
             rolesBtn.onclick = () => showEditRolesModal(u.id, u.usuario);
             td.appendChild(rolesBtn);
             tr.appendChild(td);
 
             // Acciones
             td = document.createElement('td');
+            td.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
 
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Editar';
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar usuario',
+                srText: 'Editar',
+                onClick: () => showEditUsuarioModal(u)
+            });
+            actionsGroup.appendChild(editBtn);
 
-            editBtn.className = 'btn btn-primary btn-sm';
-            editBtn.onclick = () => showEditUsuarioModal(u);
-            td.appendChild(editBtn);
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'Eliminar';
-            deleteBtn.className = 'btn btn-secondary btn-sm';
-            deleteBtn.style.marginLeft = '5px';
-            deleteBtn.onclick = async () => {
-                const confirmed = await window.showConfirm(`¿Estás seguro de que deseas eliminar al usuario ${u.usuario}?`);
-                if (confirmed) {
-                    try {
-                        const res = await fetch(`/api/admin/usuarios/${u.id}`, { method: 'DELETE' });
-                        const data = await res.json();
-                        if (res.ok) {
-                            window.showModal('Usuario eliminado exitosamente.');
-                            loadUsuarios();
-                        } else {
-                            window.showModal(`Error: ${data.error}`);
+            const deleteBtn = createAdminActionButton({
+                type: 'delete',
+                icon: 'fas fa-trash-can',
+                title: 'Eliminar usuario',
+                srText: 'Eliminar',
+                onClick: async () => {
+                    const confirmed = await window.showConfirm(`¿Estás seguro de que deseas eliminar al usuario ${u.usuario}?`);
+                    if (confirmed) {
+                        try {
+                            const res = await fetch(`/api/admin/usuarios/${u.id}`, { method: 'DELETE' });
+                            const data = await res.json();
+                            if (res.ok) {
+                                window.showModal('Usuario eliminado exitosamente.');
+                                loadUsuarios();
+                            } else {
+                                window.showModal(`Error: ${data.error}`);
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            window.showModal('Error al eliminar usuario.');
                         }
-                    } catch (e) {
-                        console.error(e);
-                        window.showModal('Error al eliminar usuario.');
                     }
                 }
-            };
-            td.appendChild(deleteBtn);
+            });
+            actionsGroup.appendChild(deleteBtn);
+            td.appendChild(actionsGroup);
 
             tr.appendChild(td);
 
@@ -170,28 +234,37 @@ async function loadRoles() {
             // Permisos (fetch explicitly)
             td = document.createElement('td');
             const permBtn = document.createElement('button');
-            permBtn.textContent = 'Ver/Editar Permisos';
-            permBtn.className = 'btn btn-secondary btn-sm';
+            permBtn.type = 'button';
+            permBtn.className = 'admin-pill-btn';
+            permBtn.title = `Gestionar permisos del rol ${escapeHTML(r.nombre)}`;
+            permBtn.innerHTML = `<i class="fas fa-shield-alt" aria-hidden="true"></i><span>Permisos</span>`;
             permBtn.onclick = () => showEditPermisosModal(r.id, r.nombre);
             td.appendChild(permBtn);
             tr.appendChild(td);
 
             // Acciones
             td = document.createElement('td');
+            td.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
 
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Editar';
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar rol',
+                srText: 'Editar',
+                onClick: () => showEditRolModal(r)
+            });
+            actionsGroup.appendChild(editBtn);
 
-            editBtn.className = 'btn btn-primary btn-sm';
-            editBtn.style.marginRight = '5px';
-            editBtn.onclick = () => showEditRolModal(r);
-            td.appendChild(editBtn);
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'Eliminar';
-            deleteBtn.className = 'btn btn-danger btn-sm';
-            deleteBtn.onclick = () => showDeleteRolModal(r);
-            td.appendChild(deleteBtn);
+            const deleteBtn = createAdminActionButton({
+                type: 'delete',
+                icon: 'fas fa-trash-can',
+                title: 'Eliminar rol',
+                srText: 'Eliminar',
+                onClick: () => showDeleteRolModal(r)
+            });
+            actionsGroup.appendChild(deleteBtn);
+            td.appendChild(actionsGroup);
 
             tr.appendChild(td);
 
@@ -222,19 +295,27 @@ async function loadPermisos() {
             td = document.createElement('td'); td.textContent = p.activo ? 'Sí' : 'No'; tr.appendChild(td);
 
             td = document.createElement('td');
+            td.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
 
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Editar';
-            editBtn.className = 'btn btn-secondary';
-            editBtn.style.marginRight = '5px';
-            editBtn.onclick = () => showEditPermisoModal(p);
-            td.appendChild(editBtn);
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar permiso',
+                srText: 'Editar',
+                onClick: () => showEditPermisoModal(p)
+            });
+            actionsGroup.appendChild(editBtn);
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'Eliminar';
-            deleteBtn.className = 'btn btn-danger';
-            deleteBtn.onclick = () => showDeletePermisoModal(p);
-            td.appendChild(deleteBtn);
+            const deleteBtn = createAdminActionButton({
+                type: 'delete',
+                icon: 'fas fa-trash-can',
+                title: 'Eliminar permiso',
+                srText: 'Eliminar',
+                onClick: () => showDeletePermisoModal(p)
+            });
+            actionsGroup.appendChild(deleteBtn);
+            td.appendChild(actionsGroup);
 
             tr.appendChild(td);
 
@@ -299,40 +380,45 @@ async function loadAccesos() {
             td = document.createElement('td'); td.textContent = a.asignado_por_nombre || 'N/A'; tr.appendChild(td);
 
             td = document.createElement('td');
+            td.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
 
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Editar';
-            editBtn.className = 'btn btn-secondary btn-sm';
-            editBtn.style.marginRight = '5px';
-            if (a.estado === 'revocado') {
-                editBtn.disabled = true;
-                editBtn.classList.add('disabled');
-                editBtn.style.cursor = 'not-allowed';
-                editBtn.style.opacity = '0.5';
-                editBtn.title = 'No se puede editar un acceso revocado';
-            } else {
-                editBtn.onclick = () => showEditAccesoModal(a);
-            }
-            td.appendChild(editBtn);
+            const isRevocado = a.estado === 'revocado';
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar acceso temporal',
+                srText: 'Editar',
+                disabled: isRevocado,
+                disabledTitle: 'No se puede editar un acceso revocado',
+                onClick: () => showEditAccesoModal(a)
+            });
+            actionsGroup.appendChild(editBtn);
 
             if (a.estado === 'activo') {
-                const revokeBtn = document.createElement('button');
-                revokeBtn.textContent = 'Revocar';
-                revokeBtn.className = 'btn btn-danger btn-sm';
-                revokeBtn.style.marginRight = '5px';
-                revokeBtn.onclick = () => showRevokeAccesoModal(a);
-                td.appendChild(revokeBtn);
+                const revokeBtn = createAdminActionButton({
+                    type: 'revoke',
+                    icon: 'fas fa-ban',
+                    title: 'Revocar acceso',
+                    srText: 'Revocar',
+                    onClick: () => showRevokeAccesoModal(a)
+                });
+                actionsGroup.appendChild(revokeBtn);
             }
 
             // Botón Eliminar: SOLO se muestra en las filas cuyo estado permita eliminar (Vencido o Revocado)
-            const canDelete = (a.estado === 'revocado') || (computedEstado === 'expirado');
+            const canDelete = isRevocado || (computedEstado === 'expirado');
             if (canDelete) {
-                const deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'Eliminar';
-                deleteBtn.className = 'btn btn-danger btn-sm';
-                deleteBtn.onclick = () => showDeleteAccesoModal(a);
-                td.appendChild(deleteBtn);
+                const deleteBtn = createAdminActionButton({
+                    type: 'delete',
+                    icon: 'fas fa-trash-can',
+                    title: 'Eliminar acceso temporal',
+                    srText: 'Eliminar',
+                    onClick: () => showDeleteAccesoModal(a)
+                });
+                actionsGroup.appendChild(deleteBtn);
             }
+            td.appendChild(actionsGroup);
             tr.appendChild(td);
             tbody.appendChild(tr);
         }
@@ -557,26 +643,36 @@ async function loadFuncionalidades() {
 
 
             td = document.createElement('td');
+            td.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
 
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Editar';
-            editBtn.className = 'btn btn-primary btn-sm';
-            editBtn.style.marginRight = '5px';
-            editBtn.onclick = () => showEditFuncionalidadModal(f);
-            td.appendChild(editBtn);
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar funcionalidad',
+                srText: 'Editar',
+                onClick: () => showEditFuncionalidadModal(f)
+            });
+            actionsGroup.appendChild(editBtn);
 
-            const permBtn = document.createElement('button');
-            permBtn.textContent = 'Permisos';
-            permBtn.className = 'btn btn-secondary btn-sm';
-            permBtn.style.marginRight = '5px';
-            permBtn.onclick = () => showEditFuncPermisosModal(f.id, f.nombre);
-            td.appendChild(permBtn);
+            const permBtn = createAdminActionButton({
+                type: 'perms',
+                icon: 'fas fa-shield-alt',
+                title: 'Gestionar permisos asociados',
+                srText: 'Permisos',
+                onClick: () => showEditFuncPermisosModal(f.id, f.nombre)
+            });
+            actionsGroup.appendChild(permBtn);
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'Eliminar';
-            deleteBtn.className = 'btn btn-danger btn-sm';
-            deleteBtn.onclick = () => showDeleteFuncionalidadModal(f);
-            td.appendChild(deleteBtn);
+            const deleteBtn = createAdminActionButton({
+                type: 'delete',
+                icon: 'fas fa-trash-can',
+                title: 'Eliminar funcionalidad',
+                srText: 'Eliminar',
+                onClick: () => showDeleteFuncionalidadModal(f)
+            });
+            actionsGroup.appendChild(deleteBtn);
+            td.appendChild(actionsGroup);
 
             tr.appendChild(td);
 
@@ -609,44 +705,54 @@ async function loadMenus() {
             td = document.createElement('td'); td.textContent = m.activo ? 'Sí' : 'No'; tr.appendChild(td);
 
             td = document.createElement('td');
+            td.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
 
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Editar';
-            editBtn.className = 'btn btn-primary btn-sm';
-            editBtn.style.marginRight = '5px';
-            editBtn.onclick = () => showEditMenuModal(m);
-            td.appendChild(editBtn);
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar menú',
+                srText: 'Editar',
+                onClick: () => showEditMenuModal(m)
+            });
+            actionsGroup.appendChild(editBtn);
 
-            const toggleBtn = document.createElement('button');
-            toggleBtn.textContent = m.activo ? 'Desactivar' : 'Activar';
-            toggleBtn.className = m.activo ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm';
-            toggleBtn.style.marginRight = '5px';
-            toggleBtn.onclick = async () => {
-                try {
-                    const res = await fetch(`/api/admin/menus/${m.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...m, activo: !m.activo })
-                    });
-                    if (res.ok) {
-                        window.showModal(`Menú ${m.activo ? 'desactivado' : 'activado'}.`);
-                        loadMenus();
-                    } else {
-                        const data = await res.json();
-                        window.showModal(`Error: ${data.error}`);
+            const toggleBtn = createAdminActionButton({
+                type: m.activo ? 'toggle-active' : 'toggle-inactive',
+                icon: m.activo ? 'fas fa-toggle-on' : 'fas fa-toggle-off',
+                title: m.activo ? 'Desactivar menú' : 'Activar menú',
+                srText: m.activo ? 'Desactivar' : 'Activar',
+                onClick: async () => {
+                    try {
+                        const res = await fetch(`/api/admin/menus/${m.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...m, activo: !m.activo })
+                        });
+                        if (res.ok) {
+                            window.showModal(`Menú ${m.activo ? 'desactivado' : 'activado'}.`);
+                            loadMenus();
+                        } else {
+                            const data = await res.json();
+                            window.showModal(`Error: ${data.error}`);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        window.showModal('Error al cambiar estado del menú.');
                     }
-                } catch (e) {
-                    console.error(e);
-                    window.showModal('Error al cambiar estado del menú.');
                 }
-            };
-            td.appendChild(toggleBtn);
+            });
+            actionsGroup.appendChild(toggleBtn);
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'Eliminar';
-            deleteBtn.className = 'btn btn-danger btn-sm';
-            deleteBtn.onclick = () => showDeleteMenuModal(m);
-            td.appendChild(deleteBtn);
+            const deleteBtn = createAdminActionButton({
+                type: 'delete',
+                icon: 'fas fa-trash-can',
+                title: 'Eliminar menú',
+                srText: 'Eliminar',
+                onClick: () => showDeleteMenuModal(m)
+            });
+            actionsGroup.appendChild(deleteBtn);
+            td.appendChild(actionsGroup);
 
             tr.appendChild(td);
             tbody.appendChild(tr);

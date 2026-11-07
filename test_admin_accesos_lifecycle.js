@@ -381,16 +381,36 @@ async function runTests() {
         ];
 
         const dom = new JSDOM(`<!DOCTYPE html><html><body>
+            <table><tbody id="admin-usuarios-tbody"></tbody></table>
+            <table><tbody id="admin-roles-tbody"></tbody></table>
+            <table><tbody id="admin-permisos-tbody"></tbody></table>
+            <table><tbody id="admin-funcionalidades-tbody"></tbody></table>
+            <table><tbody id="admin-menus-tbody"></tbody></table>
             <table><tbody id="admin-accesos-tbody"></tbody></table>
             <div id="custom-modal"><div id="custom-modal-message"></div><div id="custom-modal-buttons"></div></div>
         </body></html>`, { runScripts: "dangerously" });
 
         const { window } = dom;
 
-        // Mock fetch en window
+        // Mock fetch en window para todos los módulos administrativos
         window.fetch = async (url) => {
             if (url === '/api/admin/accesos') {
                 return { ok: true, json: async () => mockAccesosList };
+            }
+            if (url === '/api/admin/usuarios') {
+                return { ok: true, json: async () => [{ id: 1, usuario: 'admin', nombre: 'Admin', email: 'admin@test.com' }] };
+            }
+            if (url === '/api/admin/roles') {
+                return { ok: true, json: async () => [{ id: 1, nombre: 'administrador', descripcion: 'Admin', activo: 1 }] };
+            }
+            if (url === '/api/admin/permisos') {
+                return { ok: true, json: async () => [{ id: 1, codigo: 'admin.access', nombre: 'Admin Access', descripcion: 'Full', activo: 1 }] };
+            }
+            if (url === '/api/admin/funcionalidades') {
+                return { ok: true, json: async () => [{ id: 8, codigo: 'administracion', nombre: 'Administración', descripcion: 'Admin', activo: 1 }] };
+            }
+            if (url === '/api/admin/menus') {
+                return { ok: true, json: async () => [{ id: 15, nombre: 'Administración', funcionalidad_id: 8, parent_id: null, orden: 7, publico: 0, activo: 1 }] };
             }
             return { ok: true, json: async () => ({}) };
         };
@@ -453,8 +473,91 @@ async function runTests() {
         }
         console.log('  ✓ [UI 4.6] showEditAccesoModal bloqueó la invocación para registro revocado.');
 
+        console.log('\n--- Bloque 5: Verificación del Sistema Homologado de Acciones Administrativas (UI/A11y) ---');
+
+        // 5.1 Verificación de clases, tooltips, iconos y grupo en Accesos Temporales
+        const actionsGroupAcceso = rowRevocado.querySelector('.admin-actions-group');
+        if (!actionsGroupAcceso) throw new Error('[UI 5.1] Falta contenedor .admin-actions-group en fila de accesos');
+        if (!editBtnRevocado.classList.contains('admin-action-btn') || !editBtnRevocado.classList.contains('admin-action-btn--edit')) {
+            throw new Error('[UI 5.1] Botón Editar debe tener clases .admin-action-btn y .admin-action-btn--edit');
+        }
+        if (!editBtnRevocado.getAttribute('title') || !editBtnRevocado.getAttribute('aria-label')) {
+            throw new Error('[UI 5.1] Botón Editar debe tener atributos title y aria-label para accesibilidad');
+        }
+        if (!editBtnRevocado.querySelector('i.fa-pen')) {
+            throw new Error('[UI 5.1] Botón Editar debe renderizar el icono FontAwesome fa-pen');
+        }
+        if (!delBtnRevocado.classList.contains('admin-action-btn--delete') || !delBtnRevocado.querySelector('i.fa-trash-can')) {
+            throw new Error('[UI 5.1] Botón Eliminar debe tener clase .admin-action-btn--delete e icono fa-trash-can');
+        }
+        console.log('  ✓ [UI 5.1] Accesos Temporales: Clases .admin-actions-group, .admin-action-btn, tooltips, a11y e iconos verificados.');
+
+        // 5.2 Homologación en Módulo Usuarios
+        await window.eval('loadUsuarios()');
+        const rowUsuario = window.document.querySelector('#admin-usuarios-tbody tr');
+        if (!rowUsuario) throw new Error('[UI 5.2] No se renderizó fila en Usuarios');
+        const userActionsGroup = rowUsuario.querySelector('.admin-actions-group');
+        const userEditBtn = userActionsGroup ? userActionsGroup.querySelector('.admin-action-btn--edit') : null;
+        const userDelBtn = userActionsGroup ? userActionsGroup.querySelector('.admin-action-btn--delete') : null;
+        const userRolesPill = rowUsuario.querySelector('.admin-pill-btn');
+        if (!userActionsGroup || !userEditBtn || !userDelBtn || !userRolesPill) {
+            throw new Error('[UI 5.2] Usuarios debe tener .admin-actions-group con edit, delete y .admin-pill-btn para roles');
+        }
+        console.log('  ✓ [UI 5.2] Módulo Usuarios: Acciones homologadas (.admin-action-btn--edit, .admin-action-btn--delete) y .admin-pill-btn verificados.');
+
+        // 5.3 Homologación en Módulo Roles
+        await window.eval('loadRoles()');
+        const rowRol = window.document.querySelector('#admin-roles-tbody tr');
+        if (!rowRol) throw new Error('[UI 5.3] No se renderizó fila en Roles');
+        const rolActionsGroup = rowRol.querySelector('.admin-actions-group');
+        const rolEditBtn = rolActionsGroup ? rolActionsGroup.querySelector('.admin-action-btn--edit') : null;
+        const rolDelBtn = rolActionsGroup ? rolActionsGroup.querySelector('.admin-action-btn--delete') : null;
+        const rolPermsPill = rowRol.querySelector('.admin-pill-btn');
+        if (!rolActionsGroup || !rolEditBtn || !rolDelBtn || !rolPermsPill) {
+            throw new Error('[UI 5.3] Roles debe tener .admin-actions-group con edit, delete y .admin-pill-btn para permisos');
+        }
+        console.log('  ✓ [UI 5.3] Módulo Roles: Acciones homologadas y botón píldora de permisos verificados.');
+
+        // 5.4 Homologación en Módulo Permisos
+        await window.eval('loadPermisos()');
+        const rowPermiso = window.document.querySelector('#admin-permisos-tbody tr');
+        if (!rowPermiso) throw new Error('[UI 5.4] No se renderizó fila en Permisos');
+        const permActionsGroup = rowPermiso.querySelector('.admin-actions-group');
+        const permEditBtn = permActionsGroup ? permActionsGroup.querySelector('.admin-action-btn--edit') : null;
+        const permDelBtn = permActionsGroup ? permActionsGroup.querySelector('.admin-action-btn--delete') : null;
+        if (!permActionsGroup || !permEditBtn || !permDelBtn) {
+            throw new Error('[UI 5.4] Permisos debe tener .admin-actions-group con botones edit y delete');
+        }
+        console.log('  ✓ [UI 5.4] Módulo Permisos: Acciones homologadas verificadas.');
+
+        // 5.5 Homologación en Módulo Funcionalidades
+        await window.eval('loadFuncionalidades()');
+        const rowFunc = window.document.querySelector('#admin-funcionalidades-tbody tr');
+        if (!rowFunc) throw new Error('[UI 5.5] No se renderizó fila en Funcionalidades');
+        const funcActionsGroup = rowFunc.querySelector('.admin-actions-group');
+        const funcEditBtn = funcActionsGroup ? funcActionsGroup.querySelector('.admin-action-btn--edit') : null;
+        const funcPermsBtn = funcActionsGroup ? funcActionsGroup.querySelector('.admin-action-btn--perms') : null;
+        const funcDelBtn = funcActionsGroup ? funcActionsGroup.querySelector('.admin-action-btn--delete') : null;
+        if (!funcActionsGroup || !funcEditBtn || !funcPermsBtn || !funcDelBtn) {
+            throw new Error('[UI 5.5] Funcionalidades debe tener .admin-actions-group con edit, perms y delete');
+        }
+        console.log('  ✓ [UI 5.5] Módulo Funcionalidades: Barra compacta de acciones (edit, perms, delete) verificada.');
+
+        // 5.6 Homologación en Módulo Menús
+        await window.eval('loadMenus()');
+        const rowMenu = window.document.querySelector('#admin-menus-tbody tr');
+        if (!rowMenu) throw new Error('[UI 5.6] No se renderizó fila en Menús');
+        const menuActionsGroup = rowMenu.querySelector('.admin-actions-group');
+        const menuEditBtn = menuActionsGroup ? menuActionsGroup.querySelector('.admin-action-btn--edit') : null;
+        const menuToggleBtn = menuActionsGroup ? menuActionsGroup.querySelector('.admin-action-btn--toggle-active, .admin-action-btn--toggle-inactive') : null;
+        const menuDelBtn = menuActionsGroup ? menuActionsGroup.querySelector('.admin-action-btn--delete') : null;
+        if (!menuActionsGroup || !menuEditBtn || !menuToggleBtn || !menuDelBtn) {
+            throw new Error('[UI 5.6] Menús debe tener .admin-actions-group con edit, toggle y delete');
+        }
+        console.log('  ✓ [UI 5.6] Módulo Menús: Acciones homologadas (edit, toggle con icono interactivo, delete) verificadas.');
+
         console.log('\n======================================================================');
-        console.log('  ✅ TODAS LAS PRUEBAS DE CICLO DE VIDA Y RBAC PASARON CON ÉXITO (100%)');
+        console.log('  ✅ TODAS LAS PRUEBAS DE CICLO DE VIDA, RBAC Y HOMOLOGACIÓN DE ACCIONES PASARON CON ÉXITO (100%)');
         console.log('======================================================================');
         process.exit(0);
 
