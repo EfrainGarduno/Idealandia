@@ -282,16 +282,27 @@ setTimeout(async () => {
         assert.ok(contextText.includes("Arturito Matus"), "El contexto debe identificar al usuario Arturito Matus.");
         assert.ok(contextText.includes("MANUAL IDEALANDIA"), "El contexto debe incluir el manual.");
 
-        // - Verificar que el contexto OMITIÓ la sección de Ideas
+        // - Verificar que el contexto contiene la instrucción explícita de falta de acceso:
+        assert.ok(
+            contextText.includes("--- ESTADO DE ACCESO A IDEAS ---"), 
+            "El contexto DEBE incluir la sección de estado de acceso a Ideas."
+        );
+        assert.ok(
+            contextText.includes("El usuario autenticado no tiene acceso a la funcionalidad Ideas."), 
+            "El contexto DEBE declarar que el usuario autenticado no tiene acceso a Ideas."
+        );
+        assert.ok(
+            contextText.includes("Usuario: Arturito Matus"), 
+            "El contexto DEBE contener el nombre dinámico del usuario (Arturito Matus)."
+        );
+        assert.ok(
+            contextText.includes('"Arturito Matus, no cuentas con acceso a la funcionalidad de Ideas, verifícalo con tu administrador para que te dé acceso."'), 
+            "El contexto DEBE indicar exactamente la respuesta determinista esperada."
+        );
         assert.strictEqual(
             contextText.includes("--- IDEAS DEL USUARIO ---"), 
             false, 
-            "El contexto NO debe incluir encabezado de ideas para usuario sin permiso."
-        );
-        assert.strictEqual(
-            contextText.includes("No se pudieron obtener las ideas"), 
-            false, 
-            "El contexto NO debe incluir mensajes de error fatal sobre ideas."
+            "El contexto NO debe incluir listado de ideas para usuario sin permiso."
         );
 
         // - Verificar que el mensaje del usuario se envió a Gemini
@@ -322,18 +333,18 @@ setTimeout(async () => {
             "Idealita debe responder normalmente al mensaje del usuario."
         );
         assert.strictEqual(
-            lastMsg.textContent.includes("no tienes acceso a Ideas"), 
+            lastMsg.textContent.includes("no cuentas con acceso a la funcionalidad de Ideas"), 
             false, 
             "Idealita NO debe mencionar espontáneamente falta de acceso a Ideas en pregunta general."
         );
         console.log("  ✓ Mensaje normal procesado exitosamente sin interrupción ni alertas falsas.");
-        console.log("  ✓ Contexto de Ideas omitido limpiamente sin provocar menciones espontáneas.");
+        console.log("  ✓ Instrucción explícita de falta de acceso presente en contexto sin provocar mención espontánea.");
 
         // 4. Pregunta explícita por las Ideas del usuario
         console.log("\n--- TEST: Pregunta explícita por Ideas para usuario sin acceso ---");
         const beforeToolCallsCount = MockWebSocket.messagesSent.length;
 
-        // Gemini decide llamar a la herramienta consultar_ideas_usuario
+        // Gemini evalúa la consulta o invoca la herramienta consultar_ideas_usuario
         ws.onmessage({
             data: JSON.stringify({
                 toolCall: {
@@ -346,7 +357,7 @@ setTimeout(async () => {
 
         await new Promise(r => setTimeout(r, 80));
 
-        // Verificar que la herramienta respondió con falta de acceso sin cerrar el chat
+        // Verificar respuesta de la herramienta
         const newResponses = MockWebSocket.messagesSent.slice(beforeToolCallsCount);
         assert.ok(newResponses.length > 0, "Se debió enviar respuesta de la herramienta.");
         const toolResParsed = JSON.parse(newResponses[0]);
@@ -355,20 +366,21 @@ setTimeout(async () => {
         const funcResp = toolResParsed.toolResponse.functionResponses[0];
         assert.strictEqual(funcResp.name, "consultar_ideas_usuario");
         assert.strictEqual(funcResp.response.sin_acceso, true, "La herramienta debe indicar sin_acceso: true");
-        assert.ok(
-            funcResp.response.error.includes("no tiene acceso a la funcionalidad de Ideas"),
-            "La herramienta debe reportar que el usuario no tiene acceso a la funcionalidad de Ideas."
+        assert.strictEqual(
+            funcResp.response.mensaje,
+            "Arturito Matus, no cuentas con acceso a la funcionalidad de Ideas, verifícalo con tu administrador para que te dé acceso.",
+            "La herramienta debe contener el mensaje determinista exacto."
         );
 
         // No debe haberse disparado el interceptor global con modal ni redirección
         assert.strictEqual(showModalCalls.length, 0, "No debe mostrarse modal de error durante consulta de herramienta.");
         assert.notStrictEqual(chatSection.style.display, 'none', "El chat debe permanecer abierto.");
 
-        // Simular respuesta de Gemini informando la falta de acceso de forma natural
+        // Simular respuesta determinista de Idealita
         ws.onmessage({
             data: JSON.stringify({
                 serverContent: {
-                    outputTranscription: { text: "En este momento no tienes acceso a la funcionalidad de Ideas, por lo que no puedo consultar tus ideas." },
+                    outputTranscription: { text: "Arturito Matus, no cuentas con acceso a la funcionalidad de Ideas, verifícalo con tu administrador para que te dé acceso." },
                     turnComplete: true
                 }
             })
@@ -377,18 +389,46 @@ setTimeout(async () => {
         const messagesAfterIdeasQuery = chatHistory.querySelectorAll('.idealita-message');
         const ideasReply = messagesAfterIdeasQuery[messagesAfterIdeasQuery.length - 1];
         assert.ok(
-            ideasReply.textContent.includes("no tienes acceso a la funcionalidad de Ideas"),
-            "Idealita debe responder que no tiene acceso a Ideas."
+            ideasReply.textContent.includes("Arturito Matus, no cuentas con acceso a la funcionalidad de Ideas, verifícalo con tu administrador para que te dé acceso."),
+            "Idealita debe responder exactamente la frase requerida con el nombre dinámico del usuario."
         );
         assert.strictEqual(
             ideasReply.textContent.includes("Mi idea innovadora"),
             false,
             "No debe mostrar ideas inventadas ni de otros usuarios."
         );
-        console.log("  ✓ Al preguntar por ideas, responde de manera natural que no tiene acceso a la funcionalidad Ideas.");
-        console.log("  ✓ No se inventaron ideas ni se reutilizaron ideas de otros.");
+        console.log("  ✓ Al preguntar por ideas, responde deterministamente: '{nombre del usuario}, no cuentas con acceso a la funcionalidad de Ideas, verifícalo con tu administrador para que te dé acceso.'");
 
-        // 5. TEST CASO A: Usuario CON acceso a Ideas
+        // 5. Pregunta posterior no relacionada a Ideas (comportamiento conversacional continuo)
+        console.log("\n--- TEST: Pregunta posterior no relacionada para usuario sin acceso ---");
+        userInput.value = "¿Puedes darme un consejo para organizar mi día?";
+        sendBtn.click();
+
+        await new Promise(r => setTimeout(r, 60));
+
+        ws.onmessage({
+            data: JSON.stringify({
+                serverContent: {
+                    outputTranscription: { text: "¡Por supuesto, Arturito! Te sugiero priorizar tus 3 tareas más importantes al comenzar tu jornada." },
+                    turnComplete: true
+                }
+            })
+        });
+
+        const messagesAfterSecondNormal = chatHistory.querySelectorAll('.idealita-message');
+        const secondNormalReply = messagesAfterSecondNormal[messagesAfterSecondNormal.length - 1];
+        assert.ok(
+            secondNormalReply.textContent.includes("Te sugiero priorizar tus 3 tareas"),
+            "Idealita debe continuar respondiendo normalmente a preguntas posteriores."
+        );
+        assert.strictEqual(
+            secondNormalReply.textContent.includes("no cuentas con acceso a la funcionalidad de Ideas"),
+            false,
+            "La respuesta sobre falta de acceso NO debe repetirse en preguntas no relacionadas."
+        );
+        console.log("  ✓ El usuario puede seguir conversando normalmente con Idealita sobre otros temas tras la pregunta de Ideas.");
+
+        // 6. TEST CASO A: Usuario CON acceso a Ideas
         console.log("\n--- TEST CASO A: Usuario CON acceso a Ideas ---");
         // Detener live previo
         window.eval("if (typeof stopLive === 'function') stopLive();");
@@ -427,7 +467,12 @@ setTimeout(async () => {
         const authContextText = JSON.parse(authorizedContextMsg).clientContent.turns[0].parts[0].text;
         assert.ok(authContextText.includes("Mi idea innovadora"), "Debe incluir las ideas reales del usuario.");
         assert.ok(authContextText.includes("Elena Creadora"), "Debe identificar a la usuaria Elena Creadora.");
-        console.log("  ✓ Usuario con permiso recibe sus ideas en el contexto inicial normalmente.");
+        assert.strictEqual(
+            authContextText.includes("no cuentas con acceso a la funcionalidad de Ideas"),
+            false,
+            "Usuario con permiso NO debe tener leyenda de falta de acceso en contexto."
+        );
+        console.log("  ✓ Usuario con permiso recibe sus ideas en el contexto inicial normalmente sin leyenda de restricción.");
 
         // Consulta de ideas vía tool call para usuario autorizado
         const countBeforeAuthTool = MockWebSocket.messagesSent.length;
@@ -450,7 +495,7 @@ setTimeout(async () => {
         assert.strictEqual(authToolResp.response.result[0].titulo, "Mi idea innovadora");
         console.log("  ✓ Tool call consultar_ideas_usuario devuelve ideas reales para usuario autorizado.");
 
-        // 6. TEST CASO C: Regresión Chat/Live
+        // 7. TEST CASO C: Regresión Chat/Live
         console.log("\n--- TEST CASO C: Verificación de Regresión Chat/Live ---");
         // Verificar setup systemInstruction
         const initialSetupMsg = JSON.parse(MockWebSocket.messagesSent[0]);
