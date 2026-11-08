@@ -797,8 +797,10 @@ app.get('/api/menu', async (req, res) => {
         const menuTree = buildTree();
 
         const containerIds = new Set(menuItems.filter(item => item.parent_id !== null).map(item => item.parent_id));
+        const serviciosItem = menuItems.find(item => item.parent_id === null && item.nombre && item.nombre.toLowerCase().trim() === 'servicios');
+        const serviciosId = serviciosItem ? serviciosItem.id : null;
 
-                const filterEmptyContainers = (nodes) => {
+        const filterEmptyContainers = (nodes) => {
             return nodes.filter(item => {
                 if (item.hijos && item.hijos.length > 0) {
                     item.hijos = filterEmptyContainers(item.hijos);
@@ -810,6 +812,14 @@ app.get('/api/menu', async (req, res) => {
                 // If it's a container, it must have visible children, even if publico = 1
                 if (isContainer) return hasVisibleChildren;
 
+                // For items under Servicios: authenticated users can see all catalog items
+                if (serviciosId && item.parent_id === serviciosId) {
+                    if (userId) {
+                        return true;
+                    }
+                    return item.publico === 1;
+                }
+
                 if (item.publico === 1) return true;
 
                 if (item.funcionalidad_id !== null) {
@@ -820,7 +830,37 @@ app.get('/api/menu', async (req, res) => {
             });
         };
 
-        const finalMenuTree = filterEmptyContainers(menuTree);
+        const annotateAuthorization = (nodes) => {
+            return nodes.map(item => {
+                let isAuth = false;
+                if (serviciosId && item.parent_id === serviciosId) {
+                    if (item.funcionalidad_id !== null) {
+                        isAuth = Boolean(userId && allowedFunctionalityIds.has(item.funcionalidad_id));
+                    } else {
+                        isAuth = true;
+                    }
+                } else if (item.publico === 1 && item.funcionalidad_id === null) {
+                    isAuth = true;
+                } else if (item.funcionalidad_id !== null) {
+                    isAuth = Boolean(userId && allowedFunctionalityIds.has(item.funcionalidad_id));
+                } else {
+                    isAuth = true;
+                }
+
+                const hijos = (item.hijos && item.hijos.length > 0)
+                    ? annotateAuthorization(item.hijos)
+                    : [];
+
+                return {
+                    ...item,
+                    autorizado: isAuth,
+                    hijos
+                };
+            });
+        };
+
+        const filteredTree = filterEmptyContainers(menuTree);
+        const finalMenuTree = annotateAuthorization(filteredTree);
 
         let proximo_vencimiento = null;
         let proxima_activacion = null;
