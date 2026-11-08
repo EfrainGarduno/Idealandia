@@ -2316,7 +2316,7 @@
 
                         // Send initial setup
                         const userName = window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario';
-                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
+                        let sysInstruction = "Eres Idealita, la asistente personal de Idealandia. Tu propósito es conversar con los usuarios, ayudarles a explorar ideas, responder preguntas y acompañarlos dentro de Idealandia. CUANDO EL USUARIO TE PREGUNTE '¿Quién eres?', '¿Cómo te llamas?', o cualquier variación, DEBES RESPONDER SIEMPRE QUE ERES 'Idealita la asistente personal de Idealandia'. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, digas que eres un modelo de lenguaje, una inteligencia artificial, que fuiste desarrollada por Google, o que eres Gemini. Eres única y exclusivamente Idealita. Mantén tus respuestas conversacionales, breves y amigables. Habla en español. Cuando necesites información de Idealandia, utiliza las herramientas o el contexto provisto. Eres Idealita. Responde estrictamente basado en los datos proporcionados por tus herramientas. Siempre menciona la fuente de la documentación si la utilizas. Si un usuario te pregunta por algo y la herramienta responde que no hay acceso o no existe, DEBES responder exactamente eso: 'Lo siento, no tienes acceso a esa función' o 'No tengo información sobre esa capacidad'. Si el usuario pregunta específicamente por sus ideas o pide consultarlas y la herramienta consultar_ideas_usuario indica que no tiene acceso, responde de manera natural y conversacional indicando que en este momento no tiene acceso a la funcionalidad de Ideas, por lo que no puedes consultar sus ideas. NUNCA menciones espontáneamente la falta de acceso a Ideas a menos que el usuario pregunte específicamente por consultar sus ideas. NO INVENTES pasos. NO UTILICES la herramienta para eludir restricciones del sistema.";
                         if (window.currentUser) {
                             sysInstruction += ` Estás conversando con ${userName}, quien ha iniciado sesión. ¡Importante! Siempre, al inicio de la conversación, debes saludar al usuario por su nombre de forma amigable (ejemplo: \'¡Hola, ${userName}!\', o variaciones). Dirígete a él o ella por su nombre también durante la conversación cuando resulte natural.`;
                         }
@@ -2590,7 +2590,7 @@
                                     console.log("Usuario autenticado añadido al contexto.");
 
                                     try {
-                                        const ideasRes = await fetch('/api/ideas');
+                                        const ideasRes = await fetch('/api/ideas', { skipRbacInterceptor: true });
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
                                             if (ideasData.ideas && ideasData.ideas.length > 0) {
@@ -2603,6 +2603,9 @@
                                                 contextText += "El usuario autenticado no tiene ideas registradas actualmente.\n";
                                                 console.log("El usuario no tiene ideas registradas.");
                                             }
+                                        } else if (ideasRes.status === 403) {
+                                            console.log("Usuario sin acceso a Ideas (403 RBAC_ACCESS_DENIED). Omitiendo contexto de Ideas.");
+                                            // Se omite únicamente el contexto de Ideas. Continuar normalmente con Idealita.
                                         } else {
                                             contextText += "No se pudieron obtener las ideas del usuario.\n";
                                             console.warn("No se pudieron obtener las ideas (no ok).");
@@ -2657,10 +2660,16 @@
                                                 ideasUrl += '?' + qs;
                                             }
                                         }
-                                        const ideasRes = await fetch(ideasUrl);
+                                        const ideasRes = await fetch(ideasUrl, { skipRbacInterceptor: true });
                                         if (ideasRes.ok) {
                                             const ideasData = await ideasRes.json();
                                             functionResponseItem.response = { result: ideasData.ideas };
+                                        } else if (ideasRes.status === 403) {
+                                            functionResponseItem.response = {
+                                                error: 'El usuario no tiene acceso a la funcionalidad de Ideas.',
+                                                sin_acceso: true,
+                                                mensaje: 'En este momento no tienes acceso a la funcionalidad de Ideas, por lo que no puedo consultar tus ideas.'
+                                            };
                                         } else {
                                             functionResponseItem.response = { error: 'No se pudieron obtener las ideas. Es posible que el usuario no esté autenticado.' };
                                         }
@@ -2986,8 +2995,10 @@
             if (typeof window !== 'undefined' && window.fetch) {
                 const _origFetch = window.fetch;
                 window.fetch = async function(...args) {
+                    const options = args[1];
+                    const skipRbacInterceptor = Boolean(options && (options.skipRbacInterceptor || (options.headers && options.headers['X-Skip-RBAC-Interceptor'])));
                     const res = await _origFetch.apply(this, args);
-                    if (res && res.status === 403) {
+                    if (!skipRbacInterceptor && res && res.status === 403) {
                         try {
                             const cloned = res.clone();
                             cloned.json().then(data => {
