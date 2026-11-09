@@ -328,6 +328,16 @@
             border-radius: 4px;
             font-size: 14px;
         }
+        #user-input:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+            border-color: #ced4da;
+        }
+        #input-container.voice-mode-active {
+            background-color: #e9ecef;
+            opacity: 0.85;
+        }
         #send-btn {
             padding: 10px 20px;
             margin-left: 10px;
@@ -1853,4 +1863,199 @@
     .live-pulse {
         animation: none !important;
     }
+}
+
+
+/* ==========================================================================
+   PR #98: Servicios como Catálogo, Badges y Ordenamiento de Tablas
+   ========================================================================== */
+
+/* 1. Submenú Servicios en Menú Lateral */
+.service-menu-link {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px;
+}
+.service-menu-name {
+    flex: 1;
+}
+.service-menu-badge {
+    font-size: 0.85em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.service-menu-badge.available {
+    color: #28a745;
+}
+.service-menu-badge.restricted {
+    color: #f39c12;
+}
+.service-menu-link.is-restricted {
+    opacity: 0.85;
+}
+
+/* 2. Catálogo de Servicios (#servicios) */
+.servicios-view-container {
+    width: 100%;
+    animation: fadeIn 0.3s ease-in-out;
+}
+.servicios-hero {
+    margin-bottom: 25px;
+}
+.servicios-hero h2 {
+    font-size: 2em;
+    color: #333;
+    margin-bottom: 8px;
+}
+.servicios-subtitle {
+    color: #666;
+    font-size: 1.1em;
+    margin-top: 0;
+}
+.servicios-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+    margin-bottom: 30px;
+}
+.servicio-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.servicio-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.1);
+}
+.servicio-card.card-restricted {
+    background: #fafbfc;
+    border-color: #f0e6d2;
+}
+.servicio-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.servicio-card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    color: #1976d2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25em;
+    flex-shrink: 0;
+}
+.servicio-card.card-restricted .servicio-card-icon {
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    color: #f57c00;
+}
+.servicio-card-title {
+    margin: 0;
+    font-size: 1.2em;
+    color: #2c3e50;
+    line-height: 1.25;
+}
+.servicio-card-body {
+    flex: 1;
+    margin-bottom: 16px;
+}
+.servicio-card-desc {
+    color: #555;
+    font-size: 0.95em;
+    line-height: 1.5;
+    margin: 0;
+}
+.servicio-card-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+    width: fit-content;
+}
+.servicio-card-status.status-disponible {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+.servicio-card-status.status-restringido {
+    background: #fff8e1;
+    color: #b78103;
+}
+.servicio-card-footer {
+    margin-top: auto;
+}
+.btn-entrar-servicio {
+    width: 100%;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 1em;
+    border-radius: 6px;
+}
+.servicio-card-restricted-msg {
+    color: #795548;
+    background: #fff9f0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px dashed #e6c89f;
+    line-height: 1.4;
+}
+
+/* 3. Ordenamiento de Columnas en Tablas Administrativas */
+th.sortable-th {
+    cursor: pointer !important;
+    user-select: none !important;
+    position: relative;
+    transition: background-color 0.15s ease;
+}
+th.sortable-th:hover {
+    background-color: #e9ecef !important;
+}
+th.sortable-th:focus-visible {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+}
+th.sortable-th .sort-indicator {
+    margin-left: 6px;
+    font-size: 0.85em;
+    color: #888;
+    display: inline-block;
+    transition: color 0.15s ease;
+}
+th.sortable-th.sort-asc {
+    background-color: #e3f2fd !important;
+    color: #0d47a1;
+}
+th.sortable-th.sort-asc .sort-indicator {
+    color: #0d47a1;
+}
+th.sortable-th.sort-desc {
+    background-color: #e3f2fd !important;
+    color: #0d47a1;
+}
+th.sortable-th.sort-desc .sort-indicator {
+    color: #0d47a1;
+}
+
+/* 4. Modal de Permisos de Roles (Filtro y Todo) */
+.rol-perms-toolbar {
+    margin-bottom: 12px;
+}
+.perm-item-row:hover {
+    background-color: #f1f5f9;
 }

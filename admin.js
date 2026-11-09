@@ -79,7 +79,149 @@ function createAdminActionsGroup() {
     return group;
 }
 
+/**
+ * Configura ordenamiento por columnas para una tabla administrativa.
+ * Clic 1: Ascendente (↑)
+ * Clic 2: Descendente (↓)
+ * Clic 3: Restaura orden original
+ * Excluye la columna "Acciones".
+ */
+function makeAdminTableSortable(table) {
+    if (!table) return;
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if (!thead || !tbody) return;
+
+    // Snapshot current rows as original order if not already set or changed
+    tbody._originalRows = Array.from(tbody.querySelectorAll('tr'));
+
+    const ths = thead.querySelectorAll('th');
+    ths.forEach((th, colIndex) => {
+        const headerText = th.textContent.replace(/[⇅▲▼↑↓]/g, '').trim().toLowerCase();
+        if (headerText === 'acciones' || th.dataset.noSort === 'true') {
+            th.classList.remove('sortable-th');
+            return;
+        }
+
+        th.classList.add('sortable-th');
+        th.setAttribute('tabindex', '0');
+        th.setAttribute('role', 'button');
+        th.setAttribute('aria-label', `Ordenar por ${th.textContent.trim()}`);
+
+        let indicator = th.querySelector('.sort-indicator');
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.className = 'sort-indicator';
+            indicator.innerHTML = ' <i class="fas fa-sort" aria-hidden="true"></i>';
+            th.appendChild(indicator);
+        }
+
+        th.onclick = () => handleAdminTableSort(table, colIndex, th);
+        th.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleAdminTableSort(table, colIndex, th);
+            }
+        };
+    });
+}
+
+function handleAdminTableSort(table, colIndex, activeTh) {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    const currentRows = Array.from(tbody.querySelectorAll('tr'));
+    if (!tbody._originalRows || tbody._originalRows.length !== currentRows.length) {
+        tbody._originalRows = [...currentRows];
+    }
+
+    const currentDir = activeTh.dataset.sortDir || 'none';
+    let newDir = 'asc';
+    if (currentDir === 'asc') {
+        newDir = 'desc';
+    } else if (currentDir === 'desc') {
+        newDir = 'none';
+    }
+
+    // Reset all headers in this table
+    const allThs = table.querySelectorAll('thead th');
+    allThs.forEach(th => {
+        if (th !== activeTh) {
+            delete th.dataset.sortDir;
+            th.classList.remove('sort-asc', 'sort-desc');
+            const ind = th.querySelector('.sort-indicator');
+            if (ind) {
+                ind.innerHTML = ' <i class="fas fa-sort" aria-hidden="true"></i>';
+            }
+        }
+    });
+
+    if (newDir === 'none') {
+        delete activeTh.dataset.sortDir;
+        activeTh.classList.remove('sort-asc', 'sort-desc');
+        const ind = activeTh.querySelector('.sort-indicator');
+        if (ind) {
+            ind.innerHTML = ' <i class="fas fa-sort" aria-hidden="true"></i>';
+        }
+
+        // Restore original rows
+        tbody.innerHTML = '';
+        tbody._originalRows.forEach(row => tbody.appendChild(row));
+        return;
+    }
+
+    activeTh.dataset.sortDir = newDir;
+    activeTh.classList.remove('sort-asc', 'sort-desc');
+    activeTh.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    const ind = activeTh.querySelector('.sort-indicator');
+    if (ind) {
+        ind.innerHTML = newDir === 'asc' 
+            ? ' <i class="fas fa-sort-up" aria-hidden="true"></i>' 
+            : ' <i class="fas fa-sort-down" aria-hidden="true"></i>';
+    }
+
+    // Sort rows
+    const sorted = [...currentRows];
+    sorted.sort((rowA, rowB) => {
+        const cellA = rowA.children[colIndex];
+        const cellB = rowB.children[colIndex];
+        const textA = (cellA ? cellA.textContent : '').trim();
+        const textB = (cellB ? cellB.textContent : '').trim();
+
+        // 1. Numeric compare
+        const numA = Number(textA);
+        const numB = Number(textB);
+        if (!isNaN(numA) && !isNaN(numB) && textA !== '' && textB !== '') {
+            return newDir === 'asc' ? numA - numB : numB - numA;
+        }
+
+        // 2. Date compare (e.g. 2026-11-05...)
+        const datePattern = /^\d{4}-\d{2}-\d{2}/;
+        if (datePattern.test(textA) && datePattern.test(textB)) {
+            const timeA = new Date(textA).getTime();
+            const timeB = new Date(textB).getTime();
+            if (!isNaN(timeA) && !isNaN(timeB)) {
+                return newDir === 'asc' ? timeA - timeB : timeB - timeA;
+            }
+        }
+
+        // 3. String compare
+        const comp = textA.localeCompare(textB, 'es', { numeric: true, sensitivity: 'base' });
+        return newDir === 'asc' ? comp : -comp;
+    });
+
+    tbody.innerHTML = '';
+    sorted.forEach(row => tbody.appendChild(row));
+}
+
+if (typeof window !== 'undefined') {
+    window.makeAdminTableSortable = makeAdminTableSortable;
+    window.handleAdminTableSort = handleAdminTableSort;
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.admin-table').forEach(makeAdminTableSortable);
     const adminSection = document.getElementById('admin');
 
     // Setup tabs
@@ -204,6 +346,7 @@ async function loadUsuarios() {
 
             tbody.appendChild(tr);
         }
+        makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar usuarios.');
@@ -270,6 +413,7 @@ async function loadRoles() {
 
             tbody.appendChild(tr);
         }
+        makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar roles.');
@@ -321,6 +465,7 @@ async function loadPermisos() {
 
             tbody.appendChild(tr);
         }
+        makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar permisos.');
@@ -422,6 +567,7 @@ async function loadAccesos() {
             tr.appendChild(td);
             tbody.appendChild(tr);
         }
+        makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar accesos.');
@@ -678,6 +824,7 @@ async function loadFuncionalidades() {
 
             tbody.appendChild(tr);
         }
+        makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar funcionalidades.');
@@ -756,9 +903,8 @@ async function loadMenus() {
 
             tr.appendChild(td);
             tbody.appendChild(tr);
-
-
         }
+        makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
         if (window.showModal) window.showModal('Error al cargar menús.');
@@ -899,23 +1045,42 @@ async function showEditPermisosModal(rolId, rolName) {
         const allPerms = await allPermsRes.json();
 
         let html = `
-            <div style="text-align: left; max-height: 300px; overflow-y: auto; margin-bottom: 10px;">
+            <div class="rol-perms-modal-wrapper" style="text-align: left;">
+                <div class="rol-perms-toolbar" style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+                    <div style="position: relative; flex: 1; min-width: 200px;">
+                        <input type="text" id="filter-rol-perms" class="form-input" placeholder="Buscar permisos (código, nombre)..." style="width: 100%; box-sizing: border-box; padding-right: 28px;">
+                        <span id="clear-filter-rol-perms" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #888; display: none; font-size: 16px;">&times;</span>
+                    </div>
+                    <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-weight: 600; padding: 6px 10px; border-radius: 4px; background: #eef2f7; border: 1px solid #d0d7de;">
+                        <input type="checkbox" id="cb-select-all-rol-perms">
+                        <span>Todo</span>
+                    </label>
+                </div>
+                <div id="rol-perms-list-container" style="max-height: 320px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px; margin-bottom: 12px; background: #fafafa;">
         `;
 
         allPerms.forEach(p => {
             const isChecked = rolPerms.includes(p.id) ? 'checked' : '';
             html += `
-                <div>
-                    <input type="checkbox" id="perm-cb-${p.id}" value="${escapeHTML(p.id)}" ${isChecked}>
-                    <label for="perm-cb-${p.id}">${escapeHTML(p.nombre)} (${escapeHTML(p.codigo)})</label>
+                <div class="perm-item-row" data-perm-id="${p.id}" data-perm-nombre="${escapeHTML(p.nombre).toLowerCase()}" data-perm-codigo="${escapeHTML(p.codigo).toLowerCase()}" style="padding: 5px 4px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f0f0f0;">
+                    <input type="checkbox" class="perm-checkbox" id="perm-cb-${p.id}" value="${escapeHTML(p.id)}" ${isChecked}>
+                    <label for="perm-cb-${p.id}" style="cursor: pointer; margin: 0; line-height: 1.3; flex: 1;">
+                        <strong>${escapeHTML(p.nombre)}</strong> <span style="color: #666; font-size: 0.9em;">(${escapeHTML(p.codigo)})</span>
+                    </label>
                 </div>
             `;
         });
 
         html += `
+                </div>
+                <div id="rol-perms-empty-msg" style="display: none; padding: 12px; color: #888; text-align: center; font-style: italic;">
+                    No se encontraron permisos que coincidan con la búsqueda.
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+                    <button id="btn-cancel-rol-perms" class="btn btn-secondary">Cancelar</button>
+                    <button id="btn-save-rol-perms" class="btn btn-primary">Guardar</button>
+                </div>
             </div>
-            <button id="btn-save-rol-perms" class="btn btn-primary" style="margin-top: 10px;">Guardar</button>
-            <button id="btn-cancel-rol-perms" class="btn btn-secondary" style="margin-top: 10px;">Cancelar</button>
         `;
 
         const overlay = document.getElementById('custom-modal');
@@ -925,6 +1090,89 @@ async function showEditPermisosModal(rolId, rolName) {
         textElement.innerHTML = `<h3>Permisos de Rol: ${escapeHTML(rolName)}</h3>` + html;
         buttonsContainer.innerHTML = '';
         overlay.classList.add('active');
+
+        // Logic for Filter, "Todo" Tri-state, and Individual Checkboxes
+        const filterInput = document.getElementById('filter-rol-perms');
+        const clearFilterBtn = document.getElementById('clear-filter-rol-perms');
+        const selectAllCb = document.getElementById('cb-select-all-rol-perms');
+        const listContainer = document.getElementById('rol-perms-list-container');
+        const emptyMsg = document.getElementById('rol-perms-empty-msg');
+        const rows = Array.from(listContainer.querySelectorAll('.perm-item-row'));
+
+        function updateSelectAllState() {
+            const visibleRows = rows.filter(r => r.style.display !== 'none');
+            if (visibleRows.length === 0) {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = false;
+                if (emptyMsg) emptyMsg.style.display = 'block';
+                return;
+            }
+            if (emptyMsg) emptyMsg.style.display = 'none';
+
+            const visibleCheckboxes = visibleRows.map(r => r.querySelector('.perm-checkbox'));
+            const checkedCount = visibleCheckboxes.filter(cb => cb && cb.checked).length;
+
+            if (checkedCount === 0) {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = false;
+            } else if (checkedCount === visibleCheckboxes.length) {
+                selectAllCb.checked = true;
+                selectAllCb.indeterminate = false;
+            } else {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = true;
+            }
+        }
+
+        // Handle "Todo" checkbox click
+        selectAllCb.onclick = () => {
+            const targetState = selectAllCb.checked;
+            const visibleRows = rows.filter(r => r.style.display !== 'none');
+            visibleRows.forEach(r => {
+                const cb = r.querySelector('.perm-checkbox');
+                if (cb) {
+                    cb.checked = targetState;
+                }
+            });
+            selectAllCb.indeterminate = false;
+            updateSelectAllState();
+        };
+
+        // Handle individual checkbox changes
+        rows.forEach(r => {
+            const cb = r.querySelector('.perm-checkbox');
+            if (cb) {
+                cb.addEventListener('change', updateSelectAllState);
+            }
+        });
+
+        // Handle search filter
+        function applyFilter() {
+            const term = (filterInput.value || '').toLowerCase().trim();
+            if (clearFilterBtn) {
+                clearFilterBtn.style.display = term ? 'inline' : 'none';
+            }
+            rows.forEach(r => {
+                const nombre = r.dataset.permNombre || '';
+                const codigo = r.dataset.permCodigo || '';
+                const fullText = r.textContent.toLowerCase();
+                const matches = !term || fullText.includes(term) || nombre.includes(term) || codigo.includes(term);
+                r.style.display = matches ? 'flex' : 'none';
+            });
+            updateSelectAllState();
+        }
+
+        filterInput.addEventListener('input', applyFilter);
+        if (clearFilterBtn) {
+            clearFilterBtn.onclick = () => {
+                filterInput.value = '';
+                applyFilter();
+                filterInput.focus();
+            };
+        }
+
+        // Initialize "Todo" state based on currently loaded role permissions
+        updateSelectAllState();
 
         document.getElementById('btn-cancel-rol-perms').onclick = () => overlay.classList.remove('active');
         document.getElementById('btn-save-rol-perms').onclick = async () => {

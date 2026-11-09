@@ -206,13 +206,31 @@
             </div>
         </section>
 
-        <section id="servicios" class="content-section" style="display: none;">
-            <h2>Asesoría en Pensiones</h2>
-            <p>Conoce nuestros servicios.</p>
-            <div class="servicio-item" id="btn-estimacion">
-                <h3>Estimación de Cálculo de Pensión Régimen ley 73</h3>
+                <section id="servicios" class="content-section" style="display: none;">
+            <!-- Vista Catálogo de Servicios -->
+            <div id="servicios-catalogo-view" class="servicios-view-container" style="width: 100%;">
+                <div class="servicios-hero">
+                    <h2>Catálogo de Servicios</h2>
+                    <p class="servicios-subtitle">Explora los servicios y funcionalidades que Idealandia tiene para ti.</p>
+                </div>
+                <div id="servicios-cards-grid" class="servicios-grid">
+                    <!-- Tarjetas dinámicas de servicios -->
+                </div>
             </div>
-            <div id="form-estimacion" style="display: none;" class="pension-form">
+
+            <!-- Vista Asesoría de Pensiones (Estimación) -->
+            <div id="servicios-pension-view" class="servicios-view-container" style="display: none; width: 100%;">
+                <div class="servicios-back-bar" style="margin-bottom: 20px;">
+                    <button type="button" id="btn-volver-catalogo" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Volver al Catálogo de Servicios
+                    </button>
+                </div>
+                <h2>Asesoría en Pensiones</h2>
+                <p>Conoce nuestros servicios.</p>
+                <div class="servicio-item" id="btn-estimacion">
+                    <h3>Estimación de Cálculo de Pensión Régimen ley 73</h3>
+                </div>
+                <div id="form-estimacion" style="display: none;" class="pension-form">
                 <fieldset>
                     <legend>Datos generales</legend>
                     <div class="form-group">
@@ -276,6 +294,7 @@
                     <!-- Results will be injected here -->
                 </div>
             </div>
+            </div> <!-- /#servicios-pension-view -->
         </section>
 
         <!-- SECCIÓN: Clases de Inglés -->
@@ -662,12 +681,12 @@
                         </div>
 
                         <div id="live-controls" style="margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #f0f0f0; padding: 10px; border-radius: 8px;">
-                            <button id="btn-start-live" class="btn btn-primary" style="background-color: #6c40f7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
-                                🎙️ Hablar con Idealita
+                            <button id="btn-start-live" class="btn btn-primary" style="background-color: #6c40f7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;" aria-label="Iniciar con Voz" title="Iniciar con Voz">
+                                <i class="fas fa-microphone" style="margin-right: 6px;"></i>Iniciar con Voz
                             </button>
                             <button id="btn-mute-mic" class="btn btn-secondary" style="background-color: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none; margin-right: 10px;" aria-label="Silenciar micrófono" title="Silenciar micrófono"><i class="fas fa-microphone"></i></button>
-                            <button id="btn-stop-live" class="btn btn-secondary" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none;">
-                                Terminar Live
+                            <button id="btn-stop-live" class="btn btn-secondary" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: none;" aria-label="Terminar con Voz" title="Terminar con Voz">
+                                <i class="fas fa-stop" style="margin-right: 6px;"></i>Terminar con Voz
                             </button>
                             <span id="live-status" style="font-weight: 500; color: #555;">Desconectado</span>
                         </div>
@@ -1229,9 +1248,199 @@
                 }
             }
 
+            
+            function escapeHTML(str) {
+                if (!str) return '';
+                return String(str).replace(/[&<>'"]/g, tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag]));
+            }
+
+            const SERVICIOS_CATALOG_INFO = {
+                'asesoria-pensiones': {
+                    key: 'asesoria-pensiones',
+                    nombre: 'Asesoría de Pensiones',
+                    descripcion: 'Obtén herramientas y recursos especializados para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.',
+                    icon: 'fa-calculator',
+                    target: 'asesoria-pensiones'
+                },
+                'ideas-innovadoras': {
+                    key: 'ideas-innovadoras',
+                    nombre: 'Ideas Innovadoras',
+                    descripcion: 'Registra, organiza y desarrolla tus ideas dentro de Idealandia.',
+                    icon: 'fa-lightbulb',
+                    target: 'ideas'
+                },
+                'clases-ingles': {
+                    key: 'clases-ingles',
+                    nombre: 'Clases de Inglés',
+                    descripcion: 'Aprende y practica inglés conversacional en un entorno interactivo y colaborativo diseñado para comunicarte con confianza.',
+                    icon: 'fa-language',
+                    target: 'clases-ingles'
+                },
+                'asesorias-financieras': {
+                    key: 'asesorias-financieras',
+                    nombre: 'Asesorías Financieras',
+                    descripcion: 'Recibe orientación y asesoría experta para la gestión de tus finanzas personales y proyectos de inversión.',
+                    icon: 'fa-chart-line',
+                    target: 'asesorias-financieras'
+                },
+                'emprendimientos': {
+                    key: 'emprendimientos',
+                    nombre: 'Emprendimientos',
+                    descripcion: 'Descubre metodologías, herramientas y acompañamiento estratégico para impulsar tus emprendimientos y modelos de negocio.',
+                    icon: 'fa-rocket',
+                    target: 'emprendimientos'
+                },
+                'perfilamiento': {
+                    key: 'perfilamiento',
+                    nombre: 'Perfilamiento',
+                    descripcion: 'Evalúa tus competencias, intereses y perfil profesional para orientar tus oportunidades de crecimiento y desarrollo.',
+                    icon: 'fa-user-check',
+                    target: 'perfilamiento'
+                }
+            };
+
+            function getCatalogKey(nombre) {
+                const n = (nombre || '').toLowerCase();
+                if (n.includes('pensi')) return 'asesoria-pensiones';
+                if (n.includes('idea')) return 'ideas-innovadoras';
+                if (n.includes('ingl')) return 'clases-ingles';
+                if (n.includes('financ')) return 'asesorias-financieras';
+                if (n.includes('emprend')) return 'emprendimientos';
+                if (n.includes('perfil')) return 'perfilamiento';
+                return n.replace(/\s+/g, '-');
+            }
+
+            function showAccessDeniedModal(serviceName) {
+                const userName = (window.currentUser && (window.currentUser.nombre || window.currentUser.usuario)) || 'Estimado usuario';
+                const friendlyName = serviceName || 'esta funcionalidad';
+                const message = `${userName}, no cuentas con acceso a ${friendlyName}. Si deseas tener acceso, consulta con tu administrador para que te dé acceso.`;
+
+                if (typeof window.showModal === 'function') {
+                    window.showModal(message);
+                } else {
+                    alert(message);
+                }
+            }
+
+            function renderServiciosCatalog(menuData) {
+                const container = document.getElementById('servicios-cards-grid');
+                if (!container) return;
+
+                container.innerHTML = '';
+
+                const items = Array.isArray(menuData) ? menuData : (menuData && menuData.menu ? menuData.menu : []);
+                const serviciosItem = items.find(i => i.nombre && i.nombre.toLowerCase().trim() === 'servicios');
+                const hijos = (serviciosItem && serviciosItem.hijos) ? serviciosItem.hijos : [];
+
+                const entries = hijos.length > 0 
+                    ? hijos.map(h => {
+                        const key = getCatalogKey(h.nombre);
+                        const meta = SERVICIOS_CATALOG_INFO[key] || {
+                            key,
+                            nombre: h.nombre,
+                            descripcion: 'Herramienta de servicios en Idealandia.',
+                            icon: 'fa-concierge-bell',
+                            target: key
+                        };
+                        return {
+                            ...meta,
+                            nombre: h.nombre,
+                            autorizado: h.autorizado !== false
+                        };
+                    })
+                    : Object.values(SERVICIOS_CATALOG_INFO).map(m => ({ ...m, autorizado: false }));
+
+                entries.forEach(serv => {
+                    const isAuth = Boolean(serv.autorizado);
+                    const card = document.createElement('div');
+                    card.className = `servicio-card ${isAuth ? 'card-available' : 'card-restricted'}`;
+                    card.dataset.serviceKey = serv.key;
+                    card.dataset.serviceName = serv.nombre;
+                    card.dataset.autorizado = isAuth ? 'true' : 'false';
+
+                    card.innerHTML = `
+                        <div class="servicio-card-header">
+                            <div class="servicio-card-icon">
+                                <i class="fas ${serv.icon}" aria-hidden="true"></i>
+                            </div>
+                            <h3 class="servicio-card-title">${escapeHTML(serv.nombre)}</h3>
+                        </div>
+                        <div class="servicio-card-body">
+                            <p class="servicio-card-desc">${escapeHTML(serv.descripcion)}</p>
+                        </div>
+                        <div class="servicio-card-status ${isAuth ? 'status-disponible' : 'status-restringido'}">
+                            ${isAuth 
+                                ? '<i class="fas fa-check-circle" aria-hidden="true"></i> Disponible' 
+                                : '<i class="fas fa-lock" aria-hidden="true"></i> Acceso restringido'}
+                        </div>
+                        <div class="servicio-card-footer">
+                            ${isAuth 
+                                ? `<button type="button" class="btn btn-primary btn-entrar-servicio" data-target="${escapeHTML(serv.target)}">Entrar</button>` 
+                                : `<div class="servicio-card-restricted-msg"><small>Si deseas tener acceso a <strong>${escapeHTML(serv.nombre)}</strong>, consulta con tu administrador para que te dé acceso.</small></div>`}
+                        </div>
+                    `;
+
+                    if (!isAuth) {
+                        card.style.cursor = 'pointer';
+                        card.onclick = () => showAccessDeniedModal(serv.nombre);
+                    } else {
+                        const entrarBtn = card.querySelector('.btn-entrar-servicio');
+                        if (entrarBtn) {
+                            entrarBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                ejecutarEntradaServicio(serv.target);
+                            };
+                        }
+                    }
+
+                    container.appendChild(card);
+                });
+            }
+
+            function ejecutarEntradaServicio(target) {
+                const sections = document.querySelectorAll('.content-section');
+                if (target === 'asesoria-pensiones') {
+                    sections.forEach(s => s.style.display = (s.id === 'servicios') ? 'flex' : 'none');
+                    const catalogoView = document.getElementById('servicios-catalogo-view');
+                    const pensionView = document.getElementById('servicios-pension-view');
+                    if (catalogoView) catalogoView.style.display = 'none';
+                    if (pensionView) pensionView.style.display = 'block';
+                    const formEstimacionLocal = document.getElementById('form-estimacion');
+                    if (formEstimacionLocal) formEstimacionLocal.style.display = 'block';
+                } else if (target === 'ideas') {
+                    sections.forEach(s => s.style.display = (s.id === 'ideas') ? 'flex' : 'none');
+                    if (typeof fetchAndDisplayIdeas === 'function') fetchAndDisplayIdeas();
+                } else if (target === 'clases-ingles') {
+                    sections.forEach(s => s.style.display = (s.id === 'clases-ingles') ? 'flex' : 'none');
+                } else {
+                    const sec = document.getElementById(target);
+                    if (sec && sec.classList.contains('content-section')) {
+                        sections.forEach(s => s.style.display = (s.id === target) ? 'flex' : 'none');
+                    } else {
+                        if (typeof window.showModal === 'function') {
+                            window.showModal(`Funcionalidad ${target} disponible.`);
+                        }
+                    }
+                }
+            }
+
+            window.ejecutarEntradaServicio = ejecutarEntradaServicio;
+            window.renderServiciosCatalog = renderServiciosCatalog;
+            window.showAccessDeniedModal = showAccessDeniedModal;
+
             async function buildMenu() {
                 try {
-                    const response = await fetch('/api/menu');
+                    const response = await fetch('/api/menu', {
+                        method: 'GET',
+                        cache: 'no-store',
+                        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                    });
                     if (!response.ok) throw new Error('Error al obtener el menú');
                     const menuData = await response.json();
 
@@ -1276,6 +1485,17 @@
                     };
 
                     items.forEach(item => {
+                        // Si el usuario no está autenticado, no renderizar elementos privados en el menú lateral
+                        if (!window.currentUser && item.publico === 0) {
+                            return;
+                        }
+                        // Administración debe requerir estrictamente usuario autenticado y autorizado
+                        if (item.nombre && item.nombre.trim() === 'Administración') {
+                            if (!window.currentUser || item.autorizado === false) {
+                                return;
+                            }
+                        }
+
                         const li = document.createElement('li');
                         const a = document.createElement('a');
                         a.href = '#';
@@ -1294,12 +1514,28 @@
                             ul.style.paddingLeft = '20px';
                             ul.style.fontSize = '0.9em';
 
+                            const isServiciosContainer = item.nombre && item.nombre.toLowerCase().trim() === 'servicios';
                             item.hijos.forEach(hijo => {
                                 const subLi = document.createElement('li');
                                 const subA = document.createElement('a');
                                 subA.href = '#';
-                                subA.textContent = hijo.nombre;
                                 subA.dataset.submenu = sectionMap[hijo.nombre] || hijo.nombre.toLowerCase().replace(/\s+/g, '-');
+                                subA.dataset.serviceName = hijo.nombre;
+
+                                if (isServiciosContainer) {
+                                    const isAuth = hijo.autorizado !== false;
+                                    subA.dataset.autorizado = isAuth ? 'true' : 'false';
+                                    subA.className = 'service-menu-link' + (isAuth ? ' is-available' : ' is-restricted');
+
+                                    const badgeHtml = isAuth 
+                                        ? '<span class="service-menu-badge available" title="Disponible"><i class="fas fa-check-circle" aria-hidden="true"></i></span>'
+                                        : '<span class="service-menu-badge restricted" title="Acceso restringido"><i class="fas fa-lock" aria-hidden="true"></i></span>';
+
+                                    subA.innerHTML = `<span class="service-menu-name">${escapeHTML(hijo.nombre)}</span> ${badgeHtml}`;
+                                } else {
+                                    subA.textContent = hijo.nombre;
+                                }
+
                                 subLi.appendChild(subA);
                                 ul.appendChild(subLi);
                             });
@@ -1312,6 +1548,7 @@
                     });
 
                     // Re-attach menu event listeners after rebuilding the DOM
+                    renderServiciosCatalog(items);
                     attachMenuEvents();
                 } catch (error) {
                     console.error('Error al construir el menú:', error);
@@ -1320,7 +1557,11 @@
 
             async function checkAuthStatus() {
                 try {
-                    const response = await fetch('/api/me');
+                    const response = await fetch('/api/me', {
+                        method: 'GET',
+                        cache: 'no-store',
+                        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                    });
                     if (response.ok) {
                         const data = await response.json();
                         const user = data.user;
@@ -1329,10 +1570,28 @@
                         document.getElementById('auth-container-user').style.display = 'flex';
                         document.getElementById('user-greeting').textContent = `Bienvenido, ${user.nombre || user.usuario}`;
                     } else {
+                        window.currentUser = null;
                         document.getElementById('auth-container-guest').style.display = 'flex';
                         document.getElementById('auth-container-user').style.display = 'none';
                         document.getElementById('user-greeting').textContent = '';
-                        window.currentUser = null;
+
+                        if (typeof scheduleRbacTimers === 'function') {
+                            scheduleRbacTimers(null, null);
+                        }
+
+                        // Asegurar remoción inmediata de Administración en caso de estar presente en el menú
+                        const adminMenuLink = document.querySelector('a[data-section="admin"]');
+                        if (adminMenuLink && adminMenuLink.closest('li')) {
+                            adminMenuLink.closest('li').remove();
+                        }
+
+                        // Si la sección activa es admin, ocultarla y volver a inicio
+                        const adminSection = document.getElementById('admin');
+                        if (adminSection && adminSection.style.display !== 'none') {
+                            adminSection.style.display = 'none';
+                            const inicioSection = document.getElementById('inicio');
+                            if (inicioSection) inicioSection.style.display = 'flex';
+                        }
                     }
 
                     // Build menu after determining auth status
@@ -1353,26 +1612,63 @@
                 btnLogout.addEventListener('click', async (e) => {
                     e.preventDefault();
                     try {
-                        const response = await fetch('/api/logout', { method: 'POST' });
-                        if (response.ok) {
-                            // Terminate live session so context gets cleared
-                            if (typeof stopLive === 'function') {
-                                stopLive();
-                            }
-
-                            // Reset chat history to prevent leak
-                            const chatHistory = document.getElementById('chat-history');
-                            if (chatHistory) {
-                                chatHistory.innerHTML = `
-                                    <div class="message idealita-message">
-                                        ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
-                                    </div>
-                                `;
-                            }
-
-                            checkAuthStatus();
-                            document.querySelector('a[data-section="inicio"]').click();
+                        // Limpiar de inmediato el estado en memoria y temporizadores RBAC
+                        window.currentUser = null;
+                        if (typeof scheduleRbacTimers === 'function') {
+                            scheduleRbacTimers(null, null);
                         }
+
+                        // Quitar inmediatamente la opción de Administración del menú
+                        const adminMenuLink = document.querySelector('a[data-section="admin"]');
+                        if (adminMenuLink && adminMenuLink.closest('li')) {
+                            adminMenuLink.closest('li').remove();
+                        }
+
+                        // Si está en la consola de administración, ocultarla de inmediato
+                        const adminSection = document.getElementById('admin');
+                        if (adminSection) adminSection.style.display = 'none';
+
+                        // Terminate live session so context gets cleared
+                        if (typeof stopLive === 'function') {
+                            stopLive();
+                        }
+
+                        // Reset chat history to prevent leak
+                        const chatHistory = document.getElementById('chat-history');
+                        if (chatHistory) {
+                            chatHistory.innerHTML = `
+                                <div class="message idealita-message">
+                                    ¡Hola! Soy Idealita, tu asistente virtual. ¿En qué puedo ayudarte?
+                                </div>
+                            `;
+                        }
+
+                        // Actualizar UI de cabecera a invitado de inmediato
+                        document.getElementById('auth-container-guest').style.display = 'flex';
+                        document.getElementById('auth-container-user').style.display = 'none';
+                        document.getElementById('user-greeting').textContent = '';
+
+                        // Cambiar la vista a inicio de inmediato
+                        const sections = document.querySelectorAll('.content-section');
+                        sections.forEach(section => {
+                            if (section.id === 'inicio') {
+                                section.style.display = 'flex';
+                            } else {
+                                section.style.display = 'none';
+                            }
+                        });
+
+                        const response = await fetch('/api/logout', {
+                            method: 'POST',
+                            cache: 'no-store',
+                            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                        });
+
+                        // Reconstruir estado y menú como usuario no autenticado
+                        await checkAuthStatus();
+
+                        const inicioLink = document.querySelector('a[data-section="inicio"]');
+                        if (inicioLink) inicioLink.click();
                     } catch (error) {
                         console.error('Error logging out:', error);
                     }
@@ -1396,12 +1692,41 @@
 
                     newServiciosLink.addEventListener('click', (e) => {
                         e.preventDefault();
-                        if (submenuServicios.style.display === 'none') {
+                        if (submenuServicios.style.display === 'none' || !submenuServicios.style.display) {
                             submenuServicios.style.display = 'block';
                         } else {
                             submenuServicios.style.display = 'none';
                         }
+
+                        // Open Servicios catalog section
+                        sections.forEach(section => {
+                            if (section.id === 'servicios') {
+                                section.style.display = 'flex';
+                            } else {
+                                section.style.display = 'none';
+                            }
+                        });
+
+                        const catalogoView = document.getElementById('servicios-catalogo-view');
+                        const pensionView = document.getElementById('servicios-pension-view');
+                        if (catalogoView) catalogoView.style.display = 'block';
+                        if (pensionView) pensionView.style.display = 'none';
+
+                        if (window.innerWidth <= 768 && sidebar) {
+                            sidebar.classList.remove('sidebar-open');
+                        }
                     });
+                }
+
+                // Back button in pension view to return to catalog
+                const btnVolver = document.getElementById('btn-volver-catalogo');
+                if (btnVolver) {
+                    btnVolver.onclick = () => {
+                        const catalogoView = document.getElementById('servicios-catalogo-view');
+                        const pensionView = document.getElementById('servicios-pension-view');
+                        if (catalogoView) catalogoView.style.display = 'block';
+                        if (pensionView) pensionView.style.display = 'none';
+                    };
                 }
 
                 menuLinks.forEach(link => {
@@ -1414,6 +1739,13 @@
                     newLink.addEventListener('click', (e) => {
                         e.preventDefault();
                         const targetId = newLink.getAttribute('data-section');
+
+                        // Guardia de seguridad: no permitir activar sección admin si no hay usuario autenticado
+                        if (targetId === 'admin' && !window.currentUser) {
+                            const inicioLink = document.querySelector('a[data-section="inicio"]');
+                            if (inicioLink) inicioLink.click();
+                            return;
+                        }
 
                         sections.forEach(section => {
                             if (section.id === targetId) {
@@ -1449,9 +1781,18 @@
                          e.preventDefault();
 
                          const submenuId = newLink.getAttribute('data-submenu');
+                         const isAutorizado = newLink.dataset.autorizado;
+                         const serviceName = newLink.dataset.serviceName || newLink.textContent.trim();
+
+                         if (isAutorizado === 'false') {
+                             showAccessDeniedModal(serviceName);
+                             if (window.innerWidth <= 768 && sidebar) {
+                                 sidebar.classList.remove('sidebar-open');
+                             }
+                             return;
+                         }
 
                          if (submenuId === 'asesoria-pensiones') {
-                             // Show 'Servicios' section
                              sections.forEach(section => {
                                  if (section.id === 'servicios') {
                                      section.style.display = 'flex';
@@ -1460,13 +1801,25 @@
                                  }
                              });
 
-                             // Show the estimacion form
+                             const catalogoView = document.getElementById('servicios-catalogo-view');
+                             const pensionView = document.getElementById('servicios-pension-view');
+                             if (catalogoView) catalogoView.style.display = 'none';
+                             if (pensionView) pensionView.style.display = 'block';
+
                              const formEstimacionLocal = document.getElementById('form-estimacion');
                              if (formEstimacionLocal) {
                                  formEstimacionLocal.style.display = 'block';
                              }
+                         } else if (submenuId === 'ideas-innovadoras' || submenuId === 'ideas') {
+                             sections.forEach(section => {
+                                 if (section.id === 'ideas') {
+                                     section.style.display = 'flex';
+                                     if (typeof fetchAndDisplayIdeas === 'function') fetchAndDisplayIdeas();
+                                 } else {
+                                     section.style.display = 'none';
+                                 }
+                             });
                          } else {
-                             // For other elements, check if section exists
                              const targetSection = document.getElementById(submenuId);
                              if (targetSection && targetSection.classList.contains('content-section')) {
                                  sections.forEach(section => {
@@ -1481,7 +1834,6 @@
                              }
                          }
 
-                         // Just close sidebar if mobile
                          if (window.innerWidth <= 768 && sidebar) {
                             sidebar.classList.remove('sidebar-open');
                          }
@@ -1812,8 +2164,9 @@
                         }
 
                         // Switch view to home or chat, and update UI
-                        checkAuthStatus();
-                        document.querySelector('a[data-section="inicio"]').click();
+                        await checkAuthStatus();
+                        const inicioLink = document.querySelector('a[data-section="inicio"]');
+                        if (inicioLink) inicioLink.click();
                     } else {
                         showModal(`Error: ${data.error}`);
                     }
@@ -2154,6 +2507,10 @@
             }
 
             async function handleSend() {
+                if (isVoiceActive()) {
+                    return;
+                }
+
                 const text = userInput.value.trim();
 
                 if (text === '') {
@@ -2191,10 +2548,12 @@
                     console.error('Error fetching chat response:', error);
                     addMessage('Lo siento, hubo un error al conectar con el servidor.', 'idealita');
                 } finally {
-                    // Reactivar controles
-                    sendBtn.disabled = false;
-                    userInput.disabled = false;
-                    userInput.focus();
+                    // Reactivar controles solo si el modo de voz no está activo
+                    if (!isVoiceActive()) {
+                        sendBtn.disabled = false;
+                        userInput.disabled = false;
+                        userInput.focus();
+                    }
                 }
             }
 
@@ -2206,15 +2565,99 @@
 
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    handleSend();
+                    if (!userInput.disabled && !isVoiceActive()) {
+                        handleSend();
+                    }
                 }
 
             });
 
             // --- Idealita Live Logic ---
             let liveWebSocket = null;
-            window.isCurrentVoiceMode = true;
+            window.isCurrentVoiceMode = false;
             let audioContext = null;
+
+            function isVoiceActive() {
+                return Boolean(
+                    window.isCurrentVoiceMode === true &&
+                    liveWebSocket &&
+                    (liveWebSocket.readyState === WebSocket.OPEN || liveWebSocket.readyState === 1)
+                );
+            }
+            window.isVoiceActive = isVoiceActive;
+
+            function setVoiceModeUIState(active) {
+                const btnStart = document.getElementById('btn-start-live');
+                const btnStop = document.getElementById('btn-stop-live');
+                const btnMute = document.getElementById('btn-mute-mic');
+                const uInput = document.getElementById('user-input');
+                const sBtn = document.getElementById('send-btn');
+                const controlsWrapper = document.getElementById('chat-controls-wrapper');
+                const inputCont = document.getElementById('input-container');
+
+                if (active) {
+                    if (btnStart) {
+                        btnStart.disabled = false;
+                        btnStart.style.display = 'inline-block';
+                        btnStart.style.backgroundColor = '#dc3545';
+                        btnStart.innerHTML = '<i class="fas fa-stop" style="margin-right: 6px;"></i>Terminar con Voz';
+                        btnStart.setAttribute('aria-label', 'Terminar con Voz');
+                        btnStart.setAttribute('title', 'Terminar con Voz');
+                    }
+                    if (btnStop) {
+                        btnStop.style.display = 'none';
+                    }
+                    if (btnMute) {
+                        btnMute.style.display = 'inline-block';
+                    }
+                    if (uInput) {
+                        uInput.disabled = true;
+                        uInput.setAttribute('disabled', 'disabled');
+                        uInput.placeholder = 'Modo voz activo. Conversa directamente con Idealita...';
+                    }
+                    if (sBtn) {
+                        sBtn.disabled = true;
+                        sBtn.setAttribute('disabled', 'disabled');
+                    }
+                    if (controlsWrapper) {
+                        controlsWrapper.classList.add('voice-mode-active');
+                    }
+                    if (inputCont) {
+                        inputCont.classList.add('voice-mode-active');
+                    }
+                } else {
+                    if (btnStart) {
+                        btnStart.disabled = false;
+                        btnStart.style.display = 'inline-block';
+                        btnStart.style.backgroundColor = '#6c40f7';
+                        btnStart.innerHTML = '<i class="fas fa-microphone" style="margin-right: 6px;"></i>Iniciar con Voz';
+                        btnStart.setAttribute('aria-label', 'Iniciar con Voz');
+                        btnStart.setAttribute('title', 'Iniciar con Voz');
+                    }
+                    if (btnStop) {
+                        btnStop.style.display = 'none';
+                    }
+                    if (btnMute) {
+                        btnMute.style.display = 'none';
+                    }
+                    if (uInput) {
+                        uInput.disabled = false;
+                        uInput.removeAttribute('disabled');
+                        uInput.placeholder = 'Escribe tu mensaje...';
+                    }
+                    if (sBtn) {
+                        sBtn.disabled = false;
+                        sBtn.removeAttribute('disabled');
+                    }
+                    if (controlsWrapper) {
+                        controlsWrapper.classList.remove('voice-mode-active');
+                    }
+                    if (inputCont) {
+                        inputCont.classList.remove('voice-mode-active');
+                    }
+                }
+            }
+            window.setVoiceModeUIState = setVoiceModeUIState;
             let audioWorkletNode = null;
             let micStream = null;
             let pcmPlaybackContext = null;
@@ -2296,6 +2739,10 @@
                     try {
                         window.isLiveConnecting = true;
                         window.isCurrentVoiceMode = isVoiceMode;
+                        if (isVoiceMode && btnStartLive) {
+                            btnStartLive.disabled = true;
+                            btnStartLive.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i>Conectando...';
+                        }
                     if (!window.threeJsAnimationFrameId && typeof window.init3DAvatar === "function") {
                         window.init3DAvatar();
                     }
@@ -2522,11 +2969,10 @@
                         // Start global loop
                         globalAnimateAvatar();
 
+                        window.isLiveConnecting = false;
                         updateLiveStatus("Esperando setup...");
                         if (window.isCurrentVoiceMode !== false) {
-                            btnStartLive.style.display = 'none';
-                            btnStopLive.style.display = 'inline-block';
-                            if(btnMuteMic) btnMuteMic.style.display = 'inline-block';
+                            setVoiceModeUIState(true);
                             const avatarContainer = document.getElementById('avatar-container');
                             if(avatarContainer) avatarContainer.style.display = 'flex';
                         }
@@ -2788,15 +3234,15 @@
                     liveWebSocket.onerror = (err) => {
                         console.error("Live API WS Error:", err);
                         updateLiveStatus("Error en la conexión.");
-                        stopLive();
                         window.isLiveConnecting = false;
+                        stopLive();
                         reject(err);
                     };
 
                     liveWebSocket.onclose = () => {
                         console.log("Live API WS Closed.");
-                        stopLive();
                         window.isLiveConnecting = false;
+                        stopLive();
                         reject(new Error("Connection closed"));
                     };
 
@@ -2805,6 +3251,7 @@
                         showModal("No se pudo iniciar Idealita Live. Revisa los permisos de micrófono o tu conexión.");
                         updateLiveStatus("Desconectado");
                         window.isLiveConnecting = false;
+                        setVoiceModeUIState(false);
                         reject(err);
                     }
                 });
@@ -2858,10 +3305,19 @@
             }
 
             function stopLive() {
+                window.isLiveConnecting = false;
+                window.isCurrentVoiceMode = false;
                 isSetupComplete = false;
                 if (liveWebSocket) {
-                    liveWebSocket.close();
+                    const wsToClose = liveWebSocket;
                     liveWebSocket = null;
+                    wsToClose.onclose = null;
+                    wsToClose.onerror = null;
+                    try {
+                        wsToClose.close();
+                    } catch (e) {
+                        console.error("Error closing WebSocket:", e);
+                    }
                 }
                 if (audioWorkletNode) {
                     audioWorkletNode.disconnect();
@@ -2881,8 +3337,7 @@
                 }
 
                 updateLiveStatus("Desconectado");
-                btnStartLive.style.display = 'inline-block';
-                btnStopLive.style.display = 'none';
+                setVoiceModeUIState(false);
 
                 if (window.currentMouthAnimId && window.cancelAnimationFrame) {
                     window.cancelAnimationFrame(window.currentMouthAnimId);
@@ -2914,14 +3369,26 @@
 
             if (btnStartLive) {
                 btnStartLive.addEventListener('click', async () => {
-                    if (liveWebSocket && liveWebSocket.readyState === WebSocket.OPEN && window.isCurrentVoiceMode === false) {
+                    if (isVoiceActive()) {
                         stopLive();
-                        // wait a bit for cleanup
+                        return;
+                    }
+
+                    if (window.isLiveConnecting) {
+                        return;
+                    }
+
+                    if (liveWebSocket && (liveWebSocket.readyState === WebSocket.OPEN || liveWebSocket.readyState === 0) && window.isCurrentVoiceMode === false) {
+                        stopLive();
                         await new Promise(r => setTimeout(r, 100));
                     }
-                    startLive(true);
+                    startLive(true).catch(err => {
+                        console.warn("startLive catch:", err ? err.message : err);
+                    });
                 });
             }
+            window.stopLive = stopLive;
+            window.startLive = startLive;
             if (btnStopLive) btnStopLive.addEventListener('click', stopLive);
 
             // Toggle Mobile Avatar
