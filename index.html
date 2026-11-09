@@ -633,6 +633,7 @@
                                 <th>ID</th>
                                 <th>Usuario</th>
                                 <th>Funcionalidad</th>
+                                <th>Permisos</th>
                                 <th>Tipo</th>
                                 <th>Inicio</th>
                                 <th>Fin</th>
@@ -1569,8 +1570,12 @@
                         document.getElementById('auth-container-guest').style.display = 'none';
                         document.getElementById('auth-container-user').style.display = 'flex';
                         document.getElementById('user-greeting').textContent = `Bienvenido, ${user.nombre || user.usuario}`;
+                        if (typeof refreshIdeasContext === 'function') {
+                            refreshIdeasContext(false).catch(() => {});
+                        }
                     } else {
                         window.currentUser = null;
+                        if (typeof clearIdealitaUserContext === 'function') clearIdealitaUserContext();
                         document.getElementById('auth-container-guest').style.display = 'flex';
                         document.getElementById('auth-container-user').style.display = 'none';
                         document.getElementById('user-greeting').textContent = '';
@@ -1614,6 +1619,7 @@
                     try {
                         // Limpiar de inmediato el estado en memoria y temporizadores RBAC
                         window.currentUser = null;
+                        if (typeof clearIdealitaUserContext === 'function') clearIdealitaUserContext();
                         if (typeof scheduleRbacTimers === 'function') {
                             scheduleRbacTimers(null, null);
                         }
@@ -2248,6 +2254,126 @@
                 });
             }
 
+            
+            // --- Gestor de Contexto de Idealita (Ideas y Manual) ---
+            window.idealitaContext = {
+                userId: null,
+                userName: null,
+                ideas: null,
+                hasIdeasAccess: true,
+                manualText: null,
+                lastUpdated: null,
+                isLoading: false
+            };
+
+            function clearIdealitaUserContext() {
+                window.idealitaContext = {
+                    userId: null,
+                    userName: null,
+                    ideas: null,
+                    hasIdeasAccess: true,
+                    manualText: window.idealitaContext ? window.idealitaContext.manualText : null,
+                    lastUpdated: null,
+                    isLoading: false
+                };
+            }
+            window.clearIdealitaUserContext = clearIdealitaUserContext;
+
+            function buildIdealitaIdeasContextPart(ctx) {
+                if (!ctx) ctx = window.idealitaContext;
+                const userName = (ctx && ctx.userName) || (window.currentUser ? (window.currentUser.nombre || window.currentUser.usuario) : 'Usuario');
+
+                if (!ctx || ctx.hasIdeasAccess === false) {
+                    let part = "--- ESTADO DE ACCESO A IDEAS ---\n";
+                    part += "El usuario autenticado no tiene acceso a la funcionalidad Ideas.\n\n";
+                    part += `Usuario: ${userName}\n\n`;
+                    part += "Si el usuario pregunta, solicita, consulta o hace referencia a sus Ideas, NO inventes ninguna idea y NO intentes consultar datos de Ideas.\n\n";
+                    part += "Debes responder de forma clara indicando:\n\n";
+                    part += `"${userName}, no cuentas con acceso a la funcionalidad de Ideas, verifícalo con tu administrador para que te dé acceso."\n\n`;
+                    part += "IMPORTANTE: Mantén esta instrucción estrictamente como contexto interno confidencial. NUNCA menciones espontáneamente al usuario que no tiene acceso a Ideas al saludarlo o al conversar sobre cualquier otro tema. ÚNICAMENTE debes responder esto cuando el usuario pregunte, solicite o haga referencia a sus Ideas.\n\n";
+                    return part;
+                }
+
+                if (Array.isArray(ctx.ideas) && ctx.ideas.length > 0) {
+                    let part = "--- IDEAS DEL USUARIO ---\nAquí están las ideas registradas de este usuario:\n";
+                    ctx.ideas.forEach(idea => {
+                        part += `- ID: ${idea.id || 'N/A'}, Título: "${idea.titulo || ''}", Estado: "${idea.estado || ''}", Descripción: "${idea.descripcion || ''}"\n`;
+                    });
+                    return part;
+                } else {
+                    return "El usuario autenticado no tiene ideas registradas actualmente.\n";
+                }
+            }
+            window.buildIdealitaIdeasContextPart = buildIdealitaIdeasContextPart;
+
+            function notifyLiveSessionContextUpdate() {
+                const ws = (typeof window !== 'undefined' && window.liveWebSocket) ? window.liveWebSocket : ((typeof liveWebSocket !== 'undefined') ? liveWebSocket : null);
+                if (ws && (ws.readyState === 1 || (typeof WebSocket !== 'undefined' && ws.readyState === WebSocket.OPEN))) {
+                    try {
+                        const ideasPart = buildIdealitaIdeasContextPart(window.idealitaContext);
+                        const updateMessage = `[ACTUALIZACIÓN DE CONTEXTO DE IDEAS]\n${ideasPart}`;
+                        ws.send(JSON.stringify({
+                            clientContent: {
+                                turns: [{ role: "user", parts: [{ text: updateMessage }] }],
+                                turnComplete: false
+                            }
+                        }));
+                        console.log("Notificación de contexto de ideas enviada a la sesión Live activa.");
+                    } catch (e) {
+                        console.warn("No se pudo notificar la actualización a la sesión Live:", e);
+                    }
+                }
+            }
+            window.notifyLiveSessionContextUpdate = notifyLiveSessionContextUpdate;
+
+            async function refreshIdeasContext(forceReload = false) {
+                if (!window.currentUser) {
+                    clearIdealitaUserContext();
+                    return window.idealitaContext;
+                }
+                const userId = window.currentUser.id;
+                const userName = window.currentUser.nombre || window.currentUser.usuario;
+
+                if (!forceReload && window.idealitaContext && window.idealitaContext.userId === userId && window.idealitaContext.ideas !== null) {
+                    return window.idealitaContext;
+                }
+
+                try {
+                    if (!window.idealitaContext) {
+                        clearIdealitaUserContext();
+                    }
+                    window.idealitaContext.isLoading = true;
+                    window.idealitaContext.userId = userId;
+                    window.idealitaContext.userName = userName;
+
+                    const response = await fetch('/api/ideas', { skipRbacInterceptor: true });
+                    if (response.ok) {
+                        const data = await response.json();
+                        window.idealitaContext.ideas = Array.isArray(data.ideas) ? data.ideas : [];
+                        window.idealitaContext.hasIdeasAccess = true;
+                        window.idealitaContext.lastUpdated = new Date();
+                    } else if (response.status === 403) {
+                        window.idealitaContext.ideas = [];
+                        window.idealitaContext.hasIdeasAccess = false;
+                        window.idealitaContext.lastUpdated = new Date();
+                        console.log("Usuario sin acceso a Ideas (403 RBAC_ACCESS_DENIED) en refreshIdeasContext.");
+                    } else {
+                        console.warn("Respuesta no exitosa al refrescar contexto de ideas:", response.status);
+                    }
+                } catch (err) {
+                    console.error("Error al refrescar contexto de ideas:", err);
+                } finally {
+                    if (window.idealitaContext) {
+                        window.idealitaContext.isLoading = false;
+                    }
+                }
+
+                notifyLiveSessionContextUpdate();
+
+                return window.idealitaContext;
+            }
+            window.refreshIdeasContext = refreshIdeasContext;
+
             async function fetchAndDisplayIdeas() {
                 const listaIdeas = document.getElementById('lista-ideas');
                 const ideasMessage = document.getElementById('ideas-message');
@@ -2335,6 +2461,9 @@
                                         const data = await res.json();
                                         if (res.ok) {
                                             showModal('Estado de la idea actualizado correctamente.');
+                                            if (typeof refreshIdeasContext === 'function') {
+                                                await refreshIdeasContext(true);
+                                            }
                                             fetchAndDisplayIdeas();
                                         } else {
                                             showModal(`Error: ${data.error}`);
@@ -2381,6 +2510,9 @@
                                                 const data = await res.json();
                                                 if (res.ok) {
                                                     showModal('Idea eliminada correctamente.');
+                                                    if (typeof refreshIdeasContext === 'function') {
+                                                        await refreshIdeasContext(true);
+                                                    }
                                                     fetchAndDisplayIdeas();
                                                 } else {
                                                     showModal(`Error: ${data.error}`);
@@ -2399,6 +2531,9 @@
                         }
                     } else if (response.status === 401) {
                          ideasGuestMessage.style.display = 'block';
+                    } else if (response.status === 403) {
+                         ideasMessage.textContent = 'No cuentas con acceso a la funcionalidad de Ideas.';
+                         ideasMessage.style.display = 'block';
                     } else {
                          ideasMessage.textContent = 'Error al cargar las ideas.';
                          ideasMessage.style.display = 'block';
@@ -2457,6 +2592,9 @@
                             document.getElementById('idea-descripcion').value = '';
                             document.getElementById('idea-estado').value = 'pendiente';
 
+                            if (typeof refreshIdeasContext === 'function') {
+                                await refreshIdeasContext(true);
+                            }
                             fetchAndDisplayIdeas();
                         } else {
                             showModal(`Error: ${data.error}`);
@@ -2573,7 +2711,7 @@
             });
 
             // --- Idealita Live Logic ---
-            let liveWebSocket = null;
+            let liveWebSocket = null; if (typeof window !== "undefined") window.liveWebSocket = null;
             window.isCurrentVoiceMode = false;
             let audioContext = null;
 
@@ -2756,7 +2894,7 @@
 
                     updateLiveStatus("Conectando con Gemini...");
                     const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
-                    liveWebSocket = new WebSocket(wsUrl);
+                    liveWebSocket = new WebSocket(wsUrl); window.liveWebSocket = liveWebSocket;
 
                     liveWebSocket.onopen = async () => {
                         updateLiveStatus("Configurando audio...");

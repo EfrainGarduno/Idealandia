@@ -474,6 +474,152 @@ async function loadPermisos() {
 
 
 
+let currentAccesoPermisosList = [];
+
+async function renderFunctionalityPermissionsSection(container, funcId, selectedPermisoIds = []) {
+    if (!container) return;
+    if (!funcId) {
+        container.innerHTML = '';
+        container.style.display = 'none';
+        currentAccesoPermisosList = [];
+        return;
+    }
+
+    container.style.display = 'block';
+    container.innerHTML = '<div style="padding: 10px; color: #666; font-size: 0.9em;"><i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i>Cargando permisos de la funcionalidad...</div>';
+
+    try {
+        const res = await fetch(`/api/admin/funcionalidades/${funcId}/permisos`);
+        if (!res.ok) throw new Error('Error al cargar permisos');
+        const permisos = await res.json();
+        currentAccesoPermisosList = permisos;
+
+        if (!permisos || permisos.length === 0) {
+            container.innerHTML = `
+                <div style="margin-top: 10px; margin-bottom: 12px;">
+                    <label style="font-weight: 600; font-size: 0.9em; display: block; margin-bottom: 4px;">Permisos de la funcionalidad:</label>
+                    <div class="acceso-perms-empty-msg" style="padding: 10px 12px; border: 1px dashed #d0d7de; border-radius: 6px; background: #fafafa; color: #666; font-style: italic; font-size: 0.88em;">
+                        Esta funcionalidad no tiene permisos específicos configurados.
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <div style="margin-top: 10px; margin-bottom: 12px;">
+                <label style="font-weight: 600; font-size: 0.9em; display: block; margin-bottom: 6px;">Permisos de la funcionalidad:</label>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+                    <div style="position: relative; flex-grow: 1;">
+                        <input type="text" id="filter-acceso-perms" class="form-input" placeholder="Filtrar permisos..." style="width: 100%; box-sizing: border-box; padding-right: 25px; margin-bottom: 0;">
+                        <span id="clear-filter-acceso-perms" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #888; display: none; font-size: 16px;">&times;</span>
+                    </div>
+                    <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-weight: 600; padding: 6px 10px; border-radius: 4px; background: #eef2f7; border: 1px solid #d0d7de; font-size: 0.9em;">
+                        <input type="checkbox" id="cb-select-all-acceso-perms">
+                        <span>Todo</span>
+                    </label>
+                </div>
+                <div id="acceso-perms-list-container" style="max-height: 180px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; background: #fafafa;">
+        `;
+
+        permisos.forEach(p => {
+            const isChecked = selectedPermisoIds.includes(p.id) ? 'checked' : '';
+            html += `
+                <div class="acceso-perm-item-row" data-perm-id="${p.id}" data-perm-nombre="${escapeHTML(p.nombre).toLowerCase()}" data-perm-codigo="${escapeHTML(p.codigo).toLowerCase()}" style="padding: 4px 6px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f0f0f0;">
+                    <input type="checkbox" class="acceso-perm-checkbox" id="acceso-perm-cb-${p.id}" value="${p.id}" ${isChecked} style="cursor: pointer;">
+                    <label for="acceso-perm-cb-${p.id}" style="cursor: pointer; font-size: 0.9em; display: flex; flex-direction: column; margin: 0;">
+                        <span style="font-weight: 500;">${escapeHTML(p.nombre)} <code style="font-size: 0.85em; color: #57606a;">(${escapeHTML(p.codigo)})</code></span>
+                        ${p.descripcion ? `<span style="font-size: 0.78em; color: #6e7781;">${escapeHTML(p.descripcion)}</span>` : ''}
+                    </label>
+                </div>
+            `;
+        });
+
+        html += `
+                    <div id="acceso-perms-filter-empty" style="display: none; padding: 8px; color: #888; font-style: italic; text-align: center; font-size: 0.85em;">
+                        No se encontraron permisos coincidentes.
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+
+        // Tri-state and filter logic
+        const filterInput = container.querySelector('#filter-acceso-perms');
+        const clearFilterBtn = container.querySelector('#clear-filter-acceso-perms');
+        const selectAllCb = container.querySelector('#cb-select-all-acceso-perms');
+        const listContainer = container.querySelector('#acceso-perms-list-container');
+        const filterEmpty = container.querySelector('#acceso-perms-filter-empty');
+        const rows = Array.from(listContainer.querySelectorAll('.acceso-perm-item-row'));
+
+        function updateSelectAllState() {
+            const visibleRows = rows.filter(r => r.style.display !== 'none');
+            if (visibleRows.length === 0) {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = false;
+                if (filterEmpty) filterEmpty.style.display = 'block';
+                return;
+            }
+            if (filterEmpty) filterEmpty.style.display = 'none';
+
+            const visibleCheckboxes = visibleRows.map(r => r.querySelector('.acceso-perm-checkbox'));
+            const checkedCount = visibleCheckboxes.filter(cb => cb && cb.checked).length;
+
+            if (checkedCount === 0) {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = false;
+            } else if (checkedCount === visibleCheckboxes.length) {
+                selectAllCb.checked = true;
+                selectAllCb.indeterminate = false;
+            } else {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = true;
+            }
+        }
+
+        selectAllCb.onclick = () => {
+            const targetState = selectAllCb.checked;
+            const visibleRows = rows.filter(r => r.style.display !== 'none');
+            visibleRows.forEach(r => {
+                const cb = r.querySelector('.acceso-perm-checkbox');
+                if (cb) cb.checked = targetState;
+            });
+            selectAllCb.indeterminate = false;
+            updateSelectAllState();
+        };
+
+        rows.forEach(r => {
+            const cb = r.querySelector('.acceso-perm-checkbox');
+            if (cb) cb.addEventListener('change', updateSelectAllState);
+        });
+
+        function applyFilter() {
+            const term = filterInput.value.trim().toLowerCase();
+            clearFilterBtn.style.display = term ? 'block' : 'none';
+            rows.forEach(r => {
+                const nombre = r.getAttribute('data-perm-nombre') || '';
+                const codigo = r.getAttribute('data-perm-codigo') || '';
+                const match = !term || nombre.includes(term) || codigo.includes(term);
+                r.style.display = match ? 'flex' : 'none';
+            });
+            updateSelectAllState();
+        }
+
+        filterInput.addEventListener('input', applyFilter);
+        clearFilterBtn.onclick = () => {
+            filterInput.value = '';
+            applyFilter();
+            filterInput.focus();
+        };
+
+        updateSelectAllState();
+    } catch (err) {
+        console.error('Error rendering functionality permissions:', err);
+        container.innerHTML = '<div style="color: #c00; font-size: 0.85em; padding: 6px;">Error al cargar los permisos de la funcionalidad.</div>';
+    }
+}
+
 async function loadAccesos() {
     try {
         const response = await fetch('/api/admin/accesos');
@@ -486,7 +632,7 @@ async function loadAccesos() {
         if (accesos.length === 0) {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
-            td.colSpan = 9;
+            td.colSpan = 10;
             td.textContent = 'No hay accesos temporales asignados o encontrados.';
             td.style.textAlign = 'center';
             tr.appendChild(td);
@@ -499,6 +645,31 @@ async function loadAccesos() {
             let td = document.createElement('td'); td.textContent = a.id; tr.appendChild(td);
             td = document.createElement('td'); td.textContent = a.usuario_nombre; tr.appendChild(td);
             td = document.createElement('td'); td.textContent = a.funcionalidad_nombre; tr.appendChild(td);
+
+            // Permisos asignados
+            td = document.createElement('td');
+            if (Array.isArray(a.permisos) && a.permisos.length > 0) {
+                const badgesDiv = document.createElement('div');
+                badgesDiv.style.display = 'flex';
+                badgesDiv.style.flexWrap = 'wrap';
+                badgesDiv.style.gap = '4px';
+                a.permisos.forEach(p => {
+                    const span = document.createElement('span');
+                    span.className = 'admin-pill-badge';
+                    span.textContent = p.codigo || p.nombre || p;
+                    span.title = p.nombre || p.descripcion || '';
+                    badgesDiv.appendChild(span);
+                });
+                td.appendChild(badgesDiv);
+            } else {
+                const emptySpan = document.createElement('span');
+                emptySpan.style.color = '#888';
+                emptySpan.style.fontSize = '0.85em';
+                emptySpan.textContent = 'Sin permisos específicos';
+                td.appendChild(emptySpan);
+            }
+            tr.appendChild(td);
+
             td = document.createElement('td'); td.textContent = a.tipo_acceso; tr.appendChild(td);
             td = document.createElement('td'); td.textContent = a.fecha_inicio ? new Date(a.fecha_inicio).toLocaleString() : 'N/A'; tr.appendChild(td);
             td = document.createElement('td'); td.textContent = a.fecha_fin ? new Date(a.fecha_fin).toLocaleString() : 'N/A'; tr.appendChild(td);
@@ -689,6 +860,8 @@ async function showCreateAccesoModal() {
                     ${funcOptions}
                 </select>
 
+                <div id="create-acceso-perms-container" style="display: none;"></div>
+
                 <label>Tipo de Acceso:</label>
                 <select id="create-acceso-tipo" class="form-input" style="width: 100%; margin-bottom: 10px;" onchange="toggleAccesoDates()">
                     <option value="temporal">Temporal</option>
@@ -718,6 +891,15 @@ async function showCreateAccesoModal() {
 
         overlay.classList.add('active');
 
+        const funcSelect = document.getElementById('create-acceso-func');
+        const permsContainer = document.getElementById('create-acceso-perms-container');
+        if (funcSelect && permsContainer) {
+            funcSelect.addEventListener('change', () => {
+                const funcId = funcSelect.value;
+                renderFunctionalityPermissionsSection(permsContainer, funcId, []);
+            });
+        }
+
         window.toggleAccesoDates = () => {
              const tipo = document.getElementById('create-acceso-tipo').value;
              document.getElementById('create-acceso-fechas').style.display = tipo === 'temporal' ? 'block' : 'none';
@@ -736,6 +918,7 @@ async function showCreateAccesoModal() {
                 return;
             }
 
+            const selectedPermisos = Array.from(document.querySelectorAll('#create-acceso-perms-container .acceso-perm-checkbox:checked')).map(cb => parseInt(cb.value));
             try {
                 const res = await fetch('/api/admin/accesos', {
                     method: 'POST',
@@ -745,7 +928,8 @@ async function showCreateAccesoModal() {
                         funcionalidad_id,
                         tipo_acceso,
                         fecha_inicio: fecha_inicio ? fecha_inicio.replace('T', ' ') + ':00' : null,
-                        fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null
+                        fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null,
+                        permisos: selectedPermisos
                     })
                 });
                 const data = await res.json();
@@ -2119,13 +2303,26 @@ function showCreateMenuModal() {
     };
 }
 
-function showEditAccesoModal(a) {
+async function showEditAccesoModal(a) {
     if (a.estado === 'revocado') {
         if (window.showModal) window.showModal('No se puede editar un acceso con estatus revocado.');
         return;
     }
+
+    let preselectedPermIds = [];
+    if (Array.isArray(a.permisos)) {
+        preselectedPermIds = a.permisos.map(p => typeof p === 'object' ? p.id : parseInt(p));
+    } else {
+        try {
+            const pRes = await fetch(`/api/admin/accesos/${a.id}/permisos`);
+            if (pRes.ok) {
+                preselectedPermIds = await pRes.json();
+            }
+        } catch (e) {}
+    }
+
     const html = `
-        <div style="text-align: left;">
+        <div style="text-align: left; max-height: 480px; overflow-y: auto;">
             <label>Tipo de Acceso:</label>
             <select id="edit-acceso-tipo" class="form-input" style="width: 100%; margin-bottom: 10px;" onchange="toggleEditAccesoDates()">
                 <option value="temporal" ${a.tipo_acceso === 'temporal' ? 'selected' : ''}>Temporal</option>
@@ -2139,6 +2336,8 @@ function showEditAccesoModal(a) {
                 <label>Fecha y Hora de Fin:</label>
                 <input type="datetime-local" id="edit-acceso-fin" class="form-input" style="width: 100%; margin-bottom: 10px;" value="${a.fecha_fin ? new Date(new Date(a.fecha_fin).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}">
             </div>
+
+            <div id="edit-acceso-perms-container"></div>
         </div>
     `;
 
@@ -2155,6 +2354,11 @@ function showEditAccesoModal(a) {
 
     overlay.classList.add('active');
 
+    const editPermsContainer = document.getElementById('edit-acceso-perms-container');
+    if (editPermsContainer) {
+        await renderFunctionalityPermissionsSection(editPermsContainer, a.funcionalidad_id, preselectedPermIds);
+    }
+
     window.toggleEditAccesoDates = () => {
          const tipo = document.getElementById('edit-acceso-tipo').value;
          document.getElementById('edit-acceso-fechas').style.display = tipo === 'temporal' ? 'block' : 'none';
@@ -2165,6 +2369,7 @@ function showEditAccesoModal(a) {
         const tipo_acceso = document.getElementById('edit-acceso-tipo').value;
         const fecha_inicio = document.getElementById('edit-acceso-inicio').value;
         const fecha_fin = document.getElementById('edit-acceso-fin').value;
+        const selectedPermisos = Array.from(document.querySelectorAll('#edit-acceso-perms-container .acceso-perm-checkbox:checked')).map(cb => parseInt(cb.value));
 
         try {
             const res = await fetch(`/api/admin/accesos/${a.id}`, {
@@ -2173,7 +2378,8 @@ function showEditAccesoModal(a) {
                 body: JSON.stringify({
                     tipo_acceso,
                     fecha_inicio: fecha_inicio ? fecha_inicio.replace('T', ' ') + ':00' : null,
-                    fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null
+                    fecha_fin: fecha_fin ? fecha_fin.replace('T', ' ') + ':00' : null,
+                    permisos: selectedPermisos
                 })
             });
             const data = await res.json();
@@ -2191,7 +2397,6 @@ function showEditAccesoModal(a) {
         }
     };
 }
-
 
 document.addEventListener('DOMContentLoaded', () => {
     // Search for Accesos
