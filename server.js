@@ -130,6 +130,29 @@ if (pool && typeof pool.on === 'function') {
 }
 
 // Test Database Connection
+let accesoPermisosTableReady = false;
+async function ensureAccesoPermisosTable(connOrPool) {
+    if (accesoPermisosTableReady) return;
+    const runner = connOrPool || pool;
+    try {
+        if (runner && typeof runner.query === 'function') {
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS acceso_permisos (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    acceso_id INT NOT NULL,
+                    permiso_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_acceso_permiso (acceso_id, permiso_id),
+                    KEY idx_acceso_permisos_permiso (permiso_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            `);
+            accesoPermisosTableReady = true;
+        }
+    } catch (err) {
+        console.warn('Note: acceso_permisos table check/creation:', err.message);
+    }
+}
+
 pool.getConnection()
     .then(async (connection) => {
         console.log("Connected to MySQL database.");
@@ -138,6 +161,7 @@ pool.getConnection()
                 const safeTz = DB_TIMEZONE.replace(/[^0-9:+-]/g, '');
                 connection.query(`SET time_zone = '${safeTz}'`, () => {});
             }
+            await ensureAccesoPermisosTable(connection);
         } catch (e) {}
         connection.release();
     })
@@ -196,7 +220,7 @@ async function checkUserFunctionalityAccess(connectionPool, userId, funcCode) {
 
 async function checkUserPermission(connectionPool, userId, permCode) {
     if (!userId) return false;
-    const query = `
+    const roleQuery = `
         SELECT p.id, p.codigo, p.nombre
         FROM usuario_roles ur
         JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
@@ -204,8 +228,30 @@ async function checkUserPermission(connectionPool, userId, permCode) {
         JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
         WHERE ur.usuario_id = ? AND p.codigo = ?
     `;
-    const [rows] = await connectionPool.execute(query, [userId, permCode]);
-    return rows && rows.length > 0;
+    try {
+        const [roleRows] = await connectionPool.execute(roleQuery, [userId, permCode]);
+        if (roleRows && roleRows.length > 0) return true;
+    } catch (e) {}
+
+    const accesoQuery = `
+        SELECT p.id, p.codigo, p.nombre
+        FROM usuario_funcionalidades uf
+        JOIN acceso_permisos ap ON uf.id = ap.acceso_id
+        JOIN permisos p ON ap.permiso_id = p.id AND p.activo = TRUE
+        JOIN funcionalidades f ON uf.funcionalidad_id = f.id AND f.activo = TRUE
+        WHERE uf.usuario_id = ? AND p.codigo = ?
+          AND uf.estado = 'activo'
+          AND (
+              uf.tipo_acceso = 'permanente'
+              OR (uf.tipo_acceso = 'temporal' AND uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW())
+          )
+    `;
+    try {
+        const [accesoRows] = await connectionPool.execute(accesoQuery, [userId, permCode]);
+        return accesoRows && accesoRows.length > 0;
+    } catch (err) {
+        return false;
+    }
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -1167,6 +1213,55 @@ app.post('/api/admin/funcionalidad_permisos/:funcId', requireFunctionality('admi
 });
 
 
+app.get('/api/admin/funcionalidades/:funcId/permisos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
+    try {
+        const { funcId } = req.params;
+        let [permisos] = await pool.execute(`
+            SELECT p.id, p.codigo, p.nombre, p.descripcion
+            FROM permisos p
+            JOIN funcionalidad_permisos fp ON p.id = fp.permiso_id
+            WHERE fp.funcionalidad_id = ? AND p.activo = TRUE
+            ORDER BY p.codigo
+        `, [funcId]);
+
+        if (!permisos || permisos.length === 0) {
+            const [func] = await pool.execute('SELECT codigo FROM funcionalidades WHERE id = ?', [funcId]);
+            if (func.length > 0) {
+                const rawCodigo = func[0].codigo.toLowerCase();
+                const codigo = normalizeFunctionalityCode(rawCodigo);
+                let permitidos = FUNCIONALIDAD_PERMISOS_MAPPING[codigo] || FUNCIONALIDAD_PERMISOS_MAPPING[rawCodigo] || [];
+                if (!permitidos.length && !codigo.startsWith('admin') && !codigo.startsWith('administra')) {
+                    permitidos = [`${rawCodigo}.read`, `${rawCodigo}.create`, `${rawCodigo}.update`, `${rawCodigo}.delete`];
+                }
+                if (permitidos.length > 0) {
+                    const placeholders = permitidos.map(() => '?').join(',');
+                    const [availPerms] = await pool.execute(
+                        `SELECT id, codigo, nombre, descripcion FROM permisos WHERE codigo IN (${placeholders}) AND activo = TRUE ORDER BY codigo`,
+                        permitidos
+                    );
+                    permisos = availPerms;
+                }
+            }
+        }
+
+        res.status(200).json(permisos || []);
+    } catch (error) {
+        console.error('Error in GET /api/admin/funcionalidades/:funcId/permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.get('/api/admin/accesos/:id/permisos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        await ensureAccesoPermisosTable(pool);
+        const [rows] = await pool.query('SELECT permiso_id FROM acceso_permisos WHERE acceso_id = ? ORDER BY permiso_id', [id]);
+        res.status(200).json(rows.map(r => r.permiso_id));
+    } catch (error) {
+        console.error('Error in GET /api/admin/accesos/:id/permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
 app.get('/api/admin/accesos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const [accesos] = await pool.execute(`
@@ -1177,6 +1272,38 @@ app.get('/api/admin/accesos', requireFunctionality('admin'), requirePermission('
             LEFT JOIN usuarios u2 ON uf.asignado_por = u2.id
             ORDER BY uf.created_at DESC
         `);
+
+        if (accesos.length > 0) {
+            try {
+                await ensureAccesoPermisosTable(pool);
+                const accesoIds = accesos.map(a => a.id);
+                const placeholders = accesoIds.map(() => '?').join(',');
+                const [permisosRows] = await pool.query(`
+                    SELECT ap.acceso_id, p.id, p.codigo, p.nombre
+                    FROM acceso_permisos ap
+                    JOIN permisos p ON ap.permiso_id = p.id
+                    WHERE ap.acceso_id IN (${placeholders}) AND p.activo = TRUE
+                    ORDER BY p.codigo
+                `, accesoIds);
+
+                const permsByAcceso = {};
+                for (const row of permisosRows) {
+                    if (!permsByAcceso[row.acceso_id]) permsByAcceso[row.acceso_id] = [];
+                    permsByAcceso[row.acceso_id].push({
+                        id: row.id,
+                        codigo: row.codigo,
+                        nombre: row.nombre
+                    });
+                }
+
+                for (const a of accesos) {
+                    a.permisos = permsByAcceso[a.id] || [];
+                }
+            } catch (permErr) {
+                accesos.forEach(a => { a.permisos = a.permisos || []; });
+            }
+        }
+
         res.status(200).json(accesos);
     } catch (error) {
         console.error('Error in GET /api/admin/accesos:', error);
@@ -1186,7 +1313,7 @@ app.get('/api/admin/accesos', requireFunctionality('admin'), requirePermission('
 
 app.post('/api/admin/accesos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
-        const { usuarios, funcionalidad_id, tipo_acceso, fecha_inicio, fecha_fin } = req.body;
+        const { usuarios, funcionalidad_id, tipo_acceso, fecha_inicio, fecha_fin, permisos } = req.body;
 
         if (!Array.isArray(usuarios) || usuarios.length === 0 || !funcionalidad_id || !tipo_acceso) {
             return res.status(400).json({ error: 'Faltan campos obligatorios.' });
@@ -1221,10 +1348,26 @@ app.post('/api/admin/accesos', requireFunctionality('admin'), requirePermission(
                 const formattedInicio = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_inicio) : null;
                 const formattedFin = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_fin) : null;
 
-                await connection.execute(
+                const [insertResult] = await connection.execute(
                     'INSERT INTO usuario_funcionalidades (usuario_id, funcionalidad_id, tipo_acceso, fecha_inicio, fecha_fin, estado, asignado_por) VALUES (?, ?, ?, ?, ?, "activo", ?)',
                     [usuario_id, funcionalidad_id, tipo_acceso, formattedInicio, formattedFin, asignado_por]
                 );
+
+                const newAccesoId = insertResult.insertId;
+
+                if (Array.isArray(permisos) && permisos.length > 0 && newAccesoId) {
+                    await ensureAccesoPermisosTable(connection);
+                    const validPermIds = permisos
+                        .map(p => typeof p === 'object' ? parseInt(p.id) : parseInt(p))
+                        .filter(p => !isNaN(p) && p > 0);
+
+                    for (const pId of validPermIds) {
+                        await connection.query(
+                            'INSERT IGNORE INTO acceso_permisos (acceso_id, permiso_id) VALUES (?, ?)',
+                            [newAccesoId, pId]
+                        );
+                    }
+                }
             }
 
             await connection.commit();
@@ -1241,11 +1384,10 @@ app.post('/api/admin/accesos', requireFunctionality('admin'), requirePermission(
     }
 });
 
-
 app.put('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { id } = req.params;
-        const { tipo_acceso, fecha_inicio, fecha_fin } = req.body;
+        const { tipo_acceso, fecha_inicio, fecha_fin, permisos } = req.body;
 
         if (!tipo_acceso) {
             return res.status(400).json({ error: 'Falta tipo_acceso.' });
@@ -1272,11 +1414,38 @@ app.put('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermissi
         const formattedInicio = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_inicio) : null;
         const formattedFin = tipo_acceso === 'temporal' ? formatMySqlDateTime(fecha_fin) : null;
 
-        await pool.execute(
-            'UPDATE usuario_funcionalidades SET tipo_acceso = ?, fecha_inicio = ?, fecha_fin = ? WHERE id = ?',
-            [tipo_acceso, formattedInicio, formattedFin, id]
-        );
-        res.status(200).json({ message: 'Acceso actualizado exitosamente.' });
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            await connection.execute(
+                'UPDATE usuario_funcionalidades SET tipo_acceso = ?, fecha_inicio = ?, fecha_fin = ? WHERE id = ?',
+                [tipo_acceso, formattedInicio, formattedFin, id]
+            );
+
+            if (Array.isArray(permisos)) {
+                await ensureAccesoPermisosTable(connection);
+                await connection.query('DELETE FROM acceso_permisos WHERE acceso_id = ?', [id]);
+                const validPermIds = permisos
+                    .map(p => typeof p === 'object' ? parseInt(p.id) : parseInt(p))
+                    .filter(p => !isNaN(p) && p > 0);
+
+                for (const pId of validPermIds) {
+                    await connection.query(
+                        'INSERT IGNORE INTO acceso_permisos (acceso_id, permiso_id) VALUES (?, ?)',
+                        [id, pId]
+                    );
+                }
+            }
+
+            await connection.commit();
+            res.status(200).json({ message: 'Acceso actualizado exitosamente.' });
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        } finally {
+            connection.release();
+        }
     } catch (error) {
          console.error('Error in PUT /api/admin/accesos/:id:', error);
          res.status(500).json({ error: 'Error interno del servidor.' });
@@ -1321,6 +1490,9 @@ app.delete('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermi
             });
         }
 
+        try {
+            await pool.execute('DELETE FROM acceso_permisos WHERE acceso_id = ?', [id]);
+        } catch (pErr) {}
         await pool.execute('DELETE FROM usuario_funcionalidades WHERE id = ?', [id]);
         res.status(200).json({ message: 'Acceso temporal eliminado exitosamente.' });
     } catch (error) {
