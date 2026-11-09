@@ -522,8 +522,12 @@ async function renderFunctionalityPermissionsSection(container, funcId, selected
                 <div id="acceso-perms-list-container" style="max-height: 180px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; background: #fafafa;">
         `;
 
+        const selectedSet = new Set(
+            (selectedPermisoIds || []).map(id => typeof id === 'object' ? Number(id.id) : Number(id)).filter(n => !isNaN(n))
+        );
+
         permisos.forEach(p => {
-            const isChecked = selectedPermisoIds.includes(p.id) ? 'checked' : '';
+            const isChecked = selectedSet.has(Number(p.id)) ? 'checked' : '';
             html += `
                 <div class="acceso-perm-item-row" data-perm-id="${p.id}" data-perm-nombre="${escapeHTML(p.nombre).toLowerCase()}" data-perm-codigo="${escapeHTML(p.codigo).toLowerCase()}" style="padding: 4px 6px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f0f0f0;">
                     <input type="checkbox" class="acceso-perm-checkbox" id="acceso-perm-cb-${p.id}" value="${p.id}" ${isChecked} style="cursor: pointer;">
@@ -2310,15 +2314,17 @@ async function showEditAccesoModal(a) {
     }
 
     let preselectedPermIds = [];
-    if (Array.isArray(a.permisos)) {
+    try {
+        const pRes = await fetch(`/api/admin/accesos/${a.id}/permisos`);
+        if (pRes.ok) {
+            preselectedPermIds = await pRes.json();
+        }
+    } catch (e) {
+        console.warn('Error fetching permisos for acceso:', e);
+    }
+
+    if ((!preselectedPermIds || preselectedPermIds.length === 0) && Array.isArray(a.permisos) && a.permisos.length > 0) {
         preselectedPermIds = a.permisos.map(p => typeof p === 'object' ? p.id : parseInt(p));
-    } else {
-        try {
-            const pRes = await fetch(`/api/admin/accesos/${a.id}/permisos`);
-            if (pRes.ok) {
-                preselectedPermIds = await pRes.json();
-            }
-        } catch (e) {}
     }
 
     const html = `

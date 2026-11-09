@@ -130,6 +130,29 @@ if (pool && typeof pool.on === 'function') {
 }
 
 // Test Database Connection
+let accesoPermisosTableReady = false;
+async function ensureAccesoPermisosTable(connOrPool) {
+    if (accesoPermisosTableReady) return;
+    const runner = connOrPool || pool;
+    try {
+        if (runner && typeof runner.query === 'function') {
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS acceso_permisos (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    acceso_id INT NOT NULL,
+                    permiso_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_acceso_permiso (acceso_id, permiso_id),
+                    KEY idx_acceso_permisos_permiso (permiso_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            `);
+            accesoPermisosTableReady = true;
+        }
+    } catch (err) {
+        console.warn('Note: acceso_permisos table check/creation:', err.message);
+    }
+}
+
 pool.getConnection()
     .then(async (connection) => {
         console.log("Connected to MySQL database.");
@@ -138,18 +161,7 @@ pool.getConnection()
                 const safeTz = DB_TIMEZONE.replace(/[^0-9:+-]/g, '');
                 connection.query(`SET time_zone = '${safeTz}'`, () => {});
             }
-            if (typeof connection.execute === 'function') {
-                await connection.execute(`
-                    CREATE TABLE IF NOT EXISTS acceso_permisos (
-                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                        acceso_id INT NOT NULL,
-                        permiso_id INT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE KEY uq_acceso_permiso (acceso_id, permiso_id),
-                        KEY idx_acceso_permisos_permiso (permiso_id)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                `);
-            }
+            await ensureAccesoPermisosTable(connection);
         } catch (e) {}
         connection.release();
     })
@@ -1242,14 +1254,14 @@ app.get('/api/admin/funcionalidades/:funcId/permisos', requireFunctionality('adm
 app.get('/api/admin/accesos/:id/permisos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const { id } = req.params;
-        const [rows] = await pool.execute('SELECT permiso_id FROM acceso_permisos WHERE acceso_id = ?', [id]);
+        await ensureAccesoPermisosTable(pool);
+        const [rows] = await pool.query('SELECT permiso_id FROM acceso_permisos WHERE acceso_id = ? ORDER BY permiso_id', [id]);
         res.status(200).json(rows.map(r => r.permiso_id));
     } catch (error) {
         console.error('Error in GET /api/admin/accesos/:id/permisos:', error);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
-
 app.get('/api/admin/accesos', requireFunctionality('admin'), requirePermission('admin.access'), async (req, res) => {
     try {
         const [accesos] = await pool.execute(`
@@ -1263,9 +1275,10 @@ app.get('/api/admin/accesos', requireFunctionality('admin'), requirePermission('
 
         if (accesos.length > 0) {
             try {
+                await ensureAccesoPermisosTable(pool);
                 const accesoIds = accesos.map(a => a.id);
                 const placeholders = accesoIds.map(() => '?').join(',');
-                const [permisosRows] = await pool.execute(`
+                const [permisosRows] = await pool.query(`
                     SELECT ap.acceso_id, p.id, p.codigo, p.nombre
                     FROM acceso_permisos ap
                     JOIN permisos p ON ap.permiso_id = p.id
@@ -1343,19 +1356,16 @@ app.post('/api/admin/accesos', requireFunctionality('admin'), requirePermission(
                 const newAccesoId = insertResult.insertId;
 
                 if (Array.isArray(permisos) && permisos.length > 0 && newAccesoId) {
-                    const validPermIds = permisos.map(p => parseInt(p)).filter(p => !isNaN(p) && p > 0);
-                    if (validPermIds.length > 0) {
-                        const placeholders = validPermIds.map(() => '(?, ?)').join(', ');
-                        const values = [];
-                        validPermIds.forEach(pId => values.push(newAccesoId, pId));
-                        try {
-                            await connection.execute(
-                                `INSERT INTO acceso_permisos (acceso_id, permiso_id) VALUES ${placeholders}`,
-                                values
-                            );
-                        } catch (pErr) {
-                            console.warn('Error inserting acceso_permisos:', pErr.message);
-                        }
+                    await ensureAccesoPermisosTable(connection);
+                    const validPermIds = permisos
+                        .map(p => typeof p === 'object' ? parseInt(p.id) : parseInt(p))
+                        .filter(p => !isNaN(p) && p > 0);
+
+                    for (const pId of validPermIds) {
+                        await connection.query(
+                            'INSERT IGNORE INTO acceso_permisos (acceso_id, permiso_id) VALUES (?, ?)',
+                            [newAccesoId, pId]
+                        );
                     }
                 }
             }
@@ -1414,20 +1424,17 @@ app.put('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermissi
             );
 
             if (Array.isArray(permisos)) {
-                try {
-                    await connection.execute('DELETE FROM acceso_permisos WHERE acceso_id = ?', [id]);
-                    const validPermIds = permisos.map(p => parseInt(p)).filter(p => !isNaN(p) && p > 0);
-                    if (validPermIds.length > 0) {
-                        const placeholders = validPermIds.map(() => '(?, ?)').join(', ');
-                        const values = [];
-                        validPermIds.forEach(pId => values.push(id, pId));
-                        await connection.execute(
-                            `INSERT INTO acceso_permisos (acceso_id, permiso_id) VALUES ${placeholders}`,
-                            values
-                        );
-                    }
-                } catch (pErr) {
-                    console.warn('Error updating acceso_permisos:', pErr.message);
+                await ensureAccesoPermisosTable(connection);
+                await connection.query('DELETE FROM acceso_permisos WHERE acceso_id = ?', [id]);
+                const validPermIds = permisos
+                    .map(p => typeof p === 'object' ? parseInt(p.id) : parseInt(p))
+                    .filter(p => !isNaN(p) && p > 0);
+
+                for (const pId of validPermIds) {
+                    await connection.query(
+                        'INSERT IGNORE INTO acceso_permisos (acceso_id, permiso_id) VALUES (?, ?)',
+                        [id, pId]
+                    );
                 }
             }
 
