@@ -328,6 +328,16 @@
             border-radius: 4px;
             font-size: 14px;
         }
+        #user-input:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+            border-color: #ced4da;
+        }
+        #input-container.voice-mode-active {
+            background-color: #e9ecef;
+            opacity: 0.85;
+        }
         #send-btn {
             padding: 10px 20px;
             margin-left: 10px;

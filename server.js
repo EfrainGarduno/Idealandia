@@ -448,7 +448,12 @@ app.post('/api/login', async (req, res) => {
         const secret = process.env.AUTH_SECRET;
         const token = jwt.sign(payload, secret, { expiresIn: '24h' });
 
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+
         res.cookie('auth_token', token, {
+            path: '/',
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
@@ -746,6 +751,10 @@ app.post('/api/reset', async (req, res) => {
 
 app.get('/api/menu', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+
         const token = req.cookies.auth_token;
         let userId = null;
 
@@ -912,6 +921,10 @@ app.get('/api/menu', async (req, res) => {
 
 app.get('/api/me', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+
         const token = req.cookies.auth_token;
 
         if (!token) {
@@ -940,11 +953,22 @@ app.get('/api/me', async (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.clearCookie('auth_token', {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+    });
     res.cookie('auth_token', '', {
+        path: '/',
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        expires: new Date(0) // Expire immediately
+        expires: new Date(0),
+        maxAge: 0
     });
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
