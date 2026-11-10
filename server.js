@@ -254,6 +254,45 @@ async function checkUserPermission(connectionPool, userId, permCode) {
     }
 }
 
+async function assignDefaultUserRole(connOrPool, userId) {
+    if (!userId) {
+        throw new Error('ID de usuario inválido para asignación de rol por defecto.');
+    }
+    const runner = connOrPool || pool;
+
+    // 1. Buscar rol 'usuario' por nombre de forma insensible a mayúsculas
+    const [roleRows] = await runner.execute(
+        "SELECT id, nombre, activo FROM roles WHERE LOWER(nombre) = 'usuario' LIMIT 1"
+    );
+
+    if (!roleRows || roleRows.length === 0) {
+        const errMsg = 'Error de configuración RBAC: El rol "usuario" no existe en el sistema.';
+        console.error(errMsg);
+        const err = new Error(errMsg);
+        err.statusCode = 500;
+        err.code = 'ROLE_USUARIO_NOT_FOUND';
+        throw err;
+    }
+
+    const defaultRole = roleRows[0];
+    const userRoleId = defaultRole.id;
+
+    // 2. Prevenir asignación duplicada si el usuario ya cuenta con ese rol
+    const [existing] = await runner.execute(
+        'SELECT 1 FROM usuario_roles WHERE usuario_id = ? AND rol_id = ? LIMIT 1',
+        [userId, userRoleId]
+    );
+
+    if (!existing || existing.length === 0) {
+        await runner.execute(
+            'INSERT IGNORE INTO usuario_roles (usuario_id, rol_id) VALUES (?, ?)',
+            [userId, userRoleId]
+        );
+    }
+
+    return userRoleId;
+}
+
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // Initialize tools dynamically for the chat
 // Note: We use generateContent instead of chats.create to support tool calling with context more robustly per request
@@ -411,6 +450,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.post('/api/register', async (req, res) => {
+    let connection = null;
     try {
         const { usuario, password, 'password-rep': passwordRep, nombre, correo, telefono } = req.body;
 
@@ -447,17 +487,37 @@ app.post('/api/register', async (req, res) => {
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(password, saltRounds);
 
+        // Obtener conexión para inserción y asignación atómica
+        connection = (typeof pool.getConnection === 'function') ? await pool.getConnection() : pool;
+        const hasTx = connection && typeof connection.beginTransaction === 'function';
+        if (hasTx) await connection.beginTransaction();
+
         // Insertar el nuevo usuario en la base de datos
-        await pool.execute(
+        const [result] = await connection.execute(
             'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email) VALUES (?, ?, ?, ?, ?)',
             [usuario, passwordHash, nombre, telefono || null, correo]
         );
+        const newUserId = result.insertId;
 
+        // Asignar automáticamente el rol 'usuario' por defecto
+        await assignDefaultUserRole(connection, newUserId);
+
+        if (hasTx) await connection.commit();
         res.status(201).json({ message: 'Registro exitoso.' });
 
     } catch (error) {
+        if (connection && typeof connection.rollback === 'function') {
+            try { await connection.rollback(); } catch (_) {}
+        }
         console.error('Error in /api/register:', error);
+        if (error.code === 'ROLE_USUARIO_NOT_FOUND') {
+            return res.status(500).json({ error: 'No se pudo completar el registro: el rol "usuario" no se encuentra configurado en el sistema.' });
+        }
         res.status(500).json({ error: 'Error interno del servidor durante el registro.' });
+    } finally {
+        if (connection && typeof connection.release === 'function') {
+            try { connection.release(); } catch (_) {}
+        }
     }
 });
 
@@ -1503,6 +1563,7 @@ app.delete('/api/admin/accesos/:id', requireFunctionality('admin'), requirePermi
 
 
 app.post('/api/admin/usuarios', requireFunctionality('admin'), requirePermission('usuarios.create'), async (req, res) => {
+    let connection = null;
     try {
         const { usuario, password, nombre, telefono, email } = req.body;
         if (!usuario || !password || !nombre || !email) {
@@ -1516,14 +1577,34 @@ app.post('/api/admin/usuarios', requireFunctionality('admin'), requirePermission
         const bcrypt = require('bcrypt');
         const passwordHash = await bcrypt.hash(password, 10);
 
-        const [result] = await pool.execute(
+        connection = (typeof pool.getConnection === 'function') ? await pool.getConnection() : pool;
+        const hasTx = connection && typeof connection.beginTransaction === 'function';
+        if (hasTx) await connection.beginTransaction();
+
+        const [result] = await connection.execute(
             'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email) VALUES (?, ?, ?, ?, ?)',
             [usuario, passwordHash, nombre, telefono || null, email]
         );
-        res.status(201).json({ message: 'Usuario creado exitosamente.', id: result.insertId });
+        const newUserId = result.insertId;
+
+        // Asignar automáticamente el rol 'usuario' por defecto
+        await assignDefaultUserRole(connection, newUserId);
+
+        if (hasTx) await connection.commit();
+        res.status(201).json({ message: 'Usuario creado exitosamente.', id: newUserId });
     } catch (error) {
+        if (connection && typeof connection.rollback === 'function') {
+            try { await connection.rollback(); } catch (_) {}
+        }
         console.error('Error in POST /api/admin/usuarios:', error);
+        if (error.code === 'ROLE_USUARIO_NOT_FOUND') {
+            return res.status(500).json({ error: 'No se pudo crear el usuario: el rol "usuario" no se encuentra configurado en el sistema.' });
+        }
         res.status(500).json({ error: 'Error interno del servidor.' });
+    } finally {
+        if (connection && typeof connection.release === 'function') {
+            try { connection.release(); } catch (_) {}
+        }
     }
 });
 
@@ -2464,6 +2545,7 @@ if (typeof module !== 'undefined' && module.exports) {
         normalizeFunctionalityCode,
         checkUserFunctionalityAccess,
         checkUserPermission,
+        assignDefaultUserRole,
         requireFunctionality,
         FUNCIONALIDAD_CODE_ALIASES
     };
