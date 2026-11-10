@@ -585,7 +585,7 @@ window.addEventListener('load', () => {
                                             setTimeout(() => {
                                                 const menuLinks = Array.from(win.document.querySelectorAll('#dynamic-menu-list a')).map(a => a.textContent.trim());
                                                 resolve(menuLinks);
-                                            }, 500);
+                                            }, 1200);
                                         });
                                     };
 
