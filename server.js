@@ -4,6 +4,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
+const zlib = require('zlib');
+const { calculateAverageSalaryLast250Weeks, extractPeriodsFromIMSSDocumentText } = require('./pension');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -35,7 +37,8 @@ const port = process.env.PORT || 3000;
 const rateLimit = require('express-rate-limit');
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(__dirname));
 
@@ -349,6 +352,214 @@ app.get('/api/live-token', async (req, res) => {
     } catch (error) {
         console.error('Error generating live token:', error);
         res.status(500).json({ error: 'Failed to generate live token' });
+    }
+});
+
+
+function decodePdfString(str) {
+    return str
+        .replace(/\\([0-7]{1,3})/g, (m, oct) => String.fromCharCode(parseInt(oct, 8)))
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\b/g, '\b')
+        .replace(/\\f/g, '\f')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\\\/g, '\\');
+}
+
+function extractTextFromPdfBuffer(buffer) {
+    if (!Buffer.isBuffer(buffer)) return '';
+    const str = buffer.toString('binary');
+    let fullText = '';
+
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let match;
+    while ((match = streamRegex.exec(str)) !== null) {
+        let streamBytes = Buffer.from(match[1], 'binary');
+        try {
+            streamBytes = zlib.inflateSync(streamBytes);
+        } catch (e) {}
+
+        const streamContent = streamBytes.toString('latin1');
+        const tokenRegex = /\((?:[^()\\]|\\.)*\)\s*Tj|\[(?:[^\[\]\\]|\\.)*\]\s*TJ|T\*|(?:\-?\d+(?:\.\d+)?\s+){2}Td|(?:\-?\d+(?:\.\d+)?\s+){6}Tm/g;
+        let token;
+        while ((token = tokenRegex.exec(streamContent)) !== null) {
+            const t = token[0];
+            if (t.endsWith('Tj')) {
+                const s = t.slice(1, t.lastIndexOf(')'));
+                fullText += decodePdfString(s) + ' ';
+            } else if (t.endsWith('TJ')) {
+                const arrContent = t.slice(1, t.lastIndexOf(']'));
+                const strRegex = /\(((?:[^()\\]|\\.)*)\)/g;
+                let sm;
+                while ((sm = strRegex.exec(arrContent)) !== null) {
+                    fullText += decodePdfString(sm[1]);
+                }
+                fullText += ' ';
+            } else if (t === 'T*' || t.endsWith('Td') || t.endsWith('Tm')) {
+                fullText += '\n';
+            }
+        }
+    }
+
+    if (!fullText.trim()) {
+        const rawStrings = [];
+        const simpleParenRegex = /\(((?:[^()\\]|\\.)*)\)/g;
+        let sm;
+        while ((sm = simpleParenRegex.exec(str)) !== null) {
+            const decoded = decodePdfString(sm[1]);
+            if (decoded.trim().length > 1) rawStrings.push(decoded.trim());
+        }
+        if (rawStrings.length > 0) fullText = rawStrings.join(' ');
+    }
+
+    return fullText.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim();
+}
+
+async function parseIMSSWithGemini(pdfBuffer, extractedText) {
+    if (!process.env.GEMINI_API_KEY) {
+        return null;
+    }
+
+    try {
+        const prompt = "Eres un asistente experto en análisis de documentos oficiales de seguridad social del IMSS en México.\n" +
+            "Tu tarea es EXTRAER únicamente la lista estructurada de periodos laborales / cotizaciones con su salario registrado.\n" +
+            "NO calcules el salario promedio ni promedies nada.\n" +
+            "Responde ÚNICAMENTE un objeto JSON válido con la estructura:\n" +
+            '{\n  "tipoDocumento": "Constancia de Semanas Cotizadas",\n  "semanasTotalesReportadas": null,\n  "periodos": [\n    {\n      "patron": "nombre",\n      "fechaInicio": "YYYY-MM-DD",\n      "fechaFin": "YYYY-MM-DD",\n      "semanas": 104,\n      "salarioDiario": 2585.96\n    }\n  ]\n}\n' +
+            "Reglas:\n" +
+            '1. "salarioDiario" debe ser el Salario Base de Cotización (SBC) diario en pesos mexicanos como número flotante.\n' +
+            '2. "semanas" debe ser el número de semanas cotizadas en ese periodo como número.\n' +
+            '3. "fechaInicio" y "fechaFin" en formato YYYY-MM-DD.\n' +
+            "4. Responde EXCLUSIVAMENTE el JSON, sin texto adicional.";
+
+        let contents;
+        if (extractedText && extractedText.length > 50) {
+            contents = [
+                { role: 'user', parts: [{ text: prompt + "\n\nCONTENIDO DEL DOCUMENTO:\n" + extractedText }] }
+            ];
+        } else {
+            const base64Data = pdfBuffer.toString('base64');
+            contents = [
+                {
+                    role: 'user',
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: 'application/pdf', data: base64Data } }
+                    ]
+                }
+            ];
+        }
+
+        const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents,
+            config: {
+                temperature: 0.1,
+                responseMimeType: 'application/json'
+            }
+        });
+
+        const rawText = response.text || (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts[0].text);
+        if (!rawText) return null;
+
+        const fenceRegex = new RegExp('^' + String.fromCharCode(96, 96, 96) + '(?:json)?', 'i');
+        const endFenceRegex = new RegExp(String.fromCharCode(96, 96, 96) + '$');
+        const cleanedJson = rawText.trim().replace(fenceRegex, '').replace(endFenceRegex, '').trim();
+        const parsed = JSON.parse(cleanedJson);
+        if (parsed && Array.isArray(parsed.periodos) && parsed.periodos.length > 0) {
+            return parsed.periodos;
+        }
+        return null;
+    } catch (err) {
+        console.error('Error in parseIMSSWithGemini:', err.message);
+        return null;
+    }
+}
+
+app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
+    try {
+        const { pdfBase64, fileName } = req.body || {};
+        if (!pdfBase64 || typeof pdfBase64 !== 'string') {
+            return res.status(400).json({
+                error: 'INVALID_REQUEST',
+                message: 'Se requiere un archivo PDF en formato base64.'
+            });
+        }
+
+        const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '').trim();
+        const pdfBuffer = Buffer.from(cleanBase64, 'base64');
+
+        if (pdfBuffer.length < 5 || pdfBuffer.toString('latin1', 0, 5) !== '%PDF-') {
+            return res.status(400).json({
+                error: 'INVALID_PDF',
+                message: 'El archivo proporcionado no es un documento PDF válido.'
+            });
+        }
+
+        // 1. Extraer texto del PDF mediante código
+        let extractedText = '';
+        try {
+            extractedText = extractTextFromPdfBuffer(pdfBuffer);
+        } catch (e) {
+            console.warn('Advertencia al extraer texto de PDF:', e.message);
+        }
+
+        // 2. Intentar extracción determinista mediante código
+        let periods = null;
+        if (extractedText && extractedText.length > 20) {
+            periods = extractPeriodsFromIMSSDocumentText(extractedText);
+        }
+
+        // 3. Si el código no extrajo periodos o son insuficientes, recurrir a Gemini si está disponible
+        if (!periods || periods.length === 0) {
+            try {
+                periods = await parseIMSSWithGemini(pdfBuffer, extractedText);
+            } catch (aiErr) {
+                console.warn('Advertencia al interpretar PDF con IA:', aiErr.message);
+            }
+        }
+
+        if (!periods || !Array.isArray(periods) || periods.length === 0) {
+            return res.status(422).json({
+                error: 'CANNOT_INTERPRET_PDF',
+                message: 'No fue posible interpretar los periodos de semanas cotizadas en el documento. Por favor verifica que sea un documento oficial del IMSS o ingresa el salario manualmente.'
+            });
+        }
+
+        // 4. Calcular deterministamente el promedio de las últimas 250 semanas
+        const calcResult = calculateAverageSalaryLast250Weeks(periods);
+
+        if (!calcResult.success) {
+            return res.status(422).json({
+                error: calcResult.error,
+                message: calcResult.message,
+                totalSemanas: calcResult.totalSemanas,
+                semanasFaltantes: calcResult.semanasFaltantes
+            });
+        }
+
+        const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+        res.status(200).json({
+            success: true,
+            salarioDiarioPromedio: calcResult.salarioDiarioPromedio,
+            salarioDiarioPromedioFormateado: formatter.format(calcResult.salarioDiarioPromedio),
+            semanasAnalizadas: calcResult.semanasAnalizadas,
+            semanasConsideradas: calcResult.semanasAnalizadas,
+            totalSemanasDocumento: calcResult.totalSemanasDocumento,
+            periodosUtilizados: calcResult.periodosUtilizados,
+            message: 'Se identificaron las últimas 250 semanas cotizadas con éxito.'
+        });
+
+    } catch (error) {
+        console.error('Error in /api/pension/calcular-salario-pdf:', error);
+        res.status(500).json({
+            error: 'SERVER_ERROR',
+            message: 'Ocurrió un error al procesar el documento. Por favor intenta de nuevo o ingresa el salario manualmente.'
+        });
     }
 });
 
@@ -2546,6 +2757,8 @@ if (typeof module !== 'undefined' && module.exports) {
         checkUserFunctionalityAccess,
         checkUserPermission,
         assignDefaultUserRole,
+        extractTextFromPdfBuffer,
+        parseIMSSWithGemini,
         requireFunctionality,
         FUNCIONALIDAD_CODE_ALIASES
     };

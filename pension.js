@@ -172,9 +172,229 @@ function calculateIMSSLey73Pension(data) {
     };
 }
 
+
+function calculateAverageSalaryLast250Weeks(periodos) {
+    if (!Array.isArray(periodos) || periodos.length === 0) {
+        return {
+            success: false,
+            error: 'NO_PERIODS',
+            message: 'No se encontraron registros de periodos cotizados en el documento.'
+        };
+    }
+
+    const validPeriods = [];
+    for (let i = 0; i < periodos.length; i++) {
+        const p = periodos[i];
+        if (!p || typeof p !== 'object') continue;
+
+        let salario = typeof p.salarioDiario === 'number'
+            ? p.salarioDiario
+            : parseFloat(String(p.salarioDiario || '').replace(/[^0-9.]/g, ''));
+        if (isNaN(salario) || salario <= 0) continue;
+
+        let semanas = typeof p.semanas === 'number'
+            ? p.semanas
+            : parseFloat(String(p.semanas || '').replace(/[^0-9.]/g, ''));
+
+        if ((isNaN(semanas) || semanas <= 0) && p.fechaInicio && p.fechaFin) {
+            const d1 = new Date(p.fechaInicio);
+            const d2 = new Date(p.fechaFin);
+            if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d2 >= d1) {
+                const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24)) + 1;
+                semanas = Math.round((diffDays / 7) * 100) / 100;
+            }
+        }
+        if (isNaN(semanas) || semanas <= 0) continue;
+
+        let timeVal = 0;
+        if (p.fechaFin) {
+            const df = new Date(p.fechaFin);
+            if (!isNaN(df.getTime())) timeVal = df.getTime();
+        }
+        if (!timeVal && p.fechaInicio) {
+            const di = new Date(p.fechaInicio);
+            if (!isNaN(di.getTime())) timeVal = di.getTime();
+        }
+        if (!timeVal) timeVal = 1000000000000 - i;
+
+        validPeriods.push({
+            patron: p.patron || p.empresa || 'Patrón IMSS',
+            fechaInicio: p.fechaInicio || null,
+            fechaFin: p.fechaFin || null,
+            timeVal,
+            semanas,
+            salarioDiario: salario
+        });
+    }
+
+    if (validPeriods.length === 0) {
+        return {
+            success: false,
+            error: 'NO_VALID_PERIODS',
+            message: 'No se pudieron extraer registros con salarios numéricos válidos.'
+        };
+    }
+
+    // Ordenar cronológicamente del más reciente al más antiguo
+    validPeriods.sort((a, b) => b.timeVal - a.timeVal);
+
+    const totalSemanas = validPeriods.reduce((acc, p) => acc + p.semanas, 0);
+    if (totalSemanas < 250) {
+        return {
+            success: false,
+            error: 'INSUFFICIENT_WEEKS',
+            totalSemanas: Math.round(totalSemanas * 100) / 100,
+            semanasFaltantes: Math.round((250 - totalSemanas) * 100) / 100,
+            message: `El documento contiene solo ${Math.round(totalSemanas)} semanas cotizadas registradas. Se requieren al menos 250 semanas para calcular el salario promedio de las últimas 250 semanas.`
+        };
+    }
+
+    let accumulatedWeeks = 0;
+    let weightedSalarySum = 0;
+    const periodosUtilizados = [];
+
+    for (const p of validPeriods) {
+        const needed = 250 - accumulatedWeeks;
+        if (needed <= 0) break;
+
+        const weeksToUse = Math.min(p.semanas, needed);
+        weightedSalarySum += weeksToUse * p.salarioDiario;
+        accumulatedWeeks += weeksToUse;
+
+        periodosUtilizados.push({
+            patron: p.patron,
+            fechaInicio: p.fechaInicio,
+            fechaFin: p.fechaFin,
+            salarioDiario: p.salarioDiario,
+            semanasDisponibles: p.semanas,
+            semanasUtilizadas: Math.round(weeksToUse * 100) / 100,
+            parcial: weeksToUse < p.semanas
+        });
+
+        if (accumulatedWeeks >= 250) break;
+    }
+
+    const promedioDiario = weightedSalarySum / 250;
+    const salarioDiarioPromedio = Math.round(promedioDiario * 100) / 100;
+
+    return {
+        success: true,
+        salarioDiarioPromedio,
+        semanasAnalizadas: 250,
+        totalSemanasDocumento: Math.round(totalSemanas * 100) / 100,
+        periodosUtilizados
+    };
+}
+
+function parseDateToIso(str) {
+    if (!str) return null;
+    str = str.trim();
+    const dmy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (dmy) {
+        return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    }
+    const ymd = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (ymd) {
+        return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+    }
+    return null;
+}
+
+function extractPeriodsFromIMSSDocumentText(text) {
+    if (!text || typeof text !== 'string') return null;
+    const periods = [];
+    const lines = text.split(/\r?\n/);
+
+    for (const line of lines) {
+        const dateMatches = line.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/g);
+        if (!dateMatches || dateMatches.length < 2) continue;
+
+        const fechaInicio = parseDateToIso(dateMatches[0]);
+        const fechaFin = parseDateToIso(dateMatches[1]);
+
+        // Find salary
+        let salario = 0;
+        const labeledSalaryMatch = line.match(/(?:salario|sbc|s\.b\.c|cuota|base)[^\d\$\n\r]*[$]?\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i);
+        if (labeledSalaryMatch) {
+            salario = parseFloat(labeledSalaryMatch[1].replace(/,/g, ''));
+        } else {
+            const dollarMatch = line.match(/[$]\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/);
+            if (dollarMatch) {
+                salario = parseFloat(dollarMatch[1].replace(/,/g, ''));
+            } else {
+                const decimalMatches = line.match(/\b([0-9]{2,6}\.[0-9]{2})\b/g);
+                if (decimalMatches) {
+                    for (const dm of decimalMatches) {
+                        const val = parseFloat(dm);
+                        if (val > 0 && val <= 50000) {
+                            salario = val;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Find semanas
+        let semanas = 0;
+        const labeledWeeksMatch = line.match(/(?:semanas?(?:\s*cotizadas?)?)[^\d\n\r]*([0-9]{1,4})/i);
+        if (labeledWeeksMatch) {
+            semanas = parseInt(labeledWeeksMatch[1], 10);
+        } else {
+            const numbers = line.match(/\b([0-9]{1,4})\b/g);
+            if (numbers) {
+                for (const num of numbers) {
+                    const val = parseInt(num, 10);
+                    if (val > 0 && val <= 3000 &&
+                        !dateMatches[0].includes(num) &&
+                        !dateMatches[1].includes(num) &&
+                        (!salario || !salario.toString().includes(num))) {
+                        semanas = val;
+                    }
+                }
+            }
+        }
+
+        if ((!semanas || semanas <= 0) && fechaInicio && fechaFin) {
+            const d1 = new Date(fechaInicio);
+            const d2 = new Date(fechaFin);
+            if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d2 >= d1) {
+                semanas = Math.round(((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24) + 1) / 7);
+            }
+        }
+
+        if (salario > 0 && semanas > 0) {
+            let patron = line
+                .replace(dateMatches[0], '')
+                .replace(dateMatches[1], '')
+                .replace(/[|\-_]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            periods.push({
+                patron: patron || 'Patrón IMSS',
+                fechaInicio,
+                fechaFin,
+                salarioDiario: salario,
+                semanas
+            });
+        }
+    }
+
+    return periods.length > 0 ? periods : null;
+}
+
+if (typeof window !== 'undefined') {
+    window.calculateIMSSLey73Pension = calculateIMSSLey73Pension;
+    window.calculateAverageSalaryLast250Weeks = calculateAverageSalaryLast250Weeks;
+    window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         calculateIMSSLey73Pension,
+        calculateAverageSalaryLast250Weeks,
+        extractPeriodsFromIMSSDocumentText,
         TABLA_GRUPOS_SALARIALES,
         TABLA_EDAD,
         FACTOR_ADICIONAL
