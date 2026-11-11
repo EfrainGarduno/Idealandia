@@ -384,10 +384,98 @@ function extractPeriodsFromIMSSDocumentText(text) {
     return periods.length > 0 ? periods : null;
 }
 
+function validateAndCalculatePensionPeriods(aiData) {
+    if (!aiData || typeof aiData !== 'object') {
+        return { success: false, error: 'INVALID_AI_RESPONSE', message: 'La respuesta no contiene una estructura de datos válida.' };
+    }
+
+    const periodos = aiData.periodos;
+    if (!Array.isArray(periodos) || periodos.length === 0) {
+        return { success: false, error: 'NO_PERIODS', message: 'No se identificaron periodos de cotización en el documento.' };
+    }
+
+    let sumaDias = 0;
+    let sumaPonderada = 0;
+    const periodosValidados = [];
+
+    for (let i = 0; i < periodos.length; i++) {
+        const p = periodos[i];
+        if (!p || typeof p !== 'object') {
+            return { success: false, error: 'INVALID_PERIOD_STRUCTURE', message: 'Estructura de periodo no válida.' };
+        }
+
+        const dias = typeof p.dias === 'number' ? p.dias : parseInt(p.dias, 10);
+        const salario = typeof p.salario_diario === 'number'
+            ? p.salario_diario
+            : parseFloat(String(p.salario_diario || p.salarioDiario || '').replace(/[^0-9.]/g, ''));
+
+        if (isNaN(dias) || dias <= 0) {
+            return { success: false, error: 'INVALID_DAYS', message: `Número de días inválido en periodo ${i + 1}.` };
+        }
+        if (isNaN(salario) || salario <= 0) {
+            return { success: false, error: 'INVALID_SALARY', message: `Salario diario inválido en periodo ${i + 1}.` };
+        }
+
+        sumaDias += dias;
+        sumaPonderada += dias * salario;
+
+        periodosValidados.push({
+            patron: p.patron || p.empresa || 'Patrón IMSS',
+            fecha_inicio: p.fecha_inicio || p.fechaInicio || null,
+            fecha_fin: p.fecha_fin || p.fechaFin || null,
+            dias,
+            semanas: Math.round((dias / 7) * 100) / 100,
+            salario_diario: salario,
+            salarioDiario: salario,
+            semanasUtilizadas: Math.round((dias / 7) * 100) / 100,
+            semanasDisponibles: Math.round((dias / 7) * 100) / 100
+        });
+    }
+
+    // Comprobar que los días utilizados sumen exactamente 1,750 (250 semanas * 7)
+    if (sumaDias !== 1750) {
+        return {
+            success: false,
+            error: 'DAYS_SUM_MISMATCH',
+            sumaDias,
+            message: `La suma de días analizados (${sumaDias}) no coincide con los 1,750 días requeridos para 250 semanas.`
+        };
+    }
+
+    // Calcular determinísticamente en backend el promedio ponderado
+    const promedioPonderado = sumaPonderada / 1750;
+    const salarioDiarioPromedio = Math.round(promedioPonderado * 100) / 100;
+
+    // Validar concordancia con el número de Gemini si fue provisto
+    if (aiData.salario_promedio && typeof aiData.salario_promedio === 'number') {
+        const diff = Math.abs(salarioDiarioPromedio - aiData.salario_promedio);
+        if (diff > 0.05) {
+            return {
+                success: false,
+                error: 'AVERAGE_VALIDATION_FAILED',
+                message: `El promedio recalculado en backend (${salarioDiarioPromedio}) difiere del reportado (${aiData.salario_promedio}).`
+            };
+        }
+    }
+
+    return {
+        success: true,
+        salarioDiarioPromedio,
+        diasTotales: 1750,
+        semanasTotales: 250,
+        semanasAnalizadas: 250,
+        semanasConsideradas: 250,
+        totalSemanasDocumento: 250,
+        periodos: periodosValidados,
+        periodosUtilizados: periodosValidados
+    };
+}
+
 if (typeof window !== 'undefined') {
     window.calculateIMSSLey73Pension = calculateIMSSLey73Pension;
     window.calculateAverageSalaryLast250Weeks = calculateAverageSalaryLast250Weeks;
     window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
+    window.validateAndCalculatePensionPeriods = validateAndCalculatePensionPeriods;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -395,6 +483,7 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateIMSSLey73Pension,
         calculateAverageSalaryLast250Weeks,
         extractPeriodsFromIMSSDocumentText,
+        validateAndCalculatePensionPeriods,
         TABLA_GRUPOS_SALARIALES,
         TABLA_EDAD,
         FACTOR_ADICIONAL

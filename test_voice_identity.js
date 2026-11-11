@@ -190,8 +190,9 @@ setTimeout(() => {
 
             assert.ok(parsed.setup.generationConfig.responseModalities.includes("AUDIO"), 'Should request AUDIO modality');
 
-            // Wait a moment for the setup complete to send the initial context message
-            setTimeout(() => {
+            // Wait for the setup complete to send the initial context message
+            const startTime = Date.now();
+            const waitForContext = () => {
                 const contextMessages = MockWebSocket.messagesSent.filter(msg => {
                     try {
                         const parsedMsg = JSON.parse(msg);
@@ -203,13 +204,19 @@ setTimeout(() => {
                     return false;
                 });
 
+                if (contextMessages.length === 0 && Date.now() - startTime < 3000) {
+                    setTimeout(waitForContext, 50);
+                    return;
+                }
+
                 assert.ok(contextMessages.length > 0, 'Should send initial context message containing manual and ideas');
                 const contextMsg = JSON.parse(contextMessages[0]).clientContent.turns[0].parts[0].text;
                 assert.ok(contextMsg.includes('MANUAL IDEALANDIA'), 'Context should include manual section');
                 assert.ok(contextMsg.includes('Test User'), 'Context should include the user identity');
                 assert.ok(contextMsg.includes('IDEAS DEL USUARIO'), 'Context should include ideas section');
                 assert.ok(contextMsg.includes('Idea mock'), 'Context should include the mocked ideas');
-            }, 500);
+            };
+            setTimeout(waitForContext, 100);
 
             // Simulate incoming WebSocket messages to test transcription logic
             setTimeout(() => {

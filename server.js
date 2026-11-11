@@ -1,11 +1,18 @@
 require('dotenv').config();
+if (!process.env.GEMINI_API_KEY) {
+    const fs = require('fs');
+    const fallbackEnv = 'D:\\Personales\\EstrategiaPersonal\\Mipagina\\Idealandia-local\\.env';
+    if (fs.existsSync(fallbackEnv)) {
+        require('dotenv').config({ path: fallbackEnv });
+    }
+}
 const { searchKnowledge } = require('./knowledgeService');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
 const zlib = require('zlib');
-const { calculateAverageSalaryLast250Weeks, extractPeriodsFromIMSSDocumentText } = require('./pension');
+const { calculateAverageSalaryLast250Weeks, extractPeriodsFromIMSSDocumentText, validateAndCalculatePensionPeriods } = require('./pension');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -418,66 +425,107 @@ function extractTextFromPdfBuffer(buffer) {
     return fullText.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim();
 }
 
-async function parseIMSSWithGemini(pdfBuffer, extractedText) {
+async function parseIMSSWithGemini(pdfBuffer) {
     if (!process.env.GEMINI_API_KEY) {
-        return null;
+        throw new Error('GEMINI_API_KEY_NOT_CONFIGURED');
     }
 
-    try {
-        const prompt = "Eres un asistente experto en análisis de documentos oficiales de seguridad social del IMSS en México.\n" +
-            "Tu tarea es EXTRAER únicamente la lista estructurada de periodos laborales / cotizaciones con su salario registrado.\n" +
-            "NO calcules el salario promedio ni promedies nada.\n" +
-            "Responde ÚNICAMENTE un objeto JSON válido con la estructura:\n" +
-            '{\n  "tipoDocumento": "Constancia de Semanas Cotizadas",\n  "semanasTotalesReportadas": null,\n  "periodos": [\n    {\n      "patron": "nombre",\n      "fechaInicio": "YYYY-MM-DD",\n      "fechaFin": "YYYY-MM-DD",\n      "semanas": 104,\n      "salarioDiario": 2585.96\n    }\n  ]\n}\n' +
-            "Reglas:\n" +
-            '1. "salarioDiario" debe ser el Salario Base de Cotización (SBC) diario en pesos mexicanos como número flotante.\n' +
-            '2. "semanas" debe ser el número de semanas cotizadas en ese periodo como número.\n' +
-            '3. "fechaInicio" y "fechaFin" en formato YYYY-MM-DD.\n' +
-            "4. Responde EXCLUSIVAMENTE el JSON, sin texto adicional.";
+    const prompt = `
+Eres un actuario y analista experto en pensiones del IMSS bajo el régimen Ley 73.
+Se te proporciona el documento oficial en PDF "Constancia de Semanas Cotizadas en el IMSS" / "Reporte de Semanas Cotizadas del Asegurado".
 
-        let contents;
-        if (extractedText && extractedText.length > 50) {
-            contents = [
-                { role: 'user', parts: [{ text: prompt + "\n\nCONTENIDO DEL DOCUMENTO:\n" + extractedText }] }
-            ];
-        } else {
-            const base64Data = pdfBuffer.toString('base64');
-            contents = [
-                {
-                    role: 'user',
-                    parts: [
-                        { text: prompt },
-                        { inlineData: { mimeType: 'application/pdf', data: base64Data } }
-                    ]
+Tu objetivo es determinar con precisión matemática el SALARIO DIARIO PROMEDIO DE LAS ÚLTIMAS 250 SEMANAS COTIZADAS (equivalentes a exactamente 1,750 días de cotización).
+
+Instrucciones para la reconstrucción cronológica:
+1. Revisa minuciosamente el historial laboral del documento en orden cronológico inverso (desde el movimiento más reciente hacia atrás).
+2. Las fechas del IMSS están en formato DD/MM/AAAA.
+3. Las últimas 250 semanas corresponden a exactamente 1,750 DÍAS COTIZADOS (250 semanas x 7 días = 1,750 días).
+4. Reconstruye los periodos o tramos salariales vigentes hacia atrás:
+   - Identifica el tramo de Continuación Voluntaria / Modalidad 40 si existe con sus fechas exactas, días cotizados y salario diario.
+   - Identifica los tramos salariales patronales con sus fechas exactas, días cotizados y salarios diarios registrados.
+   - Si un periodo o tramo sobrepasa los 1,750 días acumulados, toma ÚNICAMENTE los días necesarios de ese periodo más antiguo para completar exactamente los 1,750 días totales (tramo proporcional).
+5. La suma de "dias" de los periodos debe ser exactamente 1,750 días.
+6. Calcula el salario promedio ponderado: Suma(dias * salario_diario) / 1,750.
+
+Responde ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta:
+{
+  "periodos": [
+    {
+      "patron": "Nombre del patrón o Modalidad 40",
+      "fecha_inicio": "YYYY-MM-DD",
+      "fecha_fin": "YYYY-MM-DD",
+      "dias": 813,
+      "salario_diario": 2714.25
+    }
+  ],
+  "dias_totales": 1750,
+  "semanas_totales": 250,
+  "salario_promedio": 2585.96
+}
+
+NO agregues explicaciones ni texto adicional antes o después del JSON. Solo el objeto JSON.
+`;
+
+    const cleanBase64 = pdfBuffer.toString('base64');
+    const candidateModels = [
+        process.env.GEMINI_MODEL,
+        'gemini-3-flash-preview',
+        'gemini-3.8-flash',
+        'gemini-3.6-flash',
+        'gemini-3.1-flash-lite'
+    ].filter(Boolean);
+
+    let lastError = null;
+    for (const modelName of candidateModels) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const response = await ai.models.generateContent({
+                    model: modelName,
+                    contents: [
+                        {
+                            role: 'user',
+                            parts: [
+                                {
+                                    inlineData: {
+                                        mimeType: 'application/pdf',
+                                        data: cleanBase64
+                                    }
+                                },
+                                { text: prompt }
+                            ]
+                        }
+                    ],
+                    config: {
+                        temperature: 0.1,
+                        responseMimeType: 'application/json'
+                    }
+                });
+
+                const rawText = response.text || (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts[0].text);
+                if (!rawText) continue;
+
+                const fenceRegex = new RegExp('^' + String.fromCharCode(96, 96, 96) + '(?:json)?', 'i');
+                const endFenceRegex = new RegExp(String.fromCharCode(96, 96, 96) + '$');
+                const cleanedJson = rawText.trim().replace(fenceRegex, '').replace(endFenceRegex, '').trim();
+                const parsed = JSON.parse(cleanedJson);
+                if (parsed && Array.isArray(parsed.periodos) && parsed.periodos.length > 0) {
+                    return parsed;
                 }
-            ];
-        }
-
-        const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents,
-            config: {
-                temperature: 0.1,
-                responseMimeType: 'application/json'
+            } catch (err) {
+                lastError = err;
+                if (err.status === 503 || (err.message && err.message.includes('503'))) {
+                    await new Promise(r => setTimeout(r, 1500 * attempt));
+                    continue;
+                }
+                break;
             }
-        });
-
-        const rawText = response.text || (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts[0].text);
-        if (!rawText) return null;
-
-        const fenceRegex = new RegExp('^' + String.fromCharCode(96, 96, 96) + '(?:json)?', 'i');
-        const endFenceRegex = new RegExp(String.fromCharCode(96, 96, 96) + '$');
-        const cleanedJson = rawText.trim().replace(fenceRegex, '').replace(endFenceRegex, '').trim();
-        const parsed = JSON.parse(cleanedJson);
-        if (parsed && Array.isArray(parsed.periodos) && parsed.periodos.length > 0) {
-            return parsed.periodos;
         }
-        return null;
-    } catch (err) {
-        console.error('Error in parseIMSSWithGemini:', err.message);
-        return null;
     }
+
+    if (lastError) {
+        throw lastError;
+    }
+    return null;
 }
 
 app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
@@ -500,62 +548,59 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             });
         }
 
-        // 1. Extraer texto del PDF mediante código
-        let extractedText = '';
-        try {
-            extractedText = extractTextFromPdfBuffer(pdfBuffer);
-        } catch (e) {
-            console.warn('Advertencia al extraer texto de PDF:', e.message);
-        }
-
-        // 2. Intentar extracción determinista mediante código
-        let periods = null;
-        if (extractedText && extractedText.length > 20) {
-            periods = extractPeriodsFromIMSSDocumentText(extractedText);
-        }
-
-        // 3. Si el código no extrajo periodos o son insuficientes, recurrir a Gemini si está disponible
-        if (!periods || periods.length === 0) {
-            try {
-                periods = await parseIMSSWithGemini(pdfBuffer, extractedText);
-            } catch (aiErr) {
-                console.warn('Advertencia al interpretar PDF con IA:', aiErr.message);
-            }
-        }
-
-        if (!periods || !Array.isArray(periods) || periods.length === 0) {
-            return res.status(422).json({
-                error: 'CANNOT_INTERPRET_PDF',
-                message: 'No fue posible interpretar los periodos de semanas cotizadas en el documento. Por favor verifica que sea un documento oficial del IMSS o ingresa el salario manualmente.'
+        if (!process.env.GEMINI_API_KEY) {
+            return res.status(500).json({
+                error: 'GEMINI_KEY_NOT_CONFIGURED',
+                message: 'La clave GEMINI_API_KEY no está configurada en el servidor. Por favor configúrala en el archivo .env o ingresa el salario manualmente.'
             });
         }
 
-        // 4. Calcular deterministamente el promedio de las últimas 250 semanas
-        const calcResult = calculateAverageSalaryLast250Weeks(periods);
-
-        if (!calcResult.success) {
+        // 1. Enviar el PDF a Gemini API real para análisis multimodal de documentos
+        let geminiAnalysis = null;
+        try {
+            geminiAnalysis = await parseIMSSWithGemini(pdfBuffer);
+        } catch (aiErr) {
+            console.error('Error al analizar documento con Gemini API:', aiErr.message);
             return res.status(422).json({
-                error: calcResult.error,
-                message: calcResult.message,
-                totalSemanas: calcResult.totalSemanas,
-                semanasFaltantes: calcResult.semanasFaltantes
+                error: 'CANNOT_INTERPRET_PDF',
+                message: 'No fue posible interpretar el documento mediante Gemini API. Por favor verifica que sea un documento oficial de Semanas Cotizadas del IMSS o ingresa el salario manualmente.'
+            });
+        }
+
+        if (!geminiAnalysis || !Array.isArray(geminiAnalysis.periodos) || geminiAnalysis.periodos.length === 0) {
+            return res.status(422).json({
+                error: 'CANNOT_INTERPRET_PDF',
+                message: 'Gemini no identificó periodos de cotización en el documento. Por favor ingresa el salario manualmente.'
+            });
+        }
+
+        // 2. Validación matemática estricta en el backend
+        const validation = validateAndCalculatePensionPeriods(geminiAnalysis);
+        if (!validation.success) {
+            return res.status(422).json({
+                error: validation.error,
+                message: validation.message,
+                sumaDias: validation.sumaDias
             });
         }
 
         const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
         res.status(200).json({
             success: true,
-            salarioDiarioPromedio: calcResult.salarioDiarioPromedio,
-            salarioDiarioPromedioFormateado: formatter.format(calcResult.salarioDiarioPromedio),
-            semanasAnalizadas: calcResult.semanasAnalizadas,
-            semanasConsideradas: calcResult.semanasAnalizadas,
-            totalSemanasDocumento: calcResult.totalSemanasDocumento,
-            periodosUtilizados: calcResult.periodosUtilizados,
-            message: 'Se identificaron las últimas 250 semanas cotizadas con éxito.'
+            salarioDiarioPromedio: validation.salarioDiarioPromedio,
+            salarioDiarioPromedioFormateado: formatter.format(validation.salarioDiarioPromedio),
+            diasTotales: validation.diasTotales,
+            semanasTotales: validation.semanasTotales,
+            semanasAnalizadas: validation.semanasTotales,
+            semanasConsideradas: validation.semanasTotales,
+            totalSemanasDocumento: validation.semanasTotales,
+            periodos: validation.periodos,
+            periodosUtilizados: validation.periodos,
+            message: 'Se identificaron las últimas 250 semanas cotizadas con éxito mediante Gemini API.'
         });
 
     } catch (error) {
-        console.error('Error in /api/pension/calcular-salario-pdf:', error);
+        console.error('Error in /api/pension/calcular-salario-pdf:', error.message);
         res.status(500).json({
             error: 'SERVER_ERROR',
             message: 'Ocurrió un error al procesar el documento. Por favor intenta de nuevo o ingresa el salario manualmente.'

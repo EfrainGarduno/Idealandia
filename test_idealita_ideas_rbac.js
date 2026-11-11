@@ -243,7 +243,10 @@ setTimeout(async () => {
         sendBtn.click();
 
         // Esperar conexión WebSocket y envío de setup / context
-        await new Promise(r => setTimeout(r, 100));
+        for (let i = 0; i < 30; i++) {
+            if (MockWebSocket.instances.length > 0) break;
+            await new Promise(r => setTimeout(r, 50));
+        }
 
         const ws = MockWebSocket.instances[0];
         assert.ok(ws, "WebSocket de Idealita Live debió inicializarse.");
@@ -446,7 +449,10 @@ setTimeout(async () => {
         userInput.value = "Hola Idealita";
         sendBtn.click();
 
-        await new Promise(r => setTimeout(r, 100));
+        for (let i = 0; i < 30; i++) {
+            if (MockWebSocket.instances.length > 1) break;
+            await new Promise(r => setTimeout(r, 50));
+        }
         const wsUserWithIdeas = MockWebSocket.instances[MockWebSocket.instances.length - 1];
         assert.ok(wsUserWithIdeas, "Nuevo WebSocket debe haberse abierto.");
 
@@ -527,4 +533,4 @@ setTimeout(async () => {
         console.error("\n❌ Error en las pruebas:", err);
         process.exit(1);
     }
-}, 500);
+}, 1000);
