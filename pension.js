@@ -173,6 +173,23 @@ function calculateIMSSLey73Pension(data) {
 }
 
 
+function iterateDays(startDateIso, endDateIso) {
+    const [y1, m1, d1] = startDateIso.split('-').map(Number);
+    const [y2, m2, d2] = endDateIso.split('-').map(Number);
+    let currentUtc = Date.UTC(y1, m1 - 1, d1, 12, 0, 0);
+    const endUtc = Date.UTC(y2, m2 - 1, d2, 12, 0, 0);
+    const days = [];
+    while (currentUtc <= endUtc) {
+        const dt = new Date(currentUtc);
+        const y = dt.getUTCFullYear();
+        const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(dt.getUTCDate()).padStart(2, '0');
+        days.push(`${y}-${m}-${d}`);
+        currentUtc += 86400000;
+    }
+    return days;
+}
+
 function calculateAverageSalaryLast250Weeks(periodos) {
     if (!Array.isArray(periodos) || periodos.length === 0) {
         return {
@@ -183,6 +200,8 @@ function calculateAverageSalaryLast250Weeks(periodos) {
     }
 
     const validPeriods = [];
+    let syntheticBaseDate = null;
+
     for (let i = 0; i < periodos.length; i++) {
         const p = periodos[i];
         if (!p || typeof p !== 'object') {
@@ -190,6 +209,18 @@ function calculateAverageSalaryLast250Weeks(periodos) {
                 success: false,
                 error: 'INVALID_PERIOD_STRUCTURE',
                 message: `Estructura de periodo no válida en la posición ${i + 1}.`
+            };
+        }
+
+        const patron = typeof p.patron === 'string' && p.patron.trim()
+            ? p.patron.trim()
+            : (typeof p.empresa === 'string' && p.empresa.trim() ? p.empresa.trim() : null);
+
+        if (!patron) {
+            return {
+                success: false,
+                error: 'INVALID_PATRON',
+                message: `Nombre de patrón no válido en periodo ${i + 1}.`
             };
         }
 
@@ -207,53 +238,49 @@ function calculateAverageSalaryLast250Weeks(periodos) {
             };
         }
 
-        let dias = typeof p.dias === 'number'
-            ? p.dias
-            : parseInt(String(p.dias || '').replace(/[^0-9]/g, ''), 10);
+        let fechaInicio = parseDateToIso(p.fechaInicio || p.fecha_inicio);
+        let fechaFin = parseDateToIso(p.fechaFin || p.fecha_fin);
 
-        const fechaInicio = p.fechaInicio || p.fecha_inicio || null;
-        const fechaFin = p.fechaFin || p.fecha_fin || null;
+        // Soporte de compatibilidad para datos sintéticos que sólo proporcionan días numéricos
+        if ((!fechaInicio || !fechaFin) && (typeof p.dias === 'number' || typeof p.semanas === 'number')) {
+            const diasCount = typeof p.dias === 'number' && p.dias > 0
+                ? p.dias
+                : Math.round(Number(p.semanas) * 7);
 
-        if ((isNaN(dias) || dias <= 0) && fechaInicio && fechaFin) {
-            const d1 = new Date(fechaInicio);
-            const d2 = new Date(fechaFin);
-            if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d2 >= d1) {
-                dias = Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24)) + 1;
+            if (diasCount > 0) {
+                if (!syntheticBaseDate) {
+                    syntheticBaseDate = new Date(Date.UTC(2025, 0, 1, 12, 0, 0));
+                }
+                const dtFin = new Date(syntheticBaseDate.getTime());
+                const dtInicio = new Date(syntheticBaseDate.getTime() - (diasCount - 1) * 86400000);
+                
+                fechaFin = dtFin.toISOString().slice(0, 10);
+                fechaInicio = dtInicio.toISOString().slice(0, 10);
+                // Mover base hacia atrás para el siguiente periodo sintético (1 día antes)
+                syntheticBaseDate = new Date(dtInicio.getTime() - 86400000);
             }
         }
 
-        if ((isNaN(dias) || dias <= 0) && (p.semanas || p.semanasCotizadas)) {
-            const sem = parseFloat(String(p.semanas || p.semanasCotizadas || '').replace(/[^0-9.]/g, ''));
-            if (!isNaN(sem) && sem > 0) {
-                dias = Math.round(sem * 7);
-            }
-        }
-
-        if (isNaN(dias) || dias <= 0) {
+        if (!fechaInicio || !fechaFin) {
             return {
                 success: false,
-                error: 'INVALID_DAYS',
-                message: `Número de días inválido en periodo ${i + 1}.`
+                error: 'INVALID_DATES',
+                message: `Fechas no válidas en periodo ${i + 1}.`
             };
         }
 
-        let timeVal = 0;
-        if (fechaFin) {
-            const df = new Date(fechaFin);
-            if (!isNaN(df.getTime())) timeVal = df.getTime();
+        if (fechaFin < fechaInicio) {
+            return {
+                success: false,
+                error: 'INVALID_DATE_RANGE',
+                message: `Rango de fechas invertido en periodo ${i + 1} (${fechaInicio} a ${fechaFin}).`
+            };
         }
-        if (!timeVal && fechaInicio) {
-            const di = new Date(fechaInicio);
-            if (!isNaN(di.getTime())) timeVal = di.getTime();
-        }
-        if (!timeVal) timeVal = 1000000000000 - i;
 
         validPeriods.push({
-            patron: p.patron || p.empresa || 'Patrón IMSS',
+            patron,
             fechaInicio,
             fechaFin,
-            timeVal,
-            dias,
             salarioDiario: salario
         });
     }
@@ -262,71 +289,144 @@ function calculateAverageSalaryLast250Weeks(periodos) {
         return {
             success: false,
             error: 'NO_VALID_PERIODS',
-            message: 'No se pudieron extraer registros con salarios numéricos válidos.'
+            message: 'No se pudieron extraer registros con periodos válidos.'
         };
     }
 
-    // Ordenar cronológicamente del más reciente al más antiguo
-    validPeriods.sort((a, b) => b.timeVal - a.timeVal);
-
-    const totalDias = validPeriods.reduce((acc, p) => acc + p.dias, 0);
-    if (totalDias < 1750) {
-        return {
-            success: false,
-            error: 'DAYS_SUM_MISMATCH',
-            sumaDias: totalDias,
-            totalDias,
-            totalSemanas: Math.round((totalDias / 7) * 100) / 100,
-            diasFaltantes: 1750 - totalDias,
-            semanasFaltantes: Math.round(((1750 - totalDias) / 7) * 100) / 100,
-            message: `La suma de días analizados (${totalDias}) no coincide con los 1,750 días requeridos para 250 semanas.`
-        };
-    }
-
-    let accumulatedDays = 0;
-    let weightedSalarySum = 0;
-    const periodosUtilizados = [];
-
+    // Construcción del mapa por DÍA CALENDARIO con regla MAX_PROVISIONAL en traslapes
+    const dayMap = {};
     for (const p of validPeriods) {
-        const neededDays = 1750 - accumulatedDays;
-        if (neededDays <= 0) break;
-
-        const daysToUse = Math.min(p.dias, neededDays);
-        weightedSalarySum += daysToUse * p.salarioDiario;
-        accumulatedDays += daysToUse;
-
-        periodosUtilizados.push({
-            patron: p.patron,
-            fechaInicio: p.fechaInicio,
-            fechaFin: p.fechaFin,
-            fecha_inicio: p.fechaInicio,
-            fecha_fin: p.fechaFin,
-            salarioDiario: p.salarioDiario,
-            salario_diario: p.salarioDiario,
-            dias: daysToUse,
-            diasDisponibles: p.dias,
-            diasUtilizados: daysToUse,
-            semanas: Math.round((daysToUse / 7) * 100) / 100,
-            semanasDisponibles: Math.round((p.dias / 7) * 100) / 100,
-            semanasUtilizadas: Math.round((daysToUse / 7) * 100) / 100,
-            parcial: daysToUse < p.dias
-        });
-
-        if (accumulatedDays >= 1750) break;
+        const days = iterateDays(p.fechaInicio, p.fechaFin);
+        for (const dia of days) {
+            if (!dayMap[dia]) {
+                dayMap[dia] = {
+                    sbc: p.salarioDiario,
+                    registros: [p],
+                    traslapado: false
+                };
+            } else {
+                dayMap[dia].sbc = Math.max(dayMap[dia].sbc, p.salarioDiario);
+                dayMap[dia].registros.push(p);
+                dayMap[dia].traslapado = true;
+            }
+        }
     }
 
-    if (accumulatedDays < 1750) {
+    // Verificar que existan al menos 1,750 días únicos de cotización
+    const uniqueDates = Object.keys(dayMap).sort((a, b) => b.localeCompare(a));
+    const totalDiasUnicos = uniqueDates.length;
+
+    if (totalDiasUnicos < 1750) {
         return {
             success: false,
             error: 'DAYS_SUM_MISMATCH',
-            sumaDias: accumulatedDays,
-            accumulatedDays,
-            message: `La suma de días analizados (${accumulatedDays}) no coincide con los 1,750 días requeridos para 250 semanas.`
+            sumaDias: totalDiasUnicos,
+            totalDias: totalDiasUnicos,
+            totalSemanas: Math.round((totalDiasUnicos / 7) * 100) / 100,
+            diasFaltantes: 1750 - totalDiasUnicos,
+            semanasFaltantes: Math.round(((1750 - totalDiasUnicos) / 7) * 100) / 100,
+            message: `La suma de días analizados (${totalDiasUnicos}) no coincide con los 1,750 días requeridos para 250 semanas.`
         };
+    }
+
+    // Seleccionar exactamente los primeros 1,750 días (ordenados de más reciente a más antiguo)
+    const selectedDates = uniqueDates.slice(0, 1750);
+
+    // Calcular determinísticamente suma ponderada y promedio en backend
+    let weightedSalarySum = 0;
+    for (const dia of selectedDates) {
+        weightedSalarySum += dayMap[dia].sbc;
     }
 
     const promedioDiario = weightedSalarySum / 1750;
     const salarioDiarioPromedio = Math.round(promedioDiario * 100) / 100;
+
+    // Reconstrucción estructurada de los segmentos utilizados
+    const segments = [];
+    let currentSegment = null;
+
+    for (let i = 0; i < selectedDates.length; i++) {
+        const dateStr = selectedDates[i];
+        const info = dayMap[dateStr];
+        const patronsKey = info.registros.map(r => r.patron).sort().join(' | ');
+
+        let isContiguous = false;
+        if (currentSegment) {
+            const [y1, m1, d1] = currentSegment.lastDate.split('-').map(Number);
+            const prevUtc = Date.UTC(y1, m1 - 1, d1, 12, 0, 0);
+            const [y2, m2, d2] = dateStr.split('-').map(Number);
+            const curUtc = Date.UTC(y2, m2 - 1, d2, 12, 0, 0);
+            if (prevUtc - curUtc === 86400000 &&
+                currentSegment.salarioDiario === info.sbc &&
+                currentSegment.patronsKey === patronsKey) {
+                isContiguous = true;
+            }
+        }
+
+        if (isContiguous) {
+            currentSegment.dias++;
+            currentSegment.fechaInicio = dateStr; // Se extiende hacia atrás
+            currentSegment.lastDate = dateStr;
+        } else {
+            if (currentSegment) {
+                delete currentSegment.lastDate;
+                delete currentSegment.patronsKey;
+                segments.push(currentSegment);
+            }
+
+            const patronName = info.registros.length === 1
+                ? info.registros[0].patron
+                : info.registros.map(r => r.patron).join(' / ');
+
+            currentSegment = {
+                patron: patronName,
+                fechaInicio: dateStr,
+                fechaFin: dateStr,
+                fecha_inicio: dateStr,
+                fecha_fin: dateStr,
+                lastDate: dateStr,
+                patronsKey,
+                dias: 1,
+                diasUtilizados: 1,
+                salarioDiario: info.sbc,
+                salario_diario: info.sbc,
+                traslapado: info.traslapado,
+                traslape: info.traslapado,
+                reglaTraslape: info.traslapado ? 'MAX_PROVISIONAL' : null,
+                registrosParticipantes: info.registros.map(r => ({
+                    patron: r.patron,
+                    salarioDiario: r.salarioDiario,
+                    fechaInicio: r.fechaInicio,
+                    fechaFin: r.fechaFin
+                })),
+                parcial: false
+            };
+        }
+    }
+
+    if (currentSegment) {
+        delete currentSegment.lastDate;
+        delete currentSegment.patronsKey;
+        segments.push(currentSegment);
+    }
+
+    // Completar campos derivados y verificar corte parcial en el segmento más antiguo
+    for (const s of segments) {
+        s.diasUtilizados = s.dias;
+        s.semanas = Math.round((s.dias / 7) * 100) / 100;
+        s.semanasUtilizadas = s.semanas;
+        s.subtotal = Math.round(s.dias * s.salarioDiario * 100) / 100;
+    }
+
+    const oldestSegment = segments[segments.length - 1];
+    let wasCut = false;
+    for (const reg of oldestSegment.registrosParticipantes) {
+        if (reg.fechaInicio < oldestSegment.fechaInicio) {
+            wasCut = true;
+            break;
+        }
+    }
+    oldestSegment.parcial = wasCut;
 
     return {
         success: true,
@@ -335,10 +435,12 @@ function calculateAverageSalaryLast250Weeks(periodos) {
         semanasTotales: 250,
         semanasAnalizadas: 250,
         semanasConsideradas: 250,
-        totalDiasDocumento: totalDias,
-        totalSemanasDocumento: Math.round((totalDias / 7) * 100) / 100,
-        periodos: periodosUtilizados,
-        periodosUtilizados
+        totalDiasDocumento: totalDiasUnicos,
+        totalSemanasDocumento: Math.round((totalDiasUnicos / 7) * 100) / 100,
+        sumaPonderada: weightedSalarySum,
+        reglaTraslape: 'MAX_PROVISIONAL',
+        periodos: segments,
+        periodosUtilizados: segments
     };
 }
 
@@ -450,28 +552,7 @@ function validateAndCalculatePensionPeriods(aiData) {
         return { success: false, error: 'NO_PERIODS', message: 'No se identificaron periodos de cotización en el documento.' };
     }
 
-    const result = calculateAverageSalaryLast250Weeks(periodos);
-    if (!result.success) {
-        return result;
-    }
-
-    // Validar concordancia con el número de Gemini si fue provisto
-    const reportedSalary = typeof aiData.salario_promedio === 'number'
-        ? aiData.salario_promedio
-        : (typeof aiData.salarioPromedio === 'number' ? aiData.salarioPromedio : null);
-
-    if (reportedSalary !== null) {
-        const diff = Math.abs(result.salarioDiarioPromedio - reportedSalary);
-        if (diff > 0.05) {
-            return {
-                success: false,
-                error: 'AVERAGE_VALIDATION_FAILED',
-                message: `El promedio recalculado en backend (${result.salarioDiarioPromedio}) difiere del reportado (${reportedSalary}).`
-            };
-        }
-    }
-
-    return result;
+    return calculateAverageSalaryLast250Weeks(periodos);
 }
 
 if (typeof window !== 'undefined') {

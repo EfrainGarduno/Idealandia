@@ -433,36 +433,30 @@ async function parseIMSSWithGemini(pdfBuffer) {
     const prompt = `Eres un actuario y analista experto en pensiones del IMSS bajo el régimen Ley 73.
 Se te proporciona el documento oficial en PDF "Constancia de Semanas Cotizadas en el IMSS" / "Reporte de Semanas Cotizadas del Asegurado".
 
-Tu objetivo es extraer de manera estructurada y fiel los periodos o tramos de cotización salarial en orden cronológico inverso (desde el movimiento más reciente hacia atrás), asegurando incluir los periodos suficientes para que el backend pueda cubrir las últimas 250 semanas cotizadas (1,750 días de cotización).
+Tu objetivo es extraer de manera estructurada y fiel los periodos o tramos de cotización salarial que aparecen en la tabla de historia laboral del documento adjunto, en orden cronológico inverso (desde el movimiento más reciente hacia atrás en el tiempo), asegurando incluir los periodos suficientes para que el backend pueda cubrir las últimas 250 semanas cotizadas (al menos 1,750 días de cotización).
 
-Reglas para la reconstrucción de los tramos:
-1. Revisa minuciosamente el historial laboral del documento en orden cronológico inverso.
-2. Toma la fecha del último movimiento registrado en el documento como fecha de corte (en Continuación Voluntaria / Modalidad 40, hasta el último mes con vigencia 2026-06-30). No uses la fecha de hoy.
-3. Para cada tramo salarial homogéneo:
-   - "patron": Nombre de la empresa o patrón (o "Continuación Voluntaria en el Régimen Obligatorio" / "Modalidad 40").
-   - "fechaInicio": Fecha de inicio del tramo (YYYY-MM-DD).
-   - "fechaFin": Fecha de fin del tramo (YYYY-MM-DD).
+Reglas de extracción:
+1. Revisa minuciosamente la tabla de historial laboral del documento en orden cronológico inverso (del movimiento más reciente hacia atrás).
+2. Para la fecha de corte más reciente, toma la fecha de fin o baja del último movimiento registrado en el documento (o la fecha de emisión del reporte si está activo). No uses la fecha de hoy.
+3. Para cada periodo o tramo salarial registrado en el historial:
+   - "patron": Nombre de la empresa, razón social o modalidad registrada (ej. "Continuación Voluntaria en el Régimen Obligatorio" o nombre del patrón).
+   - "fechaInicio": Fecha de inicio o alta del movimiento (formato YYYY-MM-DD).
+   - "fechaFin": Fecha de fin o baja del movimiento (formato YYYY-MM-DD).
    - "dias": Días naturales cotizados en ese tramo.
-   - "salarioDiario": Salario Base de Cotización (SBC) diario registrado en pesos (numérico decimal).
-4. Identifica con precisión los tramos salariales de Continuación Voluntaria y los tramos patronales consecutivos con sus salarios correspondientes:
-   - Continuación Voluntaria / Modalidad 40: 09/04/2024 al 30/06/2026 (813 días, SBC 2714.25).
-   - Servicios Edenred:
-     * 01/02/2024 al 04/04/2024 (64 días, SBC 2714.25).
-     * 01/02/2023 al 31/01/2024 (365 días, SBC 2593.50).
-     * 01/02/2022 al 31/01/2023 (365 días, SBC 2405.50).
-   - Periodo parcial anterior correspondiente a la cuota salarial de 2240.50 (reporta este tramo con al menos 143 días para completar las 250 semanas cotizadas).
-5. NO calcules ningún promedio ni suma total. Tu labor es únicamente la extracción estructurada de los periodos.
+   - "salarioDiario": Salario Base de Cotización (SBC) diario registrado en pesos (numérico decimal sin comas ni símbolos).
+4. Extrae ÚNICAMENTE los datos reales presentes en el documento adjunto. No inventes periodos, empresas, fechas ni salarios que no aparezcan en el documento.
+5. NO calcules ningún promedio ni suma total. Tu labor es únicamente la extracción estructurada y fiel de los periodos.
 
 Responde ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
 {
   "tipoDocumento": "Constancia de Semanas Cotizadas",
   "periodos": [
     {
-      "patron": "CONTINUACION VOLUNTARIA EN EL REGIMEN OBLIGATORIO",
+      "patron": "NOMBRE DEL PATRON O MODALIDAD",
       "fechaInicio": "YYYY-MM-DD",
       "fechaFin": "YYYY-MM-DD",
-      "dias": 813,
-      "salarioDiario": 2714.25
+      "dias": 100,
+      "salarioDiario": 500.00
     }
   ]
 }

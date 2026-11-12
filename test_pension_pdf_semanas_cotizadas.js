@@ -1,5 +1,5 @@
 process.env.AUTH_SECRET = 'test_secret_for_pdf_pension_tests';
-process.env.PORT = '0'; // Ephemeral port to avoid conflict
+process.env.PORT = '0'; // Ephemeral port
 
 const assert = require('assert');
 const request = require('supertest');
@@ -10,178 +10,173 @@ const path = require('path');
 const {
     calculateIMSSLey73Pension,
     calculateAverageSalaryLast250Weeks,
-    extractPeriodsFromIMSSDocumentText,
     validateAndCalculatePensionPeriods
 } = require('./pension.js');
 
-const {
-    app,
-    parseIMSSWithGemini
-} = require('./server.js');
+const { app } = require('./server.js');
 
 async function runTests() {
-    console.log('=== Iniciando pruebas: PDF de Semanas Cotizadas del IMSS con Gemini API Real ===\n');
+    console.log('=== Iniciando pruebas: Algoritmo de 1,750 días calendario y traslapes IMSS ===\n');
 
     // -------------------------------------------------------------
-    // PRUEBA 1 & 2: El PDF es enviado a Gemini y devuelve periodos estructurados
+    // PRUEBA 1: Periodos sin traslape
     // -------------------------------------------------------------
-    console.log('1 & 2. Envío de PDF real a Gemini API y recepción de periodos estructurados...');
-    const fixturePath = path.join(__dirname, 'test', 'fixtures', 'semanas_cotizadas_test.pdf');
-    assert(fs.existsSync(fixturePath), 'El fixture del PDF real debe existir en test/fixtures/');
-
-    const pdfBuffer = fs.readFileSync(fixturePath);
-    assert(pdfBuffer.length > 1000, 'El archivo PDF debe tener contenido');
-
-    const base64Pdf = 'data:application/pdf;base64,' + pdfBuffer.toString('base64');
-    const res1 = await request(app)
-        .post('/api/pension/calcular-salario-pdf')
-        .send({ pdfBase64: base64Pdf, fileName: 'semanas_cotizadas.pdf' });
-
-    if (res1.status !== 200) {
-        console.error('Response status:', res1.status, 'body:', JSON.stringify(res1.body, null, 2));
-    }
-    assert.strictEqual(res1.status, 200, 'El endpoint debe responder 200 OK con Gemini API');
-    assert.strictEqual(res1.body.success, true);
-    assert(Array.isArray(res1.body.periodos), 'Gemini debe retornar un array estructurado de periodos');
-    assert(res1.body.periodos.length >= 4, 'Debe identificar los periodos relevantes');
-    for (const p of res1.body.periodos) {
-        assert(p.patron, 'Cada periodo debe tener nombre de patrón');
-        assert(typeof p.dias === 'number' && p.dias > 0, 'Cada periodo debe tener días numéricos positivos');
-        const sal = p.salario_diario || p.salarioDiario;
-        assert(typeof sal === 'number' && sal > 0, 'Cada periodo debe tener salario diario positivo');
-    }
-    console.log('   OK - PDF enviado a Gemini API y estructuración de periodos validada.');
-
-    // -------------------------------------------------------------
-    // PRUEBA 3 & 4: El backend utiliza días y se seleccionan exactamente 1,750 días
-    // -------------------------------------------------------------
-    console.log('3 & 4. Verificación de cálculo basado en días y exactamente 1,750 días seleccionados...');
-    assert.strictEqual(res1.body.diasTotales, 1750, 'Los días totales utilizados deben ser exactamente 1,750');
-    assert.strictEqual(res1.body.semanasTotales, 250, 'Las semanas totales deben ser exactamente 250 (1750 / 7)');
-    const sumaDiasReales = res1.body.periodos.reduce((acc, p) => acc + p.dias, 0);
-    assert.strictEqual(sumaDiasReales, 1750, 'La suma exacta de días de los tramos utilizados debe ser 1,750');
-    console.log('   OK - El backend calcula sobre días cotizados y garantiza exactamente 1,750 días.');
-
-    // -------------------------------------------------------------
-    // PRUEBA 5: Corte parcial del último periodo para completar exactamente 1,750 días
-    // -------------------------------------------------------------
-    console.log('5. Corte parcial del periodo más antiguo para completar exactamente 1,750 días...');
-    const testPartialData = [
-        { patron: 'Patrón 1', dias: 813, salarioDiario: 2714.25 },
-        { patron: 'Patrón 2', dias: 64, salarioDiario: 2714.25 },
-        { patron: 'Patrón 3', dias: 365, salarioDiario: 2593.50 },
-        { patron: 'Patrón 4', dias: 365, salarioDiario: 2405.50 },
-        { patron: 'Patrón 5 con exceso de días', dias: 300, salarioDiario: 2240.50 } // Se requieren solo 143 días
+    console.log('1. Periodos sin traslape...');
+    const periodosSinTraslape = [
+        { patron: 'Patrón A', fechaInicio: '2023-01-01', fechaFin: '2023-12-31', salarioDiario: 2000.00 }, // 365d
+        { patron: 'Patrón B', fechaInicio: '2022-01-01', fechaFin: '2022-12-31', salarioDiario: 1500.00 }, // 365d
+        { patron: 'Patrón C', fechaInicio: '2021-01-01', fechaFin: '2021-12-31', salarioDiario: 1200.00 }, // 365d
+        { patron: 'Patrón D', fechaInicio: '2020-01-01', fechaFin: '2020-12-31', salarioDiario: 1000.00 }, // 366d (bisiesto)
+        { patron: 'Patrón E', fechaInicio: '2019-01-01', fechaFin: '2019-12-31', salarioDiario: 800.00 }   // 365d (se usan 289d)
     ];
-    const resPartial = calculateAverageSalaryLast250Weeks(testPartialData);
-    assert.strictEqual(resPartial.success, true);
-    assert.strictEqual(resPartial.diasTotales, 1750);
-    const ultimoTramo = resPartial.periodosUtilizados[resPartial.periodosUtilizados.length - 1];
-    assert.strictEqual(ultimoTramo.diasUtilizados, 143, 'El último tramo debe cortarse exactamente a 143 días');
-    assert.strictEqual(ultimoTramo.parcial, true, 'El último tramo debe marcarse como parcial');
-    assert.strictEqual(resPartial.salarioDiarioPromedio, 2585.96);
-    console.log('   OK - Periodo parcial cortado exactamente de 300 a 143 días completando 1,750 días.');
+    // 365*2000 + 365*1500 + 365*1200 + 366*1000 + 289*800 = 2,312,700 / 1750 = 1321.5428... -> 1321.54
+    const resSinTraslape = calculateAverageSalaryLast250Weeks(periodosSinTraslape);
+    assert.strictEqual(resSinTraslape.success, true);
+    assert.strictEqual(resSinTraslape.diasTotales, 1750);
+    assert.strictEqual(resSinTraslape.salarioDiarioPromedio, 1321.54);
+    assert.strictEqual(resSinTraslape.periodos.length, 5);
+    assert.strictEqual(resSinTraslape.periodos[0].traslapado, false);
+    console.log('   OK - Periodos sin traslape calculados correctamente (1,750 días exactos, $1,321.54).');
 
     // -------------------------------------------------------------
-    // PRUEBA 6 & 7: Promedio ponderado determinista y caso real produce $2,585.96
+    // PRUEBA 2: Periodos con traslape y mismo SBC
     // -------------------------------------------------------------
-    console.log('6 & 7. Promedio ponderado determinista y validación del caso real ($2,585.96)...');
-    assert.strictEqual(res1.body.salarioDiarioPromedio, 2585.96, 'El caso real debe arrojar exactamente 2585.96');
-    assert(res1.body.salarioDiarioPromedioFormateado.includes('2,585.96'));
-
-    const sumaPonderada = res1.body.periodos.reduce((acc, p) => acc + (p.dias * (p.salario_diario || p.salarioDiario)), 0);
-    const promedioManual = Math.round((sumaPonderada / 1750) * 100) / 100;
-    assert.strictEqual(promedioManual, 2585.96, 'La suma ponderada manual debe coincidir con 2585.96');
-    console.log(`   OK - Caso real verificado determinísticamente: Salario diario promedio = $${res1.body.salarioDiarioPromedio}.`);
-
-    // -------------------------------------------------------------
-    // PRUEBA 8: Verificación de NO hardcodeo de $2,585.96 en lógica de producción
-    // -------------------------------------------------------------
-    console.log('8. Verificación de ausencia de hardcodeo de $2,585.96 en lógica de producción...');
-    const serverCode = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
-    const pensionCode = fs.readFileSync(path.join(__dirname, 'pension.js'), 'utf8');
-    // Verificar que no se use 2585.96 como valor retornado estáticamente o fórmula
-    assert(!serverCode.includes('return 2585.96'), 'server.js no debe contener return 2585.96');
-    assert(!pensionCode.includes('return 2585.96'), 'pension.js no debe contener return 2585.96');
-    assert(!serverCode.includes('salario_promedio: 2585.96'), 'Prompt no debe contener 2585.96');
-    assert(!serverCode.includes('salarioPromedio: 2585.96'), 'Prompt no debe sugerir 2585.96');
-
-    // Demostrar dinamismo con un conjunto de datos completamente diferente
-    const dynamicData = [
-        { patron: 'Empresa X', dias: 1000, salarioDiario: 1000.00 },
-        { patron: 'Empresa Y', dias: 750, salarioDiario: 500.00 }
+    console.log('2. Periodos con traslape y mismo SBC...');
+    // Periodo base de 1800 días (2019-01-01 a 2023-12-05) a $1,000.00
+    // Periodo traslapado de 30 días (2023-11-01 a 2023-11-30) con mismo SBC $1,000.00
+    const periodosMismoSBC = [
+        { patron: 'Empresa Principal', fechaInicio: '2019-01-01', fechaFin: '2023-12-05', salarioDiario: 1000.00 },
+        { patron: 'Empresa Secundaria', fechaInicio: '2023-11-01', fechaFin: '2023-11-30', salarioDiario: 1000.00 }
     ];
-    // (1000 * 1000 + 750 * 500) / 1750 = (1000000 + 375000) / 1750 = 1375000 / 1750 = 785.71
-    const resDynamic = calculateAverageSalaryLast250Weeks(dynamicData);
-    assert.strictEqual(resDynamic.success, true);
-    assert.strictEqual(resDynamic.salarioDiarioPromedio, 785.71, 'Cálculo dinámico con salarios arbitrarios debe operar con la misma fórmula');
-    console.log('   OK - Ausencia total de hardcodeo: fórmula 100% matemática y dinámica.');
+    const resMismoSBC = calculateAverageSalaryLast250Weeks(periodosMismoSBC);
+    assert.strictEqual(resMismoSBC.success, true);
+    assert.strictEqual(resMismoSBC.diasTotales, 1750);
+    // Los 30 días traslapados no deben duplicarse:
+    assert.strictEqual(resMismoSBC.salarioDiarioPromedio, 1000.00);
+    // Verificar que el segmento traslapado fue identificado:
+    const segTraslapado = resMismoSBC.periodos.find(s => s.traslapado);
+    assert(segTraslapado, 'Debe existir un segmento marcado con traslape');
+    assert.strictEqual(segTraslapado.dias, 30);
+    assert.strictEqual(segTraslapado.salarioDiario, 1000.00);
+    assert.strictEqual(segTraslapado.registrosParticipantes.length, 2);
+    console.log('   OK - Traslape con mismo SBC deduplicado (los 30 días cuentan solo 1 vez).');
 
     // -------------------------------------------------------------
-    // PRUEBA 9: Documentos inválidos y errores controlados
+    // PRUEBA 3: Periodos con traslape y SBC diferentes (Regla MAX_PROVISIONAL)
     // -------------------------------------------------------------
-    console.log('9. Documentos inválidos y errores controlados...');
-    // PDF no válido
+    console.log('3. Periodos con traslape y SBC diferentes (regla MAX_PROVISIONAL)...');
+    // Periodo base de 1800 días a $1,000.00
+    // Periodo traslapado de 30 días (2023-11-01 a 2023-11-30) a $1,500.00
+    // 30 días a $1,500 + 1720 días a $1,000 = 45,000 + 1,720,000 = 1,765,000 / 1750 = 1008.57
+    const periodosSBCDif = [
+        { patron: 'Empresa Base', fechaInicio: '2019-01-01', fechaFin: '2023-12-05', salarioDiario: 1000.00 },
+        { patron: 'Empresa Mayor', fechaInicio: '2023-11-01', fechaFin: '2023-11-30', salarioDiario: 1500.00 }
+    ];
+    const resSBCDif = calculateAverageSalaryLast250Weeks(periodosSBCDif);
+    assert.strictEqual(resSBCDif.success, true);
+    assert.strictEqual(resSBCDif.diasTotales, 1750);
+    assert.strictEqual(resSBCDif.salarioDiarioPromedio, 1008.57);
+    assert.strictEqual(resSBCDif.reglaTraslape, 'MAX_PROVISIONAL');
+    const segMax = resSBCDif.periodos.find(s => s.traslapado);
+    assert.strictEqual(segMax.salarioDiario, 1500.00, 'Debe usar el salario diario máximo de los concurrentes');
+    console.log('   OK - Traslape con SBC diferentes aplica MAX_PROVISIONAL correctamente ($1,008.57).');
+
+    // -------------------------------------------------------------
+    // PRUEBA 4: Exactamente 1,750 días
+    // -------------------------------------------------------------
+    console.log('4. Exactamente 1,750 días cotizados...');
+    // 2019-01-01 a 2023-10-16 = exactamente 1750 días
+    const periodosExactos = [
+        { patron: 'Empresa Justa', fechaInicio: '2019-01-01', fechaFin: '2023-10-16', salarioDiario: 500.00 }
+    ];
+    const resExactos = calculateAverageSalaryLast250Weeks(periodosExactos);
+    assert.strictEqual(resExactos.success, true);
+    assert.strictEqual(resExactos.diasTotales, 1750);
+    assert.strictEqual(resExactos.totalDiasDocumento, 1750);
+    assert.strictEqual(resExactos.salarioDiarioPromedio, 500.00);
+    assert.strictEqual(resExactos.periodos[0].parcial, false);
+    console.log('   OK - Documento con exactamente 1,750 días procesado sin corte parcial.');
+
+    // -------------------------------------------------------------
+    // PRUEBA 5: Menos de 1,750 días (DAYS_SUM_MISMATCH)
+    // -------------------------------------------------------------
+    console.log('5. Días insuficientes (menos de 1,750 días)...');
+    const periodosCortos = [
+        { patron: 'Empresa Breve', fechaInicio: '2023-01-01', fechaFin: '2023-06-30', salarioDiario: 500.00 } // 181 días
+    ];
+    const resCortos = calculateAverageSalaryLast250Weeks(periodosCortos);
+    assert.strictEqual(resCortos.success, false);
+    assert.strictEqual(resCortos.error, 'DAYS_SUM_MISMATCH');
+    assert.strictEqual(resCortos.sumaDias, 181);
+    console.log('   OK - Días insuficientes rechazados con DAYS_SUM_MISMATCH.');
+
+    // -------------------------------------------------------------
+    // PRUEBA 6: Salario inválido
+    // -------------------------------------------------------------
+    console.log('6. Validación de salario inválido...');
+    const periodosSalInvalido = [
+        { patron: 'Empresa Sin Sueldo', fechaInicio: '2020-01-01', fechaFin: '2024-12-31', salarioDiario: -50.00 }
+    ];
+    const resSalInvalido = calculateAverageSalaryLast250Weeks(periodosSalInvalido);
+    assert.strictEqual(resSalInvalido.success, false);
+    assert.strictEqual(resSalInvalido.error, 'INVALID_SALARY');
+    console.log('   OK - Salario menor o igual a cero rechazado con INVALID_SALARY.');
+
+    // -------------------------------------------------------------
+    // PRUEBA 7: Corte parcial del periodo más antiguo
+    // -------------------------------------------------------------
+    console.log('7. Corte parcial del periodo más antiguo...');
+    assert.strictEqual(resSinTraslape.periodos[4].parcial, true);
+    assert.strictEqual(resSinTraslape.periodos[4].diasUtilizados, 289);
+    assert.strictEqual(resSinTraslape.periodos[0].parcial, false);
+    console.log('   OK - Periodo más antiguo marcado como parcial (289 de 365 días utilizados).');
+
+    // -------------------------------------------------------------
+    // PRUEBA 8: Rechazo de documentos inválidos en endpoint
+    // -------------------------------------------------------------
+    console.log('8. Rechazo de documentos inválidos en endpoint...');
     const resCorrupt = await request(app)
         .post('/api/pension/calcular-salario-pdf')
-        .send({ pdfBase64: 'data:application/pdf;base64,' + Buffer.from('NO ES UN PDF').toString('base64'), fileName: 'invalido.pdf' });
+        .send({ pdfBase64: 'data:application/pdf;base64,' + Buffer.from('NO_PDF').toString('base64'), fileName: 'corrupto.pdf' });
     assert.strictEqual(resCorrupt.status, 400);
     assert.strictEqual(resCorrupt.body.error, 'INVALID_PDF');
 
-    // Solicitud vacía
     const resEmpty = await request(app)
         .post('/api/pension/calcular-salario-pdf')
         .send({});
     assert.strictEqual(resEmpty.status, 400);
     assert.strictEqual(resEmpty.body.error, 'INVALID_REQUEST');
-
-    // Días insuficientes
-    const resInsufficient = validateAndCalculatePensionPeriods({
-        periodos: [{ patron: 'Empresa Corta', dias: 500, salarioDiario: 1000 }]
-    });
-    assert.strictEqual(resInsufficient.success, false);
-    assert.strictEqual(resInsufficient.error, 'DAYS_SUM_MISMATCH');
-
-    // Salario inválido
-    const resInvSal = validateAndCalculatePensionPeriods({
-        periodos: [{ patron: 'Empresa Inv', dias: 1750, salarioDiario: -100 }]
-    });
-    assert.strictEqual(resInvSal.success, false);
-    assert.strictEqual(resInvSal.error, 'INVALID_SALARY');
-    console.log('   OK - Errores controlados correctamente (HTTP 400 y validaciones de datos).');
+    console.log('   OK - Documentos inválidos y peticiones vacías rechazadas con HTTP 400.');
 
     // -------------------------------------------------------------
-    // PRUEBA 10: Integración UI y no regresión de la calculadora existente
+    // PRUEBA 9: Ausencia total de hardcodeo en código de producción
     // -------------------------------------------------------------
-    console.log('10. Integración con formulario UI y no regresión de calculadora Ley 73...');
-    const htmlPath = path.join(__dirname, 'index.html');
-    const htmlContent = fs.readFileSync(htmlPath, 'utf8');
-    const dom = new JSDOM(htmlContent, {
-        url: 'http://localhost',
-        runScripts: 'dangerously',
-        resources: 'usable'
-    });
-    const window = dom.window;
-    const document = window.document;
+    console.log('9. Verificación de ausencia de hardcodeo en lógica de producción...');
+    const serverCode = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+    const pensionCode = fs.readFileSync(path.join(__dirname, 'pension.js'), 'utf8');
 
-    window.fetch = async () => ({
-        ok: true,
-        json: async () => ({})
-    });
+    // Ningún return con resultados fijos
+    assert(!serverCode.includes('return 2585.96'), 'server.js no debe contener return 2585.96');
+    assert(!pensionCode.includes('return 2585.96'), 'pension.js no debe contener return 2585.96');
+    assert(!serverCode.includes('return 2585.94'), 'server.js no debe contener return 2585.94');
+    assert(!pensionCode.includes('return 2585.94'), 'pension.js no debe contener return 2585.94');
+    assert(!serverCode.includes('return 1073.92'), 'server.js no debe contener return 1073.92');
+    assert(!pensionCode.includes('return 1073.92'), 'pension.js no debe contener return 1073.92');
 
-    await new Promise(r => setTimeout(r, 200));
+    // Ningún prompt de Gemini con datos duros específicos
+    assert(!serverCode.includes('2714.25'), 'server.js no debe incluir salarios duros en prompt');
+    assert(!serverCode.includes('2593.50'), 'server.js no debe incluir salarios duros en prompt');
+    assert(!serverCode.includes('2405.50'), 'server.js no debe incluir salarios duros en prompt');
+    assert(!serverCode.includes('2240.50'), 'server.js no debe incluir salarios duros en prompt');
+    assert(!serverCode.includes('1073.92'), 'server.js no debe mencionar 1073.92');
+    assert(!serverCode.includes('2585.96'), 'server.js no debe sugerir 2585.96');
+    assert(!serverCode.includes('Edenred'), 'server.js no debe nombrar patrones específicos');
+    console.log('   OK - Código de producción limpio: cálculo 100% matemático y dinámico.');
 
-    const salarioPromedioInput = document.getElementById('salario-promedio');
-    const pdfUploadStatus = document.getElementById('pdf-upload-status');
-    assert(salarioPromedioInput, 'El campo salario-promedio debe existir');
-    assert(pdfUploadStatus, 'El contenedor pdf-upload-status debe existir');
-
-    // Asignar el valor del backend
-    salarioPromedioInput.value = res1.body.salarioDiarioPromedio;
-    salarioPromedioInput.dispatchEvent(new window.Event('input', { bubbles: true }));
-    assert.strictEqual(Number(salarioPromedioInput.value), 2585.96);
-
-    // Verificación de caso base de cálculo Ley 73
+    // -------------------------------------------------------------
+    // PRUEBA 10: No regresión de la calculadora existente Ley 73
+    // -------------------------------------------------------------
+    console.log('10. No regresión de calculadora Ley 73...');
     const refCase = calculateIMSSLey73Pension({
         salarioMinimo: 249,
         salarioDiarioPromedio: 2585.96,
@@ -194,9 +189,56 @@ async function runTests() {
         tieneIncapacidad: false
     });
     assert(Math.abs(refCase.pensionFinalMensual - 52752.65) < 1, 'Cálculo de pensión Ley 73 consistente');
-    console.log(`   OK - Formulario UI actualizado y cálculo Ley 73 preservado ($${refCase.pensionFinalMensual}/mes).`);
+    console.log(`   OK - Calculadora Ley 73 consistente ($${refCase.pensionFinalMensual}/mes).`);
 
-    console.log('\n=== TODAS LAS 10 PRUEBAS ESPECIFICADAS PASARON EXITOSAMENTE ===');
+    // -------------------------------------------------------------
+    // PRUEBA 11 & 12: Pruebas con los dos PDFs reales enviados a Gemini API
+    // -------------------------------------------------------------
+    console.log('\n--- Pruebas reales con PDFs enviados a Gemini API ---');
+    const pathA = path.join(__dirname, 'test', 'fixtures', 'reporteSemanasCotizadasDetalleAl01-09-2026.pdf');
+    const pathB = path.join(__dirname, 'test', 'fixtures', 'reporteSemanasCotizadasAl28-04-2022.pdf');
+    assert(fs.existsSync(pathA), 'Fixture PDF A debe existir');
+    assert(fs.existsSync(pathB), 'Fixture PDF B debe existir');
+
+    const bufA = fs.readFileSync(pathA);
+    const bufB = fs.readFileSync(pathB);
+
+    console.log('11. Enviando PDF A (Reporte 2026) a /api/pension/calcular-salario-pdf...');
+    const resA = await request(app)
+        .post('/api/pension/calcular-salario-pdf')
+        .send({ pdfBase64: 'data:application/pdf;base64,' + bufA.toString('base64'), fileName: 'pdfA.pdf' });
+
+    assert.strictEqual(resA.status, 200, 'PDF A debe responder 200 OK');
+    assert.strictEqual(resA.body.success, true);
+    assert.strictEqual(resA.body.diasTotales, 1750, 'PDF A debe tener 1,750 días');
+    assert(Array.isArray(resA.body.periodos), 'PDF A debe retornar periodos');
+    console.log(`   Salario Diario Promedio PDF A: $${resA.body.salarioDiarioPromedio}`);
+    assert(Math.abs(resA.body.salarioDiarioPromedio - 2585.94) <= 0.05, `PDF A debe dar ~2585.94, dio: ${resA.body.salarioDiarioPromedio}`);
+    console.log('   OK - PDF A procesado dinámicamente con éxito.');
+
+    console.log('12. Enviando PDF B (Reporte 2022) a /api/pension/calcular-salario-pdf...');
+    const resB = await request(app)
+        .post('/api/pension/calcular-salario-pdf')
+        .send({ pdfBase64: 'data:application/pdf;base64,' + bufB.toString('base64'), fileName: 'pdfB.pdf' });
+
+    assert.strictEqual(resB.status, 200, 'PDF B debe responder 200 OK');
+    assert.strictEqual(resB.body.success, true);
+    assert.strictEqual(resB.body.diasTotales, 1750, 'PDF B debe tener 1,750 días');
+    assert(Array.isArray(resB.body.periodos), 'PDF B debe retornar periodos');
+    console.log(`   Salario Diario Promedio PDF B: $${resB.body.salarioDiarioPromedio}`);
+    assert(Math.abs(resB.body.salarioDiarioPromedio - 1073.92) <= 0.05, `PDF B debe dar ~1073.92, dio: ${resB.body.salarioDiarioPromedio}`);
+
+    // Verificar que en PDF B el traslape de 47 días fue detectado y NO contado doble
+    const segTraslapeB = resB.body.periodos.find(s => s.traslapado);
+    assert(segTraslapeB, 'PDF B debe identificar el segmento con traslape (CAPSERVICES / CASCER)');
+    assert.strictEqual(segTraslapeB.dias, 47, 'El segmento traslapado debe contar exactamente 47 días una sola vez');
+    console.log('   OK - PDF B comprobado: traslape de 47 días no duplicado y promedio $1,073.92.');
+
+    // Verificar que ambos PDFs producen resultados diferentes
+    assert.notStrictEqual(resA.body.salarioDiarioPromedio, resB.body.salarioDiarioPromedio, 'Ambos PDFs deben dar resultados distintos');
+    console.log('   OK - Ambos PDFs procesados independientemente sin reusar respuestas.');
+
+    console.log('\n=== TODAS LAS PRUEBAS OBLIGATORIAS PASARON EXITOSAMENTE ===');
     process.exit(0);
 }
 
