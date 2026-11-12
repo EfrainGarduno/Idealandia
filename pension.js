@@ -185,44 +185,75 @@ function calculateAverageSalaryLast250Weeks(periodos) {
     const validPeriods = [];
     for (let i = 0; i < periodos.length; i++) {
         const p = periodos[i];
-        if (!p || typeof p !== 'object') continue;
+        if (!p || typeof p !== 'object') {
+            return {
+                success: false,
+                error: 'INVALID_PERIOD_STRUCTURE',
+                message: `Estructura de periodo no válida en la posición ${i + 1}.`
+            };
+        }
 
-        let salario = typeof p.salarioDiario === 'number'
+        const salario = typeof p.salarioDiario === 'number'
             ? p.salarioDiario
-            : parseFloat(String(p.salarioDiario || '').replace(/[^0-9.]/g, ''));
-        if (isNaN(salario) || salario <= 0) continue;
+            : (typeof p.salario_diario === 'number'
+                ? p.salario_diario
+                : parseFloat(String(p.salarioDiario || p.salario_diario || '').replace(/[^0-9.]/g, '')));
 
-        let semanas = typeof p.semanas === 'number'
-            ? p.semanas
-            : parseFloat(String(p.semanas || '').replace(/[^0-9.]/g, ''));
+        if (isNaN(salario) || salario <= 0) {
+            return {
+                success: false,
+                error: 'INVALID_SALARY',
+                message: `Salario diario inválido en periodo ${i + 1}.`
+            };
+        }
 
-        if ((isNaN(semanas) || semanas <= 0) && p.fechaInicio && p.fechaFin) {
-            const d1 = new Date(p.fechaInicio);
-            const d2 = new Date(p.fechaFin);
+        let dias = typeof p.dias === 'number'
+            ? p.dias
+            : parseInt(String(p.dias || '').replace(/[^0-9]/g, ''), 10);
+
+        const fechaInicio = p.fechaInicio || p.fecha_inicio || null;
+        const fechaFin = p.fechaFin || p.fecha_fin || null;
+
+        if ((isNaN(dias) || dias <= 0) && fechaInicio && fechaFin) {
+            const d1 = new Date(fechaInicio);
+            const d2 = new Date(fechaFin);
             if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d2 >= d1) {
-                const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24)) + 1;
-                semanas = Math.round((diffDays / 7) * 100) / 100;
+                dias = Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24)) + 1;
             }
         }
-        if (isNaN(semanas) || semanas <= 0) continue;
+
+        if ((isNaN(dias) || dias <= 0) && (p.semanas || p.semanasCotizadas)) {
+            const sem = parseFloat(String(p.semanas || p.semanasCotizadas || '').replace(/[^0-9.]/g, ''));
+            if (!isNaN(sem) && sem > 0) {
+                dias = Math.round(sem * 7);
+            }
+        }
+
+        if (isNaN(dias) || dias <= 0) {
+            return {
+                success: false,
+                error: 'INVALID_DAYS',
+                message: `Número de días inválido en periodo ${i + 1}.`
+            };
+        }
 
         let timeVal = 0;
-        if (p.fechaFin) {
-            const df = new Date(p.fechaFin);
+        if (fechaFin) {
+            const df = new Date(fechaFin);
             if (!isNaN(df.getTime())) timeVal = df.getTime();
         }
-        if (!timeVal && p.fechaInicio) {
-            const di = new Date(p.fechaInicio);
+        if (!timeVal && fechaInicio) {
+            const di = new Date(fechaInicio);
             if (!isNaN(di.getTime())) timeVal = di.getTime();
         }
         if (!timeVal) timeVal = 1000000000000 - i;
 
         validPeriods.push({
             patron: p.patron || p.empresa || 'Patrón IMSS',
-            fechaInicio: p.fechaInicio || null,
-            fechaFin: p.fechaFin || null,
+            fechaInicio,
+            fechaFin,
             timeVal,
-            semanas,
+            dias,
             salarioDiario: salario
         });
     }
@@ -238,50 +269,75 @@ function calculateAverageSalaryLast250Weeks(periodos) {
     // Ordenar cronológicamente del más reciente al más antiguo
     validPeriods.sort((a, b) => b.timeVal - a.timeVal);
 
-    const totalSemanas = validPeriods.reduce((acc, p) => acc + p.semanas, 0);
-    if (totalSemanas < 250) {
+    const totalDias = validPeriods.reduce((acc, p) => acc + p.dias, 0);
+    if (totalDias < 1750) {
         return {
             success: false,
-            error: 'INSUFFICIENT_WEEKS',
-            totalSemanas: Math.round(totalSemanas * 100) / 100,
-            semanasFaltantes: Math.round((250 - totalSemanas) * 100) / 100,
-            message: `El documento contiene solo ${Math.round(totalSemanas)} semanas cotizadas registradas. Se requieren al menos 250 semanas para calcular el salario promedio de las últimas 250 semanas.`
+            error: 'DAYS_SUM_MISMATCH',
+            sumaDias: totalDias,
+            totalDias,
+            totalSemanas: Math.round((totalDias / 7) * 100) / 100,
+            diasFaltantes: 1750 - totalDias,
+            semanasFaltantes: Math.round(((1750 - totalDias) / 7) * 100) / 100,
+            message: `La suma de días analizados (${totalDias}) no coincide con los 1,750 días requeridos para 250 semanas.`
         };
     }
 
-    let accumulatedWeeks = 0;
+    let accumulatedDays = 0;
     let weightedSalarySum = 0;
     const periodosUtilizados = [];
 
     for (const p of validPeriods) {
-        const needed = 250 - accumulatedWeeks;
-        if (needed <= 0) break;
+        const neededDays = 1750 - accumulatedDays;
+        if (neededDays <= 0) break;
 
-        const weeksToUse = Math.min(p.semanas, needed);
-        weightedSalarySum += weeksToUse * p.salarioDiario;
-        accumulatedWeeks += weeksToUse;
+        const daysToUse = Math.min(p.dias, neededDays);
+        weightedSalarySum += daysToUse * p.salarioDiario;
+        accumulatedDays += daysToUse;
 
         periodosUtilizados.push({
             patron: p.patron,
             fechaInicio: p.fechaInicio,
             fechaFin: p.fechaFin,
+            fecha_inicio: p.fechaInicio,
+            fecha_fin: p.fechaFin,
             salarioDiario: p.salarioDiario,
-            semanasDisponibles: p.semanas,
-            semanasUtilizadas: Math.round(weeksToUse * 100) / 100,
-            parcial: weeksToUse < p.semanas
+            salario_diario: p.salarioDiario,
+            dias: daysToUse,
+            diasDisponibles: p.dias,
+            diasUtilizados: daysToUse,
+            semanas: Math.round((daysToUse / 7) * 100) / 100,
+            semanasDisponibles: Math.round((p.dias / 7) * 100) / 100,
+            semanasUtilizadas: Math.round((daysToUse / 7) * 100) / 100,
+            parcial: daysToUse < p.dias
         });
 
-        if (accumulatedWeeks >= 250) break;
+        if (accumulatedDays >= 1750) break;
     }
 
-    const promedioDiario = weightedSalarySum / 250;
+    if (accumulatedDays < 1750) {
+        return {
+            success: false,
+            error: 'DAYS_SUM_MISMATCH',
+            sumaDias: accumulatedDays,
+            accumulatedDays,
+            message: `La suma de días analizados (${accumulatedDays}) no coincide con los 1,750 días requeridos para 250 semanas.`
+        };
+    }
+
+    const promedioDiario = weightedSalarySum / 1750;
     const salarioDiarioPromedio = Math.round(promedioDiario * 100) / 100;
 
     return {
         success: true,
         salarioDiarioPromedio,
+        diasTotales: 1750,
+        semanasTotales: 250,
         semanasAnalizadas: 250,
-        totalSemanasDocumento: Math.round(totalSemanas * 100) / 100,
+        semanasConsideradas: 250,
+        totalDiasDocumento: totalDias,
+        totalSemanasDocumento: Math.round((totalDias / 7) * 100) / 100,
+        periodos: periodosUtilizados,
         periodosUtilizados
     };
 }
@@ -394,81 +450,28 @@ function validateAndCalculatePensionPeriods(aiData) {
         return { success: false, error: 'NO_PERIODS', message: 'No se identificaron periodos de cotización en el documento.' };
     }
 
-    let sumaDias = 0;
-    let sumaPonderada = 0;
-    const periodosValidados = [];
-
-    for (let i = 0; i < periodos.length; i++) {
-        const p = periodos[i];
-        if (!p || typeof p !== 'object') {
-            return { success: false, error: 'INVALID_PERIOD_STRUCTURE', message: 'Estructura de periodo no válida.' };
-        }
-
-        const dias = typeof p.dias === 'number' ? p.dias : parseInt(p.dias, 10);
-        const salario = typeof p.salario_diario === 'number'
-            ? p.salario_diario
-            : parseFloat(String(p.salario_diario || p.salarioDiario || '').replace(/[^0-9.]/g, ''));
-
-        if (isNaN(dias) || dias <= 0) {
-            return { success: false, error: 'INVALID_DAYS', message: `Número de días inválido en periodo ${i + 1}.` };
-        }
-        if (isNaN(salario) || salario <= 0) {
-            return { success: false, error: 'INVALID_SALARY', message: `Salario diario inválido en periodo ${i + 1}.` };
-        }
-
-        sumaDias += dias;
-        sumaPonderada += dias * salario;
-
-        periodosValidados.push({
-            patron: p.patron || p.empresa || 'Patrón IMSS',
-            fecha_inicio: p.fecha_inicio || p.fechaInicio || null,
-            fecha_fin: p.fecha_fin || p.fechaFin || null,
-            dias,
-            semanas: Math.round((dias / 7) * 100) / 100,
-            salario_diario: salario,
-            salarioDiario: salario,
-            semanasUtilizadas: Math.round((dias / 7) * 100) / 100,
-            semanasDisponibles: Math.round((dias / 7) * 100) / 100
-        });
+    const result = calculateAverageSalaryLast250Weeks(periodos);
+    if (!result.success) {
+        return result;
     }
-
-    // Comprobar que los días utilizados sumen exactamente 1,750 (250 semanas * 7)
-    if (sumaDias !== 1750) {
-        return {
-            success: false,
-            error: 'DAYS_SUM_MISMATCH',
-            sumaDias,
-            message: `La suma de días analizados (${sumaDias}) no coincide con los 1,750 días requeridos para 250 semanas.`
-        };
-    }
-
-    // Calcular determinísticamente en backend el promedio ponderado
-    const promedioPonderado = sumaPonderada / 1750;
-    const salarioDiarioPromedio = Math.round(promedioPonderado * 100) / 100;
 
     // Validar concordancia con el número de Gemini si fue provisto
-    if (aiData.salario_promedio && typeof aiData.salario_promedio === 'number') {
-        const diff = Math.abs(salarioDiarioPromedio - aiData.salario_promedio);
+    const reportedSalary = typeof aiData.salario_promedio === 'number'
+        ? aiData.salario_promedio
+        : (typeof aiData.salarioPromedio === 'number' ? aiData.salarioPromedio : null);
+
+    if (reportedSalary !== null) {
+        const diff = Math.abs(result.salarioDiarioPromedio - reportedSalary);
         if (diff > 0.05) {
             return {
                 success: false,
                 error: 'AVERAGE_VALIDATION_FAILED',
-                message: `El promedio recalculado en backend (${salarioDiarioPromedio}) difiere del reportado (${aiData.salario_promedio}).`
+                message: `El promedio recalculado en backend (${result.salarioDiarioPromedio}) difiere del reportado (${reportedSalary}).`
             };
         }
     }
 
-    return {
-        success: true,
-        salarioDiarioPromedio,
-        diasTotales: 1750,
-        semanasTotales: 250,
-        semanasAnalizadas: 250,
-        semanasConsideradas: 250,
-        totalSemanasDocumento: 250,
-        periodos: periodosValidados,
-        periodosUtilizados: periodosValidados
-    };
+    return result;
 }
 
 if (typeof window !== 'undefined') {
