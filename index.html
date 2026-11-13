@@ -242,6 +242,18 @@
                         <input type="number" step="0.01" id="salario-promedio" name="salario-promedio">
                     </div>
                     <div class="pdf-semanas-container" id="pdf-semanas-container" style="background: #f8f9fa; border: 1px dashed #007bff; border-radius: 6px; padding: 12px 15px; margin-top: -5px; margin-bottom: 15px;">
+                        <div id="aviso-detalle-pdf" style="background: #e7f3fe; border-left: 4px solid #007bff; color: #0c5460; padding: 10px 12px; border-radius: 4px; font-size: 0.88em; margin-bottom: 12px; line-height: 1.45;">
+                            <div style="font-weight: 600; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-info-circle" style="color: #007bff;"></i>
+                                <span>Recomendación:</span>
+                            </div>
+                            <div style="margin-bottom: 4px;">
+                                Para obtener un cálculo más preciso del salario promedio de las últimas 250 semanas, utiliza la <strong>versión a detalle</strong> de tu reporte de Semanas Cotizadas del IMSS.
+                            </div>
+                            <div style="font-size: 0.93em; color: #495057;">
+                                La versión resumen puede no permitir identificar con suficiente precisión todos los cambios de salario dentro de los periodos de un mismo empleador, por lo que el resultado puede ser menos preciso.
+                            </div>
+                        </div>
                         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                             <div>
                                 <label for="pdf-semanas-input" style="font-weight: 600; color: #0056b3; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
@@ -1988,8 +2000,25 @@
             const pdfUploadStatus = document.getElementById('pdf-upload-status');
             const salarioPromedioInput = document.getElementById('salario-promedio');
 
+            let cronometroInterval = null;
+            let segundosTranscurridos = 0;
+
+            function formatTiempo(segundos) {
+                const mins = Math.floor(segundos / 60);
+                const secs = segundos % 60;
+                return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            }
+
+            function detenerCronometro() {
+                if (cronometroInterval) {
+                    clearInterval(cronometroInterval);
+                    cronometroInterval = null;
+                }
+            }
+
             if (btnSeleccionarPdf && pdfSemanasInput) {
                 btnSeleccionarPdf.addEventListener('click', () => {
+                    detenerCronometro();
                     pdfSemanasInput.value = '';
                     pdfSemanasInput.click();
                 });
@@ -1997,6 +2026,9 @@
                 pdfSemanasInput.addEventListener('change', async (e) => {
                     const file = e.target.files && e.target.files[0];
                     if (!file) return;
+
+                    detenerCronometro();
+                    segundosTranscurridos = 0;
 
                     const fileName = file.name;
                     const isPdf = fileName.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
@@ -2007,9 +2039,25 @@
                         return;
                     }
 
-                    // Mostrar estado de procesamiento
+                    // Mostrar estado de procesamiento con cronometro activo en 00:00
                     pdfUploadStatus.style.display = 'block';
-                    pdfUploadStatus.innerHTML = '<div style="background: #e9ecef; color: #333; padding: 10px 12px; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; gap: 8px;"><i class=\"fas fa-spinner fa-spin\" style=\"color: #007bff; font-size: 1.2em;\"></i><div><strong>Archivo:</strong> ' + fileName + '<br><em>Analizando tus semanas cotizadas...</em></div></div>';
+                    pdfUploadStatus.innerHTML = '<div style="background: #e9ecef; color: #333; padding: 12px 14px; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">' +
+                        '<div style="display: flex; align-items: center; gap: 10px;">' +
+                            '<i class=\"fas fa-spinner fa-spin\" style=\"color: #007bff; font-size: 1.3em;\"></i>' +
+                            '<div><strong>Archivo:</strong> ' + fileName + '<br><em>Analizando tus semanas cotizadas...</em></div>' +
+                        '</div>' +
+                        '<div style="font-weight: 600; color: #495057; background: #fff; border: 1px solid #ced4da; padding: 5px 10px; border-radius: 4px; font-family: monospace; font-size: 0.95em; white-space: nowrap;">' +
+                            '<i class=\"fas fa-stopwatch\" style=\"color: #007bff; margin-right: 5px;\"></i>Tiempo de análisis: <span id=\"cronometro-tiempo\">00:00</span>' +
+                        '</div>' +
+                    '</div>';
+
+                    cronometroInterval = setInterval(() => {
+                        segundosTranscurridos++;
+                        const spanTiempo = document.getElementById('cronometro-tiempo');
+                        if (spanTiempo) {
+                            spanTiempo.textContent = formatTiempo(segundosTranscurridos);
+                        }
+                    }, 1000);
 
                     try {
                         const base64 = await new Promise((resolve, reject) => {
@@ -2032,6 +2080,10 @@
 
                         const data = await response.json().catch(() => ({}));
 
+                        // Detener cronometro inmediatamente al recibir respuesta
+                        detenerCronometro();
+                        const tiempoFinal = formatTiempo(segundosTranscurridos);
+
                         if (response.ok && data && typeof data.salarioDiarioPromedio === 'number') {
                             if (salarioPromedioInput) {
                                 salarioPromedioInput.value = data.salarioDiarioPromedio;
@@ -2044,11 +2096,32 @@
                                 ? '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\">Se consideraron <strong>' + (data.semanasConsideradas || 250) + '</strong> semanas de cotización en <strong>' + data.periodosUtilizados.length + '</strong> periodo(s).</div>'
                                 : '';
 
-                            pdfUploadStatus.innerHTML = '<div style=\"background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\"><div style=\"display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;\"><div><div style=\"font-weight: bold; margin-bottom: 3px;\"><i class=\"fas fa-check-circle\" style=\"color: #28a745;\"></i> Se identificaron las últimas 250 semanas.</div><div><strong>Archivo:</strong> ' + fileName + '</div><div style=\"margin-top: 4px;\"><strong>Salario diario promedio:</strong> <span style=\"font-size: 1.15em; font-weight: bold; color: #155724;\">' + formattedSalary + '</span></div>' + periodosInfo + '<div style=\"font-size: 0.85em; color: #155724; margin-top: 4px;\"><em>El valor fue colocado en el campo de arriba. Puedes revisarlo antes de calcular tu pensión.</em></div></div><button type=\"button\" id=\"btn-reemplazar-pdf\" style=\"background: #fff; border: 1px solid #28a745; color: #155724; border-radius: 4px; padding: 4px 10px; font-size: 0.82em; cursor: pointer; white-space: nowrap;\"><i class=\"fas fa-redo\"></i> Cargar otro PDF</button></div></div>';
+                            const warningResumen = data.esReporteResumen
+                                ? '<div style=\"background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-left: 4px solid #ffc107; padding: 8px 10px; border-radius: 4px; font-size: 0.88em; margin-top: 8px; line-height: 1.45;\">' +
+                                    '<strong><i class=\"fas fa-exclamation-triangle\" style=\"color: #e0a800;\"></i> Reporte resumen detectado</strong><br>' +
+                                    'Este documento no contiene el mismo nivel de detalle que la versión a detalle. El cálculo de las últimas 250 semanas puede ser menos preciso, especialmente cuando existen cambios de salario dentro del periodo de un mismo empleador.' +
+                                  '</div>'
+                                : '';
+
+                            pdfUploadStatus.innerHTML = '<div style=\"background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\">' +
+                                '<div style=\"display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;\">' +
+                                    '<div>' +
+                                        '<div style=\"font-weight: bold; margin-bottom: 3px;\"><i class=\"fas fa-check-circle\" style=\"color: #28a745;\"></i> Se identificaron las últimas 250 semanas.</div>' +
+                                        '<div><strong>Archivo:</strong> ' + fileName + '</div>' +
+                                        '<div style=\"margin-top: 4px;\"><strong>Salario diario promedio:</strong> <span style=\"font-size: 1.15em; font-weight: bold; color: #155724;\">' + formattedSalary + '</span></div>' +
+                                        periodosInfo +
+                                        '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\"><i class=\"fas fa-check\" style=\"color: #28a745;\"></i> Análisis completado en <strong>' + tiempoFinal + '</strong></div>' +
+                                        warningResumen +
+                                        '<div style=\"font-size: 0.85em; color: #155724; margin-top: 4px;\"><em>El valor fue colocado en el campo de arriba. Puedes revisarlo antes de calcular tu pensión.</em></div>' +
+                                    '</div>' +
+                                    '<button type=\"button\" id=\"btn-reemplazar-pdf\" style=\"background: #fff; border: 1px solid #28a745; color: #155724; border-radius: 4px; padding: 4px 10px; font-size: 0.82em; cursor: pointer; white-space: nowrap;\"><i class=\"fas fa-redo\"></i> Cargar otro PDF</button>' +
+                                '</div>' +
+                            '</div>';
 
                             const btnReemplazar = document.getElementById('btn-reemplazar-pdf');
                             if (btnReemplazar) {
                                 btnReemplazar.addEventListener('click', () => {
+                                    detenerCronometro();
                                     pdfSemanasInput.value = '';
                                     pdfSemanasInput.click();
                                 });
@@ -2058,18 +2131,35 @@
                                 ? data.message
                                 : 'No se pudo interpretar el archivo PDF o calcular las últimas 250 semanas.';
 
-                            pdfUploadStatus.innerHTML = '<div style=\"background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\"><div style=\"display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;\"><div><div style=\"font-weight: bold; margin-bottom: 3px;\"><i class=\"fas fa-exclamation-triangle\" style=\"color: #dc3545;\"></i> No fue posible obtener el salario promedio</div><div><strong>Archivo:</strong> ' + fileName + '</div><div style=\"margin-top: 4px; color: #721c24;\">' + errorMsg + '</div><div style=\"font-size: 0.85em; color: #6c757d; margin-top: 4px;\"><em>Puedes ingresar el salario diario promedio manualmente en el campo correspondiente.</em></div></div><button type=\"button\" id=\"btn-reintentar-pdf\" style=\"background: #fff; border: 1px solid #dc3545; color: #721c24; border-radius: 4px; padding: 4px 10px; font-size: 0.82em; cursor: pointer; white-space: nowrap;\"><i class=\"fas fa-redo\"></i> Intentar de nuevo</button></div></div>';
+                            pdfUploadStatus.innerHTML = '<div style=\"background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\">' +
+                                '<div style=\"display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;\">' +
+                                    '<div>' +
+                                        '<div style=\"font-weight: bold; margin-bottom: 3px;\"><i class=\"fas fa-exclamation-triangle\" style=\"color: #dc3545;\"></i> No fue posible obtener el salario promedio</div>' +
+                                        '<div><strong>Archivo:</strong> ' + fileName + '</div>' +
+                                        '<div style=\"margin-top: 4px; color: #721c24;\">' + errorMsg + '</div>' +
+                                        '<div style=\"font-size: 0.85em; color: #721c24; margin-top: 3px;\"><i class=\"fas fa-times\" style=\"color: #dc3545;\"></i> No fue posible analizar el documento. Tiempo transcurrido: <strong>' + tiempoFinal + '</strong></div>' +
+                                        '<div style=\"font-size: 0.85em; color: #6c757d; margin-top: 4px;\"><em>Puedes ingresar el salario diario promedio manualmente en el campo correspondiente.</em></div>' +
+                                    '</div>' +
+                                    '<button type=\"button\" id=\"btn-reintentar-pdf\" style=\"background: #fff; border: 1px solid #dc3545; color: #721c24; border-radius: 4px; padding: 4px 10px; font-size: 0.82em; cursor: pointer; white-space: nowrap;\"><i class=\"fas fa-redo\"></i> Intentar de nuevo</button>' +
+                                '</div>' +
+                            '</div>';
 
                             const btnReintentar = document.getElementById('btn-reintentar-pdf');
                             if (btnReintentar) {
                                 btnReintentar.addEventListener('click', () => {
+                                    detenerCronometro();
                                     pdfSemanasInput.value = '';
                                     pdfSemanasInput.click();
                                 });
                             }
                         }
                     } catch (err) {
-                        pdfUploadStatus.innerHTML = '<div style=\"background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\"><strong><i class=\"fas fa-exclamation-triangle\" style=\"color: #dc3545;\"></i> Error:</strong> ' + (err.message || 'Error de conexión al procesar el archivo.') + '</div>';
+                        detenerCronometro();
+                        const tiempoFinalErr = formatTiempo(segundosTranscurridos);
+                        pdfUploadStatus.innerHTML = '<div style=\"background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\">' +
+                            '<strong><i class=\"fas fa-exclamation-triangle\" style=\"color: #dc3545;\"></i> Error:</strong> ' + (err.message || 'Error de conexión al procesar el archivo.') +
+                            '<div style=\"font-size: 0.85em; color: #721c24; margin-top: 3px;\"><i class=\"fas fa-times\" style=\"color: #dc3545;\"></i> No fue posible analizar el documento. Tiempo transcurrido: <strong>' + tiempoFinalErr + '</strong></div>' +
+                        '</div>';
                     }
                 });
             }

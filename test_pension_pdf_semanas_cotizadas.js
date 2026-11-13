@@ -238,6 +238,77 @@ async function runTests() {
     assert.notStrictEqual(resA.body.salarioDiarioPromedio, resB.body.salarioDiarioPromedio, 'Ambos PDFs deben dar resultados distintos');
     console.log('   OK - Ambos PDFs procesados independientemente sin reusar respuestas.');
 
+    // -------------------------------------------------------------
+    // PRUEBA 13: Verificación de aviso de versión a detalle en UI
+    // -------------------------------------------------------------
+    console.log('\n--- Pruebas de UX: Aviso de detalle, Cronómetro y Advertencia Resumen ---');
+    console.log('13. Verificando aviso previo de recomendación "versión a detalle" en index.html...');
+    const htmlPath = path.join(__dirname, 'index.html');
+    const htmlContent = fs.readFileSync(htmlPath, 'utf8');
+    assert(htmlContent.includes('id="aviso-detalle-pdf"'), 'El elemento aviso-detalle-pdf debe existir');
+    assert(htmlContent.includes('versión a detalle'), 'Debe recomendar la versión a detalle');
+    assert(htmlContent.includes('La versión resumen puede no permitir identificar'), 'Debe explicar la razón de la recomendación');
+    console.log('   OK - Aviso previo de versión a detalle visible y con redacción exacta.');
+
+    // -------------------------------------------------------------
+    // PRUEBA 14: Verificación del cronómetro y advertencia de reporte resumen
+    // -------------------------------------------------------------
+    console.log('14. Verificando ciclo de vida del cronómetro y advertencia de reporte resumen...');
+    const dom = new JSDOM(htmlContent, {
+        url: 'http://localhost',
+        runScripts: 'dangerously',
+        resources: 'usable'
+    });
+    const win = dom.window;
+    class FakeReader {
+        readAsDataURL() {
+            setTimeout(() => {
+                this.result = 'data:application/pdf;base64,JVBERi0=';
+                if (this.onload) this.onload();
+            }, 5);
+        }
+    }
+    win.FileReader = FakeReader;
+
+    await new Promise(r => setTimeout(r, 350));
+
+    const inputPdf = win.document.getElementById('pdf-semanas-input');
+    const statusDiv = win.document.getElementById('pdf-upload-status');
+    const salInput = win.document.getElementById('salario-promedio');
+
+    // 14.1 Inicio del cronómetro en 00:00
+    let mockResolve;
+    win.fetch = () => new Promise(res => { mockResolve = res; });
+    Object.defineProperty(inputPdf, 'files', { value: [{ name: 'test.pdf', type: 'application/pdf' }], writable: true });
+    inputPdf.dispatchEvent(new win.Event('change'));
+    await new Promise(r => setTimeout(r, 60));
+
+    const timerSpan = win.document.getElementById('cronometro-tiempo');
+    assert(timerSpan, 'El cronómetro debe aparecer al iniciar el análisis');
+    assert.strictEqual(timerSpan.textContent, '00:00', 'El cronómetro debe comenzar en 00:00');
+    assert(statusDiv.innerHTML.includes('Tiempo de análisis:'), 'Debe indicar "Tiempo de análisis:"');
+
+    // 14.2 Detención al finalizar y reporte resumen
+    mockResolve({
+        ok: true,
+        json: async () => ({
+            success: true,
+            salarioDiarioPromedio: 1200.00,
+            salarioDiarioPromedioFormateado: '$1,200.00',
+            diasTotales: 1750,
+            semanasConsideradas: 250,
+            periodosUtilizados: [{ dias: 1750, salarioDiario: 1200 }],
+            esReporteResumen: true // Reporte resumen detectado
+        })
+    });
+    await new Promise(r => setTimeout(r, 30));
+
+    assert(statusDiv.innerHTML.includes('Análisis completado en'), 'Debe mostrar "Análisis completado en"');
+    assert(statusDiv.innerHTML.includes('Reporte resumen detectado'), 'Debe mostrar advertencia de reporte resumen');
+    assert(statusDiv.innerHTML.includes('Este documento no contiene el mismo nivel de detalle'), 'Debe explicar la advertencia');
+    assert.strictEqual(Number(salInput.value), 1200.00, 'El reporte resumen no debe bloquear el cálculo');
+    console.log('   OK - Cronómetro inicia en 00:00, se detiene al terminar y muestra advertencia no-bloqueante.');
+
     console.log('\n=== TODAS LAS PRUEBAS OBLIGATORIAS PASARON EXITOSAMENTE ===');
     process.exit(0);
 }

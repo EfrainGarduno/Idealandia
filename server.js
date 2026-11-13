@@ -586,6 +586,18 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             });
         }
 
+        let esReporteResumen = false;
+        try {
+            const rawTextSample = extractTextFromPdfBuffer(pdfBuffer).toLowerCase();
+            const isImssDoc = rawTextSample.includes('semanas cotizadas') || rawTextSample.includes('seguro social');
+            const hasDetailIndicators = rawTextSample.includes('historial de registros afiliatorios') ||
+                                        rawTextSample.includes('tipo de movimiento') ||
+                                        rawTextSample.includes('modificacion de salario');
+            if (isImssDoc && !hasDetailIndicators) {
+                esReporteResumen = true;
+            }
+        } catch (sampleErr) {}
+
         const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
         res.status(200).json({
             success: true,
@@ -598,6 +610,7 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             totalSemanasDocumento: validation.semanasTotales,
             periodos: validation.periodos,
             periodosUtilizados: validation.periodos,
+            esReporteResumen,
             message: 'Se identificaron las últimas 250 semanas cotizadas con éxito mediante Gemini API.'
         });
 
