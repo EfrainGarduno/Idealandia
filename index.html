@@ -235,30 +235,37 @@
                     <legend>Datos generales</legend>
                     <div class="form-group">
                         <label for="salario-minimo">Salario mínimo general vigente:</label>
-                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo">
+                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo" value="315.04">
                     </div>
                     <div class="form-group">
                         <label for="salario-promedio">Salario diario promedio últimas 250 semanas:</label>
                         <input type="number" step="0.01" id="salario-promedio" name="salario-promedio">
                     </div>
                     <div class="pdf-semanas-container" id="pdf-semanas-container" style="background: #f8f9fa; border: 1px dashed #007bff; border-radius: 6px; padding: 12px 15px; margin-top: -5px; margin-bottom: 15px;">
-                        <div id="aviso-detalle-pdf" style="background: #e7f3fe; border-left: 4px solid #007bff; color: #0c5460; padding: 10px 12px; border-radius: 4px; font-size: 0.88em; margin-bottom: 12px; line-height: 1.45;">
-                            <div style="font-weight: 600; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-info-circle" style="color: #007bff;"></i>
-                                <span>Recomendación:</span>
-                            </div>
-                            <div style="margin-bottom: 4px;">
-                                Para obtener un cálculo más preciso del salario promedio de las últimas 250 semanas, utiliza la <strong>versión a detalle</strong> de tu reporte de Semanas Cotizadas del IMSS.
-                            </div>
-                            <div style="font-size: 0.93em; color: #495057;">
-                                La versión resumen puede no permitir identificar con suficiente precisión todos los cambios de salario dentro de los periodos de un mismo empleador, por lo que el resultado puede ser menos preciso.
-                            </div>
-                        </div>
                         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                             <div>
-                                <label for="pdf-semanas-input" style="font-weight: 600; color: #0056b3; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
-                                    <i class="fas fa-file-pdf" style="color: #dc3545; font-size: 1.1em;"></i> Cargar Semanas Cotizadas del IMSS (PDF)
-                                </label>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <label for="pdf-semanas-input" style="font-weight: 600; color: #0056b3; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
+                                        <i class="fas fa-file-pdf" style="color: #dc3545; font-size: 1.1em;"></i> Cargar Semanas Cotizadas del IMSS (PDF)
+                                    </label>
+                                    <div class="tooltip-container" id="aviso-detalle-pdf" style="position: relative; display: inline-block;">
+                                        <button type="button" id="btn-tooltip-recomendacion" class="btn-tooltip-info" aria-label="Ver recomendación sobre versión a detalle" style="background: #e7f3fe; border: 1px solid #b8daff; color: #0056b3; padding: 2px 8px; border-radius: 12px; font-size: 0.82em; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; line-height: 1.2;">
+                                            <i class="fas fa-info-circle"></i> <span>Recomendación</span>
+                                        </button>
+                                        <div id="tooltip-detalle-popover" class="tooltip-popover" role="tooltip" style="display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 1050; width: 320px; max-width: calc(100vw - 40px); background: #ffffff; border: 1px solid #007bff; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 12px 14px; font-size: 0.85em; color: #212529; text-align: left; line-height: 1.45;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: 600; color: #0056b3; border-bottom: 1px solid #e9ecef; padding-bottom: 4px;">
+                                                <span><i class="fas fa-info-circle"></i> Recomendación sobre tu reporte</span>
+                                                <span id="btn-cerrar-tooltip" style="cursor: pointer; color: #6c757d; font-size: 1.2em; line-height: 1;" title="Cerrar">&times;</span>
+                                            </div>
+                                            <div style="margin-bottom: 6px;">
+                                                Para obtener un cálculo más preciso del salario promedio de las últimas 250 semanas, utiliza la <strong>versión a detalle</strong> de tu reporte de Semanas Cotizadas del IMSS.
+                                            </div>
+                                            <div style="font-size: 0.92em; color: #6c757d;">
+                                                La versión resumen puede no permitir identificar con suficiente precisión todos los cambios de salario dentro de los periodos de un mismo empleador, por lo que el resultado puede ser menos preciso.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <small style="display: block; color: #6c757d; font-size: 0.85em; margin-top: 2px;">
                                     Calcula automáticamente el salario diario promedio real de tus últimas 250 semanas
                                 </small>
@@ -1886,12 +1893,77 @@
             const formEstimacion = document.getElementById('form-estimacion');
             const btnCalcularPension = document.getElementById('btn-calcular-pension');
 
+            const salarioMinimoInput = document.getElementById('salario-minimo');
+            const defaultSalarioMinimo = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
+            if (salarioMinimoInput && !salarioMinimoInput.value) {
+                salarioMinimoInput.value = defaultSalarioMinimo;
+            }
+
             if(btnEstimacion && formEstimacion) {
                 btnEstimacion.addEventListener('click', () => {
                     if (formEstimacion.style.display === 'none') {
                         formEstimacion.style.display = 'block';
+                        if (salarioMinimoInput && !salarioMinimoInput.value) {
+                            salarioMinimoInput.value = defaultSalarioMinimo;
+                        }
                     } else {
                         formEstimacion.style.display = 'none';
+                    }
+                });
+            }
+
+            // Logica del Tooltip / Popover de Recomendación de versión a detalle
+            const tooltipContainer = document.getElementById('aviso-detalle-pdf');
+            const tooltipPopover = document.getElementById('tooltip-detalle-popover');
+            const btnTooltipRecomendacion = document.getElementById('btn-tooltip-recomendacion');
+            const btnCerrarTooltip = document.getElementById('btn-cerrar-tooltip');
+
+            if (tooltipContainer && tooltipPopover && btnTooltipRecomendacion) {
+                let tooltipVisible = false;
+
+                const mostrarTooltip = () => {
+                    tooltipPopover.style.display = 'block';
+                    tooltipVisible = true;
+                };
+
+                const ocultarTooltip = () => {
+                    tooltipPopover.style.display = 'none';
+                    tooltipVisible = false;
+                };
+
+                // Desktop hover
+                tooltipContainer.addEventListener('mouseenter', mostrarTooltip);
+                tooltipContainer.addEventListener('mouseleave', ocultarTooltip);
+
+                // Mobile tap / click toggle
+                btnTooltipRecomendacion.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (tooltipVisible) {
+                        ocultarTooltip();
+                    } else {
+                        mostrarTooltip();
+                    }
+                });
+
+                if (btnCerrarTooltip) {
+                    btnCerrarTooltip.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        ocultarTooltip();
+                    });
+                }
+
+                // Cierre al dar clic fuera
+                document.addEventListener('click', (e) => {
+                    if (tooltipVisible && !tooltipContainer.contains(e.target)) {
+                        ocultarTooltip();
+                    }
+                });
+
+                // Accesibilidad con Escape
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && tooltipVisible) {
+                        ocultarTooltip();
                     }
                 });
             }
@@ -2091,9 +2163,24 @@
                                 salarioPromedioInput.dispatchEvent(new Event('change', { bubbles: true }));
                             }
 
+                            const semanasCotizadasInput = document.getElementById('semanas-cotizadas');
+                            const semanasExtraidas = (typeof data.totalSemanasCotizadas === 'number' && data.totalSemanasCotizadas > 0)
+                                ? data.totalSemanasCotizadas
+                                : ((typeof data.totalSemanasDocumento === 'number' && data.totalSemanasDocumento > 0) ? data.totalSemanasDocumento : null);
+
+                            if (semanasCotizadasInput && semanasExtraidas) {
+                                semanasCotizadasInput.value = semanasExtraidas;
+                                semanasCotizadasInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                semanasCotizadasInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
                             const formattedSalary = data.salarioDiarioPromedioFormateado || ('$' + Number(data.salarioDiarioPromedio).toFixed(2));
                             const periodosInfo = data.periodosUtilizados && data.periodosUtilizados.length
                                 ? '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\">Se consideraron <strong>' + (data.semanasConsideradas || 250) + '</strong> semanas de cotización en <strong>' + data.periodosUtilizados.length + '</strong> periodo(s).</div>'
+                                : '';
+
+                            const semanasDocInfo = semanasExtraidas
+                                ? '<div style=\"font-size: 0.85em; color: #155724; margin-top: 3px;\"><strong>Semanas cotizadas del asegurado:</strong> <span style=\"font-weight: bold; color: #155724;\">' + semanasExtraidas + ' semanas</span></div>'
                                 : '';
 
                             const warningResumen = data.esReporteResumen
@@ -2109,10 +2196,11 @@
                                         '<div style=\"font-weight: bold; margin-bottom: 3px;\"><i class=\"fas fa-check-circle\" style=\"color: #28a745;\"></i> Se identificaron las últimas 250 semanas.</div>' +
                                         '<div><strong>Archivo:</strong> ' + fileName + '</div>' +
                                         '<div style=\"margin-top: 4px;\"><strong>Salario diario promedio:</strong> <span style=\"font-size: 1.15em; font-weight: bold; color: #155724;\">' + formattedSalary + '</span></div>' +
+                                        semanasDocInfo +
                                         periodosInfo +
                                         '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\"><i class=\"fas fa-check\" style=\"color: #28a745;\"></i> Análisis completado en <strong>' + tiempoFinal + '</strong></div>' +
                                         warningResumen +
-                                        '<div style=\"font-size: 0.85em; color: #155724; margin-top: 4px;\"><em>El valor fue colocado en el campo de arriba. Puedes revisarlo antes de calcular tu pensión.</em></div>' +
+                                        '<div style=\"font-size: 0.85em; color: #155724; margin-top: 4px;\"><em>Los valores fueron colocados en los campos de arriba. Puedes revisarlos antes de calcular tu pensión.</em></div>' +
                                     '</div>' +
                                     '<button type=\"button\" id=\"btn-reemplazar-pdf\" style=\"background: #fff; border: 1px solid #28a745; color: #155724; border-radius: 4px; padding: 4px 10px; font-size: 0.82em; cursor: pointer; white-space: nowrap;\"><i class=\"fas fa-redo\"></i> Cargar otro PDF</button>' +
                                 '</div>' +

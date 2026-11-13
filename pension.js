@@ -1,3 +1,12 @@
+// Salario Mínimo General Vigente en México (pesos diarios)
+// Preparado para fácil actualización anual
+const SALARIO_MINIMO_GENERAL_VIGENTE = 315.04;
+const SALARIOS_MINIMOS_GENERALES = {
+    2024: 248.93,
+    2025: 278.80,
+    2026: 315.04
+};
+
 const TABLA_GRUPOS_SALARIALES = [
     { max: 1.00, cuantia: 0.8000, incremento: 0.00563 },
     { max: 1.25, cuantia: 0.7711, incremento: 0.00814 },
@@ -556,6 +565,8 @@ function validateAndCalculatePensionPeriods(aiData) {
 }
 
 if (typeof window !== 'undefined') {
+    window.SALARIO_MINIMO_GENERAL_VIGENTE = SALARIO_MINIMO_GENERAL_VIGENTE;
+    window.SALARIOS_MINIMOS_GENERALES = SALARIOS_MINIMOS_GENERALES;
     window.calculateIMSSLey73Pension = calculateIMSSLey73Pension;
     window.calculateAverageSalaryLast250Weeks = calculateAverageSalaryLast250Weeks;
     window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
@@ -564,6 +575,8 @@ if (typeof window !== 'undefined') {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        SALARIO_MINIMO_GENERAL_VIGENTE,
+        SALARIOS_MINIMOS_GENERALES,
         calculateIMSSLey73Pension,
         calculateAverageSalaryLast250Weeks,
         extractPeriodsFromIMSSDocumentText,

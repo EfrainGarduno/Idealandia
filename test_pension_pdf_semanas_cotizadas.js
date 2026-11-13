@@ -10,7 +10,8 @@ const path = require('path');
 const {
     calculateIMSSLey73Pension,
     calculateAverageSalaryLast250Weeks,
-    validateAndCalculatePensionPeriods
+    validateAndCalculatePensionPeriods,
+    SALARIO_MINIMO_GENERAL_VIGENTE
 } = require('./pension.js');
 
 const { app } = require('./server.js');
@@ -214,6 +215,8 @@ async function runTests() {
     assert(Array.isArray(resA.body.periodos), 'PDF A debe retornar periodos');
     console.log(`   Salario Diario Promedio PDF A: $${resA.body.salarioDiarioPromedio}`);
     assert(Math.abs(resA.body.salarioDiarioPromedio - 2585.94) <= 0.05, `PDF A debe dar ~2585.94, dio: ${resA.body.salarioDiarioPromedio}`);
+        assert.strictEqual(resA.body.totalSemanasCotizadas, 1615, "PDF A debe extraer 1615 semanas cotizadas totales");
+        assert.strictEqual(resA.body.totalSemanasDocumento, 1615, "PDF A totalSemanasDocumento debe ser 1615");
     console.log('   OK - PDF A procesado dinámicamente con éxito.');
 
     console.log('12. Enviando PDF B (Reporte 2022) a /api/pension/calcular-salario-pdf...');
@@ -227,6 +230,8 @@ async function runTests() {
     assert(Array.isArray(resB.body.periodos), 'PDF B debe retornar periodos');
     console.log(`   Salario Diario Promedio PDF B: $${resB.body.salarioDiarioPromedio}`);
     assert(Math.abs(resB.body.salarioDiarioPromedio - 1073.92) <= 0.05, `PDF B debe dar ~1073.92, dio: ${resB.body.salarioDiarioPromedio}`);
+        assert.strictEqual(resB.body.totalSemanasCotizadas, 1398, "PDF B debe extraer 1398 semanas cotizadas totales");
+        assert.strictEqual(resB.body.totalSemanasDocumento, 1398, "PDF B totalSemanasDocumento debe ser 1398");
 
     // Verificar que en PDF B el traslape de 47 días fue detectado y NO contado doble
     const segTraslapeB = resB.body.periodos.find(s => s.traslapado);
@@ -308,6 +313,81 @@ async function runTests() {
     assert(statusDiv.innerHTML.includes('Este documento no contiene el mismo nivel de detalle'), 'Debe explicar la advertencia');
     assert.strictEqual(Number(salInput.value), 1200.00, 'El reporte resumen no debe bloquear el cálculo');
     console.log('   OK - Cronómetro inicia en 00:00, se detiene al terminar y muestra advertencia no-bloqueante.');
+
+    // -------------------------------------------------------------
+    // PRUEBA 15: Salario mínimo general vigente 2026 (315.04) y editable
+    // -------------------------------------------------------------
+    console.log('\n15. Verificando salario mínimo general vigente (315.04) y editabilidad...');
+    assert.strictEqual(SALARIO_MINIMO_GENERAL_VIGENTE, 315.04, 'El valor constante exportado debe ser 315.04 para 2026');
+    const salMinInput = win.document.getElementById('salario-minimo');
+    assert(salMinInput, 'El campo salario-minimo debe existir en el DOM');
+    assert.strictEqual(Number(salMinInput.value), 315.04, 'El campo salario-minimo debe inicializarse en 315.04 automáticamente');
+    // Verificar que es editable manualmente por el usuario
+    salMinInput.value = '350.00';
+    salMinInput.dispatchEvent(new win.Event('input'));
+    salMinInput.dispatchEvent(new win.Event('change'));
+    assert.strictEqual(salMinInput.value, '350.00', 'El usuario debe poder editar el salario mínimo general vigente');
+    salMinInput.value = '315.04'; // Restaurar para siguientes pruebas
+    console.log('   OK - Salario mínimo prellenado con 315.04 y completamente editable.');
+
+    // -------------------------------------------------------------
+    // PRUEBA 16: Tooltip / Popover de recomendación "versión a detalle"
+    // -------------------------------------------------------------
+    console.log('\n16. Verificando comportamiento interactivo del tooltip/popover...');
+    const tooltipEl = win.document.getElementById('aviso-detalle-pdf');
+    const btnTooltip = win.document.getElementById('btn-tooltip-recomendacion');
+    const popoverEl = win.document.getElementById('tooltip-detalle-popover');
+    assert(tooltipEl, 'Contenedor de tooltip aviso-detalle-pdf debe existir');
+    assert(btnTooltip, 'Botón trigger de recomendación debe existir');
+    assert(popoverEl, 'Contenido de popover debe existir');
+    assert.strictEqual(popoverEl.style.display, 'none', 'El popover debe iniciar oculto (display: none)');
+
+    // 16.1 Hover desktop: mouseenter y mouseleave
+    tooltipEl.dispatchEvent(new win.Event('mouseenter'));
+    assert.strictEqual(popoverEl.style.display, 'block', 'El popover debe mostrarse al hacer mouseenter en desktop');
+    tooltipEl.dispatchEvent(new win.Event('mouseleave'));
+    assert.strictEqual(popoverEl.style.display, 'none', 'El popover debe ocultarse al hacer mouseleave');
+
+    // 16.2 Tap / Click toggle para mobile
+    btnTooltip.dispatchEvent(new win.Event('click', { bubbles: true }));
+    assert.strictEqual(popoverEl.style.display, 'block', 'El popover debe mostrarse al hacer clic en el botón');
+    // Clic fuera del tooltip
+    win.document.body.dispatchEvent(new win.Event('click', { bubbles: true }));
+    assert.strictEqual(popoverEl.style.display, 'none', 'El popover debe cerrarse al hacer clic fuera');
+    console.log('   OK - Tooltip funciona con hover en desktop, click en mobile y cierre exterior.');
+
+    // -------------------------------------------------------------
+    // PRUEBA 17: Semanas cotizadas auto-llenadas en UI desde PDF
+    // -------------------------------------------------------------
+    console.log('\n17. Verificando auto-llenado de semanas cotizadas en UI desde respuesta del PDF...');
+    const semInput = win.document.getElementById('semanas-cotizadas');
+    assert(semInput, 'Campo semanas-cotizadas debe existir');
+    semInput.value = '';
+
+    // Simular carga de PDF con 1615 semanas cotizadas
+    win.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+            success: true,
+            salarioDiarioPromedio: 2585.94,
+            salarioDiarioPromedioFormateado: '$2,585.94',
+            diasTotales: 1750,
+            semanasConsideradas: 250,
+            totalSemanasCotizadas: 1615,
+            periodosUtilizados: [{ dias: 1750, salarioDiario: 2585.94 }]
+        })
+    });
+    Object.defineProperty(inputPdf, 'files', { value: [{ name: 'reporte_ejemplo.pdf', type: 'application/pdf' }], writable: true });
+    inputPdf.dispatchEvent(new win.Event('change'));
+    await new Promise(r => setTimeout(r, 60));
+
+    assert.strictEqual(Number(semInput.value), 1615, 'El campo semanas-cotizadas debe llenarse con 1615 desde la respuesta del PDF');
+    assert(statusDiv.innerHTML.includes('1615 semanas'), 'El mensaje de estado debe informar las semanas cotizadas del asegurado');
+    // Verificar que permanece editable por el usuario
+    semInput.value = '1620';
+    semInput.dispatchEvent(new win.Event('input'));
+    assert.strictEqual(semInput.value, '1620', 'El usuario debe poder modificar libremente las semanas cotizadas');
+    console.log('   OK - Semanas cotizadas llenadas automáticamente desde PDF y 100% editables.');
 
     console.log('\n=== TODAS LAS PRUEBAS OBLIGATORIAS PASARON EXITOSAMENTE ===');
     process.exit(0);

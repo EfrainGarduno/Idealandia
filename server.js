@@ -425,6 +425,40 @@ function extractTextFromPdfBuffer(buffer) {
     return fullText.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim();
 }
 
+function extractTotalSemanasFromIMSSDocument(extractedText) {
+    if (!extractedText || typeof extractedText !== 'string') return null;
+
+    // 1. Cadena digital oficial del IMSS: |Número total de semanas cotizadas:1615||
+    const cadenaMatch = extractedText.match(/n[uú]mero\s+total\s+de\s+semanas\s+cotizadas\s*:\s*(\d{2,5})/i);
+    if (cadenaMatch && cadenaMatch[1]) {
+        const val = parseInt(cadenaMatch[1], 10);
+        if (val > 0) return val;
+    }
+
+    // 2. Encabezado / Resumen: bloque con número antes de NSS:
+    const nssMatch = extractedText.match(/(\d{2,5})\s*\n\s*NSS\s*:/i);
+    if (nssMatch && nssMatch[1]) {
+        const val = parseInt(nssMatch[1], 10);
+        if (val > 0) return val;
+    }
+
+    // 3. Encabezado "Total de semanas cotizadas" seguido de valor
+    const totalMatch = extractedText.match(/total\s+de\s+semanas\s+cotizadas[^\d]{0,80}(\d{2,5})/i);
+    if (totalMatch && totalMatch[1]) {
+        const val = parseInt(totalMatch[1], 10);
+        if (val > 0) return val;
+    }
+
+    // 4. Semanas cotizadas IMSS seguido de valor
+    const imssMatch = extractedText.match(/semanas\s+cotizadas\s+imss[^\d]{0,80}(\d{2,5})/i);
+    if (imssMatch && imssMatch[1]) {
+        const val = parseInt(imssMatch[1], 10);
+        if (val > 0) return val;
+    }
+
+    return null;
+}
+
 async function parseIMSSWithGemini(pdfBuffer) {
     if (!process.env.GEMINI_API_KEY) {
         throw new Error('GEMINI_API_KEY_NOT_CONFIGURED');
@@ -433,23 +467,27 @@ async function parseIMSSWithGemini(pdfBuffer) {
     const prompt = `Eres un actuario y analista experto en pensiones del IMSS bajo el régimen Ley 73.
 Se te proporciona el documento oficial en PDF "Constancia de Semanas Cotizadas en el IMSS" / "Reporte de Semanas Cotizadas del Asegurado".
 
-Tu objetivo es extraer de manera estructurada y fiel los periodos o tramos de cotización salarial que aparecen en la tabla de historia laboral del documento adjunto, en orden cronológico inverso (desde el movimiento más reciente hacia atrás en el tiempo), asegurando incluir los periodos suficientes para que el backend pueda cubrir las últimas 250 semanas cotizadas (al menos 1,750 días de cotización).
+Tu objetivo es extraer de manera estructurada y fiel:
+1. El número total de semanas cotizadas que reporta el documento del asegurado (que aparece en el encabezado o resumen superior, ej. "Total de semanas cotizadas" o "Semanas cotizadas IMSS").
+2. Los periodos o tramos de cotización salarial que aparecen en la tabla de historia laboral del documento adjunto, en orden cronológico inverso (desde el movimiento más reciente hacia atrás en el tiempo), asegurando incluir los periodos suficientes para que el backend pueda cubrir las últimas 250 semanas cotizadas (al menos 1,750 días de cotización).
 
 Reglas de extracción:
-1. Revisa minuciosamente la tabla de historial laboral del documento en orden cronológico inverso (del movimiento más reciente hacia atrás).
-2. Para la fecha de corte más reciente, toma la fecha de fin o baja del último movimiento registrado en el documento (o la fecha de emisión del reporte si está activo). No uses la fecha de hoy.
-3. Para cada periodo o tramo salarial registrado en el historial:
+1. Localiza en el resumen o encabezado del reporte el valor numérico correspondiente al total de semanas cotizadas del asegurado y asígnalo al campo "totalSemanasCotizadas" (número entero).
+2. Revisa minuciosamente la tabla de historial laboral del documento en orden cronológico inverso (del movimiento más reciente hacia atrás).
+3. Para la fecha de corte más reciente, toma la fecha de fin o baja del último movimiento registrado en el documento (o la fecha de emisión del reporte si está activo). No uses la fecha de hoy.
+4. Para cada periodo o tramo salarial registrado en el historial:
    - "patron": Nombre de la empresa, razón social o modalidad registrada (ej. "Continuación Voluntaria en el Régimen Obligatorio" o nombre del patrón).
    - "fechaInicio": Fecha de inicio o alta del movimiento (formato YYYY-MM-DD).
    - "fechaFin": Fecha de fin o baja del movimiento (formato YYYY-MM-DD).
    - "dias": Días naturales cotizados en ese tramo.
    - "salarioDiario": Salario Base de Cotización (SBC) diario registrado en pesos (numérico decimal sin comas ni símbolos).
-4. Extrae ÚNICAMENTE los datos reales presentes en el documento adjunto. No inventes periodos, empresas, fechas ni salarios que no aparezcan en el documento.
-5. NO calcules ningún promedio ni suma total. Tu labor es únicamente la extracción estructurada y fiel de los periodos.
+5. Extrae ÚNICAMENTE los datos reales presentes en el documento adjunto. No inventes semanas, periodos, empresas, fechas ni salarios que no aparezcan en el documento.
+6. NO calcules ningún promedio ni suma total de salarios. Tu labor es únicamente la extracción estructurada y fiel de los datos.
 
 Responde ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
 {
   "tipoDocumento": "Constancia de Semanas Cotizadas",
+  "totalSemanasCotizadas": 1000,
   "periodos": [
     {
       "patron": "NOMBRE DEL PATRON O MODALIDAD",
@@ -544,7 +582,13 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             });
         }
 
-        // 1. Enviar el PDF a Gemini API como flujo principal para análisis multimodal de documentos
+        // 1. Extraer texto base del buffer para apoyo en detección y fallbacks
+        let extractedText = '';
+        try {
+            extractedText = extractTextFromPdfBuffer(pdfBuffer);
+        } catch (e) {}
+
+        // 2. Enviar el PDF a Gemini API como flujo principal para análisis multimodal de documentos
         let structuredData = null;
         if (process.env.GEMINI_API_KEY) {
             try {
@@ -554,10 +598,9 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             }
         }
 
-        // 2. Fallback técnico: si Gemini no está configurado o falló, intentar con el parser existente
+        // 3. Fallback técnico: si Gemini no está configurado o falló, intentar con el parser existente
         if (!structuredData || !Array.isArray(structuredData.periodos) || structuredData.periodos.length === 0) {
             try {
-                const extractedText = extractTextFromPdfBuffer(pdfBuffer);
                 if (extractedText && extractedText.length > 20) {
                     const fallbackPeriods = extractPeriodsFromIMSSDocumentText(extractedText);
                     if (fallbackPeriods && fallbackPeriods.length > 0) {
@@ -576,7 +619,16 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             });
         }
 
-        // 3. Validación matemática estricta y cálculo ponderado en el backend por días (1,750 días)
+        // 4. Determinación de semanas cotizadas totales del asegurado según el reporte
+        let totalSemanasExtraidas = null;
+        if (structuredData && typeof structuredData.totalSemanasCotizadas === 'number' && structuredData.totalSemanasCotizadas > 0) {
+            totalSemanasExtraidas = Math.round(structuredData.totalSemanasCotizadas);
+        }
+        if (!totalSemanasExtraidas && extractedText) {
+            totalSemanasExtraidas = extractTotalSemanasFromIMSSDocument(extractedText);
+        }
+
+        // 5. Validación matemática estricta y cálculo ponderado en el backend por días (1,750 días)
         const validation = validateAndCalculatePensionPeriods(structuredData);
         if (!validation.success) {
             return res.status(422).json({
@@ -588,7 +640,7 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
 
         let esReporteResumen = false;
         try {
-            const rawTextSample = extractTextFromPdfBuffer(pdfBuffer).toLowerCase();
+            const rawTextSample = extractedText ? extractedText.toLowerCase() : extractTextFromPdfBuffer(pdfBuffer).toLowerCase();
             const isImssDoc = rawTextSample.includes('semanas cotizadas') || rawTextSample.includes('seguro social');
             const hasDetailIndicators = rawTextSample.includes('historial de registros afiliatorios') ||
                                         rawTextSample.includes('tipo de movimiento') ||
@@ -607,7 +659,8 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             semanasTotales: validation.semanasTotales,
             semanasAnalizadas: validation.semanasTotales,
             semanasConsideradas: validation.semanasTotales,
-            totalSemanasDocumento: validation.semanasTotales,
+            totalSemanasCotizadas: totalSemanasExtraidas,
+            totalSemanasDocumento: totalSemanasExtraidas || validation.semanasTotales,
             periodos: validation.periodos,
             periodosUtilizados: validation.periodos,
             esReporteResumen,
@@ -2818,6 +2871,7 @@ if (typeof module !== 'undefined' && module.exports) {
         checkUserPermission,
         assignDefaultUserRole,
         extractTextFromPdfBuffer,
+        extractTotalSemanasFromIMSSDocument,
         parseIMSSWithGemini,
         requireFunctionality,
         FUNCIONALIDAD_CODE_ALIASES
