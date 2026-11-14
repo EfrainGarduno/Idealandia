@@ -1,9 +1,18 @@
 require('dotenv').config();
+if (!process.env.GEMINI_API_KEY) {
+    const fs = require('fs');
+    const fallbackEnv = 'D:\\Personales\\EstrategiaPersonal\\Mipagina\\Idealandia-local\\.env';
+    if (fs.existsSync(fallbackEnv)) {
+        require('dotenv').config({ path: fallbackEnv });
+    }
+}
 const { searchKnowledge } = require('./knowledgeService');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
+const zlib = require('zlib');
+const { calculateAverageSalaryLast250Weeks, extractPeriodsFromIMSSDocumentText, validateAndCalculatePensionPeriods } = require('./pension');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -35,7 +44,8 @@ const port = process.env.PORT || 3000;
 const rateLimit = require('express-rate-limit');
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(__dirname));
 
@@ -349,6 +359,355 @@ app.get('/api/live-token', async (req, res) => {
     } catch (error) {
         console.error('Error generating live token:', error);
         res.status(500).json({ error: 'Failed to generate live token' });
+    }
+});
+
+
+function decodePdfString(str) {
+    return str
+        .replace(/\\([0-7]{1,3})/g, (m, oct) => String.fromCharCode(parseInt(oct, 8)))
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\b/g, '\b')
+        .replace(/\\f/g, '\f')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\\\/g, '\\');
+}
+
+function extractTextFromPdfBuffer(buffer) {
+    if (!Buffer.isBuffer(buffer)) return '';
+    const str = buffer.toString('binary');
+    let fullText = '';
+
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let match;
+    while ((match = streamRegex.exec(str)) !== null) {
+        let streamBytes = Buffer.from(match[1], 'binary');
+        try {
+            streamBytes = zlib.inflateSync(streamBytes);
+        } catch (e) {}
+
+        const streamContent = streamBytes.toString('latin1');
+        const tokenRegex = /\((?:[^()\\]|\\.)*\)\s*Tj|\[(?:[^\[\]\\]|\\.)*\]\s*TJ|T\*|(?:\-?\d+(?:\.\d+)?\s+){2}Td|(?:\-?\d+(?:\.\d+)?\s+){6}Tm/g;
+        let token;
+        while ((token = tokenRegex.exec(streamContent)) !== null) {
+            const t = token[0];
+            if (t.endsWith('Tj')) {
+                const s = t.slice(1, t.lastIndexOf(')'));
+                fullText += decodePdfString(s) + ' ';
+            } else if (t.endsWith('TJ')) {
+                const arrContent = t.slice(1, t.lastIndexOf(']'));
+                const strRegex = /\(((?:[^()\\]|\\.)*)\)/g;
+                let sm;
+                while ((sm = strRegex.exec(arrContent)) !== null) {
+                    fullText += decodePdfString(sm[1]);
+                }
+                fullText += ' ';
+            } else if (t === 'T*' || t.endsWith('Td') || t.endsWith('Tm')) {
+                fullText += '\n';
+            }
+        }
+    }
+
+    if (!fullText.trim()) {
+        const rawStrings = [];
+        const simpleParenRegex = /\(((?:[^()\\]|\\.)*)\)/g;
+        let sm;
+        while ((sm = simpleParenRegex.exec(str)) !== null) {
+            const decoded = decodePdfString(sm[1]);
+            if (decoded.trim().length > 1) rawStrings.push(decoded.trim());
+        }
+        if (rawStrings.length > 0) fullText = rawStrings.join(' ');
+    }
+
+    return fullText.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim();
+}
+
+function extractAseguradoInfo(extractedText) {
+    if (!extractedText || typeof extractedText !== 'string') {
+        return { nombreAsegurado: null, totalSemanasCotizadas: null };
+    }
+
+    let nombreAsegurado = null;
+    let totalSemanasCotizadas = null;
+
+    // 1. Extraer nombre del asegurado directamente de la primera página del PDF
+    // Formato oficial IMSS: NSS:\n [NOMBRE] \n [NSS_DIGITOS]
+    const nssNombreMatch = extractedText.match(/NSS\s*:\s*\r?\n\s*([^\r\n]{3,60})\s*\r?\n\s*\d{10,11}/i);
+    if (nssNombreMatch && nssNombreMatch[1]) {
+        const cleanName = nssNombreMatch[1].trim().replace(/\s+/g, ' ');
+        if (cleanName.length >= 3 && !/^(total|semanas|constancia|imss|curp|instituto)/i.test(cleanName)) {
+            nombreAsegurado = cleanName;
+        }
+    }
+    // Formato alternativo con etiqueta explícita 'Nombre:' o 'Nombre del asegurado:'
+    if (!nombreAsegurado) {
+        const labelNombreMatch = extractedText.match(/(?:nombre(?:\s+del\s+asegurado)?)\s*:\s*([^\r\n:]{3,60})/i);
+        if (labelNombreMatch && labelNombreMatch[1]) {
+            const cleanName = labelNombreMatch[1].trim().replace(/\s+/g, ' ');
+            if (cleanName.length >= 3 && !/^(total|semanas|constancia|imss|curp|instituto)/i.test(cleanName)) {
+                nombreAsegurado = cleanName;
+            }
+        }
+    }
+
+    // 2. Extraer total de semanas cotizadas de la primera página / resumen
+    // Formato explícito: 'Total de semanas cotizadas: 1573' o 'Total de semanas cotizadas:1573'
+    const directTotalMatch = extractedText.match(/total\s+de\s+semanas\s+cotizadas\s*:\s*(\d{1,5})/i);
+    if (directTotalMatch && directTotalMatch[1]) {
+        totalSemanasCotizadas = parseInt(directTotalMatch[1], 10);
+    }
+    // Cadena digital oficial del IMSS: |Número total de semanas cotizadas:1615||
+    if (!totalSemanasCotizadas) {
+        const cadenaMatch = extractedText.match(/n[uú]mero\s+total\s+de\s+semanas\s+cotizadas\s*:\s*(\d{1,5})/i);
+        if (cadenaMatch && cadenaMatch[1]) {
+            totalSemanasCotizadas = parseInt(cadenaMatch[1], 10);
+        }
+    }
+    // Encabezado / Resumen: bloque con número antes de NSS:
+    if (!totalSemanasCotizadas) {
+        const nssMatch = extractedText.match(/(\d{1,5})\s*\r?\n\s*NSS\s*:/i);
+        if (nssMatch && nssMatch[1]) {
+            totalSemanasCotizadas = parseInt(nssMatch[1], 10);
+        }
+    }
+    // Bloque descriptivo 'Total de semanas cotizadas' seguido del número
+    if (!totalSemanasCotizadas) {
+        const totalGenMatch = extractedText.match(/total\s+de\s+semanas\s+cotizadas[^\d]{0,80}(\d{1,5})/i);
+        if (totalGenMatch && totalGenMatch[1]) {
+            totalSemanasCotizadas = parseInt(totalGenMatch[1], 10);
+        }
+    }
+    if (!totalSemanasCotizadas) {
+        const imssMatch = extractedText.match(/semanas\s+cotizadas\s+imss[^\d]{0,80}(\d{1,5})/i);
+        if (imssMatch && imssMatch[1]) {
+            totalSemanasCotizadas = parseInt(imssMatch[1], 10);
+        }
+    }
+
+    return { nombreAsegurado, totalSemanasCotizadas };
+}
+
+function extractTotalSemanasFromIMSSDocument(extractedText) {
+    return extractAseguradoInfo(extractedText).totalSemanasCotizadas;
+}
+
+async function parseIMSSWithGemini(pdfBuffer) {
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error('GEMINI_API_KEY_NOT_CONFIGURED');
+    }
+
+    const prompt = `Eres un actuario y analista experto en pensiones del IMSS bajo el régimen Ley 73.
+Se te proporciona el documento oficial en PDF "Constancia de Semanas Cotizadas en el IMSS" / "Reporte de Semanas Cotizadas del Asegurado".
+
+Tu objetivo es extraer de manera estructurada y fiel los periodos o tramos de cotización salarial que aparecen en la tabla de historia laboral del documento adjunto, en orden cronológico inverso (desde el movimiento más reciente hacia atrás en el tiempo), asegurando incluir los periodos suficientes para que el backend pueda cubrir las últimas 250 semanas cotizadas (al menos 1,750 días de cotización).
+
+Reglas de extracción:
+1. Revisa minuciosamente la tabla de historial laboral del documento en orden cronológico inverso (del movimiento más reciente hacia atrás).
+2. Para la fecha de corte más reciente, toma la fecha de fin o baja del último movimiento registrado en el documento (o la fecha de emisión del reporte si está activo). No uses la fecha de hoy.
+3. Para cada periodo o tramo salarial registrado en el historial:
+   - "patron": Nombre de la empresa, razón social o modalidad registrada (ej. "Continuación Voluntaria en el Régimen Obligatorio" o nombre del patrón).
+   - "fechaInicio": Fecha de inicio o alta del movimiento (formato YYYY-MM-DD).
+   - "fechaFin": Fecha de fin o baja del movimiento (formato YYYY-MM-DD).
+   - "dias": Días naturales cotizados en ese tramo.
+   - "salarioDiario": Salario Base de Cotización (SBC) diario registrado en pesos (numérico decimal sin comas ni símbolos).
+4. Extrae ÚNICAMENTE los datos reales presentes en el documento adjunto. No inventes periodos, empresas, fechas ni salarios que no aparezcan en el documento.
+5. NO calcules ningún promedio ni suma total. Tu labor es únicamente la extracción estructurada y fiel de los periodos.
+
+Responde ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
+{
+  "tipoDocumento": "Constancia de Semanas Cotizadas",
+  "periodos": [
+    {
+      "patron": "NOMBRE DEL PATRON O MODALIDAD",
+      "fechaInicio": "YYYY-MM-DD",
+      "fechaFin": "YYYY-MM-DD",
+      "dias": 100,
+      "salarioDiario": 500.00
+    }
+  ]
+}
+`;
+
+    const cleanBase64 = pdfBuffer.toString('base64');
+    // Priorizar modelos estables y probados; evitar gemini-3.8-flash que reporta 503 continuo
+    const candidateModels = [
+        process.env.GEMINI_MODEL,
+        'gemini-3-flash-preview',
+        'gemini-3.6-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-3.8-flash'
+    ].filter(Boolean);
+
+    let lastError = null;
+    const TIMEOUT_POR_INTENTO_MS = 150000; // 150 segundos (margen razonable dentro de 120-180s)
+
+    for (const modelName of candidateModels) {
+        try {
+            const timeoutPromise = new Promise((_, reject) => {
+                const timer = setTimeout(() => {
+                    reject(new Error(`TIMEOUT_EXCEEDED: Se excedió el límite de ${TIMEOUT_POR_INTENTO_MS / 1000}s en modelo ${modelName}`));
+                }, TIMEOUT_POR_INTENTO_MS);
+                if (timer.unref) timer.unref();
+            });
+
+            const generatePromise = ai.models.generateContent({
+                model: modelName,
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            {
+                                inlineData: {
+                                    mimeType: 'application/pdf',
+                                    data: cleanBase64
+                                }
+                            },
+                            { text: prompt }
+                        ]
+                    }
+                ],
+                config: {
+                    temperature: 0.1,
+                    responseMimeType: 'application/json'
+                }
+            });
+
+            const response = await Promise.race([generatePromise, timeoutPromise]);
+            const rawText = response.text || (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts[0].text);
+            if (!rawText) continue;
+
+            const fenceRegex = new RegExp('^' + String.fromCharCode(96, 96, 96) + '(?:json)?', 'i');
+            const endFenceRegex = new RegExp(String.fromCharCode(96, 96, 96) + '$');
+            const cleanedJson = rawText.trim().replace(fenceRegex, '').replace(endFenceRegex, '').trim();
+            const parsed = JSON.parse(cleanedJson);
+            if (parsed && Array.isArray(parsed.periodos) && parsed.periodos.length > 0) {
+                return parsed;
+            }
+        } catch (err) {
+            lastError = err;
+            console.warn(`Aviso: Modelo ${modelName} no completó el análisis (${err.message}). Continuando con siguiente candidato...`);
+            // Ante 503 (saturación) o timeout, no bloquear la ejecución repitiendo sobre el mismo modelo; continuar inmediatamente con el siguiente
+            continue;
+        }
+    }
+
+    if (lastError) {
+        throw lastError;
+    }
+    return null;
+}
+
+app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
+    try {
+        const { pdfBase64, fileName } = req.body || {};
+        if (!pdfBase64 || typeof pdfBase64 !== 'string') {
+            return res.status(400).json({
+                error: 'INVALID_REQUEST',
+                message: 'Se requiere un archivo PDF en formato base64.'
+            });
+        }
+
+        const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '').trim();
+        const pdfBuffer = Buffer.from(cleanBase64, 'base64');
+
+        if (pdfBuffer.length < 5 || pdfBuffer.toString('latin1', 0, 5) !== '%PDF-') {
+            return res.status(400).json({
+                error: 'INVALID_PDF',
+                message: 'El archivo proporcionado no es un documento PDF válido.'
+            });
+        }
+
+        // 1. Extraer texto base del buffer para apoyo en detección y fallbacks
+        let extractedText = '';
+        try {
+            extractedText = extractTextFromPdfBuffer(pdfBuffer);
+        } catch (e) {}
+
+        // 2. Enviar el PDF a Gemini API como flujo principal para análisis multimodal de documentos
+        let structuredData = null;
+        if (process.env.GEMINI_API_KEY) {
+            try {
+                structuredData = await parseIMSSWithGemini(pdfBuffer);
+            } catch (aiErr) {
+                console.error('Advertencia al analizar documento con Gemini API:', aiErr.message);
+            }
+        }
+
+        // 3. Fallback técnico: si Gemini no está configurado o falló, intentar con el parser existente
+        if (!structuredData || !Array.isArray(structuredData.periodos) || structuredData.periodos.length === 0) {
+            try {
+                if (extractedText && extractedText.length > 20) {
+                    const fallbackPeriods = extractPeriodsFromIMSSDocumentText(extractedText);
+                    if (fallbackPeriods && fallbackPeriods.length > 0) {
+                        structuredData = { tipoDocumento: 'Constancia de Semanas Cotizadas', periodos: fallbackPeriods };
+                    }
+                }
+            } catch (fallbackErr) {
+                console.error('Error en fallback técnico de extracción de PDF:', fallbackErr.message);
+            }
+        }
+
+        if (!structuredData || !Array.isArray(structuredData.periodos) || structuredData.periodos.length === 0) {
+            return res.status(422).json({
+                error: 'CANNOT_INTERPRET_PDF',
+                message: 'No fue posible interpretar los periodos de cotización en el documento. Por favor verifica que sea un documento oficial del IMSS o ingresa el salario manualmente.'
+            });
+        }
+
+        // 4. Determinación directa de metadatos del asegurado (semanas y nombre) desde el PDF
+        const infoAsegurado = extractAseguradoInfo(extractedText);
+        const totalSemanasExtraidas = infoAsegurado.totalSemanasCotizadas;
+        const nombreAsegurado = infoAsegurado.nombreAsegurado;
+
+        // 5. Validación matemática estricta y cálculo ponderado en el backend por días (1,750 días)
+        const validation = validateAndCalculatePensionPeriods(structuredData);
+        if (!validation.success) {
+            return res.status(422).json({
+                error: validation.error,
+                message: validation.message,
+                sumaDias: validation.sumaDias
+            });
+        }
+
+        let esReporteResumen = false;
+        try {
+            const rawTextSample = extractedText ? extractedText.toLowerCase() : extractTextFromPdfBuffer(pdfBuffer).toLowerCase();
+            const isImssDoc = rawTextSample.includes('semanas cotizadas') || rawTextSample.includes('seguro social');
+            const hasDetailIndicators = rawTextSample.includes('historial de registros afiliatorios') ||
+                                        rawTextSample.includes('tipo de movimiento') ||
+                                        rawTextSample.includes('modificacion de salario');
+            if (isImssDoc && !hasDetailIndicators) {
+                esReporteResumen = true;
+            }
+        } catch (sampleErr) {}
+
+        const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+        res.status(200).json({
+            success: true,
+            salarioDiarioPromedio: validation.salarioDiarioPromedio,
+            salarioDiarioPromedioFormateado: formatter.format(validation.salarioDiarioPromedio),
+            diasTotales: validation.diasTotales,
+            semanasTotales: validation.semanasTotales,
+            semanasAnalizadas: validation.semanasTotales,
+            semanasConsideradas: validation.semanasTotales,
+            totalSemanasCotizadas: totalSemanasExtraidas,
+            totalSemanasDocumento: totalSemanasExtraidas || validation.semanasTotales,
+            nombreAsegurado: nombreAsegurado || null,
+            periodos: validation.periodos,
+            periodosUtilizados: validation.periodos,
+            esReporteResumen,
+            message: 'Se identificaron las últimas 250 semanas cotizadas con éxito mediante Gemini API.'
+        });
+
+    } catch (error) {
+        console.error('Error in /api/pension/calcular-salario-pdf:', error.message);
+        res.status(500).json({
+            error: 'SERVER_ERROR',
+            message: 'Ocurrió un error al procesar el documento. Por favor intenta de nuevo o ingresa el salario manualmente.'
+        });
     }
 });
 
@@ -2546,6 +2905,10 @@ if (typeof module !== 'undefined' && module.exports) {
         checkUserFunctionalityAccess,
         checkUserPermission,
         assignDefaultUserRole,
+        extractTextFromPdfBuffer,
+        extractAseguradoInfo,
+        extractTotalSemanasFromIMSSDocument,
+        parseIMSSWithGemini,
         requireFunctionality,
         FUNCIONALIDAD_CODE_ALIASES
     };

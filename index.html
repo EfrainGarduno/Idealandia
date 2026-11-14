@@ -235,11 +235,49 @@
                     <legend>Datos generales</legend>
                     <div class="form-group">
                         <label for="salario-minimo">Salario mínimo general vigente:</label>
-                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo">
+                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo" value="315.04">
                     </div>
                     <div class="form-group">
                         <label for="salario-promedio">Salario diario promedio últimas 250 semanas:</label>
                         <input type="number" step="0.01" id="salario-promedio" name="salario-promedio">
+                    </div>
+                    <div class="pdf-semanas-container" id="pdf-semanas-container" style="background: #f8f9fa; border: 1px dashed #007bff; border-radius: 6px; padding: 12px 15px; margin-top: -5px; margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <label for="pdf-semanas-input" style="font-weight: 600; color: #0056b3; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
+                                        <i class="fas fa-file-pdf" style="color: #dc3545; font-size: 1.1em;"></i> Cargar Semanas Cotizadas del IMSS (PDF)
+                                    </label>
+                                    <div class="tooltip-container" id="aviso-detalle-pdf" style="position: relative; display: inline-block;">
+                                        <button type="button" id="btn-tooltip-recomendacion" class="btn-tooltip-info" aria-label="Ver recomendación sobre versión a detalle" style="background: #e7f3fe; border: 1px solid #b8daff; color: #0056b3; padding: 2px 8px; border-radius: 12px; font-size: 0.82em; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; line-height: 1.2;">
+                                            <i class="fas fa-info-circle"></i> <span>Recomendación</span>
+                                        </button>
+                                        <div id="tooltip-detalle-popover" class="tooltip-popover" role="tooltip" style="display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 1050; width: 320px; max-width: calc(100vw - 40px); background: #ffffff; border: 1px solid #007bff; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 12px 14px; font-size: 0.85em; color: #212529; text-align: left; line-height: 1.45;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: 600; color: #0056b3; border-bottom: 1px solid #e9ecef; padding-bottom: 4px;">
+                                                <span><i class="fas fa-info-circle"></i> Recomendación sobre tu reporte</span>
+                                                <span id="btn-cerrar-tooltip" style="cursor: pointer; color: #6c757d; font-size: 1.2em; line-height: 1;" title="Cerrar">&times;</span>
+                                            </div>
+                                            <div style="margin-bottom: 6px;">
+                                                Para obtener un cálculo más preciso del salario promedio de las últimas 250 semanas, utiliza la <strong>versión a detalle</strong> de tu reporte de Semanas Cotizadas del IMSS.
+                                            </div>
+                                            <div style="font-size: 0.92em; color: #6c757d;">
+                                                La versión resumen puede no permitir identificar con suficiente precisión todos los cambios de salario dentro de los periodos de un mismo empleador, por lo que el resultado puede ser menos preciso.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <small style="display: block; color: #6c757d; font-size: 0.85em; margin-top: 2px;">
+                                    Calcula automáticamente el salario diario promedio real de tus últimas 250 semanas
+                                </small>
+                            </div>
+                            <div>
+                                <input type="file" id="pdf-semanas-input" accept="application/pdf,.pdf" style="display: none;">
+                                <button type="button" id="btn-seleccionar-pdf" class="btn btn-outline-primary" style="padding: 6px 14px; font-size: 0.9em; cursor: pointer; border-radius: 4px; border: 1px solid #007bff; background: #007bff; color: #fff; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-upload"></i> Seleccionar PDF
+                                </button>
+                            </div>
+                        </div>
+                        <div id="pdf-upload-status" style="margin-top: 10px; display: none;"></div>
                     </div>
                     <div class="form-group">
                         <label for="semanas-cotizadas">Semanas cotizadas:</label>
@@ -1855,12 +1893,77 @@
             const formEstimacion = document.getElementById('form-estimacion');
             const btnCalcularPension = document.getElementById('btn-calcular-pension');
 
+            const salarioMinimoInput = document.getElementById('salario-minimo');
+            const defaultSalarioMinimo = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
+            if (salarioMinimoInput && !salarioMinimoInput.value) {
+                salarioMinimoInput.value = defaultSalarioMinimo;
+            }
+
             if(btnEstimacion && formEstimacion) {
                 btnEstimacion.addEventListener('click', () => {
                     if (formEstimacion.style.display === 'none') {
                         formEstimacion.style.display = 'block';
+                        if (salarioMinimoInput && !salarioMinimoInput.value) {
+                            salarioMinimoInput.value = defaultSalarioMinimo;
+                        }
                     } else {
                         formEstimacion.style.display = 'none';
+                    }
+                });
+            }
+
+            // Logica del Tooltip / Popover de Recomendación de versión a detalle
+            const tooltipContainer = document.getElementById('aviso-detalle-pdf');
+            const tooltipPopover = document.getElementById('tooltip-detalle-popover');
+            const btnTooltipRecomendacion = document.getElementById('btn-tooltip-recomendacion');
+            const btnCerrarTooltip = document.getElementById('btn-cerrar-tooltip');
+
+            if (tooltipContainer && tooltipPopover && btnTooltipRecomendacion) {
+                let tooltipVisible = false;
+
+                const mostrarTooltip = () => {
+                    tooltipPopover.style.display = 'block';
+                    tooltipVisible = true;
+                };
+
+                const ocultarTooltip = () => {
+                    tooltipPopover.style.display = 'none';
+                    tooltipVisible = false;
+                };
+
+                // Desktop hover
+                tooltipContainer.addEventListener('mouseenter', mostrarTooltip);
+                tooltipContainer.addEventListener('mouseleave', ocultarTooltip);
+
+                // Mobile tap / click toggle
+                btnTooltipRecomendacion.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (tooltipVisible) {
+                        ocultarTooltip();
+                    } else {
+                        mostrarTooltip();
+                    }
+                });
+
+                if (btnCerrarTooltip) {
+                    btnCerrarTooltip.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        ocultarTooltip();
+                    });
+                }
+
+                // Cierre al dar clic fuera
+                document.addEventListener('click', (e) => {
+                    if (tooltipVisible && !tooltipContainer.contains(e.target)) {
+                        ocultarTooltip();
+                    }
+                });
+
+                // Accesibilidad con Escape
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && tooltipVisible) {
+                        ocultarTooltip();
                     }
                 });
             }
@@ -1950,6 +2053,224 @@
                     if(resultContainer) {
                         resultContainer.style.display = 'none';
                         resultContainer.innerHTML = '';
+                    }
+                    const pdfUploadStatus = document.getElementById('pdf-upload-status');
+                    if (pdfUploadStatus) {
+                        pdfUploadStatus.style.display = 'none';
+                        pdfUploadStatus.innerHTML = '';
+                    }
+                    const pdfSemanasInput = document.getElementById('pdf-semanas-input');
+                    if (pdfSemanasInput) {
+                        pdfSemanasInput.value = '';
+                    }
+                    const labelSemanasReset = document.querySelector('label[for="semanas-cotizadas"]');
+                    if (labelSemanasReset) {
+                        labelSemanasReset.textContent = 'Semanas cotizadas:';
+                    }
+                });
+            }
+
+            // Logica para carga y calculo automatico con PDF de Semanas Cotizadas IMSS
+            const btnSeleccionarPdf = document.getElementById('btn-seleccionar-pdf');
+            const pdfSemanasInput = document.getElementById('pdf-semanas-input');
+            const pdfUploadStatus = document.getElementById('pdf-upload-status');
+            const salarioPromedioInput = document.getElementById('salario-promedio');
+
+            let cronometroInterval = null;
+            let segundosTranscurridos = 0;
+
+            function formatTiempo(segundos) {
+                const mins = Math.floor(segundos / 60);
+                const secs = segundos % 60;
+                return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            }
+
+            function detenerCronometro() {
+                if (cronometroInterval) {
+                    clearInterval(cronometroInterval);
+                    cronometroInterval = null;
+                }
+            }
+
+            if (btnSeleccionarPdf && pdfSemanasInput) {
+                btnSeleccionarPdf.addEventListener('click', () => {
+                    detenerCronometro();
+                    pdfSemanasInput.value = '';
+                    pdfSemanasInput.click();
+                });
+
+                pdfSemanasInput.addEventListener('change', async (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) return;
+
+                    detenerCronometro();
+                    segundosTranscurridos = 0;
+
+                    const fileName = file.name;
+                    const isPdf = fileName.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+
+                    if (!isPdf) {
+                        pdfUploadStatus.style.display = 'block';
+                        pdfUploadStatus.innerHTML = '<div style="background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;"><strong><i class=\"fas fa-exclamation-triangle\" style=\"color: #dc3545;\"></i> Archivo no válido:</strong> Por favor selecciona un documento en formato PDF (.pdf).</div>';
+                        return;
+                    }
+
+                    // Mostrar estado de procesamiento con cronometro activo en 00:00
+                    pdfUploadStatus.style.display = 'block';
+                    pdfUploadStatus.innerHTML = '<div style="background: #e9ecef; color: #333; padding: 12px 14px; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">' +
+                        '<div style="display: flex; align-items: center; gap: 10px;">' +
+                            '<i class=\"fas fa-spinner fa-spin\" style=\"color: #007bff; font-size: 1.3em;\"></i>' +
+                            '<div><strong>Archivo:</strong> ' + fileName + '<br><em>Analizando tus semanas cotizadas...</em></div>' +
+                        '</div>' +
+                        '<div style="font-weight: 600; color: #495057; background: #fff; border: 1px solid #ced4da; padding: 5px 10px; border-radius: 4px; font-family: monospace; font-size: 0.95em; white-space: nowrap;">' +
+                            '<i class=\"fas fa-stopwatch\" style=\"color: #007bff; margin-right: 5px;\"></i>Tiempo de análisis: <span id=\"cronometro-tiempo\">00:00</span>' +
+                        '</div>' +
+                    '</div>';
+
+                    cronometroInterval = setInterval(() => {
+                        segundosTranscurridos++;
+                        const spanTiempo = document.getElementById('cronometro-tiempo');
+                        if (spanTiempo) {
+                            spanTiempo.textContent = formatTiempo(segundosTranscurridos);
+                        }
+                    }, 1000);
+
+                    try {
+                        const base64 = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result);
+                            reader.onerror = () => reject(new Error('No se pudo leer el archivo localmente.'));
+                            reader.readAsDataURL(file);
+                        });
+
+                        const response = await fetch('/api/pension/calcular-salario-pdf', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                pdfBase64: base64,
+                                fileName: fileName
+                            })
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        // Detener cronometro inmediatamente al recibir respuesta
+                        detenerCronometro();
+                        const tiempoFinal = formatTiempo(segundosTranscurridos);
+
+                        if (response.ok && data && typeof data.salarioDiarioPromedio === 'number') {
+                            if (salarioPromedioInput) {
+                                salarioPromedioInput.value = data.salarioDiarioPromedio;
+                                salarioPromedioInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                salarioPromedioInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
+                            const semanasCotizadasInput = document.getElementById('semanas-cotizadas');
+                            const semanasExtraidas = (typeof data.totalSemanasCotizadas === 'number' && data.totalSemanasCotizadas > 0)
+                                ? data.totalSemanasCotizadas
+                                : ((typeof data.totalSemanasDocumento === 'number' && data.totalSemanasDocumento > 0) ? data.totalSemanasDocumento : null);
+
+                            if (semanasCotizadasInput && semanasExtraidas) {
+                                semanasCotizadasInput.value = semanasExtraidas;
+                                semanasCotizadasInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                semanasCotizadasInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
+                            const formattedSalary = data.salarioDiarioPromedioFormateado || ('$' + Number(data.salarioDiarioPromedio).toFixed(2));
+                            const periodosInfo = data.periodosUtilizados && data.periodosUtilizados.length
+                                ? '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\">Se consideraron <strong>' + (data.semanasConsideradas || 250) + '</strong> semanas de cotización en <strong>' + data.periodosUtilizados.length + '</strong> periodo(s).</div>'
+                                : '';
+
+                            const nombreDisplay = (data.nombreAsegurado && typeof data.nombreAsegurado === 'string' && data.nombreAsegurado.trim().length > 0)
+                                ? data.nombreAsegurado.trim()
+                                : null;
+
+                            const labelSemanasTexto = nombreDisplay
+                                ? ('Semanas cotizadas de ' + nombreDisplay + ':')
+                                : 'Semanas cotizadas del asegurado:';
+
+                            const labelSemanasCotizadasInput = document.querySelector('label[for="semanas-cotizadas"]');
+                            if (labelSemanasCotizadasInput) {
+                                labelSemanasCotizadasInput.textContent = nombreDisplay
+                                    ? ('Semanas cotizadas de ' + nombreDisplay + ':')
+                                    : 'Semanas cotizadas:';
+                            }
+
+                            const semanasDocInfo = semanasExtraidas
+                                ? '<div style=\"font-size: 0.85em; color: #155724; margin-top: 3px;\"><strong>' + labelSemanasTexto + '</strong> <span style=\"font-weight: bold; color: #155724;\">' + semanasExtraidas + ' semanas</span></div>'
+                                : '';
+
+                            const warningResumen = data.esReporteResumen
+                                ? '<div style=\"background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-left: 4px solid #ffc107; padding: 8px 10px; border-radius: 4px; font-size: 0.88em; margin-top: 8px; line-height: 1.45;\">' +
+                                    '<strong><i class=\"fas fa-exclamation-triangle\" style=\"color: #e0a800;\"></i> Reporte resumen detectado</strong><br>' +
+                                    'Este documento no contiene el mismo nivel de detalle que la versión a detalle. El cálculo de las últimas 250 semanas puede ser menos preciso, especialmente cuando existen cambios de salario dentro del periodo de un mismo empleador.' +
+                                  '</div>'
+                                : '';
+
+                            pdfUploadStatus.innerHTML = '<div style=\"background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\">' +
+                                '<div style=\"display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;\">' +
+                                    '<div>' +
+                                        '<div style=\"font-weight: bold; margin-bottom: 3px;\"><i class=\"fas fa-check-circle\" style=\"color: #28a745;\"></i> Se identificaron las últimas 250 semanas.</div>' +
+                                        '<div><strong>Archivo:</strong> ' + fileName + '</div>' +
+                                        '<div style=\"margin-top: 4px;\"><strong>Salario diario promedio:</strong> <span style=\"font-size: 1.15em; font-weight: bold; color: #155724;\">' + formattedSalary + '</span></div>' +
+                                        semanasDocInfo +
+                                        periodosInfo +
+                                        '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\"><i class=\"fas fa-check\" style=\"color: #28a745;\"></i> Análisis completado en <strong>' + tiempoFinal + '</strong></div>' +
+                                        warningResumen +
+                                        '<div style=\"font-size: 0.85em; color: #155724; margin-top: 4px;\"><em>Los valores fueron colocados en los campos de arriba. Puedes revisarlos antes de calcular tu pensión.</em></div>' +
+                                    '</div>' +
+                                    '<button type=\"button\" id=\"btn-reemplazar-pdf\" style=\"background: #fff; border: 1px solid #28a745; color: #155724; border-radius: 4px; padding: 4px 10px; font-size: 0.82em; cursor: pointer; white-space: nowrap;\"><i class=\"fas fa-redo\"></i> Cargar otro PDF</button>' +
+                                '</div>' +
+                            '</div>';
+
+                            const btnReemplazar = document.getElementById('btn-reemplazar-pdf');
+                            if (btnReemplazar) {
+                                btnReemplazar.addEventListener('click', () => {
+                                    detenerCronometro();
+                                    pdfSemanasInput.value = '';
+                                    const labelSemanasReset = document.querySelector('label[for="semanas-cotizadas"]');
+                                    if (labelSemanasReset) {
+                                        labelSemanasReset.textContent = 'Semanas cotizadas:';
+                                    }
+                                    pdfSemanasInput.click();
+                                });
+                            }
+                        } else {
+                            const errorMsg = data && data.message
+                                ? data.message
+                                : 'No se pudo interpretar el archivo PDF o calcular las últimas 250 semanas.';
+
+                            pdfUploadStatus.innerHTML = '<div style=\"background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\">' +
+                                '<div style=\"display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;\">' +
+                                    '<div>' +
+                                        '<div style=\"font-weight: bold; margin-bottom: 3px;\"><i class=\"fas fa-exclamation-triangle\" style=\"color: #dc3545;\"></i> No fue posible obtener el salario promedio</div>' +
+                                        '<div><strong>Archivo:</strong> ' + fileName + '</div>' +
+                                        '<div style=\"margin-top: 4px; color: #721c24;\">' + errorMsg + '</div>' +
+                                        '<div style=\"font-size: 0.85em; color: #721c24; margin-top: 3px;\"><i class=\"fas fa-times\" style=\"color: #dc3545;\"></i> No fue posible analizar el documento. Tiempo transcurrido: <strong>' + tiempoFinal + '</strong></div>' +
+                                        '<div style=\"font-size: 0.85em; color: #6c757d; margin-top: 4px;\"><em>Puedes ingresar el salario diario promedio manualmente en el campo correspondiente.</em></div>' +
+                                    '</div>' +
+                                    '<button type=\"button\" id=\"btn-reintentar-pdf\" style=\"background: #fff; border: 1px solid #dc3545; color: #721c24; border-radius: 4px; padding: 4px 10px; font-size: 0.82em; cursor: pointer; white-space: nowrap;\"><i class=\"fas fa-redo\"></i> Intentar de nuevo</button>' +
+                                '</div>' +
+                            '</div>';
+
+                            const btnReintentar = document.getElementById('btn-reintentar-pdf');
+                            if (btnReintentar) {
+                                btnReintentar.addEventListener('click', () => {
+                                    detenerCronometro();
+                                    pdfSemanasInput.value = '';
+                                    pdfSemanasInput.click();
+                                });
+                            }
+                        }
+                    } catch (err) {
+                        detenerCronometro();
+                        const tiempoFinalErr = formatTiempo(segundosTranscurridos);
+                        pdfUploadStatus.innerHTML = '<div style=\"background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\">' +
+                            '<strong><i class=\"fas fa-exclamation-triangle\" style=\"color: #dc3545;\"></i> Error:</strong> ' + (err.message || 'Error de conexión al procesar el archivo.') +
+                            '<div style=\"font-size: 0.85em; color: #721c24; margin-top: 3px;\"><i class=\"fas fa-times\" style=\"color: #dc3545;\"></i> No fue posible analizar el documento. Tiempo transcurrido: <strong>' + tiempoFinalErr + '</strong></div>' +
+                        '</div>';
                     }
                 });
             }

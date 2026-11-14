@@ -82,7 +82,17 @@ async function runTests() {
     const serverProcess = spawn('node', ['server.js'], { env: { ...process.env, AUTH_SECRET: 'testnode', PORT: TEST_PORT } });
     serverProcess.stdout.on('data', (data) => console.log(`SERVER STDOUT: ${data}`));
     serverProcess.stderr.on('data', (data) => console.error(`SERVER STDERR: ${data}`));
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise((resolve) => {
+        let resolved = false;
+        const timer = setTimeout(() => { if (!resolved) { resolved = true; resolve(); } }, 8000);
+        serverProcess.stdout.on('data', (d) => {
+            if (d.toString().includes('Server listening') && !resolved) {
+                resolved = true;
+                clearTimeout(timer);
+                resolve();
+            }
+        });
+    });
 
     try {
         // --- VISITS TESTS ---
