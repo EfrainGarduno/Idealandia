@@ -422,14 +422,66 @@
 }
 /* NEW HOME SECTION STYLES */
 .new-home-section {
-    background-color: #f8f6ff;
+    background-color: #ffffff;
     border-radius: 24px;
-    padding: 60px;
+    padding: 0;
     max-width: 1000px;
     width: 100%;
     box-sizing: border-box;
-    box-shadow: none;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
     margin: 0 auto;
+    overflow: hidden;
+}
+
+/* INSTITUTIONAL HERO HOME STYLES */
+.home-hero-container {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    line-height: 0;
+    overflow: hidden;
+    border-radius: 24px;
+}
+.home-hero-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+}
+.home-interactive-btn {
+    position: absolute;
+    display: block;
+    border-radius: 14px;
+    cursor: pointer;
+    z-index: 10;
+    text-indent: -9999px;
+    overflow: hidden;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+.home-interactive-btn.btn-chat {
+    left: 4.2%;
+    top: 77.5%;
+    width: 26.2%;
+    height: 17.6%;
+}
+.home-interactive-btn.btn-recursos {
+    left: 32.6%;
+    top: 76.5%;
+    width: 21.8%;
+    height: 19%;
+}
+.home-interactive-btn:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 18px rgba(108, 64, 247, 0.35);
+    transform: translateY(-1px);
+}
+.home-interactive-btn:active {
+    transform: translateY(1px);
+}
+.home-interactive-btn:focus-visible {
+    outline: 3px solid #6c40f7;
+    outline-offset: 2px;
 }
 .home-layout {
     display: flex;
@@ -735,8 +787,8 @@
         padding: 20px;
     }
     .new-home-section {
-        padding: 40px 20px;
-        border-radius: 0;
+        padding: 0;
+        border-radius: 16px;
     }
     .home-title {
         font-size: 48px;
@@ -848,7 +900,8 @@
         box-sizing: border-box;
     }
     .new-home-section {
-        padding: 30px 20px;
+        padding: 0;
+        border-radius: 16px;
     }
     .custom-modal-content {
         width: 95%;
