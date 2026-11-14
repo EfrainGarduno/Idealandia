@@ -14,7 +14,7 @@ const {
     SALARIO_MINIMO_GENERAL_VIGENTE
 } = require('./pension.js');
 
-const { app } = require('./server.js');
+const { app, extractAseguradoInfo } = require('./server.js');
 
 async function runTests() {
     console.log('=== Iniciando pruebas: Algoritmo de 1,750 días calendario y traslapes IMSS ===\n');
@@ -216,6 +216,8 @@ async function runTests() {
     console.log(`   Salario Diario Promedio PDF A: $${resA.body.salarioDiarioPromedio}`);
     assert(Math.abs(resA.body.salarioDiarioPromedio - 2585.94) <= 0.05, `PDF A debe dar ~2585.94, dio: ${resA.body.salarioDiarioPromedio}`);
         assert.strictEqual(resA.body.totalSemanasCotizadas, 1615, "PDF A debe extraer 1615 semanas cotizadas totales");
+        assert.strictEqual(resA.body.nombreAsegurado, "GARDUÑO FLORES EFRAIN", "PDF A debe extraer el nombre del asegurado");
+        assert.strictEqual(resA.body.nombreAsegurado, "GARDUÑO FLORES EFRAIN", "PDF A debe extraer el nombre del asegurado");
         assert.strictEqual(resA.body.totalSemanasDocumento, 1615, "PDF A totalSemanasDocumento debe ser 1615");
     console.log('   OK - PDF A procesado dinámicamente con éxito.');
 
@@ -231,6 +233,8 @@ async function runTests() {
     console.log(`   Salario Diario Promedio PDF B: $${resB.body.salarioDiarioPromedio}`);
     assert(Math.abs(resB.body.salarioDiarioPromedio - 1073.92) <= 0.05, `PDF B debe dar ~1073.92, dio: ${resB.body.salarioDiarioPromedio}`);
         assert.strictEqual(resB.body.totalSemanasCotizadas, 1398, "PDF B debe extraer 1398 semanas cotizadas totales");
+        assert.strictEqual(resB.body.nombreAsegurado, "GARDUÑO FLORES EFRAIN", "PDF B debe extraer el nombre del asegurado");
+        assert.strictEqual(resB.body.nombreAsegurado, "GARDUÑO FLORES EFRAIN", "PDF B debe extraer el nombre del asegurado");
         assert.strictEqual(resB.body.totalSemanasDocumento, 1398, "PDF B totalSemanasDocumento debe ser 1398");
 
     // Verificar que en PDF B el traslape de 47 días fue detectado y NO contado doble
@@ -357,14 +361,16 @@ async function runTests() {
     console.log('   OK - Tooltip funciona con hover en desktop, click en mobile y cierre exterior.');
 
     // -------------------------------------------------------------
-    // PRUEBA 17: Semanas cotizadas auto-llenadas en UI desde PDF
+    // PRUEBA 17: Semanas cotizadas y Nombre del asegurado en UI
     // -------------------------------------------------------------
-    console.log('\n17. Verificando auto-llenado de semanas cotizadas en UI desde respuesta del PDF...');
+    console.log('\n17. Verificando auto-llenado de semanas cotizadas y nombre del asegurado en UI...');
     const semInput = win.document.getElementById('semanas-cotizadas');
+    const labelSemanas = win.document.querySelector('label[for="semanas-cotizadas"]');
     assert(semInput, 'Campo semanas-cotizadas debe existir');
+    assert(labelSemanas, 'Label para semanas-cotizadas debe existir');
     semInput.value = '';
 
-    // Simular carga de PDF con 1615 semanas cotizadas
+    // 17.1 Simular respuesta de PDF con nombre y 1615 semanas
     win.fetch = async () => ({
         ok: true,
         json: async () => ({
@@ -374,6 +380,7 @@ async function runTests() {
             diasTotales: 1750,
             semanasConsideradas: 250,
             totalSemanasCotizadas: 1615,
+            nombreAsegurado: 'GARDUÑO FLORES EFRAIN',
             periodosUtilizados: [{ dias: 1750, salarioDiario: 2585.94 }]
         })
     });
@@ -381,13 +388,49 @@ async function runTests() {
     inputPdf.dispatchEvent(new win.Event('change'));
     await new Promise(r => setTimeout(r, 60));
 
-    assert.strictEqual(Number(semInput.value), 1615, 'El campo semanas-cotizadas debe llenarse con 1615 desde la respuesta del PDF');
-    assert(statusDiv.innerHTML.includes('1615 semanas'), 'El mensaje de estado debe informar las semanas cotizadas del asegurado');
-    // Verificar que permanece editable por el usuario
-    semInput.value = '1620';
+    assert.strictEqual(Number(semInput.value), 1615, 'El campo semanas-cotizadas debe llenarse con 1615');
+    assert(statusDiv.innerHTML.includes('Semanas cotizadas de GARDUÑO FLORES EFRAIN:'), 'El status debe mostrar el nombre del asegurado');
+    assert(statusDiv.innerHTML.includes('1615 semanas'), 'El status debe mostrar 1615 semanas');
+    assert.strictEqual(labelSemanas.textContent, 'Semanas cotizadas de GARDUÑO FLORES EFRAIN:', 'El label debe cambiar dinámicamente con el nombre');
+
+    // 17.2 Verificar caso con 'Total de semanas cotizadas: 1573' y otro nombre
+    const sample1573 = 'Constancia de Semanas Cotizadas en el IMSS\nNombre del asegurado: JUAN PEREZ LOPEZ\nTotal de semanas cotizadas: 1573';
+    const info1573 = extractAseguradoInfo(sample1573);
+    assert.strictEqual(info1573.totalSemanasCotizadas, 1573, 'Debe extraer 1573 semanas directamente');
+    assert.strictEqual(info1573.nombreAsegurado, 'JUAN PEREZ LOPEZ', 'Debe extraer JUAN PEREZ LOPEZ directamente');
+
+    win.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+            success: true,
+            salarioDiarioPromedio: 1800.00,
+            salarioDiarioPromedioFormateado: '$1,800.00',
+            diasTotales: 1750,
+            semanasConsideradas: 250,
+            totalSemanasCotizadas: info1573.totalSemanasCotizadas,
+            nombreAsegurado: info1573.nombreAsegurado,
+            periodosUtilizados: [{ dias: 1750, salarioDiario: 1800 }]
+        })
+    });
+    Object.defineProperty(inputPdf, 'files', { value: [{ name: 'otro_reporte.pdf', type: 'application/pdf' }], writable: true });
+    inputPdf.dispatchEvent(new win.Event('change'));
+    await new Promise(r => setTimeout(r, 60));
+
+    assert.strictEqual(Number(semInput.value), 1573, 'Al cambiar archivo debe actualizar a 1573');
+    assert.strictEqual(labelSemanas.textContent, 'Semanas cotizadas de JUAN PEREZ LOPEZ:', 'Al cambiar archivo debe actualizar el nombre dinámicamente');
+
+    // 17.3 Verificar que el campo permanece 100% editable por el usuario
+    semInput.value = '1580';
     semInput.dispatchEvent(new win.Event('input'));
-    assert.strictEqual(semInput.value, '1620', 'El usuario debe poder modificar libremente las semanas cotizadas');
-    console.log('   OK - Semanas cotizadas llenadas automáticamente desde PDF y 100% editables.');
+    assert.strictEqual(semInput.value, '1580', 'El usuario debe poder modificar libremente las semanas cotizadas');
+
+    // 17.4 Limpiar formulario resetea el label
+    const btnLimpiar = win.document.getElementById('btn-limpiar-formulario');
+    if (btnLimpiar) {
+        btnLimpiar.dispatchEvent(new win.Event('click'));
+        assert.strictEqual(labelSemanas.textContent, 'Semanas cotizadas:', 'Limpiar formulario debe resetear el label');
+    }
+    console.log('   OK - Semanas cotizadas y nombre extraídos directamente del PDF y actualizados dinámicamente en UI.');
 
     console.log('\n=== TODAS LAS PRUEBAS OBLIGATORIAS PASARON EXITOSAMENTE ===');
     process.exit(0);

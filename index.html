@@ -2063,6 +2063,10 @@
                     if (pdfSemanasInput) {
                         pdfSemanasInput.value = '';
                     }
+                    const labelSemanasReset = document.querySelector('label[for="semanas-cotizadas"]');
+                    if (labelSemanasReset) {
+                        labelSemanasReset.textContent = 'Semanas cotizadas:';
+                    }
                 });
             }
 
@@ -2179,8 +2183,23 @@
                                 ? '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\">Se consideraron <strong>' + (data.semanasConsideradas || 250) + '</strong> semanas de cotización en <strong>' + data.periodosUtilizados.length + '</strong> periodo(s).</div>'
                                 : '';
 
+                            const nombreDisplay = (data.nombreAsegurado && typeof data.nombreAsegurado === 'string' && data.nombreAsegurado.trim().length > 0)
+                                ? data.nombreAsegurado.trim()
+                                : null;
+
+                            const labelSemanasTexto = nombreDisplay
+                                ? ('Semanas cotizadas de ' + nombreDisplay + ':')
+                                : 'Semanas cotizadas del asegurado:';
+
+                            const labelSemanasCotizadasInput = document.querySelector('label[for="semanas-cotizadas"]');
+                            if (labelSemanasCotizadasInput) {
+                                labelSemanasCotizadasInput.textContent = nombreDisplay
+                                    ? ('Semanas cotizadas de ' + nombreDisplay + ':')
+                                    : 'Semanas cotizadas:';
+                            }
+
                             const semanasDocInfo = semanasExtraidas
-                                ? '<div style=\"font-size: 0.85em; color: #155724; margin-top: 3px;\"><strong>Semanas cotizadas del asegurado:</strong> <span style=\"font-weight: bold; color: #155724;\">' + semanasExtraidas + ' semanas</span></div>'
+                                ? '<div style=\"font-size: 0.85em; color: #155724; margin-top: 3px;\"><strong>' + labelSemanasTexto + '</strong> <span style=\"font-weight: bold; color: #155724;\">' + semanasExtraidas + ' semanas</span></div>'
                                 : '';
 
                             const warningResumen = data.esReporteResumen
@@ -2211,6 +2230,10 @@
                                 btnReemplazar.addEventListener('click', () => {
                                     detenerCronometro();
                                     pdfSemanasInput.value = '';
+                                    const labelSemanasReset = document.querySelector('label[for="semanas-cotizadas"]');
+                                    if (labelSemanasReset) {
+                                        labelSemanasReset.textContent = 'Semanas cotizadas:';
+                                    }
                                     pdfSemanasInput.click();
                                 });
                             }
