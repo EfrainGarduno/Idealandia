@@ -155,6 +155,19 @@
         <section id="register" class="content-section" style="display: none;">
             <h2>Registrarse</h2>
             <div class="pension-form">
+                <div class="form-group registro-tipo-group">
+                    <label class="registro-tipo-label">¿Cómo deseas registrarte?</label>
+                    <div class="registro-tipo-options">
+                        <label class="radio-option">
+                            <input type="radio" name="reg-tipo-registro" id="reg-tipo-usuario" value="usuario" checked>
+                            <span>Usuario</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="reg-tipo-registro" id="reg-tipo-asociado" value="asociado">
+                            <span>Asociado</span>
+                        </label>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label for="reg-usuario">Usuario:</label>
                     <input type="text" id="reg-usuario" name="reg-usuario" autocomplete="username">
@@ -220,7 +233,77 @@
                     </div>
                     <span class="field-error-msg" id="error-reg-telefono"></span>
                 </div>
+
+                <!-- Campos específicos para Asociado -->
+                <div id="campos-asociado" style="display: none;">
+                    <div class="form-group">
+                        <label for="reg-servicio">Servicio que ofreces:</label>
+                        <select id="reg-servicio" name="reg-servicio">
+                            <option value="">Seleccionar servicio...</option>
+                        </select>
+                        <span class="field-error-msg" id="error-reg-servicio"></span>
+                    </div>
+                    <div class="form-group" id="group-servicio-otro" style="display: none;">
+                        <label for="reg-servicio-otro">¿Cuál es el servicio que ofreces?</label>
+                        <input type="text" id="reg-servicio-otro" name="reg-servicio-otro" placeholder="Especifica el servicio que ofreces...">
+                        <span class="field-error-msg" id="error-reg-servicio-otro"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-descripcion">Describe detalladamente el servicio que ofreces:</label>
+                        <textarea id="reg-descripcion" name="reg-descripcion" rows="4" placeholder="Describe detalladamente el servicio que ofreces..."></textarea>
+                        <span class="field-error-msg" id="error-reg-descripcion"></span>
+                    </div>
+                </div>
+
                 <button id="btn-register" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Registrarse</button>
+            </div>
+        </section>
+
+        <!-- Pantalla de Validación de Correo para Asociados -->
+        <section id="asociado-verificacion" class="content-section" style="display: none;">
+            <div class="asociado-card" style="max-width: 600px; margin: 30px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center;">
+                <div id="asociado-verif-icon" style="font-size: 48px; margin-bottom: 20px; color: #007bff;"><i class="fas fa-spinner fa-spin"></i></div>
+                <h2 id="asociado-verif-title">Validando correo electrónico...</h2>
+                <p id="asociado-verif-message" style="font-size: 16px; color: #555; line-height: 1.6;">Por favor espera mientras validamos tu enlace.</p>
+                <div style="margin-top: 25px;">
+                    <button type="button" id="btn-asociado-verif-volver" class="btn btn-primary" style="padding: 10px 24px; border: none; border-radius: 4px; background-color: #007bff; color: white; font-size: 15px; cursor: pointer;">Ir al Inicio</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Portal "Más Información" para Asociados -->
+        <section id="asociado-portal" class="content-section" style="display: none;">
+            <div class="asociado-card" style="max-width: 700px; margin: 30px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <h2 style="color: #2c3e50; border-bottom: 2px solid #e9ecef; padding-bottom: 12px; margin-bottom: 20px;">Tu solicitud requiere información adicional</h2>
+                <div class="asociado-info-box" style="background: #f8f9fa; padding: 15px 20px; border-radius: 6px; margin-bottom: 20px;">
+                    <p style="margin: 4px 0;"><strong>Nombre:</strong> <span id="portal-candidato-nombre"></span></p>
+                    <p style="margin: 4px 0;"><strong>Correo:</strong> <span id="portal-candidato-email"></span></p>
+                </div>
+                <div class="asociado-observaciones-box" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px 20px; border-radius: 4px; margin-bottom: 25px; color: #856404;">
+                    <h4 style="margin: 0 0 8px 0;"><i class="fas fa-info-circle"></i> Observaciones de Idealandia:</h4>
+                    <p id="portal-observaciones-texto" style="margin: 0; line-height: 1.6;"></p>
+                </div>
+                <div class="pension-form">
+                    <input type="hidden" id="portal-token">
+                    <div class="form-group">
+                        <label for="portal-servicio">Servicio que ofreces:</label>
+                        <select id="portal-servicio">
+                            <option value="">Seleccionar servicio...</option>
+                        </select>
+                        <span class="field-error-msg" id="error-portal-servicio"></span>
+                    </div>
+                    <div class="form-group" id="portal-group-servicio-otro" style="display: none;">
+                        <label for="portal-servicio-otro">¿Cuál es el servicio que ofreces?</label>
+                        <input type="text" id="portal-servicio-otro" placeholder="Especifica el servicio que ofreces...">
+                        <span class="field-error-msg" id="error-portal-servicio-otro"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="portal-descripcion">Describe detalladamente el servicio que ofreces:</label>
+                        <textarea id="portal-descripcion" rows="5" placeholder="Por favor especifica qué incluye el servicio y qué experiencia tienes..."></textarea>
+                        <span class="field-error-msg" id="error-portal-descripcion"></span>
+                    </div>
+                    <button type="button" id="btn-portal-actualizar" style="padding: 12px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 15px; font-weight: bold;">Actualizar solicitud</button>
+                </div>
             </div>
         </section>
 
@@ -573,6 +656,7 @@
                 <button class="admin-tab-btn" data-tab="admin-funcionalidades">Funcionalidades</button>
                 <button class="admin-tab-btn" data-tab="admin-menus">Menús</button>
                 <button class="admin-tab-btn" data-tab="admin-accesos">Accesos Temporales</button>
+                <button class="admin-tab-btn" data-tab="admin-asociados">Asociados</button>
             </div>
 
             <div class="admin-tab-content active" id="admin-usuarios">
@@ -702,7 +786,54 @@
                     </table>
                 </div>
             </div>
+
+            <div class="admin-tab-content" id="admin-asociados">
+                <div class="admin-header">
+                    <h3>Gestión de Solicitudes de Asociados</h3>
+                </div>
+                <div class="admin-filters-bar" style="margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="btn-filter-asociado active" data-status="">Todos</button>
+                    <button type="button" class="btn-filter-asociado" data-status="por_aprobar">Por aprobar</button>
+                    <button type="button" class="btn-filter-asociado" data-status="mas_informacion">Más información</button>
+                    <button type="button" class="btn-filter-asociado" data-status="autorizado">Autorizados</button>
+                    <button type="button" class="btn-filter-asociado" data-status="rechazado">Rechazados</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="admin-asociados-table" id="tabla-admin-asociados">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Candidato</th>
+                                <th>Usuario</th>
+                                <th>Correo</th>
+                                <th>Teléfono</th>
+                                <th>Servicio</th>
+                                <th>Estado</th>
+                                <th>Correo Validado</th>
+                                <th>Fecha Solicitud</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-asociados-tbody">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </section>
+
+        <!-- Modal Detalle de Asociado -->
+        <div id="modal-asociado-detalle" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 650px; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #2c3e50;">Detalle de Solicitud de Asociado</h3>
+                    <button type="button" id="btn-cerrar-modal-asociado" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666;" aria-label="Cerrar">&times;</button>
+                </div>
+                <div id="modal-asociado-detalle-body">
+                    <!-- Rellenado dinámicamente -->
+                </div>
+            </div>
+        </div>
 
         <section id="chat" class="content-section chat-section-override" style="display: none;">
             <div id="chat-container">
@@ -2395,6 +2526,161 @@
                 }, 100);
             }
 
+            // Check for verificar_correo in URL
+            const tokenVerificarCorreo = urlParams.get('verificar_correo');
+            const tokenAsociadoPortal = urlParams.get('asociado_token');
+
+            if (tokenVerificarCorreo) {
+                setTimeout(async () => {
+                    const sections = document.querySelectorAll('.content-section');
+                    sections.forEach(s => s.style.display = 'none');
+                    const secVerif = document.getElementById('asociado-verificacion');
+                    if (secVerif) secVerif.style.display = 'block';
+
+                    const iconEl = document.getElementById('asociado-verif-icon');
+                    const titleEl = document.getElementById('asociado-verif-title');
+                    const msgEl = document.getElementById('asociado-verif-message');
+
+                    try {
+                        const res = await fetch(`/api/asociados/verificar-correo/${encodeURIComponent(tokenVerificarCorreo)}`);
+                        const data = await res.json();
+                        if (res.ok) {
+                            if (iconEl) iconEl.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i>';
+                            if (titleEl) titleEl.textContent = '¡Correo validado correctamente!';
+                            if (msgEl) msgEl.textContent = data.message || 'Tu solicitud como Asociado ha sido recibida y está pendiente de revisión por parte de Idealandia.';
+                        } else {
+                            if (iconEl) iconEl.innerHTML = '<i class="fas fa-exclamation-circle" style="color: #dc3545;"></i>';
+                            if (titleEl) titleEl.textContent = 'Error al validar correo';
+                            if (msgEl) msgEl.textContent = data.error || 'El enlace de validación es inválido o ha expirado (vigencia de 10 minutos).';
+                        }
+                    } catch (err) {
+                        if (iconEl) iconEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #ffc107;"></i>';
+                        if (titleEl) titleEl.textContent = 'Error de conexión';
+                        if (msgEl) msgEl.textContent = 'No se pudo contactar con el servidor. Por favor intenta más tarde.';
+                    } finally {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                }, 100);
+            }
+
+            const btnVerifVolver = document.getElementById('btn-asociado-verif-volver');
+            if (btnVerifVolver) {
+                btnVerifVolver.addEventListener('click', () => {
+                    const inicioLink = document.querySelector('a[data-section="inicio"]');
+                    if (inicioLink) inicioLink.click();
+                });
+            }
+
+            // Check for asociado_token in URL (Portal "Más Información")
+            if (tokenAsociadoPortal) {
+                setTimeout(async () => {
+                    const sections = document.querySelectorAll('.content-section');
+                    sections.forEach(s => s.style.display = 'none');
+                    const secPortal = document.getElementById('asociado-portal');
+                    if (secPortal) secPortal.style.display = 'block';
+
+                    try {
+                        const res = await fetch(`/api/asociados/solicitud/${encodeURIComponent(tokenAsociadoPortal)}`);
+                        const data = await res.json();
+                        if (res.ok && data.solicitud) {
+                            const sol = data.solicitud;
+                            document.getElementById('portal-token').value = tokenAsociadoPortal;
+                            document.getElementById('portal-candidato-nombre').textContent = sol.usuario_nombre || '';
+                            document.getElementById('portal-candidato-email').textContent = sol.usuario_email || '';
+                            document.getElementById('portal-observaciones-texto').textContent = sol.observaciones || 'Se requiere complementar la información de tu servicio.';
+
+                            const portalServicioSelect = document.getElementById('portal-servicio');
+                            await populateServiciosSelect(portalServicioSelect, sol.servicio_id);
+
+                            const portalGroupOtro = document.getElementById('portal-group-servicio-otro');
+                            const portalServicioOtroInput = document.getElementById('portal-servicio-otro');
+                            if (sol.servicio_id === 999) {
+                                if (portalGroupOtro) portalGroupOtro.style.display = 'block';
+                                if (portalServicioOtroInput) portalServicioOtroInput.value = sol.nombre_servicio_otro || '';
+                            }
+
+                            if (portalServicioSelect) {
+                                portalServicioSelect.addEventListener('change', () => {
+                                    if (portalGroupOtro) {
+                                        portalGroupOtro.style.display = (portalServicioSelect.value === '999') ? 'block' : 'none';
+                                    }
+                                });
+                            }
+
+                            const portalDescTextarea = document.getElementById('portal-descripcion');
+                            if (portalDescTextarea) {
+                                portalDescTextarea.value = sol.descripcion_servicio || '';
+                            }
+
+                        } else {
+                            showModal(data.error || 'El enlace para actualizar tu solicitud es inválido o ha expirado.');
+                            const inicioLink = document.querySelector('a[data-section="inicio"]');
+                            if (inicioLink) inicioLink.click();
+                        }
+                    } catch (e) {
+                        console.error('Error cargando portal asociado:', e);
+                        showModal('Error al conectar con el servidor.');
+                    } finally {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                }, 100);
+            }
+
+            // Handler para actualizar solicitud en portal
+            const btnPortalActualizar = document.getElementById('btn-portal-actualizar');
+            if (btnPortalActualizar) {
+                btnPortalActualizar.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const token = document.getElementById('portal-token').value;
+                    const servicioId = document.getElementById('portal-servicio').value;
+                    const servicioOtro = document.getElementById('portal-servicio-otro').value.trim();
+                    const descripcion = document.getElementById('portal-descripcion').value.trim();
+
+                    if (!servicioId) {
+                        showModal('Debes seleccionar un servicio.');
+                        return;
+                    }
+                    if (servicioId === '999' && (!servicioOtro || servicioOtro.length < 3)) {
+                        showModal('Debes especificar el nombre de tu servicio (mínimo 3 caracteres).');
+                        return;
+                    }
+                    if (!descripcion || descripcion.length < 10) {
+                        showModal('Por favor proporciona una descripción detallada (mínimo 10 caracteres).');
+                        return;
+                    }
+
+                    try {
+                        btnPortalActualizar.disabled = true;
+                        btnPortalActualizar.textContent = 'Actualizando...';
+                        const res = await fetch('/api/asociados/solicitud/actualizar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                token,
+                                servicio_id: servicioId,
+                                servicio_otro: servicioId === '999' ? servicioOtro : null,
+                                descripcion_servicio: descripcion
+                            })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            showModal(data.message || 'Solicitud actualizada exitosamente.');
+                            const inicioLink = document.querySelector('a[data-section="inicio"]');
+                            if (inicioLink) inicioLink.click();
+                        } else {
+                            showModal(`Error: ${data.error}`);
+                            btnPortalActualizar.disabled = false;
+                            btnPortalActualizar.textContent = 'Actualizar solicitud';
+                        }
+                    } catch (err) {
+                        console.error('Error al actualizar solicitud:', err);
+                        showModal('Error interno al actualizar la solicitud.');
+                        btnPortalActualizar.disabled = false;
+                        btnPortalActualizar.textContent = 'Actualizar solicitud';
+                    }
+                });
+            }
+
             // Reset Password Logic
             const btnReset = document.getElementById('btn-reset');
             if (btnReset) {
@@ -2559,6 +2845,73 @@
             const regTelefonoInput = document.getElementById('reg-telefono');
             const regCodigoPaisSelect = document.getElementById('reg-codigo-pais');
             const btnRegisterNewUser = document.getElementById('btn-register');
+
+            // Elementos de Registro para Asociados
+            const regTipoUsuarioRadio = document.getElementById('reg-tipo-usuario');
+            const regTipoAsociadoRadio = document.getElementById('reg-tipo-asociado');
+            const regCamposAsociado = document.getElementById('campos-asociado');
+            const regServicioSelect = document.getElementById('reg-servicio');
+            const regGroupServicioOtro = document.getElementById('group-servicio-otro');
+            const regServicioOtroInput = document.getElementById('reg-servicio-otro');
+            const regDescripcionTextarea = document.getElementById('reg-descripcion');
+
+            let serviciosCatalogLoaded = false;
+            async function loadServiciosCatalog() {
+                if (serviciosCatalogLoaded || !regServicioSelect) return;
+                try {
+                    const res = await fetch('/api/servicios');
+                    const data = await res.json();
+                    const serviciosList = Array.isArray(data) ? data : (data && Array.isArray(data.servicios) ? data.servicios : []);
+                    if (serviciosList.length > 0) {
+                        regServicioSelect.innerHTML = '<option value="">Seleccionar servicio...</option>';
+                        serviciosList.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s.id;
+                            opt.textContent = s.nombre;
+                            regServicioSelect.appendChild(opt);
+                        });
+                        serviciosCatalogLoaded = true;
+                    }
+                } catch (err) {
+                    console.error('Error al cargar catálogo de servicios:', err);
+                }
+            }
+
+            function toggleRegistroTipo() {
+                const isAsociado = regTipoAsociadoRadio && regTipoAsociadoRadio.checked;
+                if (regCamposAsociado) {
+                    regCamposAsociado.style.display = isAsociado ? 'block' : 'none';
+                }
+                if (isAsociado) {
+                    loadServiciosCatalog();
+                } else {
+                    ['error-reg-servicio', 'error-reg-servicio-otro', 'error-reg-descripcion'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) { el.textContent = ''; el.classList.remove('visible'); }
+                    });
+                    if (regServicioSelect) regServicioSelect.classList.remove('input-invalid', 'input-valid');
+                    if (regServicioOtroInput) regServicioOtroInput.classList.remove('input-invalid', 'input-valid');
+                    if (regDescripcionTextarea) regDescripcionTextarea.classList.remove('input-invalid', 'input-valid');
+                }
+            }
+
+            if (regTipoUsuarioRadio) regTipoUsuarioRadio.addEventListener('change', toggleRegistroTipo);
+            if (regTipoAsociadoRadio) regTipoAsociadoRadio.addEventListener('change', toggleRegistroTipo);
+
+            if (regServicioSelect) {
+                regServicioSelect.addEventListener('change', () => {
+                    const isOtro = regServicioSelect.value === '999';
+                    if (regGroupServicioOtro) {
+                        regGroupServicioOtro.style.display = isOtro ? 'block' : 'none';
+                    }
+                    if (regServicioSelect.classList.contains('input-invalid') || regServicioSelect.classList.contains('input-valid')) {
+                        validateServicio(true);
+                    }
+                    if (isOtro && regServicioOtroInput && (regServicioOtroInput.classList.contains('input-invalid') || regServicioOtroInput.classList.contains('input-valid'))) {
+                        validateServicioOtro(true);
+                    }
+                });
+            }
 
             // 1. Alternar visualización de contraseña ("ojito")
             function setupPasswordToggle(btnId, inputId) {
@@ -2795,6 +3148,42 @@
                 return setFieldFeedback(regTelefonoInput, 'error-reg-telefono', error, showError);
             }
 
+            // Validaciones específicas para Asociado
+            function validateServicio(showError = false) {
+                if (!regServicioSelect) return true;
+                const val = regServicioSelect.value;
+                let error = '';
+                if (!val) {
+                    error = 'Debes seleccionar un servicio.';
+                }
+                return setFieldFeedback(regServicioSelect, 'error-reg-servicio', error, showError);
+            }
+
+            function validateServicioOtro(showError = false) {
+                if (!regServicioSelect || regServicioSelect.value !== '999') return true;
+                if (!regServicioOtroInput) return true;
+                const val = regServicioOtroInput.value.trim();
+                let error = '';
+                if (!val) {
+                    error = 'Debes especificar el nombre del servicio que ofreces.';
+                } else if (val.length < 3) {
+                    error = 'El nombre del servicio debe tener al menos 3 caracteres.';
+                }
+                return setFieldFeedback(regServicioOtroInput, 'error-reg-servicio-otro', error, showError);
+            }
+
+            function validateDescripcion(showError = false) {
+                if (!regDescripcionTextarea) return true;
+                const val = regDescripcionTextarea.value.trim();
+                let error = '';
+                if (!val) {
+                    error = 'La descripción detallada del servicio es obligatoria.';
+                } else if (val.length < 10) {
+                    error = 'Por favor describe detalladamente tu servicio (mínimo 10 caracteres).';
+                }
+                return setFieldFeedback(regDescripcionTextarea, 'error-reg-descripcion', error, showError);
+            }
+
             // 5. Vincular listeners de interacción (blur e input dinámico)
             function attachValidationListeners(inputEl, validatorFn) {
                 if (!inputEl) return;
@@ -2812,6 +3201,8 @@
             attachValidationListeners(regNombreInput, validateNombre);
             attachValidationListeners(regCorreoInput, validateCorreo);
             attachValidationListeners(regTelefonoInput, validateTelefono);
+            attachValidationListeners(regServicioOtroInput, validateServicioOtro);
+            attachValidationListeners(regDescripcionTextarea, validateDescripcion);
 
             if (regPasswordInput) {
                 regPasswordInput.addEventListener('input', () => {
@@ -2852,6 +3243,8 @@
                 btnRegisterNewUser.addEventListener('click', async (e) => {
                     e.preventDefault();
 
+                    const isAsociado = regTipoAsociadoRadio && regTipoAsociadoRadio.checked;
+
                     const isUsuarioValid = validateUsuario(true);
                     const isNombreValid = validateNombre(true);
                     const isCorreoValid = validateCorreo(true);
@@ -2859,7 +3252,18 @@
                     const isPasswordRepValid = validatePasswordRep(true);
                     const isTelefonoValid = validateTelefono(true);
 
-                    if (!isUsuarioValid || !isNombreValid || !isCorreoValid || !isPasswordValid || !isPasswordRepValid || !isTelefonoValid) {
+                    let isServicioValid = true;
+                    let isServicioOtroValid = true;
+                    let isDescripcionValid = true;
+
+                    if (isAsociado) {
+                        isServicioValid = validateServicio(true);
+                        isServicioOtroValid = validateServicioOtro(true);
+                        isDescripcionValid = validateDescripcion(true);
+                    }
+
+                    if (!isUsuarioValid || !isNombreValid || !isCorreoValid || !isPasswordValid || !isPasswordRepValid || !isTelefonoValid ||
+                        (isAsociado && (!isServicioValid || !isServicioOtroValid || !isDescripcionValid))) {
                         const firstInvalid = document.querySelector('#register .input-invalid');
                         if (firstInvalid) firstInvalid.focus();
                         return;
@@ -2888,21 +3292,30 @@
                         }
                     }
 
+                    const payload = {
+                        usuario,
+                        password,
+                        'password-rep': passwordRep,
+                        nombre,
+                        correo,
+                        telefono: formattedTelefono,
+                        codigo_pais: codigoPais,
+                        tipo_registro: isAsociado ? 'asociado' : 'usuario'
+                    };
+
+                    if (isAsociado) {
+                        payload.servicio_id = regServicioSelect ? regServicioSelect.value : '';
+                        payload.servicio_otro = (regServicioSelect && regServicioSelect.value === '999' && regServicioOtroInput) ? regServicioOtroInput.value.trim() : null;
+                        payload.descripcion_servicio = regDescripcionTextarea ? regDescripcionTextarea.value.trim() : '';
+                    }
+
                     try {
                         const response = await fetch('/api/register', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({
-                                usuario,
-                                password,
-                                'password-rep': passwordRep,
-                                nombre,
-                                correo,
-                                telefono: formattedTelefono,
-                                codigo_pais: codigoPais
-                            })
+                            body: JSON.stringify(payload)
                         });
 
                         const data = await response.json();
@@ -2918,7 +3331,14 @@
                             regTelefonoInput.value = '';
                             if (regCodigoPaisSelect) regCodigoPaisSelect.value = 'MX';
 
-                            [regUsuarioInput, regNombreInput, regCorreoInput, regPasswordInput, regPasswordRepInput, regTelefonoInput].forEach(input => {
+                            if (regServicioSelect) regServicioSelect.value = '';
+                            if (regServicioOtroInput) regServicioOtroInput.value = '';
+                            if (regDescripcionTextarea) regDescripcionTextarea.value = '';
+                            if (regGroupServicioOtro) regGroupServicioOtro.style.display = 'none';
+                            if (regCamposAsociado) regCamposAsociado.style.display = 'none';
+                            if (regTipoUsuarioRadio) regTipoUsuarioRadio.checked = true;
+
+                            [regUsuarioInput, regNombreInput, regCorreoInput, regPasswordInput, regPasswordRepInput, regTelefonoInput, regServicioSelect, regServicioOtroInput, regDescripcionTextarea].forEach(input => {
                                 if (input) {
                                     input.classList.remove('input-valid', 'input-invalid');
                                 }
@@ -2929,10 +3349,12 @@
                             });
                             updatePasswordChecklist('');
 
-                            // Redirigir a la vista de login tras registro exitoso
-                            const loginLink = document.querySelector('a[data-section="login"]');
-                            if (loginLink) {
-                                loginLink.click();
+                            if (!isAsociado) {
+                                // Redirigir a la vista de login tras registro exitoso normal
+                                const loginLink = document.querySelector('a[data-section="login"]');
+                                if (loginLink) {
+                                    loginLink.click();
+                                }
                             }
                         } else {
                             showModal(`Error: ${data.error}`);

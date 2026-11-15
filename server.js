@@ -18,6 +18,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const crypto = require('crypto');
 const { parsePhoneNumber, isValidPhoneNumber } = require('libphonenumber-js');
 
 
@@ -29,6 +30,17 @@ async function verifyToken(token, connectionPool) {
     const [users] = await connectionPool.execute('SELECT jwt_version FROM usuarios WHERE id = ?', [decoded.id]);
     if (users.length === 0) {
         throw new Error('Usuario no encontrado');
+    }
+
+    // Verificar si el usuario está activo (en BD real)
+    try {
+        const [activoRows] = await connectionPool.execute('SELECT activo FROM usuarios WHERE id = ?', [decoded.id]);
+        if (activoRows.length > 0 && (activoRows[0].activo === 0 || activoRows[0].activo === false)) {
+            throw new Error('Usuario inactivo');
+        }
+    } catch (e) {
+        if (e.message === 'Usuario inactivo') throw e;
+        // Si el mock no implementa SELECT activo, continuar normalmente
     }
 
     const currentVersion = users[0].jwt_version || 1;
@@ -104,7 +116,8 @@ const ADMIN_PERMISOS = [
     'roles.read', 'roles.create', 'roles.update', 'roles.delete',
     'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete',
     'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete',
-    'menus.read', 'menus.create', 'menus.update', 'menus.delete'
+    'menus.read', 'menus.create', 'menus.update', 'menus.delete',
+    'asociados.read', 'asociados.autorizar', 'asociados.rechazar', 'asociados.pedir_informacion'
 ];
 
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
@@ -269,11 +282,9 @@ async function checkUserPermission(connectionPool, userId, permCode) {
 
 async function assignDefaultUserRole(connOrPool, userId) {
     if (!userId) {
-        throw new Error('ID de usuario inválido para asignación de rol por defecto.');
+        throw new Error('ID de usuario inválido para asignación de rol.');
     }
     const runner = connOrPool || pool;
-
-    // 1. Buscar rol 'usuario' por nombre de forma insensible a mayúsculas
     const [roleRows] = await runner.execute(
         "SELECT id, nombre, activo FROM roles WHERE LOWER(nombre) = 'usuario' LIMIT 1"
     );
@@ -287,23 +298,72 @@ async function assignDefaultUserRole(connOrPool, userId) {
         throw err;
     }
 
-    const defaultRole = roleRows[0];
-    const userRoleId = defaultRole.id;
+    const role = roleRows[0];
+    const roleId = role.id;
 
-    // 2. Prevenir asignación duplicada si el usuario ya cuenta con ese rol
+    if (!role.activo) {
+        const errMsg = 'Error de configuración RBAC: El rol "usuario" se encuentra inactivo.';
+        console.error(errMsg);
+        const err = new Error(errMsg);
+        err.statusCode = 500;
+        err.code = 'ROLE_USUARIO_INACTIVE';
+        throw err;
+    }
+
     const [existing] = await runner.execute(
         'SELECT 1 FROM usuario_roles WHERE usuario_id = ? AND rol_id = ? LIMIT 1',
-        [userId, userRoleId]
+        [userId, roleId]
     );
 
     if (!existing || existing.length === 0) {
         await runner.execute(
             'INSERT IGNORE INTO usuario_roles (usuario_id, rol_id) VALUES (?, ?)',
-            [userId, userRoleId]
+            [userId, roleId]
         );
     }
 
-    return userRoleId;
+    return roleId;
+}
+
+async function assignRoleByName(connOrPool, userId, roleName) {
+    if (roleName && roleName.toLowerCase() === 'usuario') {
+        const res = await assignDefaultUserRole(connOrPool, userId);
+        return res.roleId;
+    }
+    if (!userId) {
+        throw new Error('ID de usuario inválido para asignación de rol.');
+    }
+    const runner = connOrPool || pool;
+    const [roleRows] = await runner.execute(
+        "SELECT id, nombre, activo FROM roles WHERE LOWER(nombre) = LOWER(?) LIMIT 1",
+        [roleName]
+    );
+
+    if (!roleRows || roleRows.length === 0) {
+        const errMsg = `Error de configuración RBAC: El rol "${roleName}" no existe en el sistema.`;
+        console.error(errMsg);
+        const err = new Error(errMsg);
+        err.statusCode = 500;
+        err.code = `ROLE_${roleName.toUpperCase()}_NOT_FOUND`;
+        throw err;
+    }
+
+    const role = roleRows[0];
+    const roleId = role.id;
+
+    const [existing] = await runner.execute(
+        'SELECT 1 FROM usuario_roles WHERE usuario_id = ? AND rol_id = ? LIMIT 1',
+        [userId, roleId]
+    );
+
+    if (!existing || existing.length === 0) {
+        await runner.execute(
+            'INSERT IGNORE INTO usuario_roles (usuario_id, rol_id) VALUES (?, ?)',
+            [userId, roleId]
+        );
+    }
+
+    return roleId;
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -814,7 +874,24 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/register', async (req, res) => {
     let connection = null;
     try {
-        const { usuario, password, 'password-rep': passwordRep, nombre, correo, telefono, codigo_pais } = req.body;
+        const {
+            usuario,
+            password,
+            'password-rep': passwordRep,
+            nombre,
+            correo,
+            telefono,
+            codigo_pais,
+            tipo_registro,
+            servicio_id,
+            servicio_otro,
+            descripcion_servicio
+        } = req.body;
+
+        const tipoRegistro = (tipo_registro || 'usuario').toLowerCase().trim();
+        if (tipoRegistro !== 'usuario' && tipoRegistro !== 'asociado') {
+            return res.status(400).json({ error: 'Tipo de registro inválido.' });
+        }
 
         // 1. Validar Usuario (mínimo 2 caracteres)
         if (!usuario || typeof usuario !== 'string' || usuario.trim().length < 2) {
@@ -884,6 +961,48 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'El número de teléfono no es válido para el país seleccionado.' });
         }
 
+        // Validaciones específicas para Asociado
+        let parsedServicioId = null;
+        let cleanServicioOtro = null;
+        let cleanDescripcion = null;
+
+        if (tipoRegistro === 'asociado') {
+            parsedServicioId = parseInt(servicio_id, 10);
+            if (!parsedServicioId || isNaN(parsedServicioId)) {
+                return res.status(400).json({ error: 'Debes seleccionar un servicio válido.' });
+            }
+
+            const [servicioRows] = await pool.execute(
+                'SELECT id, nombre, activo FROM servicios WHERE id = ?',
+                [parsedServicioId]
+            );
+
+            if (servicioRows.length === 0 || !servicioRows[0].activo) {
+                return res.status(400).json({ error: 'El servicio seleccionado no existe o no está activo.' });
+            }
+
+            if (parsedServicioId === 999) {
+                if (!servicio_otro || typeof servicio_otro !== 'string' || servicio_otro.trim().length === 0) {
+                    return res.status(400).json({ error: 'Debes especificar el nombre de tu servicio cuando seleccionas "Otros".' });
+                }
+                cleanServicioOtro = servicio_otro.trim();
+                if (cleanServicioOtro.length < 3 || cleanServicioOtro.length > 150) {
+                    return res.status(400).json({ error: 'El nombre del servicio personalizado debe contener entre 3 y 150 caracteres.' });
+                }
+            }
+
+            if (!descripcion_servicio || typeof descripcion_servicio !== 'string' || descripcion_servicio.trim().length === 0) {
+                return res.status(400).json({ error: 'La descripción del servicio es obligatoria.' });
+            }
+            cleanDescripcion = descripcion_servicio.trim();
+            if (cleanDescripcion.length < 10) {
+                return res.status(400).json({ error: 'La descripción del servicio debe contener al menos 10 caracteres.' });
+            }
+            if (cleanDescripcion.length > 3000) {
+                return res.status(400).json({ error: 'La descripción del servicio no puede exceder 3000 caracteres.' });
+            }
+        }
+
         // Comprobar si el usuario o el correo ya existen
         const [existingUsers] = await pool.execute(
             'SELECT * FROM usuarios WHERE usuario = ? OR email = ?',
@@ -912,18 +1031,64 @@ app.post('/api/register', async (req, res) => {
         const hasTx = connection && typeof connection.beginTransaction === 'function';
         if (hasTx) await connection.beginTransaction();
 
-        // Insertar el nuevo usuario en la base de datos con teléfono E.164
-        const [result] = await connection.execute(
-            'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email) VALUES (?, ?, ?, ?, ?)',
-            [cleanUsuario, passwordHash, cleanNombre, formattedTelefono, cleanCorreo]
-        );
-        const newUserId = result.insertId;
+        if (tipoRegistro === 'asociado') {
+            // Insertar usuario inactivo (activo = 0)
+            const [result] = await connection.execute(
+                'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email, activo) VALUES (?, ?, ?, ?, ?, 0)',
+                [cleanUsuario, passwordHash, cleanNombre, formattedTelefono, cleanCorreo]
+            );
+            const newUserId = result.insertId;
 
-        // Asignar automáticamente el rol 'usuario' por defecto
-        await assignDefaultUserRole(connection, newUserId);
+            // Asignar rol Asociado
+            await assignRoleByName(connection, newUserId, 'Asociado');
 
-        if (hasTx) await connection.commit();
-        res.status(201).json({ message: 'Registro exitoso.' });
+            // Crear solicitud de asociado con estatus por_aprobar
+            const [solResult] = await connection.execute(
+                'INSERT INTO solicitudes_asociado (usuario_id, servicio_id, descripcion_servicio, nombre_servicio_otro, estatus) VALUES (?, ?, ?, ?, "por_aprobar")',
+                [newUserId, parsedServicioId, cleanDescripcion, cleanServicioOtro]
+            );
+            const newSolId = solResult.insertId;
+
+            // Registrar historial inicial
+            await connection.execute(
+                'INSERT INTO historial_solicitudes_asociado (solicitud_id, estatus_anterior, estatus_nuevo, usuario_id, observaciones) VALUES (?, NULL, "por_aprobar", ?, "Registro inicial como Asociado")',
+                [newSolId, newUserId]
+            );
+
+            // Generar token seguro para verificación de correo (vigencia 10 minutos)
+            const emailToken = crypto.randomBytes(32).toString('hex');
+            const tokenHash = crypto.createHash('sha256').update(emailToken).digest('hex');
+            await connection.execute(
+                'INSERT INTO verificaciones_correo (usuario_id, token_hash, expira_en) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))',
+                [newUserId, tokenHash]
+            );
+
+            if (hasTx) await connection.commit();
+
+            // Enviar correo de verificación (asíncrono y protegido contra errores SMTP)
+            sendAsociadoEmailVerificacion(cleanCorreo, cleanNombre, emailToken).catch(err => {
+                console.error('Error enviando correo de verificación de asociado:', err.message);
+            });
+
+            return res.status(201).json({
+                message: 'Registro exitoso como Asociado. Te hemos enviado un correo para validar tu dirección en los próximos 10 minutos.',
+                tipo: 'asociado'
+            });
+
+        } else {
+            // Insertar el nuevo usuario normal en la base de datos (activo = 1)
+            const [result] = await connection.execute(
+                'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email, activo) VALUES (?, ?, ?, ?, ?, 1)',
+                [cleanUsuario, passwordHash, cleanNombre, formattedTelefono, cleanCorreo]
+            );
+            const newUserId = result.insertId;
+
+            // Asignar automáticamente el rol 'usuario' por defecto
+            await assignDefaultUserRole(connection, newUserId);
+
+            if (hasTx) await connection.commit();
+            return res.status(201).json({ message: 'Registro exitoso.', tipo: 'usuario' });
+        }
 
     } catch (error) {
         if (connection && typeof connection.rollback === 'function') {
@@ -933,9 +1098,218 @@ app.post('/api/register', async (req, res) => {
         if (error.code === 'ROLE_USUARIO_NOT_FOUND') {
             return res.status(500).json({ error: 'No se pudo completar el registro: el rol "usuario" no se encuentra configurado en el sistema.' });
         }
+        if (error.code === 'ROLE_ASOCIADO_NOT_FOUND') {
+            return res.status(500).json({ error: 'No se pudo completar el registro: el rol "Asociado" no se encuentra configurado en el sistema.' });
+        }
         res.status(500).json({ error: 'Error interno del servidor durante el registro.' });
     } finally {
         if (connection && typeof connection.release === 'function') {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+app.get('/api/servicios', async (req, res) => {
+    try {
+        const [servicios] = await pool.execute(
+            'SELECT id, nombre, descripcion, activo FROM servicios WHERE activo = 1 ORDER BY (CASE WHEN id = 999 THEN 1 ELSE 0 END), id ASC'
+        );
+        res.status(200).json(servicios);
+    } catch (error) {
+        console.error('Error in /api/servicios:', error);
+        res.status(500).json({ error: 'Error al consultar catálogo de servicios.' });
+    }
+});
+
+// Endpoint de verificación de correo de Asociado (admite GET y POST)
+const handleVerificarCorreoAsociado = async (req, res) => {
+    try {
+        const token = (req.params && req.params.token) || (req.body && req.body.token) || (req.query && req.query.token);
+        if (!token) {
+            return res.status(400).json({ error: 'Token de validación requerido.' });
+        }
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+        const [rows] = await pool.execute(
+            'SELECT id, usuario_id, expira_en, usado, (expira_en > NOW()) as is_valid FROM verificaciones_correo WHERE token_hash = ? OR token_hash = ?',
+            [tokenHash, token]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'El enlace de validación es inválido o no existe.' });
+        }
+
+        const record = rows[0];
+        if (record.usado === 1) {
+            return res.status(400).json({ error: 'Este enlace de validación ya ha sido utilizado previamente.' });
+        }
+
+        if (!record.is_valid) {
+            return res.status(400).json({ error: 'El enlace de validación ha expirado. Su vigencia es de 10 minutos.' });
+        }
+
+        // Marcar token como utilizado
+        await pool.execute('UPDATE verificaciones_correo SET usado = 1 WHERE id = ?', [record.id]);
+
+        // Registrar en historial de la solicitud si existe
+        const [solicitudes] = await pool.execute('SELECT id FROM solicitudes_asociado WHERE usuario_id = ? ORDER BY id DESC LIMIT 1', [record.usuario_id]);
+        if (solicitudes.length > 0) {
+            await pool.execute(
+                'INSERT INTO historial_solicitudes_asociado (solicitud_id, estatus_anterior, estatus_nuevo, usuario_id, observaciones) VALUES (?, "por_aprobar", "por_aprobar", ?, "Correo electrónico validado exitosamente por el candidato")',
+                [solicitudes[0].id, record.usuario_id]
+            );
+        }
+
+        // IMPORTANTE: Validar correo NO activa la cuenta de usuario (usuarios.activo permanece en 0)
+        res.status(200).json({
+            success: true,
+            validado: true,
+            message: 'Correo validado correctamente. Tu solicitud como Asociado ha sido recibida y está pendiente de revisión por parte de Idealandia.'
+        });
+
+    } catch (error) {
+        console.error('Error in verificar-correo:', error);
+        res.status(500).json({ error: 'Error interno del servidor durante la validación de correo.' });
+    }
+};
+
+app.get('/api/asociados/verificar-correo', handleVerificarCorreoAsociado);
+app.get('/api/asociados/verificar-correo/:token', handleVerificarCorreoAsociado);
+app.post('/api/asociados/verificar-correo', handleVerificarCorreoAsociado);
+
+// Endpoint público para portal de "Más Información" (consulta por token seguro)
+app.get('/api/asociados/solicitud/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        if (!token) return res.status(400).json({ error: 'Token requerido.' });
+
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const [tokenRows] = await pool.execute(
+            'SELECT id, solicitud_id, expira_en, usado, (expira_en > NOW()) as is_valid FROM tokens_solicitud_asociado WHERE token_hash = ? OR token_hash = ?',
+            [tokenHash, token]
+        );
+
+        if (tokenRows.length === 0) {
+            return res.status(404).json({ error: 'El enlace de acceso a la solicitud es inválido.' });
+        }
+
+        const tRecord = tokenRows[0];
+        if (tRecord.usado === 1) {
+            return res.status(400).json({ error: 'Este enlace ya fue utilizado para actualizar la solicitud.' });
+        }
+
+        if (!tRecord.is_valid) {
+            return res.status(400).json({ error: 'El enlace de acceso ha expirado. Contacta a administración para solicitar un nuevo enlace.' });
+        }
+
+        const [solRows] = await pool.execute(`
+            SELECT s.id, s.servicio_id, s.descripcion_servicio, s.nombre_servicio_otro, s.estatus, s.observaciones, s.fecha_solicitud,
+                   u.nombre as usuario_nombre, u.email as usuario_email, sv.nombre as servicio_nombre
+            FROM solicitudes_asociado s
+            JOIN usuarios u ON s.usuario_id = u.id
+            JOIN servicios sv ON s.servicio_id = sv.id
+            WHERE s.id = ?
+        `, [tRecord.solicitud_id]);
+
+        if (solRows.length === 0) {
+            return res.status(404).json({ error: 'Solicitud no encontrada.' });
+        }
+
+        res.status(200).json({ solicitud: solRows[0] });
+    } catch (error) {
+        console.error('Error fetching solicitud by token:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Endpoint público para que el candidato actualice su solicitud vía token seguro
+app.post('/api/asociados/solicitud/actualizar', async (req, res) => {
+    let connection = null;
+    try {
+        const { token, servicio_id, servicio_otro, descripcion_servicio } = req.body;
+        if (!token) return res.status(400).json({ error: 'Token requerido.' });
+
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const [tokenRows] = await pool.execute(
+            'SELECT id, solicitud_id, expira_en, usado, (expira_en > NOW()) as is_valid FROM tokens_solicitud_asociado WHERE token_hash = ? OR token_hash = ?',
+            [tokenHash, token]
+        );
+
+        if (tokenRows.length === 0) {
+            return res.status(404).json({ error: 'El enlace de acceso a la solicitud es inválido.' });
+        }
+
+        const tRecord = tokenRows[0];
+        if (tRecord.usado === 1) {
+            return res.status(400).json({ error: 'Este enlace ya fue utilizado.' });
+        }
+
+        if (!tRecord.is_valid) {
+            return res.status(400).json({ error: 'El enlace de acceso ha expirado.' });
+        }
+
+        const parsedServicioId = parseInt(servicio_id, 10);
+        if (!parsedServicioId || isNaN(parsedServicioId)) {
+            return res.status(400).json({ error: 'Debes seleccionar un servicio válido.' });
+        }
+        const [servRows] = await pool.execute('SELECT id, activo FROM servicios WHERE id = ?', [parsedServicioId]);
+        if (servRows.length === 0 || !servRows[0].activo) {
+            return res.status(400).json({ error: 'El servicio seleccionado no existe o no está activo.' });
+        }
+
+        let cleanServicioOtro = null;
+        if (parsedServicioId === 999) {
+            if (!servicio_otro || typeof servicio_otro !== 'string' || servicio_otro.trim().length === 0) {
+                return res.status(400).json({ error: 'Debes especificar el nombre de tu servicio cuando seleccionas "Otros".' });
+            }
+            cleanServicioOtro = servicio_otro.trim();
+            if (cleanServicioOtro.length < 3 || cleanServicioOtro.length > 150) {
+                return res.status(400).json({ error: 'El nombre del servicio personalizado debe contener entre 3 y 150 caracteres.' });
+            }
+        }
+
+        if (!descripcion_servicio || typeof descripcion_servicio !== 'string' || descripcion_servicio.trim().length === 0) {
+            return res.status(400).json({ error: 'La descripción del servicio es obligatoria.' });
+        }
+        const cleanDesc = descripcion_servicio.trim();
+        if (cleanDesc.length < 10 || cleanDesc.length > 3000) {
+            return res.status(400).json({ error: 'La descripción debe tener entre 10 y 3000 caracteres.' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // Actualizar solicitud: vuelve a por_aprobar y usuario permanece inactivo
+        await connection.execute(`
+            UPDATE solicitudes_asociado
+            SET servicio_id = ?,
+                nombre_servicio_otro = ?,
+                descripcion_servicio = ?,
+                estatus = 'por_aprobar',
+                fecha_actualizacion = NOW()
+            WHERE id = ?
+        `, [parsedServicioId, cleanServicioOtro, cleanDesc, tRecord.solicitud_id]);
+
+        // Invalidar token usado
+        await connection.execute('UPDATE tokens_solicitud_asociado SET usado = 1 WHERE id = ?', [tRecord.id]);
+
+        // Registrar en historial
+        await connection.execute(`
+            INSERT INTO historial_solicitudes_asociado (solicitud_id, estatus_anterior, estatus_nuevo, observaciones)
+            VALUES (?, 'mas_informacion', 'por_aprobar', 'El candidato actualizó la información requerida')
+        `, [tRecord.solicitud_id]);
+
+        await connection.commit();
+        res.status(200).json({ message: 'Solicitud actualizada exitosamente. Tu información ha sido enviada a revisión nuevamente.' });
+
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error updating solicitud by token:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    } finally {
+        if (connection) {
             try { connection.release(); } catch (_) {}
         }
     }
@@ -950,7 +1324,7 @@ app.post('/api/login', async (req, res) => {
         }
 
         const [users] = await pool.execute(
-            'SELECT id, usuario, password_hash, nombre, telefono, email, jwt_version FROM usuarios WHERE usuario = ? OR email = ?',
+            'SELECT id, usuario, password_hash, nombre, telefono, email, jwt_version, activo FROM usuarios WHERE usuario = ? OR email = ?',
             [usuario, usuario]
         );
 
@@ -963,6 +1337,10 @@ app.post('/api/login', async (req, res) => {
 
         if (!isMatch) {
             return res.status(401).json({ error: 'Credenciales inválidas.' });
+        }
+
+        if (user.activo === 0 || user.activo === false) {
+            return res.status(403).json({ error: 'Tu cuenta se encuentra inactiva o pendiente de autorización.' });
         }
 
         const payload = {
@@ -996,7 +1374,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
 let mailTransporter = null;
@@ -1026,6 +1403,132 @@ function initMailTransporter(env = process.env) {
     return transporter;
 }
 if (!global.__TESTING__) mailTransporter = initMailTransporter();
+
+function escapeHTML(str) {
+    if (!str && str !== 0) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function sendAsociadoEmailVerificacion(email, nombre, token) {
+    if (!mailTransporter) return;
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const link = `${appUrl}/?verificar_correo=${token}`;
+    const subject = 'Valida tu correo electrónico para tu solicitud como Asociado — Idealandia';
+    const text = `Hola ${nombre}:\n\nTu correo electrónico debe ser validado para continuar con tu solicitud como Asociado de Idealandia.\n\nPor favor haz clic en el siguiente enlace para validar tu correo (válido únicamente por 10 minutos):\n${link}\n\nSi tú no realizaste este registro, por favor ignora este mensaje.\n\nAtentamente,\nEquipo Idealandia`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #2c3e50;">Bienvenido a Idealandia</h2>
+            <p>Hola <strong>${escapeHTML(nombre)}</strong>,</p>
+            <p>Tu correo electrónico debe ser validado para continuar con tu solicitud como <strong>Asociado</strong> de Idealandia.</p>
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="${link}" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Validar mi correo</a>
+            </p>
+            <p style="color: #666; font-size: 13px;">Este enlace expira en exactamente <strong>10 minutos</strong>.</p>
+            <p style="color: #666; font-size: 13px;">Si el botón no funciona, copia y pega el siguiente enlace en tu navegador:<br><a href="${link}">${link}</a></p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
+        </div>
+    `;
+    await mailTransporter.sendMail({
+        from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
+        to: email,
+        subject,
+        text,
+        html
+    });
+}
+
+async function sendAsociadoEmailAutorizado(email, nombre) {
+    if (!mailTransporter) return;
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const loginLink = `${appUrl}/?seccion=login`;
+    const subject = '¡Tu solicitud como Asociado ha sido autorizada! — Idealandia';
+    const text = `¡Hola ${nombre}!\n\n¡Tu solicitud para formar parte de Idealandia como Asociado ha sido autorizada!\n\nYa puedes acceder a Idealandia iniciando sesión con tu cuenta:\n${loginLink}\n\n¡Bienvenido al equipo de Asociados de Idealandia!\n\nAtentamente,\nEquipo Idealandia`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #28a745;">¡Felicitaciones!</h2>
+            <p>Hola <strong>${escapeHTML(nombre)}</strong>,</p>
+            <p><strong>¡Tu solicitud para formar parte de Idealandia como Asociado ha sido autorizada!</strong></p>
+            <p>A partir de este momento tu cuenta se encuentra activa y ya puedes iniciar sesión normalmente en la plataforma.</p>
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="${loginLink}" style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Acceder a Idealandia</a>
+            </p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
+        </div>
+    `;
+    await mailTransporter.sendMail({
+        from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
+        to: email,
+        subject,
+        text,
+        html
+    });
+}
+
+async function sendAsociadoEmailRechazado(email, nombre, observaciones) {
+    if (!mailTransporter) return;
+    const subject = 'Actualización sobre tu solicitud como Asociado — Idealandia';
+    const text = `Hola ${nombre}:\n\nTu solicitud para formar parte de Idealandia como Asociado no fue aprobada en esta ocasión.\n\nMotivo / observaciones:\n${observaciones}\n\nGracias por tu interés en Idealandia.\n\nAtentamente,\nEquipo Idealandia`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #dc3545;">Solicitud de Asociado</h2>
+            <p>Hola <strong>${escapeHTML(nombre)}</strong>,</p>
+            <p>Tu solicitud para formar parte de Idealandia como Asociado no fue aprobada en esta ocasión.</p>
+            <div style="background-color: #f8f9fa; border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; font-weight: bold; color: #333;">Observaciones:</p>
+                <p style="margin: 10px 0 0 0; color: #555;">${escapeHTML(observaciones).replace(/\n/g, '<br>')}</p>
+            </div>
+            <p>Agradecemos sinceramente tu interés en colaborar con Idealandia.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
+        </div>
+    `;
+    await mailTransporter.sendMail({
+        from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
+        to: email,
+        subject,
+        text,
+        html
+    });
+}
+
+async function sendAsociadoEmailMasInformacion(email, nombre, observaciones, token) {
+    if (!mailTransporter) return;
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const link = `${appUrl}/?asociado_token=${token}`;
+    const subject = 'Tu solicitud como Asociado requiere información adicional — Idealandia';
+    const text = `Hola ${nombre}:\n\nTu solicitud como Asociado de Idealandia requiere información adicional para poder ser procesada.\n\nObservaciones del equipo revisor:\n${observaciones}\n\nPor favor continúa con tu solicitud en el siguiente enlace:\n${link}\n\nAtentamente,\nEquipo Idealandia`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #ffc107;">Información adicional requerida</h2>
+            <p>Hola <strong>${escapeHTML(nombre)}</strong>,</p>
+            <p>Tu solicitud como Asociado de Idealandia requiere información adicional para continuar con el proceso de revisión.</p>
+            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; color: #856404;">
+                <p style="margin: 0; font-weight: bold;">Observaciones de Idealandia:</p>
+                <p style="margin: 10px 0 0 0;">${escapeHTML(observaciones).replace(/\n/g, '<br>')}</p>
+            </div>
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="${link}" style="background-color: #17a2b8; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Continuar con mi solicitud</a>
+            </p>
+            <p style="color: #666; font-size: 13px;">Si el botón no funciona, copia y pega el siguiente enlace:<br><a href="${link}">${link}</a></p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
+        </div>
+    `;
+    await mailTransporter.sendMail({
+        from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
+        to: email,
+        subject,
+        text,
+        html
+    });
+}
 
 // Export for test_smtp_config.js
 if (typeof module !== 'undefined' && module.exports) {
@@ -1504,7 +2007,7 @@ const requireFunctionality = (funcCode) => {
     return async (req, res, next) => {
         try {
             if (!req.userId) {
-                const token = req.cookies.auth_token;
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
                 if (!token) {
                     return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
                 }
@@ -1525,7 +2028,7 @@ const requireFunctionality = (funcCode) => {
             next();
         } catch (error) {
             console.error(`Error in requireFunctionality (${canonicalCode}):`, error);
-            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado') {
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
                 return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
             }
             return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
@@ -1537,7 +2040,7 @@ const requirePermission = (permCode) => {
     return async (req, res, next) => {
         try {
             if (!req.userId) {
-                const token = req.cookies.auth_token;
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
                 if (!token) {
                     return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
                 }
@@ -1558,7 +2061,7 @@ const requirePermission = (permCode) => {
             next();
         } catch (error) {
             console.error(`Error in requirePermission (${permCode}):`, error);
-            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado') {
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
                 return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
             }
             return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
@@ -2824,6 +3327,299 @@ app.get('/api/knowledge', async (req, res) => {
     }
 });
 
+// =============================================================================
+// ADMINISTRACIÓN DE ASOCIADOS
+// =============================================================================
+
+app.get('/api/admin/asociados', requireFunctionality('admin'), requirePermission('asociados.read'), async (req, res) => {
+    try {
+        const { estatus } = req.query;
+        let query = `
+            SELECT s.id, s.usuario_id, s.servicio_id, s.descripcion_servicio, s.nombre_servicio_otro,
+                   s.estatus, s.observaciones, s.fecha_solicitud, s.fecha_actualizacion, s.usuario_revisor_id,
+                   u.usuario, u.nombre, u.email, u.telefono, u.activo as usuario_activo,
+                   sv.nombre as servicio_nombre,
+                   EXISTS(SELECT 1 FROM verificaciones_correo vc WHERE vc.usuario_id = u.id AND vc.usado = 1) as correo_validado
+            FROM solicitudes_asociado s
+            JOIN usuarios u ON s.usuario_id = u.id
+            JOIN servicios sv ON s.servicio_id = sv.id
+        `;
+        const params = [];
+        if (estatus && ['por_aprobar', 'mas_informacion', 'autorizado', 'rechazado'].includes(estatus)) {
+            query += ' WHERE s.estatus = ?';
+            params.push(estatus);
+        }
+        query += ' ORDER BY s.fecha_solicitud DESC';
+
+        const [rows] = await pool.execute(query, params);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Error in GET /api/admin/asociados:', error);
+        res.status(500).json({ error: 'Error interno al consultar asociados.' });
+    }
+});
+
+app.get('/api/admin/asociados/:id', requireFunctionality('admin'), requirePermission('asociados.read'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [rows] = await pool.execute(`
+            SELECT s.id, s.usuario_id, s.servicio_id, s.descripcion_servicio, s.nombre_servicio_otro,
+                   s.estatus, s.observaciones, s.fecha_solicitud, s.fecha_actualizacion, s.usuario_revisor_id,
+                   u.usuario, u.nombre, u.email, u.telefono, u.activo as usuario_activo,
+                   sv.nombre as servicio_nombre,
+                   ur.nombre as revisor_nombre,
+                   EXISTS(SELECT 1 FROM verificaciones_correo vc WHERE vc.usuario_id = u.id AND vc.usado = 1) as correo_validado
+            FROM solicitudes_asociado s
+            JOIN usuarios u ON s.usuario_id = u.id
+            JOIN servicios sv ON s.servicio_id = sv.id
+            LEFT JOIN usuarios ur ON s.usuario_revisor_id = ur.id
+            WHERE s.id = ?
+        `, [id]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Solicitud no encontrada.' });
+        }
+
+        const [historial] = await pool.execute(`
+            SELECT h.id, h.estatus_anterior, h.estatus_nuevo, h.observaciones, h.fecha,
+                   u.usuario as usuario_nombre
+            FROM historial_solicitudes_asociado h
+            LEFT JOIN usuarios u ON h.usuario_id = u.id
+            WHERE h.solicitud_id = ?
+            ORDER BY h.fecha ASC
+        `, [id]);
+
+        res.status(200).json({ solicitud: rows[0], historial });
+    } catch (error) {
+        console.error('Error in GET /api/admin/asociados/:id:', error);
+        res.status(500).json({ error: 'Error interno al consultar detalle de solicitud.' });
+    }
+});
+
+app.post('/api/admin/asociados/:id/autorizar', requireFunctionality('admin'), requirePermission('asociados.autorizar'), async (req, res) => {
+    let connection = null;
+    try {
+        const { id } = req.params;
+        const adminId = req.userId;
+
+        const [solRows] = await pool.execute(`
+            SELECT s.id, s.usuario_id, s.estatus, u.nombre, u.email, u.activo,
+                   EXISTS(SELECT 1 FROM verificaciones_correo vc WHERE vc.usuario_id = u.id AND vc.usado = 1) as correo_validado,
+                   EXISTS(SELECT 1 FROM usuario_roles ur JOIN roles r ON ur.rol_id = r.id WHERE ur.usuario_id = u.id AND LOWER(r.nombre) = 'asociado') as tiene_rol_asociado
+            FROM solicitudes_asociado s
+            JOIN usuarios u ON s.usuario_id = u.id
+            WHERE s.id = ?
+        `, [id]);
+
+        if (solRows.length === 0) {
+            return res.status(404).json({ error: 'Solicitud no encontrada.' });
+        }
+
+        const sol = solRows[0];
+
+        if (!sol.tiene_rol_asociado) {
+            return res.status(400).json({ error: 'El usuario no cuenta con el rol de Asociado.' });
+        }
+
+        if (!sol.correo_validado) {
+            return res.status(400).json({ error: 'No se puede autorizar la solicitud: el correo electrónico del candidato aún no ha sido validado.' });
+        }
+
+        if (sol.estatus === 'autorizado') {
+            return res.status(400).json({ error: 'La solicitud ya ha sido autorizada previamente.' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Activar usuario
+        await connection.execute('UPDATE usuarios SET activo = 1 WHERE id = ?', [sol.usuario_id]);
+
+        // 2. Actualizar solicitud
+        await connection.execute(`
+            UPDATE solicitudes_asociado
+            SET estatus = 'autorizado',
+                usuario_revisor_id = ?,
+                fecha_actualizacion = NOW()
+            WHERE id = ?
+        `, [adminId, id]);
+
+        // 3. Registrar en historial
+        await connection.execute(`
+            INSERT INTO historial_solicitudes_asociado (solicitud_id, estatus_anterior, estatus_nuevo, usuario_id, observaciones)
+            VALUES (?, ?, 'autorizado', ?, 'Solicitud autorizada por el administrador')
+        `, [id, sol.estatus, adminId]);
+
+        await connection.commit();
+
+        // 4. Enviar correo de autorización
+        sendAsociadoEmailAutorizado(sol.email, sol.nombre).catch(err => {
+            console.error('Error enviando correo de autorización:', err.message);
+        });
+
+        res.status(200).json({ message: 'Solicitud autorizada exitosamente. La cuenta del asociado ha sido activada.' });
+
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in POST /api/admin/asociados/:id/autorizar:', error);
+        res.status(500).json({ error: 'Error interno al autorizar la solicitud.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+app.post('/api/admin/asociados/:id/rechazar', requireFunctionality('admin'), requirePermission('asociados.rechazar'), async (req, res) => {
+    let connection = null;
+    try {
+        const { id } = req.params;
+        const { observaciones } = req.body;
+        const adminId = req.userId;
+
+        if (!observaciones || typeof observaciones !== 'string' || observaciones.trim().length === 0) {
+            return res.status(400).json({ error: 'El motivo / observaciones del rechazo son obligatorios.' });
+        }
+        const cleanObs = observaciones.trim();
+
+        const [solRows] = await pool.execute(`
+            SELECT s.id, s.usuario_id, s.estatus, u.nombre, u.email
+            FROM solicitudes_asociado s
+            JOIN usuarios u ON s.usuario_id = u.id
+            WHERE s.id = ?
+        `, [id]);
+
+        if (solRows.length === 0) {
+            return res.status(404).json({ error: 'Solicitud no encontrada.' });
+        }
+
+        const sol = solRows[0];
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Asegurar usuario inactivo
+        await connection.execute('UPDATE usuarios SET activo = 0 WHERE id = ?', [sol.usuario_id]);
+
+        // 2. Actualizar solicitud
+        await connection.execute(`
+            UPDATE solicitudes_asociado
+            SET estatus = 'rechazado',
+                observaciones = ?,
+                usuario_revisor_id = ?,
+                fecha_actualizacion = NOW()
+            WHERE id = ?
+        `, [cleanObs, adminId, id]);
+
+        // 3. Registrar en historial
+        await connection.execute(`
+            INSERT INTO historial_solicitudes_asociado (solicitud_id, estatus_anterior, estatus_nuevo, usuario_id, observaciones)
+            VALUES (?, ?, 'rechazado', ?, ?)
+        `, [id, sol.estatus, adminId, cleanObs]);
+
+        await connection.commit();
+
+        // 4. Enviar correo de rechazo
+        sendAsociadoEmailRechazado(sol.email, sol.nombre, cleanObs).catch(err => {
+            console.error('Error enviando correo de rechazo:', err.message);
+        });
+
+        res.status(200).json({ message: 'Solicitud rechazada correctamente.' });
+
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in POST /api/admin/asociados/:id/rechazar:', error);
+        res.status(500).json({ error: 'Error interno al rechazar la solicitud.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+app.post('/api/admin/asociados/:id/mas-informacion', requireFunctionality('admin'), requirePermission('asociados.pedir_informacion'), async (req, res) => {
+    let connection = null;
+    try {
+        const { id } = req.params;
+        const { observaciones } = req.body;
+        const adminId = req.userId;
+
+        if (!observaciones || typeof observaciones !== 'string' || observaciones.trim().length === 0) {
+            return res.status(400).json({ error: 'Debes especificar qué información adicional se requiere.' });
+        }
+        const cleanObs = observaciones.trim();
+
+        const [solRows] = await pool.execute(`
+            SELECT s.id, s.usuario_id, s.estatus, u.nombre, u.email
+            FROM solicitudes_asociado s
+            JOIN usuarios u ON s.usuario_id = u.id
+            WHERE s.id = ?
+        `, [id]);
+
+        if (solRows.length === 0) {
+            return res.status(404).json({ error: 'Solicitud no encontrada.' });
+        }
+
+        const sol = solRows[0];
+
+        // Token criptográfico único temporal (7 días) para el portal
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Actualizar solicitud a mas_informacion
+        await connection.execute(`
+            UPDATE solicitudes_asociado
+            SET estatus = 'mas_informacion',
+                observaciones = ?,
+                usuario_revisor_id = ?,
+                fecha_actualizacion = NOW()
+            WHERE id = ?
+        `, [cleanObs, adminId, id]);
+
+        // 2. Invalidar tokens anteriores de esta solicitud
+        await connection.execute('UPDATE tokens_solicitud_asociado SET usado = 1 WHERE solicitud_id = ? AND usado = 0', [id]);
+
+        // 3. Crear nuevo token
+        await connection.execute(`
+            INSERT INTO tokens_solicitud_asociado (solicitud_id, token_hash, expira_en)
+            VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY))
+        `, [id, tokenHash]);
+
+        // 4. Registrar en historial
+        await connection.execute(`
+            INSERT INTO historial_solicitudes_asociado (solicitud_id, estatus_anterior, estatus_nuevo, usuario_id, observaciones)
+            VALUES (?, ?, 'mas_informacion', ?, ?)
+        `, [id, sol.estatus, adminId, cleanObs]);
+
+        await connection.commit();
+
+        // 5. Enviar correo de solicitud de más información
+        sendAsociadoEmailMasInformacion(sol.email, sol.nombre, cleanObs, token).catch(err => {
+            console.error('Error enviando correo de más información:', err.message);
+        });
+
+        res.status(200).json({ message: 'Solicitud de información enviada correctamente al candidato.' });
+
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in POST /api/admin/asociados/:id/mas-informacion:', error);
+        res.status(500).json({ error: 'Error interno al solicitar más información.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
 app.get('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
     try {
         const usuario_id = req.userId;
@@ -2966,6 +3762,11 @@ if (typeof module !== 'undefined' && module.exports) {
         checkUserFunctionalityAccess,
         checkUserPermission,
         assignDefaultUserRole,
+        assignRoleByName,
+        sendAsociadoEmailVerificacion,
+        sendAsociadoEmailAutorizado,
+        sendAsociadoEmailRechazado,
+        sendAsociadoEmailMasInformacion,
         extractTextFromPdfBuffer,
         extractAseguradoInfo,
         extractTotalSemanasFromIMSSDocument,

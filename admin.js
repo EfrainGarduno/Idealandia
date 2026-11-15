@@ -244,6 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (targetId === 'admin-funcionalidades') loadFuncionalidades();
             if (targetId === 'admin-accesos') loadAccesos();
             if (targetId === 'admin-menus') loadMenus();
+            if (targetId === 'admin-asociados') loadAsociados();
         });
     });
 
@@ -2435,3 +2436,458 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// =============================================================================
+// GESTIÓN DE ASOCIADOS EN PANEL ADMINISTRATIVO
+// =============================================================================
+
+let currentAsociadosFilter = '';
+
+async function loadAsociados(statusFilter = currentAsociadosFilter) {
+    currentAsociadosFilter = statusFilter || '';
+    const tbody = document.getElementById('admin-asociados-tbody');
+    if (!tbody) return;
+
+    try {
+        const url = `/api/admin/asociados${currentAsociadosFilter ? '?estatus=' + encodeURIComponent(currentAsociadosFilter) : ''}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || 'Error al cargar asociados.');
+        }
+
+        const data = await response.json();
+        tbody.innerHTML = '';
+
+        if (!data || data.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="10" style="text-align: center; color: #777; padding: 25px;">No se encontraron solicitudes de asociados.</td>`;
+            tbody.appendChild(tr);
+            return;
+        }
+
+        data.forEach(s => {
+            const tr = document.createElement('tr');
+
+            // 1. ID
+            const tdId = document.createElement('td');
+            tdId.textContent = s.id;
+            tr.appendChild(tdId);
+
+            // 2. Candidato (Nombre)
+            const tdNombre = document.createElement('td');
+            tdNombre.textContent = s.nombre;
+            tr.appendChild(tdNombre);
+
+            // 3. Usuario
+            const tdUsuario = document.createElement('td');
+            tdUsuario.textContent = s.usuario;
+            tr.appendChild(tdUsuario);
+
+            // 4. Correo
+            const tdEmail = document.createElement('td');
+            tdEmail.textContent = s.email;
+            tr.appendChild(tdEmail);
+
+            // 5. Teléfono
+            const tdTel = document.createElement('td');
+            tdTel.textContent = s.telefono || '—';
+            tr.appendChild(tdTel);
+
+            // 6. Servicio
+            const tdServ = document.createElement('td');
+            if (s.servicio_id === 999 && s.nombre_servicio_otro) {
+                tdServ.textContent = `Otros (${s.nombre_servicio_otro})`;
+            } else {
+                tdServ.textContent = s.servicio_nombre || '—';
+            }
+            tr.appendChild(tdServ);
+
+            // 7. Estado
+            const tdStatus = document.createElement('td');
+            let badgeClass = 'badge-por-aprobar';
+            let labelStatus = 'Por aprobar';
+            if (s.estatus === 'mas_informacion') { badgeClass = 'badge-mas-informacion'; labelStatus = 'Más información'; }
+            if (s.estatus === 'autorizado') { badgeClass = 'badge-autorizado'; labelStatus = 'Autorizado'; }
+            if (s.estatus === 'rechazado') { badgeClass = 'badge-rechazado'; labelStatus = 'Rechazado'; }
+            tdStatus.innerHTML = `<span class="asociado-badge ${badgeClass}">${labelStatus}</span>`;
+            tr.appendChild(tdStatus);
+
+            // 8. Correo Validado
+            const tdEmailVal = document.createElement('td');
+            if (s.correo_validado) {
+                tdEmailVal.innerHTML = `<span class="badge-correo-ok"><i class="fas fa-check"></i> Validado</span>`;
+            } else {
+                tdEmailVal.innerHTML = `<span class="badge-correo-pending"><i class="fas fa-clock"></i> Pendiente</span>`;
+            }
+            tr.appendChild(tdEmailVal);
+
+            // 9. Fecha Solicitud
+            const tdFecha = document.createElement('td');
+            tdFecha.textContent = s.fecha_solicitud ? new Date(s.fecha_solicitud).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+            tr.appendChild(tdFecha);
+
+            // 10. Acciones
+            const tdActions = document.createElement('td');
+            tdActions.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
+
+            const viewBtn = createAdminActionButton({
+                type: 'view',
+                icon: 'fas fa-eye',
+                title: 'Ver detalle de la solicitud',
+                srText: 'Detalle',
+                onClick: () => showAsociadoDetalle(s.id)
+            });
+            actionsGroup.appendChild(viewBtn);
+            tdActions.appendChild(actionsGroup);
+            tr.appendChild(tdActions);
+
+            tbody.appendChild(tr);
+        });
+
+    } catch (error) {
+        console.error('Error al cargar asociados:', error);
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #dc3545; padding: 20px;">Error al cargar asociados: ${escapeHTML(error.message)}</td></tr>`;
+    }
+}
+
+// Inicializar listeners de filtros de Asociados y modal
+document.addEventListener('DOMContentLoaded', () => {
+    const filterBtns = document.querySelectorAll('.btn-filter-asociado');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const status = btn.getAttribute('data-status');
+            loadAsociados(status);
+        });
+    });
+
+    const btnCerrarModal = document.getElementById('btn-cerrar-modal-asociado');
+    const modalAsociado = document.getElementById('modal-asociado-detalle');
+    if (btnCerrarModal && modalAsociado) {
+        btnCerrarModal.addEventListener('click', () => {
+            modalAsociado.style.display = 'none';
+        });
+        modalAsociado.addEventListener('click', (e) => {
+            if (e.target === modalAsociado) modalAsociado.style.display = 'none';
+        });
+    }
+});
+
+async function showAsociadoDetalle(id) {
+    const modal = document.getElementById('modal-asociado-detalle');
+    const body = document.getElementById('modal-asociado-detalle-body');
+    if (!modal || !body) return;
+
+    body.innerHTML = '<div style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Cargando información...</p></div>';
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch(`/api/admin/asociados/${id}`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'No se pudo obtener la solicitud.');
+        }
+
+        const data = await res.json();
+        const s = data.solicitud;
+        const historial = data.historial || [];
+
+        let statusBadge = 'badge-por-aprobar';
+        let statusLabel = 'Por aprobar';
+        if (s.estatus === 'mas_informacion') { statusBadge = 'badge-mas-informacion'; statusLabel = 'Más información'; }
+        if (s.estatus === 'autorizado') { statusBadge = 'badge-autorizado'; statusLabel = 'Autorizado'; }
+        if (s.estatus === 'rechazado') { statusBadge = 'badge-rechazado'; statusLabel = 'Rechazado'; }
+
+        const correoValidadoHtml = s.correo_validado
+            ? `<span class="badge-correo-ok"><i class="fas fa-check"></i> Validado</span>`
+            : `<span class="badge-correo-pending"><i class="fas fa-clock"></i> Pendiente de validación</span>`;
+
+        const userActivoHtml = s.usuario_activo
+            ? `<span style="color: #28a745; font-weight: bold;">Activo</span>`
+            : `<span style="color: #6c757d; font-weight: bold;">Inactivo</span>`;
+
+        let historialHtml = '';
+        if (historial.length > 0) {
+            historialHtml = `
+                <div class="detalle-section">
+                    <div class="detalle-title">Historial de Revisiones</div>
+                    <ul style="padding-left: 20px; margin: 0; font-size: 13px; color: #555;">
+                        ${historial.map(h => `
+                            <li style="margin-bottom: 6px;">
+                                <strong>${new Date(h.fecha).toLocaleString('es-MX')}:</strong>
+                                ${escapeHTML(h.estatus_anterior || 'Inicio')} &rarr; <strong>${escapeHTML(h.estatus_nuevo)}</strong>
+                                ${h.observaciones ? ` — <em>${escapeHTML(h.observaciones)}</em>` : ''}
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        const actionsHtml = s.estatus !== 'autorizado' ? `
+            <div class="detalle-actions-bar">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-asociado-detalle').style.display='none'">Cerrar</button>
+                <button type="button" class="btn btn-warning" id="btn-asoc-mas-info" style="background-color: #ffc107; color: #212529; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                    <i class="fas fa-question-circle"></i> Pedir más información
+                </button>
+                <button type="button" class="btn btn-danger" id="btn-asoc-rechazar" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                    <i class="fas fa-ban"></i> Rechazar
+                </button>
+                <button type="button" class="btn btn-success" id="btn-asoc-autorizar" style="background-color: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                    <i class="fas fa-check-circle"></i> Autorizar
+                </button>
+            </div>
+        ` : `
+            <div class="detalle-actions-bar">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-asociado-detalle').style.display='none'">Cerrar</button>
+            </div>
+        `;
+
+        body.innerHTML = `
+            <div class="detalle-section">
+                <div class="detalle-title">Datos del Candidato</div>
+                <div class="detalle-grid">
+                    <div class="detalle-item"><strong>Nombre:</strong> ${escapeHTML(s.nombre)}</div>
+                    <div class="detalle-item"><strong>Usuario:</strong> ${escapeHTML(s.usuario)}</div>
+                    <div class="detalle-item"><strong>Correo:</strong> ${escapeHTML(s.email)}</div>
+                    <div class="detalle-item"><strong>Teléfono:</strong> ${escapeHTML(s.telefono || 'No proporcionado')}</div>
+                    <div class="detalle-item"><strong>Estado del Usuario:</strong> ${userActivoHtml}</div>
+                </div>
+            </div>
+
+            <div class="detalle-section">
+                <div class="detalle-title">Validación de Correo</div>
+                <div class="detalle-item">${correoValidadoHtml}</div>
+            </div>
+
+            <div class="detalle-section">
+                <div class="detalle-title">Servicio Ofrecido</div>
+                <div class="detalle-item" style="margin-bottom: 8px;">
+                    <strong>Servicio:</strong> ${escapeHTML(s.servicio_id === 999 && s.nombre_servicio_otro ? `Otros — ${s.nombre_servicio_otro}` : s.servicio_nombre)}
+                </div>
+                <div class="detalle-title" style="margin-top: 10px;">Descripción detallada:</div>
+                <div class="detalle-desc-box">${escapeHTML(s.descripcion_servicio)}</div>
+            </div>
+
+            <div class="detalle-section">
+                <div class="detalle-title">Estado de la Solicitud</div>
+                <div class="detalle-grid">
+                    <div class="detalle-item"><strong>Estado actual:</strong> <span class="asociado-badge ${statusBadge}">${statusLabel}</span></div>
+                    <div class="detalle-item"><strong>Fecha solicitud:</strong> ${new Date(s.fecha_solicitud).toLocaleString('es-MX')}</div>
+                    ${s.revisor_nombre ? `<div class="detalle-item"><strong>Revisado por:</strong> ${escapeHTML(s.revisor_nombre)}</div>` : ''}
+                </div>
+                ${s.observaciones ? `
+                    <div style="margin-top: 10px;">
+                        <strong>Observaciones vigentes:</strong>
+                        <div class="detalle-desc-box" style="margin-top: 5px; background: #fff8e1; border-color: #ffe082;">${escapeHTML(s.observaciones)}</div>
+                    </div>
+                ` : ''}
+            </div>
+
+            ${historialHtml}
+            ${actionsHtml}
+        `;
+
+        // Vincular acciones
+        const btnAutorizar = document.getElementById('btn-asoc-autorizar');
+        if (btnAutorizar) {
+            btnAutorizar.addEventListener('click', () => autorizarAsociado(s));
+        }
+
+        const btnRechazar = document.getElementById('btn-asoc-rechazar');
+        if (btnRechazar) {
+            btnRechazar.addEventListener('click', () => pedirObservacionesRechazo(s));
+        }
+
+        const btnMasInfo = document.getElementById('btn-asoc-mas-info');
+        if (btnMasInfo) {
+            btnMasInfo.addEventListener('click', () => pedirObservacionesMasInfo(s));
+        }
+
+    } catch (err) {
+        console.error('Error in showAsociadoDetalle:', err);
+        body.innerHTML = `<div style="color: #dc3545; padding: 20px; text-align: center;"><p>Error al cargar el detalle: ${escapeHTML(err.message)}</p><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-asociado-detalle').style.display='none'">Cerrar</button></div>`;
+    }
+}
+
+async function autorizarAsociado(s) {
+    if (!s.correo_validado) {
+        window.showModal('No se puede autorizar la solicitud: el correo electrónico del candidato aún no ha sido validado.');
+        return;
+    }
+
+    const confirmed = await window.showConfirm(`¿Confirmas que deseas autorizar a ${s.nombre} como Asociado de Idealandia y activar su cuenta?`);
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`/api/admin/asociados/${s.id}/autorizar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (res.ok) {
+            window.showModal(data.message || 'Solicitud autorizada exitosamente.');
+            document.getElementById('modal-asociado-detalle').style.display = 'none';
+            loadAsociados();
+        } else {
+            window.showModal(`Error: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error al autorizar:', error);
+        window.showModal('Error interno al autorizar la solicitud.');
+    }
+}
+
+function pedirObservacionesRechazo(s) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+    if (!overlay || !textElement || !buttonsContainer) return;
+
+    textElement.innerHTML = `
+        <div style="text-align: left;">
+            <h4 style="margin: 0 0 10px 0; color: #dc3545;">Rechazar Solicitud de Asociado</h4>
+            <p style="margin-bottom: 10px; font-size: 14px;">Indica obligatoriamente el motivo / observaciones del rechazo para informar a <strong>${escapeHTML(s.nombre)}</strong>:</p>
+            <textarea id="modal-input-rechazo" rows="4" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 14px; box-sizing: border-box;" placeholder="Escribe aquí las observaciones obligatorias..."></textarea>
+            <span id="error-input-rechazo" style="color: #dc3545; font-size: 12px; display: none; margin-top: 4px;"></span>
+        </div>
+    `;
+
+    buttonsContainer.innerHTML = '';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'custom-modal-btn secondary';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.onclick = () => { overlay.style.display = 'none'; };
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'custom-modal-btn primary';
+    confirmBtn.style.backgroundColor = '#dc3545';
+    confirmBtn.textContent = 'Rechazar solicitud';
+    confirmBtn.onclick = async () => {
+        const textarea = document.getElementById('modal-input-rechazo');
+        const errSpan = document.getElementById('error-input-rechazo');
+        const observaciones = textarea ? textarea.value.trim() : '';
+
+        if (!observaciones) {
+            if (errSpan) {
+                errSpan.textContent = 'Las observaciones son obligatorias para rechazar la solicitud.';
+                errSpan.style.display = 'block';
+            }
+            if (textarea) textarea.focus();
+            return;
+        }
+
+        try {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Rechazando...';
+            const res = await fetch(`/api/admin/asociados/${s.id}/rechazar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ observaciones })
+            });
+            const data = await res.json();
+            overlay.style.display = 'none';
+
+            if (res.ok) {
+                window.showModal(data.message || 'Solicitud rechazada correctamente.');
+                document.getElementById('modal-asociado-detalle').style.display = 'none';
+                loadAsociados();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (err) {
+            console.error('Error al rechazar:', err);
+            overlay.style.display = 'none';
+            window.showModal('Error interno al rechazar la solicitud.');
+        }
+    };
+
+    buttonsContainer.appendChild(cancelBtn);
+    buttonsContainer.appendChild(confirmBtn);
+    overlay.style.display = 'flex';
+    setTimeout(() => {
+        const t = document.getElementById('modal-input-rechazo');
+        if (t) t.focus();
+    }, 100);
+}
+
+function pedirObservacionesMasInfo(s) {
+    const overlay = document.getElementById('custom-modal');
+    const textElement = document.getElementById('custom-modal-message');
+    const buttonsContainer = document.getElementById('custom-modal-buttons');
+    if (!overlay || !textElement || !buttonsContainer) return;
+
+    textElement.innerHTML = `
+        <div style="text-align: left;">
+            <h4 style="margin: 0 0 10px 0; color: #d39e00;">Solicitar Información Adicional</h4>
+            <p style="margin-bottom: 10px; font-size: 14px;">¿Qué información necesita proporcionar <strong>${escapeHTML(s.nombre)}</strong> para continuar su solicitud?</p>
+            <textarea id="modal-input-mas-info" rows="4" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 14px; box-sizing: border-box;" placeholder="Ejemplo: Por favor especifica qué incluye el servicio y qué experiencia tienes..."></textarea>
+            <span id="error-input-mas-info" style="color: #dc3545; font-size: 12px; display: none; margin-top: 4px;"></span>
+        </div>
+    `;
+
+    buttonsContainer.innerHTML = '';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'custom-modal-btn secondary';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.onclick = () => { overlay.style.display = 'none'; };
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'custom-modal-btn primary';
+    confirmBtn.style.backgroundColor = '#17a2b8';
+    confirmBtn.textContent = 'Solicitar información';
+    confirmBtn.onclick = async () => {
+        const textarea = document.getElementById('modal-input-mas-info');
+        const errSpan = document.getElementById('error-input-mas-info');
+        const observaciones = textarea ? textarea.value.trim() : '';
+
+        if (!observaciones) {
+            if (errSpan) {
+                errSpan.textContent = 'Debes especificar qué información adicional se requiere.';
+                errSpan.style.display = 'block';
+            }
+            if (textarea) textarea.focus();
+            return;
+        }
+
+        try {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Enviando...';
+            const res = await fetch(`/api/admin/asociados/${s.id}/mas-informacion`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ observaciones })
+            });
+            const data = await res.json();
+            overlay.style.display = 'none';
+
+            if (res.ok) {
+                window.showModal(data.message || 'Solicitud de información enviada correctamente al candidato.');
+                document.getElementById('modal-asociado-detalle').style.display = 'none';
+                loadAsociados();
+            } else {
+                window.showModal(`Error: ${data.error}`);
+            }
+        } catch (err) {
+            console.error('Error al pedir más información:', err);
+            overlay.style.display = 'none';
+            window.showModal('Error interno al solicitar más información.');
+        }
+    };
+
+    buttonsContainer.appendChild(cancelBtn);
+    buttonsContainer.appendChild(confirmBtn);
+    overlay.style.display = 'flex';
+    setTimeout(() => {
+        const t = document.getElementById('modal-input-mas-info');
+        if (t) t.focus();
+    }, 100);
+}
+
+window.loadAsociados = loadAsociados;
+window.showAsociadoDetalle = showAsociadoDetalle;
