@@ -420,6 +420,142 @@
 #btn-calcular-pension:hover {
     background-color: #218838;
 }
+
+/* REGISTRATION FORM VALIDATION & UX STYLES */
+.field-error-msg {
+    display: none;
+    color: #dc3545;
+    font-size: 0.85em;
+    margin-top: 5px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+.field-error-msg.visible {
+    display: block;
+}
+.input-invalid {
+    border-color: #dc3545 !important;
+    background-color: #fff8f8;
+}
+.input-valid {
+    border-color: #28a745 !important;
+    background-color: #f8fff9;
+}
+.password-input-wrapper {
+    position: relative;
+    width: 100%;
+}
+.password-input-wrapper input {
+    width: 100%;
+    padding-right: 44px !important;
+    box-sizing: border-box;
+}
+.btn-toggle-password {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #666;
+    padding: 8px;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: color 0.2s ease;
+}
+.btn-toggle-password:hover {
+    color: #222;
+}
+.password-checklist {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.password-checklist .checklist-header {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 6px;
+}
+.password-checklist ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.password-checklist li {
+    font-size: 0.82em;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s ease;
+}
+.password-checklist li i {
+    font-size: 0.9em;
+    width: 14px;
+    text-align: center;
+}
+.password-checklist li.rule-met {
+    color: #28a745;
+    font-weight: 500;
+}
+.password-checklist li.rule-met i {
+    color: #28a745;
+}
+.password-checklist li.rule-unmet {
+    color: #dc3545;
+}
+.password-checklist li.rule-unmet i {
+    color: #dc3545;
+}
+
+/* PHONE INPUT WITH COUNTRY SELECTOR */
+.phone-input-group {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.phone-country-select-wrapper {
+    flex: 0 0 150px;
+    max-width: 165px;
+}
+.phone-country-select {
+    width: 100%;
+    height: 100%;
+    min-height: 40px;
+    padding: 8px 8px 8px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    font-size: 13.5px;
+    cursor: pointer;
+    box-sizing: border-box;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.phone-number-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+.phone-number-wrapper input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 /* NEW HOME SECTION STYLES */
 .new-home-section {
     background-color: #ffffff;
@@ -881,8 +1017,27 @@
     cursor: pointer;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
+/* SIDEBAR OVERLAY FOR MOBILE (DETECTS TOUCH/CLICK OUTSIDE) */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
 /* MOBILE RESPONSIVE (max-width: 768px) */
 @media (max-width: 768px) {
+    .sidebar-overlay.active {
+        display: block;
+        opacity: 1;
+        pointer-events: auto;
+    }
     body {
         overflow: auto; /* allow scrolling on body */
         overflow-x: hidden; /* prevent horizontal scroll */

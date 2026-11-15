@@ -54,6 +54,7 @@ const dom = new JSDOM(htmlContent, {
 });
 
 const window = dom.window;
+window.libphonenumber = require('libphonenumber-js');
 
 // Mock Three.js gracefully for main testing loop
 window.THREE = {
@@ -139,7 +140,7 @@ window.fetch = async (url, options) => {
         return { ok: true, json: async () => ({ ideas: [] }) };
     } else if (url === "/api/register" && options.method === "POST") {
         const body = JSON.parse(options.body);
-        if (body.usuario === 'testuser' && body.password === 'testpass') {
+        if (body.usuario === 'testuser' && body.password === 'TestPass1!') {
              return {
                  ok: true,
                  json: async () => ({ message: 'Registro exitoso.' })
@@ -408,10 +409,11 @@ window.addEventListener('load', () => {
             // Test Registration Form
             const btnRegisterNewUser = document.getElementById('btn-register');
             document.getElementById('reg-usuario').value = 'testuser';
-            document.getElementById('reg-password').value = 'testpass';
-            document.getElementById('reg-password-rep').value = 'testpass';
+            document.getElementById('reg-password').value = 'TestPass1!';
+            document.getElementById('reg-password-rep').value = 'TestPass1!';
             document.getElementById('reg-nombre').value = 'Test User';
             document.getElementById('reg-correo').value = 'test@example.com';
+            document.getElementById('reg-telefono').value = '4425539803';
 
             btnRegisterNewUser.click();
 
