@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ideas creativas en Idealandia</title>
 
+    <!-- Metadatos Open Graph para vista previa en redes sociales -->
+    <meta property="og:title" content="Idealandia — Donde las ideas cobran vida">
+    <meta property="og:description" content="Explora ideas, aprende, encuentra soluciones y descubre nuevas oportunidades. En Idealandia encontrarás herramientas, recursos y a Idealita para ayudarte a crear y avanzar.">
+    <meta property="og:url" content="https://idealandia.com.mx/">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://idealandia.com.mx/img/inicio_institucional.jpg">
+
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -69,47 +76,14 @@
         </div>
 
         <section id="inicio" class="content-section new-home-section">
-            <div class="home-layout">
-                <div class="home-text">
-                    <p class="home-subtitle">BIENVENIDA A TU ESPACIO</p>
-                    <h1 class="home-title">Donde las ideas<br><span style="color: #6c40f7;">cobran vida.</span></h1>
-                    <p class="home-description">Explora, aprende y transforma tus mejores ideas en<br>algo extraordinario.</p>
-                    <div class="home-buttons">
-                        <a href="#" class="btn btn-primary" data-section="chat">Hablar con Idealita <i class="fas fa-arrow-right" style="margin-left: 8px;"></i></a>
-                        <a href="#" class="btn btn-secondary" data-section="gratis">Explorar recursos</a>
-                    </div>
-                </div>
-                <div class="home-visual">
-                    <div class="visual-container">
-                        <div class="speech-bubble">¿Qué creamos hoy?</div>
-
-                        <svg class="orbits" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-                            <ellipse cx="200" cy="150" rx="160" ry="80" transform="rotate(-20 200 150)" fill="none" stroke="#b3a1f9" stroke-width="1.5"/>
-                            <ellipse cx="200" cy="150" rx="140" ry="100" transform="rotate(40 200 150)" fill="none" stroke="#b3a1f9" stroke-width="1.5"/>
-                        </svg>
-
-                        <!-- Sparkles -->
-                        <div class="sparkle sparkle-1">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0L13.5 10.5L24 12L13.5 13.5L12 24L10.5 13.5L0 12L10.5 10.5L12 0Z" fill="#6c40f7"/></svg>
-                        </div>
-                        <div class="sparkle sparkle-2">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 0L13.5 10.5L24 12L13.5 13.5L12 24L10.5 13.5L0 12L10.5 10.5L12 0Z" fill="#6c40f7"/></svg>
-                        </div>
-                        <div class="sparkle sparkle-3">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L13.5 10.5L22 12L13.5 13.5L12 22L10.5 13.5L2 12L10.5 10.5L12 2Z" stroke="#6c40f7" stroke-width="1.5"/></svg>
-                        </div>
-
-                        <div class="sphere">
-                            <div class="eye left"></div>
-                            <div class="eye right"></div>
-                            <div class="smile"></div>
-                        </div>
-                    </div>
-                </div>
+            <div class="home-hero-container">
+                <img src="img/inicio_institucional.jpg" alt="Idealandia — Donde las ideas cobran vida. Explora ideas, aprende, encuentra soluciones y descubre nuevas oportunidades. En Idealandia encontrarás herramientas, recursos y a Idealita para ayudarte a crear y avanzar." class="home-hero-img">
+                
+                <!-- Accesos interactivos conservando las acciones originales: "Hablar con Idealita" y "Explorar recursos" -->
+                <a href="#" data-section="chat" class="home-interactive-btn btn-chat" aria-label="Hablar con Idealita" title="Hablar con Idealita">Hablar con Idealita</a>
+                <a href="#" data-section="gratis" class="home-interactive-btn btn-recursos" aria-label="Explorar recursos" title="Explorar recursos">Explorar recursos</a>
             </div>
-
-
-            </section>
+        </section>
 
         <section id="login" class="content-section" style="display: none;">
             <h2>Iniciar Sesión</h2>
