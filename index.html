@@ -65,6 +65,8 @@
         </nav>
     </aside>
 
+    <div id="sidebar-overlay" class="sidebar-overlay" aria-hidden="true"></div>
+
     <div id="content-area">
         <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Abrir menú"><i class="fas fa-bars"></i></button>
         <div class="top-auth-container" id="auth-container-guest">
@@ -203,13 +205,13 @@
                     <div class="phone-input-group">
                         <div class="phone-country-select-wrapper">
                             <select id="reg-codigo-pais" class="phone-country-select" aria-label="Código de país">
-                                <option value="MX" selected>🇲🇽 México (+52)</option>
-                                <option value="US">🇺🇸 Estados Unidos (+1)</option>
-                                <option value="ES">🇪🇸 España (+34)</option>
-                                <option value="CO">🇨🇴 Colombia (+57)</option>
-                                <option value="AR">🇦🇷 Argentina (+54)</option>
-                                <option value="CL">🇨🇱 Chile (+56)</option>
-                                <option value="PE">🇵🇪 Perú (+51)</option>
+                                <option value="MX" selected>🇲🇽 +52 México</option>
+                                <option value="US">🇺🇸 +1 Estados Unidos</option>
+                                <option value="ES">🇪🇸 +34 España</option>
+                                <option value="CO">🇨🇴 +57 Colombia</option>
+                                <option value="AR">🇦🇷 +54 Argentina</option>
+                                <option value="CL">🇨🇱 +56 Chile</option>
+                                <option value="PE">🇵🇪 +51 Perú</option>
                             </select>
                         </div>
                         <div class="phone-number-wrapper">
@@ -1774,6 +1776,8 @@
 
                         if (window.innerWidth <= 768 && sidebar) {
                             sidebar.classList.remove('sidebar-open');
+                            const overlay = document.getElementById('sidebar-overlay');
+                            if (overlay) overlay.classList.remove('active');
                         }
                     });
                 }
@@ -1826,6 +1830,8 @@
                         // Close sidebar on mobile after clicking a link
                         if (window.innerWidth <= 768 && sidebar) {
                             sidebar.classList.remove('sidebar-open');
+                            const overlay = document.getElementById('sidebar-overlay');
+                            if (overlay) overlay.classList.remove('active');
                         }
                     });
                 });
@@ -1848,6 +1854,8 @@
                              showAccessDeniedModal(serviceName);
                              if (window.innerWidth <= 768 && sidebar) {
                                  sidebar.classList.remove('sidebar-open');
+                                 const overlay = document.getElementById('sidebar-overlay');
+                                 if (overlay) overlay.classList.remove('active');
                              }
                              return;
                          }
@@ -1896,6 +1904,8 @@
 
                          if (window.innerWidth <= 768 && sidebar) {
                             sidebar.classList.remove('sidebar-open');
+                            const overlay = document.getElementById('sidebar-overlay');
+                            if (overlay) overlay.classList.remove('active');
                          }
                     });
                 });
@@ -2604,7 +2614,7 @@
                         countryItems.forEach(item => {
                             const opt = document.createElement('option');
                             opt.value = item.code;
-                            opt.textContent = `${item.flag} ${item.name} (${item.dial})`;
+                            opt.textContent = `${item.flag} ${item.dial} ${item.name}`;
                             if (item.code === 'MX') opt.selected = true;
                             regCodigoPaisSelect.appendChild(opt);
                         });
@@ -2918,6 +2928,12 @@
                                 msg.classList.remove('visible');
                             });
                             updatePasswordChecklist('');
+
+                            // Redirigir a la vista de login tras registro exitoso
+                            const loginLink = document.querySelector('a[data-section="login"]');
+                            if (loginLink) {
+                                loginLink.click();
+                            }
                         } else {
                             showModal(`Error: ${data.error}`);
                         }
@@ -4267,15 +4283,64 @@
             });
         }
 
-            // Mobile menu logic
+            // Mobile menu logic: apertura, cierre con tres rayitas, overlay y toque fuera
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+            function openMobileSidebar() {
+                if (sidebar) sidebar.classList.add('sidebar-open');
+                if (sidebarOverlay) sidebarOverlay.classList.add('active');
+            }
+
+            function closeMobileSidebar() {
+                if (sidebar) sidebar.classList.remove('sidebar-open');
+                if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+            }
+
+            function toggleMobileSidebar() {
+                if (!sidebar) return;
+                if (sidebar.classList.contains('sidebar-open')) {
+                    closeMobileSidebar();
+                } else {
+                    openMobileSidebar();
+                }
+            }
 
             if (mobileMenuBtn && sidebar) {
-                mobileMenuBtn.addEventListener('click', () => {
-                    sidebar.classList.toggle('sidebar-open');
+                mobileMenuBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleMobileSidebar();
                 });
             }
+
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    closeMobileSidebar();
+                });
+                sidebarOverlay.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    closeMobileSidebar();
+                });
+            }
+
+            // Detección de toque/clic fuera del menú lateral en móviles
+            document.addEventListener('click', (e) => {
+                if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('sidebar-open')) {
+                    if (!sidebar.contains(e.target) && (!mobileMenuBtn || !mobileMenuBtn.contains(e.target))) {
+                        closeMobileSidebar();
+                    }
+                }
+            });
+
+            document.addEventListener('touchstart', (e) => {
+                if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('sidebar-open')) {
+                    if (!sidebar.contains(e.target) && (!mobileMenuBtn || !mobileMenuBtn.contains(e.target))) {
+                        closeMobileSidebar();
+                    }
+                }
+            }, { passive: true });
 
             // Global 403 Response Interceptor for RBAC
             if (typeof window !== 'undefined' && window.fetch) {

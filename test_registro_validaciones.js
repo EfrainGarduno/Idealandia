@@ -256,7 +256,8 @@ async function mockRegisterHandler(body) {
     window.VRMLoaderPlugin = class {};
     window.libphonenumber = require('libphonenumber-js');
 
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
+        try {
         // 3.1 Etiqueta "Nombre y Apellidos:"
         const nombreLabel = document.querySelector('label[for="reg-nombre"]');
         assert.ok(nombreLabel, 'Label de reg-nombre debe existir');
@@ -267,7 +268,9 @@ async function mockRegisterHandler(body) {
         const countrySelect = document.getElementById('reg-codigo-pais');
         assert.ok(countrySelect, 'Selector de país debe existir');
         assert.strictEqual(countrySelect.value, 'MX', 'México (MX) debe estar preseleccionado');
-        console.log('✓ 3.2 Selector de país con México predeterminado.');
+        const selectedOption = countrySelect.options[countrySelect.selectedIndex];
+        assert.ok(selectedOption.textContent.includes('+52'), 'El código de país +52 debe ser visible en la opción seleccionada');
+        console.log('✓ 3.2 Selector de país con México predeterminado y código +52 visible al inicio.');
 
         // 3.3 Botones de visualización de contraseña ("ojito")
         const btnTogglePwd = document.getElementById('btn-toggle-reg-password');
@@ -336,11 +339,11 @@ async function mockRegisterHandler(body) {
         assert.strictEqual(errorUsuario.classList.contains('visible'), false);
         console.log('✓ 3.5 y 3.6 Validación visual con interacción (blur e input).');
 
-        // 3.7 Prevención de envío ante errores
+        // 3.7 Prevención de envío ante errores y redirección al login en éxito
         let submitAttempted = false;
         window.fetch = async () => {
             submitAttempted = true;
-            return { ok: true, json: async () => ({}) };
+            return { ok: true, json: async () => ({ message: 'Registro exitoso.' }) };
         };
 
         const btnRegister = document.getElementById('btn-register');
@@ -349,9 +352,92 @@ async function mockRegisterHandler(body) {
         assert.strictEqual(submitAttempted, false, 'No debe disparar fetch con campos inválidos');
         console.log('✓ 3.7 Envío del formulario bloqueado si existen errores.');
 
+        // 3.8 Registro exitoso redirige automáticamente a la vista de login
+        document.getElementById('reg-usuario').value = 'usuarioOk';
+        document.getElementById('reg-nombre').value = 'Usuario Valido';
+        document.getElementById('reg-correo').value = 'valido@dominio.com';
+        document.getElementById('reg-password').value = 'ValidoPass1!';
+        document.getElementById('reg-password-rep').value = 'ValidoPass1!';
+        document.getElementById('reg-telefono').value = '4425539803';
+
+        btnRegister.click();
+        assert.strictEqual(submitAttempted, true, 'Debe disparar fetch al ser válido');
+
+        // Esperar a que concluya el handler asíncrono y la navegación
+        await new Promise(r => setTimeout(r, 100));
+
+        // Comprobar que tras el registro se navega a la sección login
+        const loginSection = document.getElementById('login');
+        assert.strictEqual(loginSection.style.display, 'flex', 'Debe llevar al usuario a la vista de login tras registrarse con éxito');
+        console.log('✓ 3.8 Registro exitoso redirige correctamente a la vista de Login.');
+
+        // 3.9 Comportamiento del menú lateral móvil y cierre al pulsar fuera / overlay
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        assert.ok(overlay, 'El elemento #sidebar-overlay debe existir en el DOM');
+        assert.ok(mobileMenuBtn && sidebar, 'Botón móvil y sidebar deben existir');
+
+        // Simular viewport móvil
+        window.innerWidth = 390;
+
+        // Estado inicial: cerrado
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), false);
+        assert.strictEqual(overlay.classList.contains('active'), false);
+
+        // Caso 1: Abrir menú pulsando las tres rayitas
+        mobileMenuBtn.click();
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), true, 'Menú debe abrirse');
+        assert.strictEqual(overlay.classList.contains('active'), true, 'Overlay debe activarse');
+
+        // Caso 2: Pulsar el overlay (fuera del menú) lo cierra
+        overlay.click();
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), false, 'Menú debe cerrarse al pulsar overlay');
+        assert.strictEqual(overlay.classList.contains('active'), false, 'Overlay debe desactivarse');
+
+        // Caso 3: Abrir de nuevo y pulsar de nuevo las tres rayitas lo cierra
+        mobileMenuBtn.click();
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), true);
+        assert.strictEqual(overlay.classList.contains('active'), true);
+
+        mobileMenuBtn.click();
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), false, 'Menú debe cerrarse al pulsar tres rayitas de nuevo');
+        assert.strictEqual(overlay.classList.contains('active'), false);
+
+        // Caso 4: Abrir y pulsar fuera en el documento lo cierra
+        mobileMenuBtn.click();
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), true);
+
+        // Clic dentro del sidebar NO debe cerrarlo
+        sidebar.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), true, 'Clic dentro del sidebar NO debe cerrarlo');
+
+        // Clic fuera del sidebar en el content-area debe cerrarlo
+        const contentArea = document.getElementById('content-area');
+        contentArea.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), false, 'Clic fuera del sidebar debe cerrarlo');
+        assert.strictEqual(overlay.classList.contains('active'), false);
+
+        // Caso 5: Tocar opción dentro del menú lo cierra y ejecuta acción
+        mobileMenuBtn.click();
+        assert.strictEqual(sidebar.classList.contains('sidebar-open'), true);
+        const chatLink = document.querySelector('a[data-section="chat"]');
+        if (chatLink) {
+            chatLink.click();
+            assert.strictEqual(sidebar.classList.contains('sidebar-open'), false, 'Al pulsar opción de menú debe cerrarse');
+            assert.strictEqual(overlay.classList.contains('active'), false);
+        }
+
+        console.log('✓ 3.9 Comportamiento de menú móvil verificado (abrir, cerrar con rayitas, cerrar al pulsar fuera/overlay, cerrar con opción).');
+
         console.log('\n================================================================');
         console.log('TODAS LAS PRUEBAS OBLIGATORIAS PASARON EXITOSAMENTE (100% OK)');
         console.log('================================================================\n');
         process.exit(0);
+        } catch (err) {
+            console.error('Error en prueba DOM:', err);
+            process.exit(1);
+        }
     });
 })();
