@@ -427,6 +427,7 @@
     padding: 0;
     max-width: 1000px;
     width: 100%;
+    min-width: 0;
     box-sizing: border-box;
     box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
     margin: 0 auto;
@@ -438,6 +439,7 @@
     position: relative;
     width: 100%;
     max-width: 1000px;
+    min-width: 0;
     margin: 0 auto;
     line-height: 0;
     overflow: hidden;
@@ -445,6 +447,8 @@
 }
 .home-hero-img {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     height: auto;
     display: block;
     object-fit: contain;
@@ -458,6 +462,7 @@
     text-indent: -9999px;
     overflow: hidden;
     transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
 }
 .home-interactive-btn.btn-chat {
     left: 4.2%;
@@ -468,8 +473,8 @@
 .home-interactive-btn.btn-recursos {
     left: 32.6%;
     top: 76.5%;
-    width: 21.8%;
-    height: 19%;
+    width: 21.4%;
+    height: 19.1%;
 }
 .home-interactive-btn:hover {
     background-color: rgba(255, 255, 255, 0.14);
@@ -477,7 +482,8 @@
     transform: translateY(-1px);
 }
 .home-interactive-btn:active {
-    transform: translateY(1px);
+    transform: scale(0.98);
+    background-color: rgba(255, 255, 255, 0.22);
 }
 .home-interactive-btn:focus-visible {
     outline: 3px solid #6c40f7;
@@ -786,9 +792,52 @@
     #content-area {
         padding: 20px;
     }
+    #inicio.content-section,
     .new-home-section {
-        padding: 0;
-        border-radius: 16px;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .home-hero-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        margin: 0 auto !important;
+        position: relative !important;
+        overflow: hidden !important;
+        border-radius: 16px !important;
+        line-height: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .home-hero-img {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        display: block !important;
+        object-fit: contain !important;
+    }
+    .home-interactive-btn {
+        border-radius: 8px !important;
+    }
+    .home-interactive-btn.btn-chat {
+        left: 4.2% !important;
+        top: 77.5% !important;
+        width: 26.2% !important;
+        height: 17.6% !important;
+    }
+    .home-interactive-btn.btn-recursos {
+        left: 32.6% !important;
+        top: 76.5% !important;
+        width: 21.4% !important;
+        height: 19.1% !important;
     }
     .home-title {
         font-size: 48px;
@@ -899,9 +948,52 @@
         width: 100%;
         box-sizing: border-box;
     }
+    #inicio.content-section,
     .new-home-section {
-        padding: 0;
-        border-radius: 16px;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .home-hero-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        margin: 0 auto !important;
+        position: relative !important;
+        overflow: hidden !important;
+        border-radius: 16px !important;
+        line-height: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .home-hero-img {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        display: block !important;
+        object-fit: contain !important;
+    }
+    .home-interactive-btn {
+        border-radius: 8px !important;
+    }
+    .home-interactive-btn.btn-chat {
+        left: 4.2% !important;
+        top: 77.5% !important;
+        width: 26.2% !important;
+        height: 17.6% !important;
+    }
+    .home-interactive-btn.btn-recursos {
+        left: 32.6% !important;
+        top: 76.5% !important;
+        width: 21.4% !important;
+        height: 19.1% !important;
     }
     .custom-modal-content {
         width: 95%;
@@ -998,6 +1090,60 @@
         width: 32px;
         height: 32px;
         font-size: 16px;
+    }
+}
+
+/* SMALL MOBILE RESPONSIVE (max-width: 480px) */
+@media (max-width: 480px) {
+    #content-area {
+        padding-top: 70px !important;
+    }
+    #inicio.content-section,
+    .new-home-section {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .home-hero-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        margin: 0 auto !important;
+        position: relative !important;
+        overflow: hidden !important;
+        border-radius: 12px !important;
+        line-height: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .home-hero-img {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        display: block !important;
+        object-fit: contain !important;
+    }
+    .home-interactive-btn {
+        border-radius: 6px !important;
+    }
+    .home-interactive-btn.btn-chat {
+        left: 4.2% !important;
+        top: 77.5% !important;
+        width: 26.2% !important;
+        height: 17.6% !important;
+    }
+    .home-interactive-btn.btn-recursos {
+        left: 32.6% !important;
+        top: 76.5% !important;
+        width: 21.4% !important;
+        height: 19.1% !important;
     }
 }
 .acerca-item {
