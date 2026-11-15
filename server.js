@@ -17,6 +17,8 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const path = require('path');
+const { parsePhoneNumber, isValidPhoneNumber } = require('libphonenumber-js');
 
 
 async function verifyToken(token, connectionPool) {
@@ -48,6 +50,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(__dirname));
+app.use('/vendor/libphonenumber-js', express.static(path.join(__dirname, 'node_modules/libphonenumber-js/bundle')));
 
 // Trust proxy for secure rate limiting behind reverse proxies (like Nginx/Load Balancers)
 // Only trust the explicitly provided proxy IPs or local loopback by default.
@@ -811,27 +814,85 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/register', async (req, res) => {
     let connection = null;
     try {
-        const { usuario, password, 'password-rep': passwordRep, nombre, correo, telefono } = req.body;
+        const { usuario, password, 'password-rep': passwordRep, nombre, correo, telefono, codigo_pais } = req.body;
 
-        // Validar campos requeridos
-        if (!usuario || !password || !passwordRep || !nombre || !correo) {
-            return res.status(400).json({ error: 'Todos los campos obligatorios deben estar completos.' });
+        // 1. Validar Usuario (mínimo 2 caracteres)
+        if (!usuario || typeof usuario !== 'string' || usuario.trim().length < 2) {
+            return res.status(400).json({ error: 'El usuario debe contener al menos 2 caracteres.' });
         }
+        const cleanUsuario = usuario.trim();
 
-        // Validar que las contraseñas coincidan
+        // 2. Validar Nombre y Apellidos (obligatorio)
+        if (!nombre || typeof nombre !== 'string' || nombre.trim().length === 0) {
+            return res.status(400).json({ error: 'El nombre y apellidos son obligatorios.' });
+        }
+        const cleanNombre = nombre.trim();
+
+        // 3. Validar Correo Electrónico (formato real)
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!correo || typeof correo !== 'string' || !emailRegex.test(correo.trim())) {
+            return res.status(400).json({ error: 'El formato del correo electrónico es inválido.' });
+        }
+        const cleanCorreo = correo.trim().toLowerCase();
+
+        // 4. Validar Contraseña (mínimo 8 caracteres, 1 número, 1 mayúscula, 1 minúscula, 1 carácter especial)
+        if (!password || typeof password !== 'string' || password.length < 8) {
+            return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+        }
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({ error: 'La contraseña debe contener al menos una letra mayúscula.' });
+        }
+        if (!/[a-z]/.test(password)) {
+            return res.status(400).json({ error: 'La contraseña debe contener al menos una letra minúscula.' });
+        }
+        if (!/[0-9]/.test(password)) {
+            return res.status(400).json({ error: 'La contraseña debe contener al menos un número.' });
+        }
+        if (!/[^A-Za-z0-9\s]/.test(password)) {
+            return res.status(400).json({ error: 'La contraseña debe contener al menos un carácter especial (! @ # $ % & * ...).' });
+        }
         if (password !== passwordRep) {
             return res.status(400).json({ error: 'Las contraseñas no coinciden.' });
+        }
+
+        // 5. Validar Teléfono según país internacional
+        if (!telefono || typeof telefono !== 'string' || telefono.trim().length === 0) {
+            return res.status(400).json({ error: 'El teléfono es obligatorio.' });
+        }
+        const country = (codigo_pais || 'MX').toUpperCase();
+        const rawTel = telefono.trim();
+        let validPhone = false;
+        let formattedTelefono = null;
+
+        try {
+            if (rawTel.startsWith('+')) {
+                validPhone = isValidPhoneNumber(rawTel);
+                if (validPhone) {
+                    formattedTelefono = parsePhoneNumber(rawTel).number;
+                }
+            } else {
+                validPhone = isValidPhoneNumber(rawTel, country);
+                if (validPhone) {
+                    formattedTelefono = parsePhoneNumber(rawTel, country).number;
+                }
+            }
+        } catch (_) {
+            validPhone = false;
+        }
+
+        if (!validPhone) {
+            return res.status(400).json({ error: 'El número de teléfono no es válido para el país seleccionado.' });
         }
 
         // Comprobar si el usuario o el correo ya existen
         const [existingUsers] = await pool.execute(
             'SELECT * FROM usuarios WHERE usuario = ? OR email = ?',
-            [usuario, correo]
+            [cleanUsuario, cleanCorreo]
         );
 
         if (existingUsers.length > 0) {
-            const isUser = existingUsers.some(user => user.usuario === usuario);
-            const isEmail = existingUsers.some(user => user.email === correo);
+            const isUser = existingUsers.some(user => user.usuario === cleanUsuario);
+            const isEmail = existingUsers.some(user => user.email === cleanCorreo);
 
             if (isUser && isEmail) {
                 return res.status(400).json({ error: 'El usuario y el correo ya están registrados.' });
@@ -851,10 +912,10 @@ app.post('/api/register', async (req, res) => {
         const hasTx = connection && typeof connection.beginTransaction === 'function';
         if (hasTx) await connection.beginTransaction();
 
-        // Insertar el nuevo usuario en la base de datos
+        // Insertar el nuevo usuario en la base de datos con teléfono E.164
         const [result] = await connection.execute(
             'INSERT INTO usuarios (usuario, password_hash, nombre, telefono, email) VALUES (?, ?, ?, ?, ?)',
-            [usuario, passwordHash, nombre, telefono || null, correo]
+            [cleanUsuario, passwordHash, cleanNombre, formattedTelefono, cleanCorreo]
         );
         const newUserId = result.insertId;
 

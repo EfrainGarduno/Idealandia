@@ -22,6 +22,7 @@
     <!-- Markdown and Sanitization for Chat -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="/vendor/libphonenumber-js/libphonenumber-js.min.js"></script>
 
     <script type="importmap">
         {
@@ -154,27 +155,68 @@
             <div class="pension-form">
                 <div class="form-group">
                     <label for="reg-usuario">Usuario:</label>
-                    <input type="text" id="reg-usuario" name="reg-usuario">
+                    <input type="text" id="reg-usuario" name="reg-usuario" autocomplete="username">
+                    <span class="field-error-msg" id="error-reg-usuario"></span>
+                </div>
+                <div class="form-group">
+                    <label for="reg-nombre">Nombre y Apellidos:</label>
+                    <input type="text" id="reg-nombre" name="reg-nombre" autocomplete="name">
+                    <span class="field-error-msg" id="error-reg-nombre"></span>
+                </div>
+                <div class="form-group">
+                    <label for="reg-correo">Correo electrónico:</label>
+                    <input type="email" id="reg-correo" name="reg-correo" autocomplete="email">
+                    <span class="field-error-msg" id="error-reg-correo"></span>
                 </div>
                 <div class="form-group">
                     <label for="reg-password">Contraseña:</label>
-                    <input type="password" id="reg-password" name="reg-password">
+                    <div class="password-input-wrapper">
+                        <input type="password" id="reg-password" name="reg-password" autocomplete="new-password">
+                        <button type="button" id="btn-toggle-reg-password" class="btn-toggle-password" aria-label="Mostrar u ocultar contraseña">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="password-checklist" id="reg-password-checklist">
+                        <div class="checklist-header">La contraseña debe contener:</div>
+                        <ul>
+                            <li id="req-length" class="rule-unmet"><i class="fas fa-times-circle"></i> Al menos 8 caracteres</li>
+                            <li id="req-upper" class="rule-unmet"><i class="fas fa-times-circle"></i> Una letra mayúscula</li>
+                            <li id="req-lower" class="rule-unmet"><i class="fas fa-times-circle"></i> Una letra minúscula</li>
+                            <li id="req-number" class="rule-unmet"><i class="fas fa-times-circle"></i> Un número</li>
+                            <li id="req-special" class="rule-unmet"><i class="fas fa-times-circle"></i> Un carácter especial (! @ # $ % & *)</li>
+                        </ul>
+                    </div>
+                    <span class="field-error-msg" id="error-reg-password"></span>
                 </div>
                 <div class="form-group">
                     <label for="reg-password-rep">Repetir contraseña:</label>
-                    <input type="password" id="reg-password-rep" name="reg-password-rep">
-                </div>
-                <div class="form-group">
-                    <label for="reg-nombre">Nombre:</label>
-                    <input type="text" id="reg-nombre" name="reg-nombre">
-                </div>
-                <div class="form-group">
-                    <label for="reg-correo">Correo:</label>
-                    <input type="email" id="reg-correo" name="reg-correo">
+                    <div class="password-input-wrapper">
+                        <input type="password" id="reg-password-rep" name="reg-password-rep" autocomplete="new-password">
+                        <button type="button" id="btn-toggle-reg-password-rep" class="btn-toggle-password" aria-label="Mostrar u ocultar confirmación de contraseña">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <span class="field-error-msg" id="error-reg-password-rep"></span>
                 </div>
                 <div class="form-group">
                     <label for="reg-telefono">Teléfono:</label>
-                    <input type="tel" id="reg-telefono" name="reg-telefono">
+                    <div class="phone-input-group">
+                        <div class="phone-country-select-wrapper">
+                            <select id="reg-codigo-pais" class="phone-country-select" aria-label="Código de país">
+                                <option value="MX" selected>🇲🇽 México (+52)</option>
+                                <option value="US">🇺🇸 Estados Unidos (+1)</option>
+                                <option value="ES">🇪🇸 España (+34)</option>
+                                <option value="CO">🇨🇴 Colombia (+57)</option>
+                                <option value="AR">🇦🇷 Argentina (+54)</option>
+                                <option value="CL">🇨🇱 Chile (+56)</option>
+                                <option value="PE">🇵🇪 Perú (+51)</option>
+                            </select>
+                        </div>
+                        <div class="phone-number-wrapper">
+                            <input type="tel" id="reg-telefono" name="reg-telefono" placeholder="4425539803" autocomplete="tel-national">
+                        </div>
+                    </div>
+                    <span class="field-error-msg" id="error-reg-telefono"></span>
                 </div>
                 <button id="btn-register" style="padding: 10px 20px; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 16px; cursor: pointer; width: 100%; margin-top: 10px;">Registrarse</button>
             </div>
@@ -2498,25 +2540,342 @@
                 });
             }
 
+            // --- Registro de Usuario: Validaciones, UX y Toggle de Contraseñas ---
+            const regUsuarioInput = document.getElementById('reg-usuario');
+            const regNombreInput = document.getElementById('reg-nombre');
+            const regCorreoInput = document.getElementById('reg-correo');
+            const regPasswordInput = document.getElementById('reg-password');
+            const regPasswordRepInput = document.getElementById('reg-password-rep');
+            const regTelefonoInput = document.getElementById('reg-telefono');
+            const regCodigoPaisSelect = document.getElementById('reg-codigo-pais');
             const btnRegisterNewUser = document.getElementById('btn-register');
+
+            // 1. Alternar visualización de contraseña ("ojito")
+            function setupPasswordToggle(btnId, inputId) {
+                const btn = document.getElementById(btnId);
+                const input = document.getElementById(inputId);
+                if (btn && input) {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const isPassword = input.type === 'password';
+                        input.type = isPassword ? 'text' : 'password';
+                        const icon = btn.querySelector('i');
+                        if (icon) {
+                            if (isPassword) {
+                                icon.classList.remove('fa-eye');
+                                icon.classList.add('fa-eye-slash');
+                            } else {
+                                icon.classList.remove('fa-eye-slash');
+                                icon.classList.add('fa-eye');
+                            }
+                        }
+                    });
+                }
+            }
+            setupPasswordToggle('btn-toggle-reg-password', 'reg-password');
+            setupPasswordToggle('btn-toggle-reg-password-rep', 'reg-password-rep');
+
+            // 2. Poblar selector de países internacional usando libphonenumber-js
+            function populateCountrySelect() {
+                if (!regCodigoPaisSelect) return;
+                const lp = window.libphonenumber;
+                if (lp && typeof lp.getCountries === 'function') {
+                    try {
+                        const dn = typeof Intl !== 'undefined' && Intl.DisplayNames ? new Intl.DisplayNames(['es', 'es-419'], { type: 'region' }) : null;
+                        const countries = lp.getCountries();
+                        const countryItems = countries.map(code => {
+                            let name = code;
+                            if (dn) {
+                                try { name = dn.of(code) || code; } catch (_) {}
+                            }
+                            let dial = '';
+                            try { dial = '+' + lp.getCountryCallingCode(code); } catch (_) {}
+                            const flag = String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+                            return { code, name, dial, flag };
+                        });
+
+                        countryItems.sort((a, b) => {
+                            if (a.code === 'MX') return -1;
+                            if (b.code === 'MX') return 1;
+                            return a.name.localeCompare(b.name, 'es');
+                        });
+
+                        regCodigoPaisSelect.innerHTML = '';
+                        countryItems.forEach(item => {
+                            const opt = document.createElement('option');
+                            opt.value = item.code;
+                            opt.textContent = `${item.flag} ${item.name} (${item.dial})`;
+                            if (item.code === 'MX') opt.selected = true;
+                            regCodigoPaisSelect.appendChild(opt);
+                        });
+                    } catch (e) {
+                        console.warn('Error inicializando selector de países:', e);
+                    }
+                }
+            }
+            populateCountrySelect();
+
+            // 3. Reglas y checklist de contraseña en tiempo real
+            function updatePasswordChecklist(val) {
+                const checks = {
+                    'req-length': val.length >= 8,
+                    'req-upper': /[A-Z]/.test(val),
+                    'req-lower': /[a-z]/.test(val),
+                    'req-number': /[0-9]/.test(val),
+                    'req-special': /[^A-Za-z0-9\s]/.test(val)
+                };
+
+                let allMet = true;
+                for (const [id, met] of Object.entries(checks)) {
+                    const item = document.getElementById(id);
+                    if (item) {
+                        const icon = item.querySelector('i');
+                        if (met) {
+                            item.className = 'rule-met';
+                            if (icon) icon.className = 'fas fa-check-circle';
+                        } else {
+                            allMet = false;
+                            item.className = 'rule-unmet';
+                            if (icon) icon.className = 'fas fa-times-circle';
+                        }
+                    } else if (!met) {
+                        allMet = false;
+                    }
+                }
+                return allMet;
+            }
+
+            // 4. Funciones de validación individuales
+            function setFieldFeedback(inputEl, errorElId, errorMsg, showError) {
+                if (!inputEl) return !errorMsg;
+                const errorEl = document.getElementById(errorElId);
+                if (errorMsg) {
+                    if (showError) {
+                        inputEl.classList.add('input-invalid');
+                        inputEl.classList.remove('input-valid');
+                        if (errorEl) {
+                            errorEl.textContent = errorMsg;
+                            errorEl.classList.add('visible');
+                        }
+                    } else {
+                        inputEl.classList.remove('input-invalid');
+                        inputEl.classList.remove('input-valid');
+                        if (errorEl) {
+                            errorEl.textContent = '';
+                            errorEl.classList.remove('visible');
+                        }
+                    }
+                    return false;
+                } else {
+                    if (showError || inputEl.value.trim().length > 0) {
+                        inputEl.classList.remove('input-invalid');
+                        inputEl.classList.add('input-valid');
+                    } else {
+                        inputEl.classList.remove('input-invalid');
+                        inputEl.classList.remove('input-valid');
+                    }
+                    if (errorEl) {
+                        errorEl.textContent = '';
+                        errorEl.classList.remove('visible');
+                    }
+                    return true;
+                }
+            }
+
+            function validateUsuario(showError = false) {
+                if (!regUsuarioInput) return true;
+                const val = regUsuarioInput.value.trim();
+                let error = '';
+                if (!val) {
+                    error = 'El usuario es obligatorio.';
+                } else if (val.length < 2) {
+                    error = 'El usuario debe contener al menos 2 caracteres.';
+                }
+                return setFieldFeedback(regUsuarioInput, 'error-reg-usuario', error, showError);
+            }
+
+            function validateNombre(showError = false) {
+                if (!regNombreInput) return true;
+                const val = regNombreInput.value.trim();
+                let error = '';
+                if (!val) {
+                    error = 'El nombre y apellidos son obligatorios.';
+                }
+                return setFieldFeedback(regNombreInput, 'error-reg-nombre', error, showError);
+            }
+
+            function validateCorreo(showError = false) {
+                if (!regCorreoInput) return true;
+                const val = regCorreoInput.value.trim();
+                const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                let error = '';
+                if (!val) {
+                    error = 'El correo electrónico es obligatorio.';
+                } else if (!emailRegex.test(val)) {
+                    error = 'Por favor, ingresa un correo electrónico válido (ejemplo: usuario@dominio.com).';
+                }
+                return setFieldFeedback(regCorreoInput, 'error-reg-correo', error, showError);
+            }
+
+            function validatePassword(showError = false) {
+                if (!regPasswordInput) return true;
+                const val = regPasswordInput.value;
+                const allMet = updatePasswordChecklist(val);
+                let error = '';
+                if (!val) {
+                    error = 'La contraseña es obligatoria.';
+                } else if (!allMet) {
+                    if (val.length < 8) {
+                        error = 'La contraseña debe contener al menos 8 caracteres.';
+                    } else if (!/[A-Z]/.test(val)) {
+                        error = 'La contraseña debe contener al menos una letra mayúscula.';
+                    } else if (!/[a-z]/.test(val)) {
+                        error = 'La contraseña debe contener al menos una letra minúscula.';
+                    } else if (!/[0-9]/.test(val)) {
+                        error = 'La contraseña debe contener al menos un número.';
+                    } else if (!/[^A-Za-z0-9\s]/.test(val)) {
+                        error = 'La contraseña debe contener al menos un carácter especial (! @ # $ % & *).';
+                    }
+                }
+                return setFieldFeedback(regPasswordInput, 'error-reg-password', error, showError);
+            }
+
+            function validatePasswordRep(showError = false) {
+                if (!regPasswordRepInput) return true;
+                const repVal = regPasswordRepInput.value;
+                const pwdVal = regPasswordInput ? regPasswordInput.value : '';
+                let error = '';
+                if (!repVal) {
+                    error = 'Debes confirmar la contraseña.';
+                } else if (repVal !== pwdVal) {
+                    error = 'Las contraseñas no coinciden.';
+                }
+                return setFieldFeedback(regPasswordRepInput, 'error-reg-password-rep', error, showError);
+            }
+
+            function validateTelefono(showError = false) {
+                if (!regTelefonoInput) return true;
+                const val = regTelefonoInput.value.trim();
+                const country = regCodigoPaisSelect ? regCodigoPaisSelect.value : 'MX';
+                let error = '';
+                if (!val) {
+                    error = 'El teléfono es obligatorio.';
+                } else {
+                    const lp = window.libphonenumber;
+                    let isValid = false;
+                    try {
+                        if (lp && typeof lp.isValidPhoneNumber === 'function') {
+                            if (val.startsWith('+')) {
+                                isValid = lp.isValidPhoneNumber(val);
+                            } else {
+                                isValid = lp.isValidPhoneNumber(val, country);
+                            }
+                        } else {
+                            // Fallback de validación si libphonenumber no está disponible en cliente
+                            const clean = val.replace(/[\s\-()]/g, '');
+                            isValid = /^\+?[0-9]{7,15}$/.test(clean);
+                        }
+                    } catch (_) {
+                        isValid = false;
+                    }
+                    if (!isValid) {
+                        error = 'El número de teléfono no es válido para el país seleccionado.';
+                    }
+                }
+                return setFieldFeedback(regTelefonoInput, 'error-reg-telefono', error, showError);
+            }
+
+            // 5. Vincular listeners de interacción (blur e input dinámico)
+            function attachValidationListeners(inputEl, validatorFn) {
+                if (!inputEl) return;
+                inputEl.addEventListener('blur', () => {
+                    validatorFn(true);
+                });
+                inputEl.addEventListener('input', () => {
+                    if (inputEl.classList.contains('input-invalid') || inputEl.classList.contains('input-valid')) {
+                        validatorFn(true);
+                    }
+                });
+            }
+
+            attachValidationListeners(regUsuarioInput, validateUsuario);
+            attachValidationListeners(regNombreInput, validateNombre);
+            attachValidationListeners(regCorreoInput, validateCorreo);
+            attachValidationListeners(regTelefonoInput, validateTelefono);
+
+            if (regPasswordInput) {
+                regPasswordInput.addEventListener('input', () => {
+                    updatePasswordChecklist(regPasswordInput.value);
+                    if (regPasswordInput.classList.contains('input-invalid') || regPasswordInput.classList.contains('input-valid')) {
+                        validatePassword(true);
+                    }
+                    if (regPasswordRepInput && (regPasswordRepInput.classList.contains('input-invalid') || regPasswordRepInput.classList.contains('input-valid') || regPasswordRepInput.value.length > 0)) {
+                        validatePasswordRep(true);
+                    }
+                });
+                regPasswordInput.addEventListener('blur', () => {
+                    validatePassword(true);
+                });
+            }
+
+            if (regPasswordRepInput) {
+                regPasswordRepInput.addEventListener('input', () => {
+                    if (regPasswordRepInput.classList.contains('input-invalid') || regPasswordRepInput.classList.contains('input-valid')) {
+                        validatePasswordRep(true);
+                    }
+                });
+                regPasswordRepInput.addEventListener('blur', () => {
+                    validatePasswordRep(true);
+                });
+            }
+
+            if (regCodigoPaisSelect) {
+                regCodigoPaisSelect.addEventListener('change', () => {
+                    if (regTelefonoInput && (regTelefonoInput.value.trim().length > 0 || regTelefonoInput.classList.contains('input-invalid'))) {
+                        validateTelefono(true);
+                    }
+                });
+            }
+
+            // 6. Enviar formulario tras validar completamente
             if (btnRegisterNewUser) {
                 btnRegisterNewUser.addEventListener('click', async (e) => {
                     e.preventDefault();
-                    const usuario = document.getElementById('reg-usuario').value;
-                    const password = document.getElementById('reg-password').value;
-                    const passwordRep = document.getElementById('reg-password-rep').value;
-                    const nombre = document.getElementById('reg-nombre').value;
-                    const correo = document.getElementById('reg-correo').value;
-                    const telefono = document.getElementById('reg-telefono').value;
 
-                    if (!usuario || !password || !passwordRep || !nombre || !correo) {
-                        showModal('Por favor, completa todos los campos obligatorios.');
+                    const isUsuarioValid = validateUsuario(true);
+                    const isNombreValid = validateNombre(true);
+                    const isCorreoValid = validateCorreo(true);
+                    const isPasswordValid = validatePassword(true);
+                    const isPasswordRepValid = validatePasswordRep(true);
+                    const isTelefonoValid = validateTelefono(true);
+
+                    if (!isUsuarioValid || !isNombreValid || !isCorreoValid || !isPasswordValid || !isPasswordRepValid || !isTelefonoValid) {
+                        const firstInvalid = document.querySelector('#register .input-invalid');
+                        if (firstInvalid) firstInvalid.focus();
                         return;
                     }
 
-                    if (password !== passwordRep) {
-                        showModal('Las contraseñas no coinciden.');
-                        return;
+                    const usuario = regUsuarioInput.value.trim();
+                    const nombre = regNombreInput.value.trim();
+                    const correo = regCorreoInput.value.trim();
+                    const password = regPasswordInput.value;
+                    const passwordRep = regPasswordRepInput.value;
+                    const rawTelefono = regTelefonoInput.value.trim();
+                    const codigoPais = regCodigoPaisSelect ? regCodigoPaisSelect.value : 'MX';
+
+                    // Formatear a E.164 si libphonenumber está disponible
+                    let formattedTelefono = rawTelefono;
+                    const lp = window.libphonenumber;
+                    if (lp && typeof lp.parsePhoneNumber === 'function') {
+                        try {
+                            if (rawTelefono.startsWith('+')) {
+                                formattedTelefono = lp.parsePhoneNumber(rawTelefono).number;
+                            } else {
+                                formattedTelefono = lp.parsePhoneNumber(rawTelefono, codigoPais).number;
+                            }
+                        } catch (_) {
+                            formattedTelefono = rawTelefono;
+                        }
                     }
 
                     try {
@@ -2525,20 +2884,40 @@
                             headers: {
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({ usuario, password, 'password-rep': passwordRep, nombre, correo, telefono })
+                            body: JSON.stringify({
+                                usuario,
+                                password,
+                                'password-rep': passwordRep,
+                                nombre,
+                                correo,
+                                telefono: formattedTelefono,
+                                codigo_pais: codigoPais
+                            })
                         });
 
                         const data = await response.json();
 
                         if (response.ok) {
                             showModal(data.message);
-                            // Clear form
-                            document.getElementById('reg-usuario').value = '';
-                            document.getElementById('reg-password').value = '';
-                            document.getElementById('reg-password-rep').value = '';
-                            document.getElementById('reg-nombre').value = '';
-                            document.getElementById('reg-correo').value = '';
-                            document.getElementById('reg-telefono').value = '';
+                            // Limpiar formulario y estados de validación
+                            regUsuarioInput.value = '';
+                            regNombreInput.value = '';
+                            regCorreoInput.value = '';
+                            regPasswordInput.value = '';
+                            regPasswordRepInput.value = '';
+                            regTelefonoInput.value = '';
+                            if (regCodigoPaisSelect) regCodigoPaisSelect.value = 'MX';
+
+                            [regUsuarioInput, regNombreInput, regCorreoInput, regPasswordInput, regPasswordRepInput, regTelefonoInput].forEach(input => {
+                                if (input) {
+                                    input.classList.remove('input-valid', 'input-invalid');
+                                }
+                            });
+                            document.querySelectorAll('#register .field-error-msg').forEach(msg => {
+                                msg.textContent = '';
+                                msg.classList.remove('visible');
+                            });
+                            updatePasswordChecklist('');
                         } else {
                             showModal(`Error: ${data.error}`);
                         }
