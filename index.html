@@ -671,6 +671,7 @@
                                 <th>Teléfono</th>
                                 <th>Email</th>
                                 <th>Roles</th>
+                                <th>Estatus</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -2549,6 +2550,37 @@
                 }, 100);
             }
 
+            // Catálogo de Servicios compartido (Registro y Portal de Asociados)
+            let cachedServiciosList = null;
+            async function fetchServiciosCatalog() {
+                if (cachedServiciosList && cachedServiciosList.length > 0) {
+                    return cachedServiciosList;
+                }
+                const res = await fetch('/api/servicios');
+                if (!res.ok) throw new Error(`HTTP ${res.status} al consultar catálogo de servicios`);
+                const data = await res.json();
+                const list = Array.isArray(data) ? data : (data && Array.isArray(data.servicios) ? data.servicios : []);
+                cachedServiciosList = list;
+                return list;
+            }
+
+            async function populateServiciosSelect(selectElement, selectedValue = null) {
+                if (!selectElement) return;
+                const servicios = await fetchServiciosCatalog();
+                selectElement.innerHTML = '<option value="">Seleccionar servicio...</option>';
+                servicios.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.nombre;
+                    if (selectedValue !== null && String(s.id) === String(selectedValue)) {
+                        opt.selected = true;
+                    }
+                    selectElement.appendChild(opt);
+                });
+            }
+            window.populateServiciosSelect = populateServiciosSelect;
+            window.fetchServiciosCatalog = fetchServiciosCatalog;
+
             // Check for verificar_correo in URL
             const tokenVerificarCorreo = urlParams.get('verificar_correo');
             const tokenAsociadoPortal = urlParams.get('asociado_token');
@@ -2603,46 +2635,75 @@
                     if (secPortal) secPortal.style.display = 'block';
 
                     try {
-                        const res = await fetch(`/api/asociados/solicitud/${encodeURIComponent(tokenAsociadoPortal)}`);
-                        const data = await res.json();
-                        if (res.ok && data.solicitud) {
-                            const sol = data.solicitud;
-                            document.getElementById('portal-token').value = tokenAsociadoPortal;
-                            document.getElementById('portal-candidato-nombre').textContent = sol.usuario_nombre || '';
-                            document.getElementById('portal-candidato-email').textContent = sol.usuario_email || '';
-                            document.getElementById('portal-observaciones-texto').textContent = sol.observaciones || 'Se requiere complementar la información de tu servicio.';
+                        let res;
+                        try {
+                            res = await fetch(`/api/asociados/solicitud/${encodeURIComponent(tokenAsociadoPortal)}`);
+                        } catch (netErr) {
+                            console.error('Error de red al consultar solicitud de asociado:', netErr);
+                            showModal('No se pudo establecer conexión con el servidor. Por favor verifica tu conexión a internet e intenta nuevamente.');
+                            return;
+                        }
 
-                            const portalServicioSelect = document.getElementById('portal-servicio');
-                            await populateServiciosSelect(portalServicioSelect, sol.servicio_id);
+                        let data;
+                        try {
+                            data = await res.json();
+                        } catch (jsonErr) {
+                            console.error('Error al procesar JSON de solicitud:', jsonErr);
+                            showModal('Respuesta inesperada del servidor.');
+                            return;
+                        }
 
-                            const portalGroupOtro = document.getElementById('portal-group-servicio-otro');
-                            const portalServicioOtroInput = document.getElementById('portal-servicio-otro');
-                            if (sol.servicio_id === 999) {
-                                if (portalGroupOtro) portalGroupOtro.style.display = 'block';
-                                if (portalServicioOtroInput) portalServicioOtroInput.value = sol.nombre_servicio_otro || '';
-                            }
-
-                            if (portalServicioSelect) {
-                                portalServicioSelect.addEventListener('change', () => {
-                                    if (portalGroupOtro) {
-                                        portalGroupOtro.style.display = (portalServicioSelect.value === '999') ? 'block' : 'none';
-                                    }
-                                });
-                            }
-
-                            const portalDescTextarea = document.getElementById('portal-descripcion');
-                            if (portalDescTextarea) {
-                                portalDescTextarea.value = sol.descripcion_servicio || '';
-                            }
-
-                        } else {
-                            showModal(data.error || 'El enlace para actualizar tu solicitud es inválido o ha expirado.');
+                        if (!res.ok) {
+                            const errMsg = data && data.error 
+                                ? data.error 
+                                : `El enlace para actualizar tu solicitud no es válido o ha expirado (Código ${res.status}).`;
+                            showModal(errMsg);
                             const inicioLink = document.querySelector('a[data-section="inicio"]');
                             if (inicioLink) inicioLink.click();
+                            return;
                         }
-                    } catch (e) {
-                        console.error('Error cargando portal asociado:', e);
-                        showModal('Error al conectar con el servidor.');
+
+                        if (!data || !data.solicitud) {
+                            showModal('No se encontró la información de la solicitud.');
+                            const inicioLink = document.querySelector('a[data-section="inicio"]');
+                            if (inicioLink) inicioLink.click();
+                            return;
+                        }
+
+                        const sol = data.solicitud;
+                        document.getElementById('portal-token').value = tokenAsociadoPortal;
+                        document.getElementById('portal-candidato-nombre').textContent = sol.usuario_nombre || '';
+                        document.getElementById('portal-candidato-email').textContent = sol.usuario_email || '';
+                        document.getElementById('portal-observaciones-texto').textContent = sol.observaciones || 'Se requiere complementar la información de tu servicio.';
+
+                        const portalServicioSelect = document.getElementById('portal-servicio');
+                        await populateServiciosSelect(portalServicioSelect, sol.servicio_id);
+
+                        const portalGroupOtro = document.getElementById('portal-group-servicio-otro');
+                        const portalServicioOtroInput = document.getElementById('portal-servicio-otro');
+                        if (String(sol.servicio_id) === '999') {
+                            if (portalGroupOtro) portalGroupOtro.style.display = 'block';
+                            if (portalServicioOtroInput) portalServicioOtroInput.value = sol.nombre_servicio_otro || '';
+                        } else {
+                            if (portalGroupOtro) portalGroupOtro.style.display = 'none';
+                        }
+
+                        if (portalServicioSelect) {
+                            portalServicioSelect.onchange = () => {
+                                if (portalGroupOtro) {
+                                    portalGroupOtro.style.display = (portalServicioSelect.value === '999') ? 'block' : 'none';
+                                }
+                            };
+                        }
+
+                        const portalDescTextarea = document.getElementById('portal-descripcion');
+                        if (portalDescTextarea) {
+                            portalDescTextarea.value = sol.descripcion_servicio || '';
+                        }
+
+                    } catch (jsErr) {
+                        console.error('Error inesperado al inicializar portal asociado:', jsErr);
+                        showModal('Ocurrió un error al inicializar el portal. Por favor recarga la página.');
                     } finally {
                         window.history.replaceState({}, document.title, window.location.pathname);
                     }
@@ -2882,19 +2943,8 @@
             async function loadServiciosCatalog() {
                 if (serviciosCatalogLoaded || !regServicioSelect) return;
                 try {
-                    const res = await fetch('/api/servicios');
-                    const data = await res.json();
-                    const serviciosList = Array.isArray(data) ? data : (data && Array.isArray(data.servicios) ? data.servicios : []);
-                    if (serviciosList.length > 0) {
-                        regServicioSelect.innerHTML = '<option value="">Seleccionar servicio...</option>';
-                        serviciosList.forEach(s => {
-                            const opt = document.createElement('option');
-                            opt.value = s.id;
-                            opt.textContent = s.nombre;
-                            regServicioSelect.appendChild(opt);
-                        });
-                        serviciosCatalogLoaded = true;
-                    }
+                    await populateServiciosSelect(regServicioSelect);
+                    serviciosCatalogLoaded = true;
                 } catch (err) {
                     console.error('Error al cargar catálogo de servicios:', err);
                 }

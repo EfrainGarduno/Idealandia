@@ -259,6 +259,10 @@ async function runTests() {
             descripcion_servicio: 'Clases particulares de inglés de negocios y preparación TOEFL.'
         });
         assert.strictEqual(resRegAsocA.status, 201);
+        assert.strictEqual(
+            resRegAsocA.body.message,
+            'Registro exitoso como Asociado. Te hemos enviado un correo para validar tu dirección. El enlace de validación tiene una vigencia de 10 minutos.'
+        );
         
         // Verificar en BD que el usuario tenga rol 'Asociado' y activo = 0
         const [asocARows] = await pool.query(
@@ -478,6 +482,21 @@ async function runTests() {
         assert(solAPostUpdate[0].descripcion_servicio.includes('certificación C2'));
         console.log('✓ Portal del candidato permite subsanar observaciones y reactiva solicitud a "por_aprobar".');
 
+        // Intento de reusar el mismo token ya consumido -> 400
+        const resReusoTokenPortal = await request('POST', '/api/asociados/solicitud/actualizar', {
+            token: candidateToken,
+            servicio_id: 1,
+            descripcion_servicio: 'Intento de doble envío con token consumido'
+        });
+        assert.strictEqual(resReusoTokenPortal.status, 400);
+        assert(resReusoTokenPortal.body.error.includes('utilizado'));
+        console.log('✓ Reuso de token de portal rechazado (token de un solo uso).');
+
+        // Intento con token falso/inexistente -> 404
+        const resTokenFalsoPortal = await request('GET', '/api/asociados/solicitud/token_completamente_falso_123');
+        assert.strictEqual(resTokenFalsoPortal.status, 404);
+        console.log('✓ Consulta a portal con token inexistente responde 404.');
+
         // 8.3 Ciclo 2 de "Más Información" (iteración repetida sin romper el flujo)
         const resMasInfoCiclo2 = await request('POST', `/api/admin/asociados/${solA.id}/mas-informacion`, {
             observaciones: 'Por favor aclara si las clases son presenciales o en línea.'
@@ -500,7 +519,14 @@ async function runTests() {
             descripcion_servicio: 'Clases particulares de inglés avanzado tanto presenciales como en línea con horario flexible.'
         });
         assert.strictEqual(resPortalPost2.status, 200);
-        console.log('✓ Ciclo múltiple de "Más información" completado satisfactoriamente.');
+
+        // Verificar que el historial conservó íntegramente todos los ciclos
+        const [historialCiclos] = await pool.query(
+            'SELECT estatus_anterior, estatus_nuevo, observaciones FROM historial_solicitudes_asociado WHERE solicitud_id = ? ORDER BY id ASC',
+            [solA.id]
+        );
+        assert(historialCiclos.length >= 4, 'El historial debe conservar todos los ciclos de revisión');
+        console.log('✓ Ciclo múltiple de "Más información" completado satisfactoriamente con historial completo conservado.');
 
         // 8.4 Prueba de fallback cuando el servicio de correo falla: debe registrar warning y no crash
         serverExports.initMailTransporter({
@@ -678,6 +704,35 @@ async function runTests() {
         assert(modalDetalle, 'Debe existir modal #modal-asociado-detalle');
         console.log('✓ Estructura DOM de registro, portal y administración validada correctamente.');
 
+        // 11.2 Verificar populateServiciosSelect en JSDOM
+        const domServicios = new JSDOM(htmlContent, { runScripts: "dangerously" });
+        const { window: winServicios } = domServicios;
+        winServicios.fetch = async (url) => {
+            if (url === '/api/servicios') {
+                return {
+                    ok: true,
+                    json: async () => [
+                        { id: 1, nombre: 'Clases de Idiomas' },
+                        { id: 2, nombre: 'Asesoría Empresarial' },
+                        { id: 999, nombre: 'Otros' }
+                    ]
+                };
+            }
+            return { ok: true, json: async () => [] };
+        };
+        const startServIdx = htmlContent.indexOf('// Catálogo de Servicios compartido');
+        const endServIdx = htmlContent.indexOf('// Check for verificar_correo');
+        assert(startServIdx !== -1 && endServIdx !== -1, 'Debe existir bloque de catálogo de servicios compartido en index.html');
+        const servScriptCode = htmlContent.substring(startServIdx, endServIdx);
+        winServicios.eval(servScriptCode);
+
+        assert.strictEqual(typeof winServicios.populateServiciosSelect, 'function', 'populateServiciosSelect debe ser función global accesible');
+        const mockSelect = winServicios.document.createElement('select');
+        await winServicios.populateServiciosSelect(mockSelect, 999);
+        assert.strictEqual(mockSelect.options.length, 4, 'Debe poblar placeholder + 3 opciones');
+        assert.strictEqual(mockSelect.value, '999', 'Debe seleccionar el valor 999 correctamente');
+        console.log('✓ populateServiciosSelect se ejecuta sin ReferenceError y puebla correctamente el select.');
+
         // ---------------------------------------------------------------------
         // TEST 12: Corrección del Modal Común (#custom-modal) y showConfirm
         // ---------------------------------------------------------------------
@@ -737,6 +792,74 @@ async function runTests() {
 
         console.log('✓ showConfirm es configurable (muestra "Confirmar" para autorizar y "Eliminar" para bajas).');
         console.log('✓ #custom-modal no retiene style="display: none" inline en ninguna circunstancia.');
+
+        // ---------------------------------------------------------------------
+        // TEST 13: Listado de Usuarios y Visualización de Estatus
+        // ---------------------------------------------------------------------
+        console.log('\n--- TEST 13: Listado de Usuarios y Visualización de Estatus ---');
+        const resAdminUsuarios = await request('GET', '/api/admin/usuarios', null, {
+            'Authorization': `Bearer ${adminToken}`
+        });
+        assert.strictEqual(resAdminUsuarios.status, 200);
+        assert(Array.isArray(resAdminUsuarios.body));
+
+        // Verificar que los usuarios de prueba tienen los campos requeridos
+        const testUsrNormal = resAdminUsuarios.body.find(u => u.id === usrRows[0].id);
+        assert(testUsrNormal, 'Usuario regular debe estar en la lista');
+        assert.strictEqual(testUsrNormal.activo, 1, 'Usuario regular debe estar activo');
+        assert.strictEqual(testUsrNormal.es_asociado, 0, 'Usuario regular no es asociado');
+
+        const testAsocAutorizado = resAdminUsuarios.body.find(u => u.id === asocAId);
+        assert(testAsocAutorizado, 'Asociado A debe estar en la lista');
+        assert.strictEqual(testAsocAutorizado.activo, 1, 'Asociado A autorizado debe estar activo = 1');
+        assert.strictEqual(testAsocAutorizado.es_asociado, 1, 'Asociado A debe tener es_asociado = 1');
+
+        const testAsocRechazado = resAdminUsuarios.body.find(u => u.id === asocBId);
+        assert(testAsocRechazado, 'Asociado B debe estar en la lista');
+        assert.strictEqual(testAsocRechazado.activo, 0, 'Asociado B rechazado debe estar activo = 0');
+        assert.strictEqual(testAsocRechazado.es_asociado, 1, 'Asociado B debe tener es_asociado = 1');
+
+        // Cargar admin.js en JSDOM y verificar que loadUsuarios() renderiza la columna Estatus
+        const adminJsContent = fs.readFileSync(path.join(__dirname, 'admin.js'), 'utf8');
+        const domAdmin = new JSDOM(htmlContent, { runScripts: "dangerously" });
+        const { window: winAdmin } = domAdmin;
+        
+        // Mock fetch para winAdmin
+        winAdmin.fetch = async (url) => {
+            if (url === '/api/admin/usuarios') {
+                return {
+                    ok: true,
+                    json: async () => [
+                        { id: 101, usuario: 'usr_activo', nombre: 'Juan Activo', email: 'j@test.com', activo: 1, es_asociado: 0 },
+                        { id: 102, usuario: 'usr_inactivo', nombre: 'Pedro Inactivo', email: 'p@test.com', activo: 0, es_asociado: 0 },
+                        { id: 103, usuario: 'asoc_inactivo', nombre: 'Ana Asociada', email: 'a@test.com', activo: 0, es_asociado: 1, solicitud_asociado_estatus: 'por_aprobar' },
+                        { id: 104, usuario: 'asoc_activo', nombre: 'Carlos Asociado', email: 'c@test.com', activo: 1, es_asociado: 1, solicitud_asociado_estatus: 'autorizado' },
+                        { id: 105, usuario: 'asoc_rechazado', nombre: 'Luis Rechazado', email: 'l@test.com', activo: 0, es_asociado: 1, solicitud_asociado_estatus: 'rechazado' }
+                    ]
+                };
+            }
+            return { ok: true, json: async () => [] };
+        };
+
+        winAdmin.eval(adminJsContent);
+        await winAdmin.loadUsuarios();
+
+        const tableUsers = winAdmin.document.querySelector('#admin-usuarios table');
+        const userHeaders = Array.from(tableUsers.querySelectorAll('thead th')).map(th => th.textContent.trim());
+        assert(userHeaders.includes('Estatus'), 'La tabla de usuarios debe tener la cabecera Estatus');
+        assert.strictEqual(userHeaders[userHeaders.length - 2], 'Estatus', 'Estatus debe preceder a Acciones');
+
+        const rowsUsers = winAdmin.document.querySelectorAll('#admin-usuarios-tbody tr');
+        assert.strictEqual(rowsUsers.length, 5);
+
+        // Validar badges generados
+        assert(rowsUsers[0].querySelector('.badge-user-activo'), 'Usuario activo debe tener badge-user-activo');
+        assert(rowsUsers[1].querySelector('.badge-user-inactivo'), 'Usuario inactivo debe tener badge-user-inactivo');
+        assert(rowsUsers[2].querySelector('.badge-asoc-inactivo'), 'Asociado inactivo debe tener badge-asoc-inactivo');
+        assert(rowsUsers[3].querySelector('.badge-asoc-activo'), 'Asociado activo debe tener badge-asoc-activo');
+        assert(rowsUsers[4].querySelector('.badge-asoc-rechazado'), 'Asociado rechazado debe tener badge-asoc-rechazado');
+
+        console.log('✓ Tabla de usuarios renderiza correctamente la columna Estatus distinguiendo usuarios y asociados activos/inactivos.');
 
         console.log('\n================================================================');
         console.log('🎉 TODAS LAS PRUEBAS DE ASOCIADOS PASARON SATISFACTORIAMENTE');

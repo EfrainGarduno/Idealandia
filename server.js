@@ -1071,7 +1071,7 @@ app.post('/api/register', async (req, res) => {
             });
 
             return res.status(201).json({
-                message: 'Registro exitoso como Asociado. Te hemos enviado un correo para validar tu dirección en los próximos 10 minutos.',
+                message: 'Registro exitoso como Asociado. Te hemos enviado un correo para validar tu dirección. El enlace de validación tiene una vigencia de 10 minutos.',
                 tipo: 'asociado'
             });
 
@@ -1229,7 +1229,18 @@ app.get('/api/asociados/solicitud/:token', async (req, res) => {
             return res.status(404).json({ error: 'Solicitud no encontrada.' });
         }
 
-        res.status(200).json({ solicitud: solRows[0] });
+        const sol = solRows[0];
+        if (sol.estatus === 'autorizado') {
+            return res.status(400).json({ error: 'Esta solicitud ya ha sido autorizada previamente y no requiere modificaciones.' });
+        }
+        if (sol.estatus === 'rechazado') {
+            return res.status(400).json({ error: 'Esta solicitud fue rechazada y no se encuentra disponible para edición.' });
+        }
+        if (sol.estatus !== 'mas_informacion') {
+            return res.status(400).json({ error: 'Esta solicitud se encuentra en revisión y no está disponible para edición en este momento.' });
+        }
+
+        res.status(200).json({ solicitud: sol });
     } catch (error) {
         console.error('Error fetching solicitud by token:', error);
         res.status(500).json({ error: 'Error interno del servidor.' });
@@ -1260,6 +1271,20 @@ app.post('/api/asociados/solicitud/actualizar', async (req, res) => {
 
         if (!tRecord.is_valid) {
             return res.status(400).json({ error: 'El enlace de acceso ha expirado.' });
+        }
+
+        const [solCheck] = await pool.execute('SELECT id, estatus FROM solicitudes_asociado WHERE id = ?', [tRecord.solicitud_id]);
+        if (solCheck.length === 0) {
+            return res.status(404).json({ error: 'Solicitud no encontrada.' });
+        }
+        if (solCheck[0].estatus === 'autorizado') {
+            return res.status(400).json({ error: 'Esta solicitud ya ha sido autorizada previamente y no puede ser modificada.' });
+        }
+        if (solCheck[0].estatus === 'rechazado') {
+            return res.status(400).json({ error: 'Esta solicitud fue rechazada y no puede ser modificada.' });
+        }
+        if (solCheck[0].estatus !== 'mas_informacion') {
+            return res.status(400).json({ error: 'Esta solicitud no se encuentra disponible para edición.' });
         }
 
         const parsedServicioId = parseInt(servicio_id, 10);
@@ -1435,7 +1460,7 @@ async function sendAsociadoEmailVerificacion(email, nombre, token) {
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const link = `${appUrl}/?verificar_correo=${token}`;
     const subject = 'Valida tu correo electrónico para tu solicitud como Asociado — Idealandia';
-    const text = `Hola ${nombre}:\n\nTu correo electrónico debe ser validado para continuar con tu solicitud como Asociado de Idealandia.\n\nPor favor haz clic en el siguiente enlace para validar tu correo (válido únicamente por 10 minutos):\n${link}\n\nSi tú no realizaste este registro, por favor ignora este mensaje.\n\nAtentamente,\nEquipo Idealandia`;
+    const text = `Hola ${nombre}:\n\nTu correo electrónico debe ser validado para continuar con tu solicitud como Asociado de Idealandia.\n\nPor favor haz clic en el siguiente enlace para validar tu correo (el enlace de validación tiene una vigencia de 10 minutos):\n${link}\n\nSi tú no realizaste este registro, por favor ignora este mensaje.\n\nAtentamente,\nEquipo Idealandia`;
     const html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
             <h2 style="color: #2c3e50;">Bienvenido a Idealandia</h2>
@@ -1444,7 +1469,7 @@ async function sendAsociadoEmailVerificacion(email, nombre, token) {
             <p style="text-align: center; margin: 30px 0;">
                 <a href="${link}" style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Validar mi correo</a>
             </p>
-            <p style="color: #666; font-size: 13px;">Este enlace expira en exactamente <strong>10 minutos</strong>.</p>
+            <p style="color: #666; font-size: 13px;">El enlace de validación tiene una vigencia de exactamente <strong>10 minutos</strong>.</p>
             <p style="color: #666; font-size: 13px;">Si el botón no funciona, copia y pega el siguiente enlace en tu navegador:<br><a href="${link}">${link}</a></p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
             <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
@@ -2097,7 +2122,21 @@ app.get('/api/admin/check', requireFunctionality('admin'), async (req, res) => {
 
 app.get('/api/admin/usuarios', requireFunctionality('admin'), requirePermission('usuarios.read'), async (req, res) => {
     try {
-        const [usuarios] = await pool.execute('SELECT id, usuario, nombre, telefono, email FROM usuarios');
+        const [usuarios] = await pool.execute(`
+            SELECT u.id, u.usuario, u.nombre, u.telefono, u.email, u.activo,
+                   EXISTS(
+                       SELECT 1 FROM usuario_roles ur
+                       JOIN roles r ON ur.rol_id = r.id
+                       WHERE ur.usuario_id = u.id AND LOWER(r.nombre) = 'asociado'
+                   ) as es_asociado,
+                   (
+                       SELECT s.estatus FROM solicitudes_asociado s
+                       WHERE s.usuario_id = u.id
+                       ORDER BY s.id DESC LIMIT 1
+                   ) as solicitud_asociado_estatus
+            FROM usuarios u
+            ORDER BY u.id ASC
+        `);
         res.status(200).json(usuarios);
     } catch (error) {
         console.error('Error in GET /api/admin/usuarios:', error);

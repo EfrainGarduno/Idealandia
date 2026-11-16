@@ -302,6 +302,27 @@ async function loadUsuarios() {
             td.appendChild(rolesBtn);
             tr.appendChild(td);
 
+            // Estatus
+            td = document.createElement('td');
+            let statusHtml = '';
+            if (u.es_asociado) {
+                if (u.activo) {
+                    statusHtml = '<span class="user-status-badge badge-asoc-activo"><i class="fas fa-user-check"></i> Asociado autorizado</span>';
+                } else if (u.solicitud_asociado_estatus === 'rechazado') {
+                    statusHtml = '<span class="user-status-badge badge-asoc-rechazado"><i class="fas fa-times-circle"></i> Asociado inactivo</span>';
+                } else {
+                    statusHtml = '<span class="user-status-badge badge-asoc-inactivo"><i class="fas fa-user-clock"></i> Asociado inactivo</span>';
+                }
+            } else {
+                if (u.activo) {
+                    statusHtml = '<span class="user-status-badge badge-user-activo"><i class="fas fa-check-circle"></i> Usuario activo</span>';
+                } else {
+                    statusHtml = '<span class="user-status-badge badge-user-inactivo"><i class="fas fa-ban"></i> Usuario inactivo</span>';
+                }
+            }
+            td.innerHTML = statusHtml;
+            tr.appendChild(td);
+
             // Acciones
             td = document.createElement('td');
             td.className = 'admin-actions-cell';
