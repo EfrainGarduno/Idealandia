@@ -1313,6 +1313,12 @@
                 const textElement = document.getElementById('custom-modal-message');
                 const buttonsContainer = document.getElementById('custom-modal-buttons');
 
+                if (!overlay || !textElement || !buttonsContainer) {
+                    return resolve(true);
+                }
+
+                overlay.style.removeProperty('display');
+
                 textElement.textContent = message;
                 buttonsContainer.innerHTML = '';
 
@@ -1322,6 +1328,7 @@
 
                 okBtn.onclick = () => {
                     overlay.classList.remove('active');
+                    overlay.style.removeProperty('display');
                     resolve(true);
                 };
 
@@ -1330,28 +1337,44 @@
             });
         };
 
-        window.showConfirm = function(message) {
+        window.showConfirm = function(message, options = {}) {
             return new Promise((resolve) => {
                 const overlay = document.getElementById('custom-modal');
                 const textElement = document.getElementById('custom-modal-message');
                 const buttonsContainer = document.getElementById('custom-modal-buttons');
 
+                if (!overlay || !textElement || !buttonsContainer) {
+                    return resolve(false);
+                }
+
+                overlay.style.removeProperty('display');
+
                 textElement.textContent = message;
                 buttonsContainer.innerHTML = '';
 
+                let confirmText = options.confirmText;
+                if (!confirmText) {
+                    const isDelete = /eliminar|borrar|revocar/i.test(message);
+                    confirmText = isDelete ? 'Eliminar' : 'Confirmar';
+                }
+                const cancelText = options.cancelText || 'Cancelar';
+                const confirmClass = options.confirmClass || 'custom-modal-btn primary';
+
                 const cancelBtn = document.createElement('button');
                 cancelBtn.className = 'custom-modal-btn secondary';
-                cancelBtn.textContent = 'Cancelar';
+                cancelBtn.textContent = cancelText;
                 cancelBtn.onclick = () => {
                     overlay.classList.remove('active');
+                    overlay.style.removeProperty('display');
                     resolve(false);
                 };
 
                 const confirmBtn = document.createElement('button');
-                confirmBtn.className = 'custom-modal-btn primary';
-                confirmBtn.textContent = 'Eliminar';
+                confirmBtn.className = confirmClass;
+                confirmBtn.textContent = confirmText;
                 confirmBtn.onclick = () => {
                     overlay.classList.remove('active');
+                    overlay.style.removeProperty('display');
                     resolve(true);
                 };
 

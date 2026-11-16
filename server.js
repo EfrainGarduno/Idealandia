@@ -1140,8 +1140,22 @@ const handleVerificarCorreoAsociado = async (req, res) => {
         }
 
         const record = rows[0];
+
+        // Comprobar el estatus actual de la solicitud del usuario
+        const [solicitudRows] = await pool.execute(
+            'SELECT id, estatus FROM solicitudes_asociado WHERE usuario_id = ? ORDER BY id DESC LIMIT 1',
+            [record.usuario_id]
+        );
+        if (solicitudRows.length > 0 && solicitudRows[0].estatus === 'rechazado') {
+            return res.status(400).json({
+                error: 'Este enlace de validación ya no es válido. La solicitud asociada a este correo fue rechazada o el enlace fue invalidado.'
+            });
+        }
+
         if (record.usado === 1) {
-            return res.status(400).json({ error: 'Este enlace de validación ya ha sido utilizado previamente.' });
+            return res.status(400).json({
+                error: 'Este enlace de validación ya no es válido. La solicitud asociada a este correo fue rechazada o el enlace fue invalidado.'
+            });
         }
 
         if (!record.is_valid) {
@@ -1415,7 +1429,9 @@ function escapeHTML(str) {
 }
 
 async function sendAsociadoEmailVerificacion(email, nombre, token) {
-    if (!mailTransporter) return;
+    if (!mailTransporter) {
+        throw new Error('Servicio de correo no disponible (mailTransporter no configurado).');
+    }
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const link = `${appUrl}/?verificar_correo=${token}`;
     const subject = 'Valida tu correo electrónico para tu solicitud como Asociado — Idealandia';
@@ -1434,7 +1450,7 @@ async function sendAsociadoEmailVerificacion(email, nombre, token) {
             <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
         </div>
     `;
-    await mailTransporter.sendMail({
+    return await mailTransporter.sendMail({
         from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
         to: email,
         subject,
@@ -1444,7 +1460,9 @@ async function sendAsociadoEmailVerificacion(email, nombre, token) {
 }
 
 async function sendAsociadoEmailAutorizado(email, nombre) {
-    if (!mailTransporter) return;
+    if (!mailTransporter) {
+        throw new Error('Servicio de correo no disponible (mailTransporter no configurado).');
+    }
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const loginLink = `${appUrl}/?seccion=login`;
     const subject = '¡Tu solicitud como Asociado ha sido autorizada! — Idealandia';
@@ -1462,7 +1480,7 @@ async function sendAsociadoEmailAutorizado(email, nombre) {
             <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
         </div>
     `;
-    await mailTransporter.sendMail({
+    return await mailTransporter.sendMail({
         from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
         to: email,
         subject,
@@ -1472,7 +1490,9 @@ async function sendAsociadoEmailAutorizado(email, nombre) {
 }
 
 async function sendAsociadoEmailRechazado(email, nombre, observaciones) {
-    if (!mailTransporter) return;
+    if (!mailTransporter) {
+        throw new Error('Servicio de correo no disponible (mailTransporter no configurado).');
+    }
     const subject = 'Actualización sobre tu solicitud como Asociado — Idealandia';
     const text = `Hola ${nombre}:\n\nTu solicitud para formar parte de Idealandia como Asociado no fue aprobada en esta ocasión.\n\nMotivo / observaciones:\n${observaciones}\n\nGracias por tu interés en Idealandia.\n\nAtentamente,\nEquipo Idealandia`;
     const html = `
@@ -1489,7 +1509,7 @@ async function sendAsociadoEmailRechazado(email, nombre, observaciones) {
             <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
         </div>
     `;
-    await mailTransporter.sendMail({
+    return await mailTransporter.sendMail({
         from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
         to: email,
         subject,
@@ -1499,7 +1519,9 @@ async function sendAsociadoEmailRechazado(email, nombre, observaciones) {
 }
 
 async function sendAsociadoEmailMasInformacion(email, nombre, observaciones, token) {
-    if (!mailTransporter) return;
+    if (!mailTransporter) {
+        throw new Error('Servicio de correo no disponible (mailTransporter no configurado).');
+    }
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const link = `${appUrl}/?asociado_token=${token}`;
     const subject = 'Tu solicitud como Asociado requiere información adicional — Idealandia';
@@ -1521,18 +1543,13 @@ async function sendAsociadoEmailMasInformacion(email, nombre, observaciones, tok
             <p style="color: #999; font-size: 12px;">Equipo de Idealandia</p>
         </div>
     `;
-    await mailTransporter.sendMail({
+    return await mailTransporter.sendMail({
         from: process.env.SMTP_FROM || '"Idealandia" <no-reply@idealandia.com.mx>',
         to: email,
         subject,
         text,
         html
     });
-}
-
-// Export for test_smtp_config.js
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { app, initMailTransporter };
 }
 
 
@@ -3453,11 +3470,21 @@ app.post('/api/admin/asociados/:id/autorizar', requireFunctionality('admin'), re
         await connection.commit();
 
         // 4. Enviar correo de autorización
-        sendAsociadoEmailAutorizado(sol.email, sol.nombre).catch(err => {
-            console.error('Error enviando correo de autorización:', err.message);
-        });
+        let emailSent = false;
+        let emailWarning = null;
+        try {
+            await sendAsociadoEmailAutorizado(sol.email, sol.nombre);
+            emailSent = true;
+        } catch (err) {
+            console.error('Error enviando correo de autorización para solicitud ID ' + id + ':', err.message);
+            emailWarning = 'La solicitud fue autorizada y la cuenta activada, pero no se pudo enviar el correo de notificación al asociado.';
+        }
 
-        res.status(200).json({ message: 'Solicitud autorizada exitosamente. La cuenta del asociado ha sido activada.' });
+        if (emailSent) {
+            res.status(200).json({ success: true, emailSent: true, message: 'Solicitud autorizada exitosamente. La cuenta del asociado ha sido activada.' });
+        } else {
+            res.status(200).json({ success: true, emailSent: false, warning: emailWarning, message: 'Solicitud autorizada exitosamente.' });
+        }
 
     } catch (error) {
         if (connection) {
@@ -3503,7 +3530,13 @@ app.post('/api/admin/asociados/:id/rechazar', requireFunctionality('admin'), req
         // 1. Asegurar usuario inactivo
         await connection.execute('UPDATE usuarios SET activo = 0 WHERE id = ?', [sol.usuario_id]);
 
-        // 2. Actualizar solicitud
+        // 2. Invalidar tokens pendientes de verificación de correo para ese usuario
+        await connection.execute('UPDATE verificaciones_correo SET usado = 1 WHERE usuario_id = ? AND usado = 0', [sol.usuario_id]);
+
+        // 3. Invalidar tokens pendientes de más información para esta solicitud
+        await connection.execute('UPDATE tokens_solicitud_asociado SET usado = 1 WHERE solicitud_id = ? AND usado = 0', [id]);
+
+        // 4. Actualizar solicitud
         await connection.execute(`
             UPDATE solicitudes_asociado
             SET estatus = 'rechazado',
@@ -3513,7 +3546,7 @@ app.post('/api/admin/asociados/:id/rechazar', requireFunctionality('admin'), req
             WHERE id = ?
         `, [cleanObs, adminId, id]);
 
-        // 3. Registrar en historial
+        // 5. Registrar en historial
         await connection.execute(`
             INSERT INTO historial_solicitudes_asociado (solicitud_id, estatus_anterior, estatus_nuevo, usuario_id, observaciones)
             VALUES (?, ?, 'rechazado', ?, ?)
@@ -3521,12 +3554,22 @@ app.post('/api/admin/asociados/:id/rechazar', requireFunctionality('admin'), req
 
         await connection.commit();
 
-        // 4. Enviar correo de rechazo
-        sendAsociadoEmailRechazado(sol.email, sol.nombre, cleanObs).catch(err => {
-            console.error('Error enviando correo de rechazo:', err.message);
-        });
+        // 6. Enviar correo de rechazo
+        let emailSent = false;
+        let emailWarning = null;
+        try {
+            await sendAsociadoEmailRechazado(sol.email, sol.nombre, cleanObs);
+            emailSent = true;
+        } catch (err) {
+            console.error('Error enviando correo de rechazo para solicitud ID ' + id + ':', err.message);
+            emailWarning = 'La solicitud fue rechazada, pero no se pudo enviar el correo de notificación al solicitante.';
+        }
 
-        res.status(200).json({ message: 'Solicitud rechazada correctamente.' });
+        if (emailSent) {
+            res.status(200).json({ success: true, emailSent: true, message: 'Solicitud rechazada correctamente.' });
+        } else {
+            res.status(200).json({ success: true, emailSent: false, warning: emailWarning, message: 'Solicitud rechazada correctamente.' });
+        }
 
     } catch (error) {
         if (connection) {
@@ -3601,11 +3644,21 @@ app.post('/api/admin/asociados/:id/mas-informacion', requireFunctionality('admin
         await connection.commit();
 
         // 5. Enviar correo de solicitud de más información
-        sendAsociadoEmailMasInformacion(sol.email, sol.nombre, cleanObs, token).catch(err => {
-            console.error('Error enviando correo de más información:', err.message);
-        });
+        let emailSent = false;
+        let emailWarning = null;
+        try {
+            await sendAsociadoEmailMasInformacion(sol.email, sol.nombre, cleanObs, token);
+            emailSent = true;
+        } catch (err) {
+            console.error('Error enviando correo de más información para solicitud ID ' + id + ':', err.message);
+            emailWarning = 'La solicitud se actualizó a "Más información", pero no se pudo enviar el correo de notificación al solicitante. Por favor verifica la configuración del servidor de correo.';
+        }
 
-        res.status(200).json({ message: 'Solicitud de información enviada correctamente al candidato.' });
+        if (emailSent) {
+            res.status(200).json({ success: true, emailSent: true, message: 'Solicitud de información enviada correctamente al candidato.' });
+        } else {
+            res.status(200).json({ success: true, emailSent: false, warning: emailWarning, message: 'Solicitud actualizada a más información.' });
+        }
 
     } catch (error) {
         if (connection) {

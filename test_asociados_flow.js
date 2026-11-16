@@ -374,7 +374,7 @@ async function runTests() {
         // 6.3 Reutilización del token (no se permite)
         const resVerifReuso = await request('GET', `/api/asociados/verificar-correo?token=${verifRecordA.token_hash}`);
         assert.strictEqual(resVerifReuso.status, 400);
-        assert(resVerifReuso.body.error.includes('utilizado'));
+        assert(resVerifReuso.body.error.includes('ya no es válido') || resVerifReuso.body.error.includes('utilizado'));
         console.log('✓ Token ya utilizado no puede ser reutilizado.');
 
         // ---------------------------------------------------------------------
@@ -418,9 +418,9 @@ async function runTests() {
         console.log('✓ Administrador visualiza lista y detalle de solicitudes con historial y estado de correo.');
 
         // ---------------------------------------------------------------------
-        // TEST 8: Flujo Más Información y Portal del Candidato
+        // TEST 8: Flujo Más Información, Envío de Correo y Portal del Candidato
         // ---------------------------------------------------------------------
-        console.log('\n--- TEST 8: Solicitud de Más Información y Portal del Candidato ---');
+        console.log('\n--- TEST 8: Solicitud de Más Información, Envío de Correo y Portal del Candidato ---');
         
         // 8.1 Sin observaciones obligatorias -> 400
         const resMasInfoSinObs = await request('POST', `/api/admin/asociados/${solA.id}/mas-informacion`, {
@@ -429,11 +429,26 @@ async function runTests() {
         assert.strictEqual(resMasInfoSinObs.status, 400);
         console.log('✓ Pedir más información exige observaciones obligatorias.');
 
-        // 8.2 Con observaciones -> pasa a mas_informacion y genera token
+        // Configurar mock mail transporter para verificar que se envía el correo
+        const sentEmails = [];
+        serverExports.initMailTransporter({
+            sendMail: async (mailOptions) => {
+                sentEmails.push(mailOptions);
+                return { messageId: 'mock-mail-id-123' };
+            }
+        });
+
+        // 8.2 Con observaciones y correo exitoso -> pasa a mas_informacion, genera token y envía correo
         const resMasInfoExito = await request('POST', `/api/admin/asociados/${solA.id}/mas-informacion`, {
             observaciones: 'Por favor adjunta tu experiencia docente previa en clases de inglés.'
         }, { 'Authorization': `Bearer ${adminToken}` });
         assert.strictEqual(resMasInfoExito.status, 200);
+        assert.strictEqual(resMasInfoExito.body.emailSent, true, 'Debe indicar que el correo fue enviado exitosamente');
+        assert(sentEmails.length > 0, 'Debe haber ejecutado sendMail');
+        const lastEmail = sentEmails[sentEmails.length - 1];
+        assert.strictEqual(lastEmail.to, `${asocUserA}@test.idealandia.com`);
+        assert(lastEmail.subject.includes('información adicional'));
+        console.log('✓ "Pedir más información" envía el correo al solicitante con las observaciones y token seguro.');
 
         // Obtener el token generado en tokens_solicitud_asociado
         const [tokenRows] = await pool.query(
@@ -449,7 +464,7 @@ async function runTests() {
         assert.strictEqual(resPortalGet.body.solicitud.estatus, 'mas_informacion');
         assert(resPortalGet.body.solicitud.observaciones.includes('experiencia docente'));
 
-        // Candidato actualiza su información
+        // Candidato actualiza su información (Ciclo 1)
         const resPortalPost = await request('POST', '/api/asociados/solicitud/actualizar', {
             token: candidateToken,
             servicio_id: 1,
@@ -463,13 +478,74 @@ async function runTests() {
         assert(solAPostUpdate[0].descripcion_servicio.includes('certificación C2'));
         console.log('✓ Portal del candidato permite subsanar observaciones y reactiva solicitud a "por_aprobar".');
 
+        // 8.3 Ciclo 2 de "Más Información" (iteración repetida sin romper el flujo)
+        const resMasInfoCiclo2 = await request('POST', `/api/admin/asociados/${solA.id}/mas-informacion`, {
+            observaciones: 'Por favor aclara si las clases son presenciales o en línea.'
+        }, { 'Authorization': `Bearer ${adminToken}` });
+        assert.strictEqual(resMasInfoCiclo2.status, 200);
+        assert.strictEqual(resMasInfoCiclo2.body.emailSent, true);
+
+        // Obtener nuevo token
+        const [tokenRows2] = await pool.query(
+            'SELECT * FROM tokens_solicitud_asociado WHERE solicitud_id = ? AND usado = 0 ORDER BY id DESC LIMIT 1',
+            [solA.id]
+        );
+        assert.strictEqual(tokenRows2.length, 1);
+        const candidateToken2 = tokenRows2[0].token_hash;
+
+        // Candidato actualiza nuevamente
+        const resPortalPost2 = await request('POST', '/api/asociados/solicitud/actualizar', {
+            token: candidateToken2,
+            servicio_id: 1,
+            descripcion_servicio: 'Clases particulares de inglés avanzado tanto presenciales como en línea con horario flexible.'
+        });
+        assert.strictEqual(resPortalPost2.status, 200);
+        console.log('✓ Ciclo múltiple de "Más información" completado satisfactoriamente.');
+
+        // 8.4 Prueba de fallback cuando el servicio de correo falla: debe registrar warning y no crash
+        serverExports.initMailTransporter({
+            sendMail: async () => {
+                throw new Error('Simulated SMTP transport timeout');
+            }
+        });
+        const resMasInfoEmailFail = await request('POST', `/api/admin/asociados/${solA.id}/mas-informacion`, {
+            observaciones: 'Prueba de tolerancia a fallo de correo'
+        }, { 'Authorization': `Bearer ${adminToken}` });
+        assert.strictEqual(resMasInfoEmailFail.status, 200);
+        assert.strictEqual(resMasInfoEmailFail.body.emailSent, false);
+        assert(resMasInfoEmailFail.body.warning.includes('no se pudo enviar el correo'));
+        console.log('✓ Fallo de envío de correo se maneja limpiamente devolviendo warning sin romper el endpoint.');
+
+        // Restaurar mock transporter operativo y regresar solicitud a por_aprobar para autorizar después
+        serverExports.initMailTransporter({
+            sendMail: async (mailOptions) => {
+                sentEmails.push(mailOptions);
+                return { messageId: 'mock-mail-id-restored' };
+            }
+        });
+        const [tokenRowsFail] = await pool.query(
+            'SELECT token_hash FROM tokens_solicitud_asociado WHERE solicitud_id = ? AND usado = 0 ORDER BY id DESC LIMIT 1',
+            [solA.id]
+        );
+        if (tokenRowsFail.length > 0) {
+            await request('POST', '/api/asociados/solicitud/actualizar', {
+                token: tokenRowsFail[0].token_hash,
+                servicio_id: 1,
+                descripcion_servicio: 'Clases particulares completas de inglés.'
+            });
+        }
+
         // ---------------------------------------------------------------------
-        // TEST 9: Flujo Rechazar Solicitud
+        // TEST 9: Flujo Rechazar Solicitud e Invalidez Inmediata de Token de Correo
         // ---------------------------------------------------------------------
-        console.log('\n--- TEST 9: Rechazo de Solicitud ---');
+        console.log('\n--- TEST 9: Rechazo de Solicitud e Invalidación de Tokens ---');
         
-        // Probaremos rechazar la solicitud de Asociado B
+        // Asociado B se registró pero NUNCA validó su correo
         const solBId = solBRows[0].id;
+        const [verifBBefore] = await pool.query('SELECT id, token_hash, usado FROM verificaciones_correo WHERE usuario_id = ?', [asocBId]);
+        assert.strictEqual(verifBBefore.length, 1);
+        assert.strictEqual(verifBBefore[0].usado, 0, 'Token de correo de Asociado B estaba pendiente');
+        const verifBToken = verifBBefore[0].token_hash;
 
         // Sin observaciones -> 400
         const resRechazoSinObs = await request('POST', `/api/admin/asociados/${solBId}/rechazar`, {
@@ -490,7 +566,19 @@ async function runTests() {
 
         const [usrBPostRechazo] = await pool.query('SELECT activo FROM usuarios WHERE id = ?', [asocBId]);
         assert.strictEqual(usrBPostRechazo[0].activo, 0, 'Usuario rechazado debe permanecer con activo = 0');
-        console.log('✓ Solicitud rechazada correctamente con usuario inactivo y registro de revisor.');
+
+        // CRUCIAL (Problema 4): El token de validación de correo debe haber quedado invalidado (usado = 1)
+        const [verifBAfter] = await pool.query('SELECT usado FROM verificaciones_correo WHERE id = ?', [verifBBefore[0].id]);
+        assert.strictEqual(verifBAfter[0].usado, 1, 'Token de verificación de correo debe ser marcado como usado = 1 inmediatamente al rechazar');
+
+        // Al intentar validar el correo con el enlace previo, debe ser rechazado con 400
+        const resVerifBPostRechazo = await request('GET', `/api/asociados/verificar-correo?token=${verifBToken}`);
+        assert.strictEqual(resVerifBPostRechazo.status, 400);
+        assert.strictEqual(
+            resVerifBPostRechazo.body.error,
+            'Este enlace de validación ya no es válido. La solicitud asociada a este correo fue rechazada o el enlace fue invalidado.'
+        );
+        console.log('✓ Token de verificación de correo queda inmediatamente invalidado si el asociado es rechazado antes de validar.');
 
         // ---------------------------------------------------------------------
         // TEST 10: Flujo Autorizar Solicitud y Login Exitoso
@@ -589,6 +677,66 @@ async function runTests() {
         const modalDetalle = doc.getElementById('modal-asociado-detalle');
         assert(modalDetalle, 'Debe existir modal #modal-asociado-detalle');
         console.log('✓ Estructura DOM de registro, portal y administración validada correctamente.');
+
+        // ---------------------------------------------------------------------
+        // TEST 12: Corrección del Modal Común (#custom-modal) y showConfirm
+        // ---------------------------------------------------------------------
+        console.log('\n--- TEST 12: Comportamiento del Modal Común (#custom-modal) y showConfirm ---');
+        
+        // Cargar entorno JSDOM con ejecución de scripts para verificar la lógica de window.showConfirm y modales
+        const domScripts = new JSDOM(htmlContent, { runScripts: "dangerously" });
+        const win = domScripts.window;
+
+        // Extraer y evaluar las funciones de modal desde index.html para garantizar aislamiento en JSDOM
+        const startModalIdx = htmlContent.indexOf('window.showModal = function');
+        const endModalIdx = htmlContent.indexOf('async function loadFooterInfo');
+        assert(startModalIdx !== -1 && endModalIdx !== -1, 'Debe encontrarse la definición de window.showModal y window.showConfirm en index.html');
+        const modalFuncsCode = htmlContent.substring(startModalIdx, endModalIdx);
+        win.eval(modalFuncsCode);
+
+        const overlay = win.document.getElementById('custom-modal');
+        assert(overlay, 'Debe existir #custom-modal en el DOM');
+
+        // 12.1 Verificar que showConfirm sin opciones para acción destructiva usa "Eliminar"
+        const confirmPromiseEliminar = win.showConfirm('¿Estás seguro de que deseas eliminar este registro?');
+        const confirmBtnEliminar = win.document.getElementById('custom-modal-buttons').querySelector('button:last-child');
+        const cancelBtnEliminar = win.document.getElementById('custom-modal-buttons').querySelector('button:first-child');
+        assert(confirmBtnEliminar, 'Debe existir botón de confirmación');
+        assert.strictEqual(confirmBtnEliminar.textContent, 'Eliminar', 'Acción destructiva debe mostrar "Eliminar"');
+        assert.strictEqual(cancelBtnEliminar.textContent, 'Cancelar', 'Botón de cancelar debe mostrar "Cancelar"');
+        assert(overlay.classList.contains('active'), 'Overlay debe tener clase active');
+        assert.strictEqual(overlay.style.display, '', 'Overlay NO debe tener style="display: ..." inline');
+
+        // Cancelar el diálogo
+        cancelBtnEliminar.click();
+        const resultadoEliminar = await confirmPromiseEliminar;
+        assert.strictEqual(resultadoEliminar, false);
+        assert(!overlay.classList.contains('active'), 'Overlay debe remover clase active al cerrar');
+        assert.strictEqual(overlay.style.display, '', 'Al cerrar, overlay NO debe retener display: none');
+
+        // 12.2 Verificar que showConfirm con opciones configurables usa "Confirmar" (Autorizar Asociado)
+        const confirmPromiseAutorizar = win.showConfirm('¿Confirmas que deseas autorizar a este Asociado?', {
+            confirmText: 'Confirmar',
+            cancelText: 'Cancelar'
+        });
+        const confirmBtnAutorizar = win.document.getElementById('custom-modal-buttons').querySelector('button:last-child');
+        assert.strictEqual(confirmBtnAutorizar.textContent, 'Confirmar', 'Autorizar debe mostrar "Confirmar" y no "Eliminar"');
+        confirmBtnAutorizar.click();
+        const resultadoAutorizar = await confirmPromiseAutorizar;
+        assert.strictEqual(resultadoAutorizar, true);
+        assert(!overlay.classList.contains('active'));
+        assert.strictEqual(overlay.style.display, '', 'Al confirmar, overlay NO debe retener display: none');
+
+        // 12.3 Simular que un estilo inline espurio existía y verificar que showModal / showConfirm lo eliminan
+        overlay.style.display = 'none'; // Simular estado corrupto
+        win.showModal('Mensaje de prueba');
+        assert.strictEqual(overlay.style.display, '', 'showModal debe remover propiedad inline display');
+        const modalOkBtn = win.document.getElementById('custom-modal-buttons').querySelector('button');
+        modalOkBtn.click();
+        assert.strictEqual(overlay.style.display, '', 'Al cerrar modal, overlay style.display permanece limpio');
+
+        console.log('✓ showConfirm es configurable (muestra "Confirmar" para autorizar y "Eliminar" para bajas).');
+        console.log('✓ #custom-modal no retiene style="display: none" inline en ninguna circunstancia.');
 
         console.log('\n================================================================');
         console.log('🎉 TODAS LAS PRUEBAS DE ASOCIADOS PASARON SATISFACTORIAMENTE');

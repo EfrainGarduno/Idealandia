@@ -2691,25 +2691,37 @@ async function showAsociadoDetalle(id) {
             ${actionsHtml}
         `;
 
-        // Vincular acciones
+        // Vincular acciones (asignación directa de onclick para evitar acumulación de listeners)
         const btnAutorizar = document.getElementById('btn-asoc-autorizar');
         if (btnAutorizar) {
-            btnAutorizar.addEventListener('click', () => autorizarAsociado(s));
+            btnAutorizar.onclick = () => autorizarAsociado(s);
         }
 
         const btnRechazar = document.getElementById('btn-asoc-rechazar');
         if (btnRechazar) {
-            btnRechazar.addEventListener('click', () => pedirObservacionesRechazo(s));
+            btnRechazar.onclick = () => pedirObservacionesRechazo(s);
         }
 
         const btnMasInfo = document.getElementById('btn-asoc-mas-info');
         if (btnMasInfo) {
-            btnMasInfo.addEventListener('click', () => pedirObservacionesMasInfo(s));
+            btnMasInfo.onclick = () => pedirObservacionesMasInfo(s);
         }
 
     } catch (err) {
         console.error('Error in showAsociadoDetalle:', err);
         body.innerHTML = `<div style="color: #dc3545; padding: 20px; text-align: center;"><p>Error al cargar el detalle: ${escapeHTML(err.message)}</p><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-asociado-detalle').style.display='none'">Cerrar</button></div>`;
+    }
+}
+
+function closeCustomModal() {
+    const overlay = document.getElementById('custom-modal');
+    if (overlay) {
+        overlay.classList.remove('active');
+        overlay.style.removeProperty('display');
+        const btns = document.getElementById('custom-modal-buttons');
+        if (btns) btns.innerHTML = '';
+        const msg = document.getElementById('custom-modal-message');
+        if (msg) msg.innerHTML = '';
     }
 }
 
@@ -2719,7 +2731,10 @@ async function autorizarAsociado(s) {
         return;
     }
 
-    const confirmed = await window.showConfirm(`¿Confirmas que deseas autorizar a ${s.nombre} como Asociado de Idealandia y activar su cuenta?`);
+    const confirmed = await window.showConfirm(
+        `¿Confirmas que deseas autorizar a ${s.nombre} como Asociado de Idealandia y activar su cuenta?`,
+        { confirmText: 'Confirmar', cancelText: 'Cancelar' }
+    );
     if (!confirmed) return;
 
     try {
@@ -2747,6 +2762,8 @@ function pedirObservacionesRechazo(s) {
     const buttonsContainer = document.getElementById('custom-modal-buttons');
     if (!overlay || !textElement || !buttonsContainer) return;
 
+    overlay.style.removeProperty('display');
+
     textElement.innerHTML = `
         <div style="text-align: left;">
             <h4 style="margin: 0 0 10px 0; color: #dc3545;">Rechazar Solicitud de Asociado</h4>
@@ -2761,7 +2778,7 @@ function pedirObservacionesRechazo(s) {
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'custom-modal-btn secondary';
     cancelBtn.textContent = 'Cancelar';
-    cancelBtn.onclick = () => { overlay.style.display = 'none'; };
+    cancelBtn.onclick = () => { closeCustomModal(); };
 
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'custom-modal-btn primary';
@@ -2790,7 +2807,7 @@ function pedirObservacionesRechazo(s) {
                 body: JSON.stringify({ observaciones })
             });
             const data = await res.json();
-            overlay.style.display = 'none';
+            closeCustomModal();
 
             if (res.ok) {
                 window.showModal(data.message || 'Solicitud rechazada correctamente.');
@@ -2801,14 +2818,14 @@ function pedirObservacionesRechazo(s) {
             }
         } catch (err) {
             console.error('Error al rechazar:', err);
-            overlay.style.display = 'none';
+            closeCustomModal();
             window.showModal('Error interno al rechazar la solicitud.');
         }
     };
 
     buttonsContainer.appendChild(cancelBtn);
     buttonsContainer.appendChild(confirmBtn);
-    overlay.style.display = 'flex';
+    overlay.classList.add('active');
     setTimeout(() => {
         const t = document.getElementById('modal-input-rechazo');
         if (t) t.focus();
@@ -2820,6 +2837,8 @@ function pedirObservacionesMasInfo(s) {
     const textElement = document.getElementById('custom-modal-message');
     const buttonsContainer = document.getElementById('custom-modal-buttons');
     if (!overlay || !textElement || !buttonsContainer) return;
+
+    overlay.style.removeProperty('display');
 
     textElement.innerHTML = `
         <div style="text-align: left;">
@@ -2835,7 +2854,7 @@ function pedirObservacionesMasInfo(s) {
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'custom-modal-btn secondary';
     cancelBtn.textContent = 'Cancelar';
-    cancelBtn.onclick = () => { overlay.style.display = 'none'; };
+    cancelBtn.onclick = () => { closeCustomModal(); };
 
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'custom-modal-btn primary';
@@ -2864,10 +2883,14 @@ function pedirObservacionesMasInfo(s) {
                 body: JSON.stringify({ observaciones })
             });
             const data = await res.json();
-            overlay.style.display = 'none';
+            closeCustomModal();
 
             if (res.ok) {
-                window.showModal(data.message || 'Solicitud de información enviada correctamente al candidato.');
+                if (data.warning) {
+                    window.showModal(data.warning);
+                } else {
+                    window.showModal(data.message || 'Solicitud de información enviada correctamente al candidato.');
+                }
                 document.getElementById('modal-asociado-detalle').style.display = 'none';
                 loadAsociados();
             } else {
@@ -2875,14 +2898,14 @@ function pedirObservacionesMasInfo(s) {
             }
         } catch (err) {
             console.error('Error al pedir más información:', err);
-            overlay.style.display = 'none';
+            closeCustomModal();
             window.showModal('Error interno al solicitar más información.');
         }
     };
 
     buttonsContainer.appendChild(cancelBtn);
     buttonsContainer.appendChild(confirmBtn);
-    overlay.style.display = 'flex';
+    overlay.classList.add('active');
     setTimeout(() => {
         const t = document.getElementById('modal-input-mas-info');
         if (t) t.focus();
