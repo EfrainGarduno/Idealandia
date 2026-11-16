@@ -650,7 +650,7 @@
         <section id="admin" class="content-section" style="display: none;">
             <h2>Administración de Idealandia</h2>
             <div class="admin-tabs">
-                <button class="admin-tab-btn active" data-tab="admin-usuarios">Usuarios</button>
+                <button class="admin-tab-btn" data-tab="admin-usuarios">Usuarios</button>
                 <button class="admin-tab-btn" data-tab="admin-roles">Roles</button>
                 <button class="admin-tab-btn" data-tab="admin-permisos">Permisos</button>
                 <button class="admin-tab-btn" data-tab="admin-funcionalidades">Funcionalidades</button>
@@ -659,7 +659,7 @@
                 <button class="admin-tab-btn" data-tab="admin-asociados">Asociados</button>
             </div>
 
-            <div class="admin-tab-content active" id="admin-usuarios">
+            <div class="admin-tab-content" id="admin-usuarios">
                 <h3>Gestión de Usuarios</h3>
                 <div class="table-responsive">
                     <table class="admin-table">
@@ -1318,6 +1318,12 @@
                     return resolve(true);
                 }
 
+                if (typeof message === 'string') {
+                    if (/permiso denegado|se requiere\s+[a-z0-9_\.]+|rbac_permission_denied|rbac_access_denied|permission denied/i.test(message)) {
+                        message = 'Acceso no autorizado o vencido para esta funcionalidad.';
+                    }
+                }
+
                 overlay.style.removeProperty('display');
 
                 textElement.textContent = message;
@@ -1830,6 +1836,13 @@
                     try {
                         // Limpiar de inmediato el estado en memoria y temporizadores RBAC
                         window.currentUser = null;
+                        window.userAdminPermissions = null;
+                        ['admin-usuarios-tbody', 'admin-roles-tbody', 'admin-permisos-tbody',
+                         'admin-funcionalidades-tbody', 'admin-menus-tbody', 'admin-accesos-tbody',
+                         'admin-asociados-tbody'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.innerHTML = '';
+                        });
                         if (typeof clearIdealitaUserContext === 'function') clearIdealitaUserContext();
                         if (typeof scheduleRbacTimers === 'function') {
                             scheduleRbacTimers(null, null);

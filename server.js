@@ -280,6 +280,51 @@ async function checkUserPermission(connectionPool, userId, permCode) {
     }
 }
 
+async function getUserPermissions(connectionPool, userId) {
+    if (!userId) return [];
+    const permissions = new Set();
+    const roleQuery = `
+        SELECT DISTINCT p.codigo
+        FROM usuario_roles ur
+        JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+        JOIN rol_permisos rp ON r.id = rp.rol_id
+        JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+        WHERE ur.usuario_id = ?
+    `;
+    try {
+        const [roleRows] = await connectionPool.execute(roleQuery, [userId]);
+        for (const row of roleRows) {
+            if (row.codigo) permissions.add(row.codigo);
+        }
+    } catch (e) {
+        console.error('Error fetching role permissions in getUserPermissions:', e);
+    }
+
+    const accesoQuery = `
+        SELECT DISTINCT p.codigo
+        FROM usuario_funcionalidades uf
+        JOIN acceso_permisos ap ON uf.id = ap.acceso_id
+        JOIN permisos p ON ap.permiso_id = p.id AND p.activo = TRUE
+        JOIN funcionalidades f ON uf.funcionalidad_id = f.id AND f.activo = TRUE
+        WHERE uf.usuario_id = ?
+          AND uf.estado = 'activo'
+          AND (
+              uf.tipo_acceso = 'permanente'
+              OR (uf.tipo_acceso = 'temporal' AND uf.fecha_inicio <= NOW() AND uf.fecha_fin > NOW())
+          )
+    `;
+    try {
+        const [accesoRows] = await connectionPool.execute(accesoQuery, [userId]);
+        for (const row of accesoRows) {
+            if (row.codigo) permissions.add(row.codigo);
+        }
+    } catch (err) {
+        // Fallback if table not ready or temporary error
+    }
+
+    return Array.from(permissions);
+}
+
 async function assignDefaultUserRole(connOrPool, userId) {
     if (!userId) {
         throw new Error('ID de usuario inválido para asignación de rol.');
@@ -2094,7 +2139,7 @@ const requirePermission = (permCode) => {
             const hasPermission = await checkUserPermission(pool, req.userId, permCode);
             if (!hasPermission) {
                 return res.status(403).json({
-                    error: `Permiso denegado: se requiere ${permCode}`,
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
                     code: 'RBAC_PERMISSION_DENIED',
                     permiso: permCode
                 });
@@ -2116,6 +2161,32 @@ const requireAdmin = requireFunctionality('administracion');
 
 app.get('/api/admin/check', requireFunctionality('admin'), async (req, res) => {
     res.status(200).json({ message: 'Acceso de administrador concedido.' });
+});
+
+app.get('/api/admin/mis-permisos', requireFunctionality('admin'), async (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        const permisos = await getUserPermissions(pool, req.userId);
+        res.status(200).json({ permisos });
+    } catch (error) {
+        console.error('Error in /api/admin/mis-permisos:', error);
+        res.status(500).json({ error: 'Error interno del servidor al consultar permisos.' });
+    }
+});
+
+app.get('/api/me/permisos', async (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+        }
+        const decoded = await verifyToken(token, pool);
+        const permisos = await getUserPermissions(pool, decoded.id);
+        res.status(200).json({ permisos });
+    } catch (error) {
+        return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+    }
 });
 
 // --- ADMIN ENDPOINTS ---

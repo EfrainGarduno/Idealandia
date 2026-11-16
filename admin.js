@@ -220,7 +220,172 @@ if (typeof window !== 'undefined') {
 }
 
 
-document.addEventListener('DOMContentLoaded', () => {
+const STANDARD_UNAUTHORIZED_MESSAGE = 'Acceso no autorizado o vencido para esta funcionalidad.';
+
+const ADMIN_TAB_PERMISSIONS = {
+    'admin-usuarios': 'usuarios.read',
+    'admin-roles': 'roles.read',
+    'admin-permisos': 'permisos.read',
+    'admin-funcionalidades': 'funcionalidades.read',
+    'admin-menus': 'menus.read',
+    'admin-accesos': 'admin.access',
+    'admin-asociados': 'asociados.read'
+};
+
+const ADMIN_TAB_CONFIG = [
+    { tabId: 'admin-usuarios', perm: 'usuarios.read', loadFn: () => loadUsuarios() },
+    { tabId: 'admin-roles', perm: 'roles.read', loadFn: () => loadRoles() },
+    { tabId: 'admin-permisos', perm: 'permisos.read', loadFn: () => loadPermisos() },
+    { tabId: 'admin-funcionalidades', perm: 'funcionalidades.read', loadFn: () => loadFuncionalidades() },
+    { tabId: 'admin-menus', perm: 'menus.read', loadFn: () => loadMenus() },
+    { tabId: 'admin-accesos', perm: 'admin.access', loadFn: () => loadAccesos() },
+    { tabId: 'admin-asociados', perm: 'asociados.read', loadFn: () => loadAsociados() }
+];
+
+function isUnauthorizedResponse(res, data) {
+    if (!res) return false;
+    if (res.status === 401 || res.status === 403) return true;
+    if (data && (data.code === 'RBAC_PERMISSION_DENIED' || data.code === 'RBAC_ACCESS_DENIED' || data.code === 'AUTH_REQUIRED')) return true;
+    if (data && typeof data.error === 'string' && (data.error.includes('Permiso denegado') || data.error.includes('Acceso no autorizado') || data.error.includes('se requiere '))) return true;
+    return false;
+}
+
+function handleAdminError(res, data, defaultMsg = 'Error al procesar la solicitud.') {
+    if (isUnauthorizedResponse(res, data)) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        else alert(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+    const msg = (data && data.error) ? `Error: ${data.error}` : defaultMsg;
+    if (window.showModal) window.showModal(msg);
+    else alert(msg);
+}
+
+function clearAllAdminTables() {
+    const tableIds = [
+        'admin-usuarios-tbody', 'admin-roles-tbody', 'admin-permisos-tbody',
+        'admin-funcionalidades-tbody', 'admin-menus-tbody', 'admin-accesos-tbody',
+        'admin-asociados-tbody'
+    ];
+    tableIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+}
+
+let isSyncingAdminTabs = false;
+async function syncAdminTabsAndPermissions() {
+    if (isSyncingAdminTabs) return;
+    isSyncingAdminTabs = true;
+    try {
+        clearAllAdminTables();
+
+        let perms = [];
+        try {
+            const res = await fetch('/api/admin/mis-permisos', { cache: 'no-store' });
+            if (!res.ok) {
+                window.userAdminPermissions = new Set();
+                const adminSection = document.getElementById('admin');
+                if (adminSection) adminSection.style.display = 'none';
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                const inicioLink = document.querySelector('a[data-section="inicio"]');
+                if (inicioLink) inicioLink.click();
+                return;
+            }
+            const data = await res.json();
+            perms = Array.isArray(data.permisos) ? data.permisos : [];
+        } catch (fetchErr) {
+            console.error('Error fetching mis-permisos:', fetchErr);
+            window.userAdminPermissions = new Set();
+            return;
+        }
+
+        window.userAdminPermissions = new Set(perms);
+
+        const tabBtns = document.querySelectorAll('.admin-tab-btn');
+        const tabContents = document.querySelectorAll('.admin-tab-content');
+
+        let firstAuthorizedItem = null;
+
+        ADMIN_TAB_CONFIG.forEach(item => {
+            const btn = document.querySelector(`.admin-tab-btn[data-tab="${item.tabId}"]`);
+            const content = document.getElementById(item.tabId);
+            const isAuth = window.userAdminPermissions.has(item.perm);
+
+            if (isAuth && !firstAuthorizedItem) {
+                firstAuthorizedItem = item;
+            }
+
+            if (btn) {
+                if (isAuth) {
+                    btn.style.display = '';
+                    btn.removeAttribute('disabled');
+                } else {
+                    btn.style.display = 'none';
+                    btn.setAttribute('disabled', 'true');
+                    btn.classList.remove('active');
+                }
+            }
+            if (content) {
+                if (!isAuth) {
+                    content.classList.remove('active');
+                    content.style.display = 'none';
+                }
+            }
+        });
+
+        if (!firstAuthorizedItem) {
+            const adminSection = document.getElementById('admin');
+            if (adminSection) adminSection.style.display = 'none';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            const inicioLink = document.querySelector('a[data-section="inicio"]');
+            if (inicioLink) inicioLink.click();
+            return;
+        }
+
+        const currentActiveBtn = document.querySelector('.admin-tab-btn.active');
+        const currentTabId = currentActiveBtn ? currentActiveBtn.getAttribute('data-tab') : null;
+        let selectedItem = null;
+        if (currentTabId && window.userAdminPermissions.has(ADMIN_TAB_PERMISSIONS[currentTabId])) {
+            selectedItem = ADMIN_TAB_CONFIG.find(item => item.tabId === currentTabId);
+        }
+
+        if (!selectedItem) {
+            selectedItem = firstAuthorizedItem;
+        }
+
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => {
+            c.classList.remove('active');
+            c.style.display = 'none';
+        });
+
+        const activeBtn = document.querySelector(`.admin-tab-btn[data-tab="${selectedItem.tabId}"]`);
+        const activeContent = document.getElementById(selectedItem.tabId);
+        if (activeBtn) activeBtn.classList.add('active');
+        if (activeContent) {
+            activeContent.classList.add('active');
+            activeContent.style.display = '';
+        }
+
+        await selectedItem.loadFn();
+
+    } finally {
+        isSyncingAdminTabs = false;
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.STANDARD_UNAUTHORIZED_MESSAGE = STANDARD_UNAUTHORIZED_MESSAGE;
+    window.ADMIN_TAB_PERMISSIONS = ADMIN_TAB_PERMISSIONS;
+    window.clearAllAdminTables = clearAllAdminTables;
+    window.syncAdminTabsAndPermissions = syncAdminTabsAndPermissions;
+    window.handleAdminError = handleAdminError;
+    window.isUnauthorizedResponse = isUnauthorizedResponse;
+    window.initAdminTabs = initAdminTabs;
+}
+
+function initAdminTabs() {
     document.querySelectorAll('.admin-table').forEach(makeAdminTableSortable);
     const adminSection = document.getElementById('admin');
 
@@ -229,13 +394,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabContents = document.querySelectorAll('.admin-tab-content');
 
     tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            const targetId = btn.getAttribute('data-tab');
+            const requiredPerm = ADMIN_TAB_PERMISSIONS[targetId];
+
+            if (window.userAdminPermissions && !window.userAdminPermissions.has(requiredPerm)) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                else if (typeof showModal === 'function') showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                return;
+            }
+
             tabBtns.forEach(b => b.classList.remove('active'));
-            tabContents.forEach(c => c.classList.remove('active'));
+            tabContents.forEach(c => {
+                c.classList.remove('active');
+                c.style.display = 'none';
+            });
 
             btn.classList.add('active');
-            const targetId = btn.getAttribute('data-tab');
-            document.getElementById(targetId).classList.add('active');
+            const targetContent = document.getElementById(targetId);
+            if (targetContent) {
+                targetContent.classList.add('active');
+                targetContent.style.display = '';
+            }
 
             // Load data when tab is clicked
             if (targetId === 'admin-usuarios') loadUsuarios();
@@ -253,11 +435,9 @@ document.addEventListener('DOMContentLoaded', () => {
         mutations.forEach((mutation) => {
             if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
                 if (adminSection.style.display === 'flex' || adminSection.style.display === 'block') {
-                    // Refresh currently active tab
-                    const activeTabBtn = document.querySelector('.admin-tab-btn.active');
-                    if (activeTabBtn) {
-                        activeTabBtn.click();
-                    }
+                    syncAdminTabsAndPermissions();
+                } else if (adminSection.style.display === 'none') {
+                    clearAllAdminTables();
                 }
             }
         });
@@ -266,16 +446,43 @@ document.addEventListener('DOMContentLoaded', () => {
     if (adminSection) {
         observer.observe(adminSection, { attributes: true });
     }
-});
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAdminTabs);
+    } else {
+        initAdminTabs();
+    }
+}
 
 async function loadUsuarios() {
+    const tbody = document.getElementById('admin-usuarios-tbody');
+    if (tbody) tbody.innerHTML = '';
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('usuarios.read')) {
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/usuarios');
-        if (!response.ok) throw new Error('Error al cargar usuarios');
+        if (response.status === 401 || response.status === 403) {
+            if (tbody) tbody.innerHTML = '';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            return;
+        }
+        if (!response.ok) {
+            if (tbody) tbody.innerHTML = '';
+            const errData = await response.json().catch(() => ({}));
+            if (isUnauthorizedResponse(response, errData)) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            } else {
+                if (window.showModal) window.showModal('Error al cargar usuarios.');
+            }
+            return;
+        }
         const usuarios = await response.json();
-
-        const tbody = document.getElementById('admin-usuarios-tbody');
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
 
         for (const u of usuarios) {
             const tr = document.createElement('tr');
@@ -352,7 +559,7 @@ async function loadUsuarios() {
                                 window.showModal('Usuario eliminado exitosamente.');
                                 loadUsuarios();
                             } else {
-                                window.showModal(`Error: ${data.error}`);
+                                handleAdminError(res, data, 'Error al eliminar usuario.');
                             }
                         } catch (e) {
                             console.error(e);
@@ -371,18 +578,38 @@ async function loadUsuarios() {
         makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
+        if (tbody) tbody.innerHTML = '';
         if (window.showModal) window.showModal('Error al cargar usuarios.');
     }
 }
 
 async function loadRoles() {
+    const tbody = document.getElementById('admin-roles-tbody');
+    if (tbody) tbody.innerHTML = '';
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('roles.read')) {
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/roles');
-        if (!response.ok) throw new Error('Error al cargar roles');
+        if (response.status === 401 || response.status === 403) {
+            if (tbody) tbody.innerHTML = '';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            return;
+        }
+        if (!response.ok) {
+            if (tbody) tbody.innerHTML = '';
+            const errData = await response.json().catch(() => ({}));
+            if (isUnauthorizedResponse(response, errData)) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            } else {
+                if (window.showModal) window.showModal('Error al cargar roles.');
+            }
+            return;
+        }
         const roles = await response.json();
-
-        const tbody = document.getElementById('admin-roles-tbody');
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
 
         for (const r of roles) {
             const tr = document.createElement('tr');
@@ -438,18 +665,38 @@ async function loadRoles() {
         makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
+        if (tbody) tbody.innerHTML = '';
         if (window.showModal) window.showModal('Error al cargar roles.');
     }
 }
 
 async function loadPermisos() {
+    const tbody = document.getElementById('admin-permisos-tbody');
+    if (tbody) tbody.innerHTML = '';
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('permisos.read')) {
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/permisos');
-        if (!response.ok) throw new Error('Error al cargar permisos');
+        if (response.status === 401 || response.status === 403) {
+            if (tbody) tbody.innerHTML = '';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            return;
+        }
+        if (!response.ok) {
+            if (tbody) tbody.innerHTML = '';
+            const errData = await response.json().catch(() => ({}));
+            if (isUnauthorizedResponse(response, errData)) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            } else {
+                if (window.showModal) window.showModal('Error al cargar permisos.');
+            }
+            return;
+        }
         const permisos = await response.json();
-
-        const tbody = document.getElementById('admin-permisos-tbody');
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
 
         for (const p of permisos) {
             const tr = document.createElement('tr');
@@ -490,6 +737,7 @@ async function loadPermisos() {
         makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
+        if (tbody) tbody.innerHTML = '';
         if (window.showModal) window.showModal('Error al cargar permisos.');
     }
 }
@@ -647,13 +895,32 @@ async function renderFunctionalityPermissionsSection(container, funcId, selected
 }
 
 async function loadAccesos() {
+    const tbody = document.getElementById('admin-accesos-tbody');
+    if (tbody) tbody.innerHTML = '';
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('admin.access')) {
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/accesos');
-        if (!response.ok) throw new Error('Error al cargar accesos');
+        if (response.status === 401 || response.status === 403) {
+            if (tbody) tbody.innerHTML = '';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            return;
+        }
+        if (!response.ok) {
+            if (tbody) tbody.innerHTML = '';
+            const errData = await response.json().catch(() => ({}));
+            if (isUnauthorizedResponse(response, errData)) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            } else {
+                if (window.showModal) window.showModal('Error al cargar accesos.');
+            }
+            return;
+        }
         const accesos = await response.json();
-
-        const tbody = document.getElementById('admin-accesos-tbody');
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
 
         if (accesos.length === 0) {
             const tr = document.createElement('tr');
@@ -767,6 +1034,7 @@ async function loadAccesos() {
         makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
+        if (tbody) tbody.innerHTML = '';
         if (window.showModal) window.showModal('Error al cargar accesos.');
     }
 }
@@ -798,7 +1066,7 @@ function showRevokeAccesoModal(a) {
                 broadcastRbacUpdate();
                 loadAccesos();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al revocar acceso.');
             }
         } catch (e) {
             console.error(e);
@@ -845,7 +1113,7 @@ function showDeleteAccesoModal(a) {
                 if (typeof broadcastRbacUpdate === 'function') broadcastRbacUpdate();
                 loadAccesos();
             } else {
-                if (window.showModal) window.showModal(`Error: ${data.error || 'No se pudo eliminar el acceso.'}`);
+                handleAdminError(res, data, 'No se pudo eliminar el acceso.');
             }
         } catch (e) {
             console.error(e);
@@ -965,7 +1233,7 @@ async function showCreateAccesoModal() {
                     broadcastRbacUpdate();
                     loadAccesos();
                 } else {
-                    window.showModal(`Error: ${data.error}`);
+                    handleAdminError(res, data, 'Error al otorgar accesos.');
                 }
             } catch (e) {
                 console.error(e);
@@ -979,13 +1247,32 @@ async function showCreateAccesoModal() {
 }
 
 async function loadFuncionalidades() {
+    const tbody = document.getElementById('admin-funcionalidades-tbody');
+    if (tbody) tbody.innerHTML = '';
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('funcionalidades.read')) {
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/funcionalidades');
-        if (!response.ok) throw new Error('Error al cargar funcionalidades');
+        if (response.status === 401 || response.status === 403) {
+            if (tbody) tbody.innerHTML = '';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            return;
+        }
+        if (!response.ok) {
+            if (tbody) tbody.innerHTML = '';
+            const errData = await response.json().catch(() => ({}));
+            if (isUnauthorizedResponse(response, errData)) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            } else {
+                if (window.showModal) window.showModal('Error al cargar funcionalidades.');
+            }
+            return;
+        }
         const funcionalidades = await response.json();
-
-        const tbody = document.getElementById('admin-funcionalidades-tbody');
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
 
         for (const f of funcionalidades) {
             const tr = document.createElement('tr');
@@ -1037,18 +1324,38 @@ async function loadFuncionalidades() {
         makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
+        if (tbody) tbody.innerHTML = '';
         if (window.showModal) window.showModal('Error al cargar funcionalidades.');
     }
 }
 
 async function loadMenus() {
+    const tbody = document.getElementById('admin-menus-tbody');
+    if (tbody) tbody.innerHTML = '';
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('menus.read')) {
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/menus');
-        if (!response.ok) throw new Error('Error al cargar menús');
+        if (response.status === 401 || response.status === 403) {
+            if (tbody) tbody.innerHTML = '';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            return;
+        }
+        if (!response.ok) {
+            if (tbody) tbody.innerHTML = '';
+            const errData = await response.json().catch(() => ({}));
+            if (isUnauthorizedResponse(response, errData)) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            } else {
+                if (window.showModal) window.showModal('Error al cargar menús.');
+            }
+            return;
+        }
         const menus = await response.json();
-
-        const tbody = document.getElementById('admin-menus-tbody');
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
 
         for (const m of menus) {
             const tr = document.createElement('tr');
@@ -1091,7 +1398,7 @@ async function loadMenus() {
                             loadMenus();
                         } else {
                             const data = await res.json();
-                            window.showModal(`Error: ${data.error}`);
+                            handleAdminError(res, data, 'Error al cambiar estado del menú.');
                         }
                     } catch (e) {
                         console.error(e);
@@ -1117,6 +1424,7 @@ async function loadMenus() {
         makeAdminTableSortable(tbody.closest('table'));
     } catch (error) {
         console.error(error);
+        if (tbody) tbody.innerHTML = '';
         if (window.showModal) window.showModal('Error al cargar menús.');
     }
 }
@@ -1163,7 +1471,7 @@ async function showEditUsuarioModal(u) {
                 window.showModal('Usuario actualizado.');
                 loadUsuarios();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al actualizar usuario.');
             }
         } catch (e) {
             console.error(e);
@@ -1228,7 +1536,7 @@ async function showEditRolesModal(userId, username) {
                     broadcastRbacUpdate();
                     loadUsuarios();
                 } else {
-                    window.showModal(`Error: ${data.error}`);
+                    handleAdminError(res, data, 'Error al actualizar roles.');
                 }
             } catch (e) {
                 console.error(e);
@@ -1400,7 +1708,7 @@ async function showEditPermisosModal(rolId, rolName) {
                     broadcastRbacUpdate();
                     loadRoles();
                 } else {
-                    window.showModal(`Error: ${data.error}`);
+                    handleAdminError(res, data, 'Error al actualizar permisos.');
                 }
             } catch (e) {
                 console.error(e);
@@ -1459,7 +1767,7 @@ function showCreatePermisoModal() {
                 window.showModal('Permiso creado.');
                 loadPermisos();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al crear permiso.');
             }
         } catch (e) {
             console.error(e);
@@ -1513,7 +1821,7 @@ function showEditPermisoModal(p) {
                 window.showModal('Permiso actualizado.');
                 loadPermisos();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al actualizar permiso.');
             }
         } catch (e) {
             console.error(e);
@@ -1548,7 +1856,7 @@ function showDeletePermisoModal(p) {
                 window.showModal('Permiso eliminado.');
                 loadPermisos();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al eliminar permiso.');
             }
         } catch (e) {
             console.error(e);
@@ -1605,7 +1913,7 @@ function showCreateFuncionalidadModal() {
                 window.showModal('Funcionalidad creada.');
                 loadFuncionalidades();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al crear funcionalidad.');
             }
         } catch (e) {
             console.error(e);
@@ -1640,7 +1948,7 @@ function showDeleteFuncionalidadModal(f) {
                 window.showModal('Funcionalidad eliminada.');
                 loadFuncionalidades();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al eliminar funcionalidad.');
             }
         } catch (e) {
             console.error(e);
@@ -1772,7 +2080,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.showModal('Rol creado.');
                         loadRoles();
                     } else {
-                        window.showModal(`Error: ${data.error}`);
+                        handleAdminError(res, data, 'Error al crear rol.');
                     }
                 } catch (e) {
                     console.error(e);
@@ -1809,7 +2117,7 @@ function showDeleteRolModal(r) {
                 window.showModal('Rol eliminado.');
                 loadRoles();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al eliminar rol.');
             }
         } catch (e) {
             console.error(e);
@@ -1860,7 +2168,7 @@ function showEditRolModal(r) {
                 window.showModal('Rol actualizado.');
                 loadRoles();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al actualizar rol.');
             }
         } catch (e) {
             console.error(e);
@@ -1917,7 +2225,7 @@ function showEditFuncionalidadModal(f) {
                 window.showModal('Funcionalidad actualizada.');
                 loadFuncionalidades();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al actualizar funcionalidad.');
             }
         } catch (e) {
             console.error(e);
@@ -1981,7 +2289,7 @@ function showEditMenuModal(m) {
                 window.showModal('Menú actualizado.');
                 loadMenus();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al actualizar menú.');
             }
         } catch (e) {
             console.error(e);
@@ -2212,7 +2520,7 @@ async function showEditFuncPermisosModal(funcId, funcName) {
                     window.showModal('Permisos de funcionalidad actualizados.');
                     loadFuncionalidades();
                 } else {
-                    window.showModal(`Error: ${data.error}`);
+                    handleAdminError(res, data, 'Error al actualizar permisos de funcionalidad.');
                 }
             } catch (e) {
                 console.error(e);
@@ -2253,7 +2561,7 @@ function showDeleteMenuModal(m) {
                 window.showModal('Menú eliminado.');
                 loadMenus();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al eliminar menú.');
             }
         } catch (e) {
             console.error(e);
@@ -2320,7 +2628,7 @@ function showCreateMenuModal() {
                 window.showModal('Menú creado.');
                 loadMenus();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al crear menú.');
             }
         } catch (e) {
             console.error(e);
@@ -2417,7 +2725,7 @@ async function showEditAccesoModal(a) {
                 broadcastRbacUpdate();
                 loadAccesos();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al actualizar el acceso.');
             }
         } catch (e) {
             console.error(e);
@@ -2467,18 +2775,33 @@ let currentAsociadosFilter = '';
 async function loadAsociados(statusFilter = currentAsociadosFilter) {
     currentAsociadosFilter = statusFilter || '';
     const tbody = document.getElementById('admin-asociados-tbody');
-    if (!tbody) return;
+    if (tbody) tbody.innerHTML = '';
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asociados.read')) {
+        return;
+    }
 
     try {
         const url = `/api/admin/asociados${currentAsociadosFilter ? '?estatus=' + encodeURIComponent(currentAsociadosFilter) : ''}`;
         const response = await fetch(url);
+        if (response.status === 401 || response.status === 403) {
+            if (tbody) tbody.innerHTML = '';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            return;
+        }
         if (!response.ok) {
+            if (tbody) tbody.innerHTML = '';
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error || 'Error al cargar asociados.');
+            if (isUnauthorizedResponse(response, errData)) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            } else {
+                if (window.showModal) window.showModal('Error al cargar asociados.');
+            }
+            return;
         }
 
         const data = await response.json();
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
 
         if (!data || data.length === 0) {
             const tr = document.createElement('tr');
@@ -2569,7 +2892,9 @@ async function loadAsociados(statusFilter = currentAsociadosFilter) {
 
     } catch (error) {
         console.error('Error al cargar asociados:', error);
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #dc3545; padding: 20px;">Error al cargar asociados: ${escapeHTML(error.message)}</td></tr>`;
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #dc3545; padding: 20px;">Error al cargar asociados.</td></tr>`;
+        }
     }
 }
 
@@ -2609,6 +2934,10 @@ async function showAsociadoDetalle(id) {
         const res = await fetch(`/api/admin/asociados/${id}`);
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
+            if (isUnauthorizedResponse(res, err)) {
+                body.innerHTML = `<div style="color: #dc3545; padding: 20px; text-align: center;"><p>${STANDARD_UNAUTHORIZED_MESSAGE}</p><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-asociado-detalle').style.display='none'">Cerrar</button></div>`;
+                return;
+            }
             throw new Error(err.error || 'No se pudo obtener la solicitud.');
         }
 
@@ -2769,7 +3098,7 @@ async function autorizarAsociado(s) {
             document.getElementById('modal-asociado-detalle').style.display = 'none';
             loadAsociados();
         } else {
-            window.showModal(`Error: ${data.error}`);
+            handleAdminError(res, data, 'Error al autorizar la solicitud.');
         }
     } catch (error) {
         console.error('Error al autorizar:', error);
@@ -2835,7 +3164,7 @@ function pedirObservacionesRechazo(s) {
                 document.getElementById('modal-asociado-detalle').style.display = 'none';
                 loadAsociados();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al rechazar la solicitud.');
             }
         } catch (err) {
             console.error('Error al rechazar:', err);
@@ -2915,7 +3244,7 @@ function pedirObservacionesMasInfo(s) {
                 document.getElementById('modal-asociado-detalle').style.display = 'none';
                 loadAsociados();
             } else {
-                window.showModal(`Error: ${data.error}`);
+                handleAdminError(res, data, 'Error al solicitar más información.');
             }
         } catch (err) {
             console.error('Error al pedir más información:', err);
