@@ -189,11 +189,11 @@
 .motor-living-card {
     position: relative;
     border-radius: 16px;
-    padding: 2.5px; /* Espacio para el circuito de luz perimetral */
+    padding: 3px; /* Espacio claramente visible para el circuito perimetral de luz */
     cursor: pointer;
-    background: conic-gradient(from var(--border-angle), transparent 0%, transparent 68%, var(--motor-color) 85%, #ffffff 94%, var(--motor-color) 100%);
+    background: conic-gradient(from var(--border-angle), transparent 0%, transparent 68%, var(--motor-color) 85%, #ffffff 95%, var(--motor-color) 100%);
     animation: rotateBorderCurrent 5.2s linear infinite, motorBreathingV3 6s ease-in-out infinite;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 0 12px var(--motor-glow, rgba(108, 64, 247, 0.15));
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 0 14px var(--motor-glow, rgba(108, 64, 247, 0.18));
     will-change: transform, box-shadow;
     transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
                 box-shadow 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -258,7 +258,8 @@
 /* 5. HOVER CONTUNDENTE (Aceleración de Borde + Elevación + Halo) */
 .motor-living-card:hover {
     transform: translateY(-8px) scale(1.035) !important;
-    animation: rotateBorderCurrent 1.4s linear infinite !important; /* Corriente acelerada perimetral */
+    animation: rotateBorderCurrent 1.3s linear infinite !important; /* Corriente acelerada perimetral */
+    background: conic-gradient(from var(--border-angle), transparent 0%, transparent 58%, var(--motor-color) 78%, #ffffff 94%, var(--motor-color) 100%) !important;
     box-shadow: 0 18px 40px var(--motor-glow, rgba(108, 64, 247, 0.38)), 0 0 25px var(--motor-color) !important;
     z-index: 5;
 }
@@ -427,8 +428,11 @@
 
 /* 7. SECUENCIA DE ACTIVACIÓN (BORDE → CARGA → RECORRIDO → EXPLOSIÓN) */
 .motor-card-charging {
-    animation: rotateBorderCurrent 0.45s linear infinite !important; /* Corriente a máxima velocidad */
-    box-shadow: 0 0 45px var(--motor-color), 0 0 70px var(--motor-glow) !important;
+    padding: 3.5px !important;
+    background: conic-gradient(from var(--border-angle), transparent 0%, transparent 35%, var(--motor-color) 65%, #ffffff 92%, var(--motor-color) 100%) !important;
+    animation: rotateBorderCurrent 0.35s linear infinite !important; /* Corriente a máxima velocidad (1 vuelta en 350ms) */
+    box-shadow: 0 0 35px var(--motor-color), 0 0 65px var(--motor-glow) !important;
+    transform: scale(1.04) !important;
 }
 
 @keyframes motorActivationBlast {
@@ -447,6 +451,16 @@
 }
 .motor-card-just-selected {
     animation: motorActivationBlast 0.65s cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+}
+
+/* Pulso de absorción cósmica del Núcleo IDEA */
+.nucleo-pulse-active {
+    animation: nucleoAbsorbPulse 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+}
+@keyframes nucleoAbsorbPulse {
+    0% { transform: scale(1); filter: brightness(1); }
+    40% { transform: scale(1.08); filter: brightness(1.4) drop-shadow(0 0 16px #f59e0b); }
+    100% { transform: scale(1); filter: brightness(1); }
 }
 
 /* 8. ÁREA DE CONFIGURACIÓN Y EJECUCIÓN */

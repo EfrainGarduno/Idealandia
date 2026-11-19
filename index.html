@@ -7316,11 +7316,11 @@ ${userMessage}`;
                 const motorDef = MOTORES_DEFINICIONES.find(m => m.key === key);
                 const activeCard = document.querySelector(`.motor-select-card[data-motor="${key}"]`);
                 if (activeCard) {
-                    // Fase 1 y 2: Carga perimetral de energía acelerada
+                    // Fase 1 y 2: Carga perimetral de energía acelerada (1 vuelta completa en 350ms)
                     activeCard.classList.add('motor-card-charging');
 
                     setTimeout(() => {
-                        // Fase 3 y 4: Recorrido y detonación de la explosión frontal
+                        // Fase 3 y 4: Recorrido completado y detonación de la explosión frontal
                         activeCard.classList.remove('motor-card-charging');
                         activeCard.classList.remove('motor-card-just-selected');
                         void activeCard.offsetWidth; // Reflow
@@ -7347,7 +7347,7 @@ ${userMessage}`;
                             const cardRect = activeCard.getBoundingClientRect();
                             emitMotorBurst(motorDef.color, cardRect);
                         }
-                    }, 120);
+                    }, 350);
                 }
             }
             window.seleccionarMotor = seleccionarMotor;
@@ -7435,7 +7435,14 @@ ${userMessage}`;
                         statusMsg.innerHTML = '<i class="fas fa-check-circle"></i> Análisis completado y registrado en el Historial.';
                     }
 
-                    renderMotorResult(resJson);
+                    // Detener procesamiento y emitir pulso elegante de Eureka antes del resultado
+                    if (window.universoCreativo && typeof window.universoCreativo.setProcessingMode === 'function') {
+                        window.universoCreativo.setProcessingMode(false, motorKey);
+                    }
+
+                    setTimeout(() => {
+                        renderMotorResult(resJson);
+                    }, 260);
 
                 } catch (err) {
                     if (statusMsg) {
@@ -7443,7 +7450,7 @@ ${userMessage}`;
                         statusMsg.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message || 'Error al ejecutar el motor.'}`;
                     }
                 } finally {
-                    if (window.universoCreativo && typeof window.universoCreativo.setProcessingMode === 'function') {
+                    if (window.universoCreativo && typeof window.universoCreativo.setProcessingMode === 'function' && window.universoCreativo.isProcessing) {
                         window.universoCreativo.setProcessingMode(false, motorKey);
                     }
                     if (btn) btn.disabled = false;

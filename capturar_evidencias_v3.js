@@ -1,16 +1,21 @@
 /**
  * =============================================================================
- * GENERADOR DE EVIDENCIAS VISUALES Y MEDICIÓN REAL DE FPS: V3 EXPLOSIÓN CREATIVA
+ * GENERADOR DE EVIDENCIAS VISUALES Y MEDICIÓN REAL DE FPS: V3 CADENA ENERGÉTICA
  * =============================================================================
+ * Ciclo Completo:
+ * REPOSO → HOVER → BORDE CARGÁNDOSE → EXPLOSIÓN → IDEAS VOLANDO → PROCESAMIENTO → EUREKA → RESULTADO
+ *
  * Genera:
- * 1. 1_reposo.png (Glassmorphism, partículas fondo, palabras flotantes, núcleo idea)
- * 2. 2_hover.png (Hover: aceleración borde perimetral, elevación, halo 360°)
- * 3. 3_borde_energetico.png (Fase de Carga: corriente rápida recorriendo el borde)
- * 4. 4_activacion.png (Explosión frontal: shockwave y ráfaga 75+ partículas sobre tarjetas)
- * 5. 5_procesamiento_ia.png (Vórtice orbital, anillos concéntricos de procesamiento)
- * 6. 6_resultado_eureka.png (Flash de Eureka dorado y revelación estructurada)
- * 7. secuencia_completa_v3.webm (Video HD continuo de la secuencia completa)
- * 8. Telemetría empírica de FPS en telemetria_fps_real_v3.json
+ * 1. 1_reposo.png (Universo Creativo, Glassmorphism, Núcleo ✦ IDEA ✦ y filamentos)
+ * 2. 2_hover.png (Hover: corriente perimetral acelerada, elevación y halo 360°)
+ * 3. 3_borde_cargandose.png (Fase de Carga: corriente ultrarrápida a 0.35s por vuelta)
+ * 4. 4_explosion.png (Explosión frontal: onda de choque, ráfaga 85+ y conexiones iluminadas)
+ * 5. 5_ideas_volando.png (Ideas Volando: pastillas conceptuales radiantes + retorno al Núcleo)
+ * 6. 6_procesamiento.png (Vórtice orbital continuo y anillos elípticos durante llamada IA)
+ * 7. 7_eureka.png (Segundo pulso elegante, concentrado y dorado antes del resultado)
+ * 8. 8_resultado.png (Resultado estructurado revelado con animación suave)
+ * 9. secuencia_completa_v3_cadena.webm (Video HD continuo de la secuencia completa)
+ * 10. telemetria_fps_real_v3.json (Telemetría empírica de FPS)
  */
 
 const fs = require('fs');
@@ -20,7 +25,7 @@ const { chromium } = require('playwright');
 
 (async () => {
     console.log("================================================================================");
-    console.log("GENERANDO EVIDENCIAS VISUALES REALES Y MEDICIÓN DE FPS (V3: UNIVERSO VIVO)");
+    console.log("GENERANDO EVIDENCIAS VISUALES REALES: V3 CADENA ENERGÉTICA REFORZADA");
     console.log("================================================================================\n");
 
     const htmlPath = path.join(__dirname, 'index.html');
@@ -69,7 +74,7 @@ const { chromium } = require('playwright');
 
     const browser = await chromium.launch({ headless: true });
 
-    // Configurar contexto con grabación de video integrada
+    // Grabación de video continuo
     const context = await browser.newContext({
         viewport: { width: 1280, height: 850 },
         deviceScaleFactor: 1.5,
@@ -125,48 +130,45 @@ const { chromium } = require('playwright');
     const panelLocator = page.locator('#workspace-panel-motores');
 
     // -------------------------------------------------------------------------
-    // ESTADO 1: REPOSO AMBIENTAL (Glassmorphism, Núcleo, Palabras, Partículas)
+    // 1. REPOSO
     // -------------------------------------------------------------------------
-    console.log("2. Capturando Estado 1: REPOSO (Glassmorphism, Núcleo ✦ IDEA ✦, partículas y conceptos flotantes)...");
+    console.log("2. Capturando: 1_reposo.png...");
     await page.waitForTimeout(1600);
-
     const pathReposo = path.join(outputDir, '1_reposo.png');
     await panelLocator.screenshot({ path: pathReposo });
     console.log(`   [OK] Guardado: ${pathReposo}`);
 
     // -------------------------------------------------------------------------
-    // ESTADO 2: HOVER SOBRE UN MOTOR (Explorador: Aceleración Borde, Elevación, Halo)
+    // 2. HOVER
     // -------------------------------------------------------------------------
-    console.log("3. Capturando Estado 2: HOVER (Aceleración de borde perimetral, elevación, halo 360°)...");
+    console.log("3. Capturando: 2_hover.png (aceleración perimetral, elevación, halo 360°)...");
     const exploradorCard = page.locator('.motor-card-explorador');
     await exploradorCard.hover({ force: true });
     await page.waitForTimeout(450);
-
     const pathHover = path.join(outputDir, '2_hover.png');
     await panelLocator.screenshot({ path: pathHover });
     console.log(`   [OK] Guardado: ${pathHover}`);
 
     // -------------------------------------------------------------------------
-    // ESTADO 3: BORDE ENERGÉTICO EN FASE DE CARGA (.motor-card-charging)
+    // 3. BORDE CARGÁNDOSE
     // -------------------------------------------------------------------------
-    console.log("4. Capturando Estado 3: BORDE ENERGÉTICO (Fase de carga y circuito perimetral rápido)...");
-    // Activamos la fase de carga del motor explorador
+    console.log("4. Capturando: 3_borde_cargandose.png (fase de carga y circuito perimetral ultrarrápido)...");
     await page.evaluate(() => {
         const card = document.querySelector('.motor-select-card[data-motor="explorador"]');
         if (card) {
             card.classList.add('motor-card-active', 'motor-card-charging');
         }
     });
-    await page.waitForTimeout(120);
-
-    const pathBorde = path.join(outputDir, '3_borde_energetico.png');
-    await panelLocator.screenshot({ path: pathBorde });
-    console.log(`   [OK] Guardado: ${pathBorde}`);
+    // Capturar a mitad del recorrido de 350ms (a los 170ms) mostrando la corriente perimetral girando
+    await page.waitForTimeout(170);
+    const pathBordeCargandose = path.join(outputDir, '3_borde_cargandose.png');
+    await panelLocator.screenshot({ path: pathBordeCargandose });
+    console.log(`   [OK] Guardado: ${pathBordeCargandose}`);
 
     // -------------------------------------------------------------------------
-    // ESTADO 4: EXPLOSIÓN FRONTAL DE ACTIVACIÓN (Canvas Frontal z-index: 6)
+    // 4. EXPLOSIÓN
     // -------------------------------------------------------------------------
-    console.log("5. Capturando Estado 4: ACTIVACIÓN (Canvas frontal con shockwave y 80+ partículas sobre tarjetas)...");
+    console.log("5. Capturando: 4_explosion.png (onda frontal, ráfaga 85+ y conexiones iluminadas)...");
     await page.evaluate(() => {
         const card = document.querySelector('.motor-select-card[data-motor="explorador"]');
         if (card) {
@@ -176,25 +178,34 @@ const { chromium } = require('playwright');
             const cx = rect.left + rect.width / 2;
             const cy = rect.top + rect.height / 2;
             if (window.universoCreativo && typeof window.universoCreativo.triggerExplosion === 'function') {
-                window.universoCreativo.triggerExplosion(cx, cy, 'explorador');
+                window.universoCreativo.triggerExplosion('explorador', cx, cy);
             }
         }
     });
-
-    // Esperar 120ms para capturar la onda frontal a 130px de radio y las 80 partículas sobrevolando las tarjetas
-    await page.waitForTimeout(120);
-
-    const pathActivacion = path.join(outputDir, '4_activacion.png');
-    await panelLocator.screenshot({ path: pathActivacion });
-    console.log(`   [OK] Guardado: ${pathActivacion}`);
-
-    // Dejar disipar suavemente la explosión
-    await page.waitForTimeout(900);
+    // Capturar a los 110ms el ápice de la onda expansiva y las líneas de conexión iluminadas
+    await page.waitForTimeout(110);
+    const pathExplosion = path.join(outputDir, '4_explosion.png');
+    await panelLocator.screenshot({ path: pathExplosion });
+    console.log(`   [OK] Guardado: ${pathExplosion}`);
 
     // -------------------------------------------------------------------------
-    // ESTADO 5: PROCESAMIENTO IA (VÓRTICE ORBITAL / NÚCLEO CREATIVO)
+    // 5. IDEAS VOLANDO (Conceptos radiantes + Partículas regresando al Núcleo)
     // -------------------------------------------------------------------------
-    console.log("6. Capturando Estado 5: PROCESAMIENTO IA (vórtice orbital activo y anillos concéntricos)...");
+    console.log("6. Capturando: 5_ideas_volando.png (conceptos recién nacidos flotando y retorno al núcleo)...");
+    // Esperar 400ms adicionales para que las pastillas conceptuales ('POSIBILIDADES', 'DESCUBRIR', etc.)
+    // se hayan desplegado sobre las tarjetas y las partículas de retorno lleguen al Núcleo IDEA
+    await page.waitForTimeout(400);
+    const pathIdeasVolando = path.join(outputDir, '5_ideas_volando.png');
+    await panelLocator.screenshot({ path: pathIdeasVolando });
+    console.log(`   [OK] Guardado: ${pathIdeasVolando}`);
+
+    // Dejar disipar suavemente la explosión antes de procesar
+    await page.waitForTimeout(800);
+
+    // -------------------------------------------------------------------------
+    // 6. PROCESAMIENTO
+    // -------------------------------------------------------------------------
+    console.log("7. Capturando: 6_procesamiento.png (vórtice orbital continuo y anillos elípticos)...");
     await page.evaluate(() => {
         const btn = document.getElementById('btn-ejecutar-motor');
         const btnText = document.getElementById('btn-ejecutar-motor-text');
@@ -209,19 +220,17 @@ const { chromium } = require('playwright');
         window.universoCreativo.setProcessingMode(true, 'explorador');
     });
 
-    // Dejar que el vórtice orbital gire 600ms
     await page.waitForTimeout(600);
-
-    const pathProcesamiento = path.join(outputDir, '5_procesamiento_ia.png');
+    const pathProcesamiento = path.join(outputDir, '6_procesamiento.png');
     await panelLocator.screenshot({ path: pathProcesamiento });
     console.log(`   [OK] Guardado: ${pathProcesamiento}`);
 
-    await page.waitForTimeout(1000); // Continuar la animación de procesamiento para el video
+    await page.waitForTimeout(1000); // 1s de procesamiento visible para el video
 
     // -------------------------------------------------------------------------
-    // ESTADO 6: FLASH DE EUREKA Y RESULTADO ESTRUCTURADO
+    // 7. EUREKA (Segundo pulso elegante, concentrado y dorado)
     // -------------------------------------------------------------------------
-    console.log("7. Capturando Estado 6: FLASH DE EUREKA Y RESULTADO REVELADO...");
+    console.log("8. Capturando: 7_eureka.png (segundo pulso elegante y dorado antes del resultado)...");
     await page.evaluate(() => {
         const btn = document.getElementById('btn-ejecutar-motor');
         const btnText = document.getElementById('btn-ejecutar-motor-text');
@@ -233,10 +242,21 @@ const { chromium } = require('playwright');
             statusMsg.innerHTML = '<i class="fas fa-check-circle"></i> Análisis completado y registrado en el Historial.';
         }
 
-        // Finaliza procesamiento -> Dispara Flash de Eureka frontal
+        // Finalizar procesamiento -> Dispara segundo pulso elegante de Eureka
         window.universoCreativo.setProcessingMode(false, 'explorador');
+    });
 
-        // Renderizar resultado estructurado
+    // Capturar a los 110ms durante la expansión del pulso dorado elegante
+    await page.waitForTimeout(110);
+    const pathEureka = path.join(outputDir, '7_eureka.png');
+    await panelLocator.screenshot({ path: pathEureka });
+    console.log(`   [OK] Guardado: ${pathEureka}`);
+
+    // -------------------------------------------------------------------------
+    // 8. RESULTADO
+    // -------------------------------------------------------------------------
+    console.log("9. Capturando: 8_resultado.png (resultado estructurado revelado suavemente)...");
+    await page.evaluate(() => {
         window.renderMotorResult({
             motor: 'explorador',
             motor_nombre: 'Motor Explorador',
@@ -259,20 +279,17 @@ const { chromium } = require('playwright');
         });
     });
 
-    // Capturar a los 130ms cuando la onda dorada de Eureka y los destellos iluminan la pantalla
-    await page.waitForTimeout(130);
-
-    const pathResultado = path.join(outputDir, '6_resultado_eureka.png');
+    await page.waitForTimeout(400);
+    const pathResultado = path.join(outputDir, '8_resultado.png');
     await panelLocator.screenshot({ path: pathResultado });
     console.log(`   [OK] Guardado: ${pathResultado}`);
 
-    // Dejar 1.8 segundos finales para que en el video se aprecie el resultado y la estabilización armónica
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(1800); // 1.8s finales para que el video concluya armoniosamente
 
     // -------------------------------------------------------------------------
-    // RECOLECCIÓN DE TELEMETRÍA DE RENDIMIENTO (FPS REALES)
+    // TELEMETRÍA DE FPS
     // -------------------------------------------------------------------------
-    console.log("\n8. Extrayendo métricas reales de rendimiento (FPS)...");
+    console.log("\n10. Extrayendo métricas reales de rendimiento (FPS)...");
     const fpsMetrics = await page.evaluate(() => {
         window.fpsTelemetry.measuring = false;
         const deltas = window.fpsTelemetry.frameDeltas.slice(15);
@@ -313,10 +330,10 @@ const { chromium } = require('playwright');
     let finalVideoPath = null;
     if (videoObj) {
         const rawVideoPath = await videoObj.path();
-        finalVideoPath = path.join(outputDir, 'secuencia_completa_v3.webm');
+        finalVideoPath = path.join(outputDir, 'secuencia_completa_v3_cadena.webm');
         if (fs.existsSync(rawVideoPath)) {
             fs.copyFileSync(rawVideoPath, finalVideoPath);
-            console.log(`\n9. Video de alta definición generado con éxito: ${finalVideoPath}`);
+            console.log(`\n11. Video HD continuo generado con éxito: ${finalVideoPath}`);
         }
     }
 
@@ -325,14 +342,16 @@ const { chromium } = require('playwright');
     const filesToCopy = [
         '1_reposo.png',
         '2_hover.png',
-        '3_borde_energetico.png',
-        '4_activacion.png',
-        '5_procesamiento_ia.png',
-        '6_resultado_eureka.png',
-        'secuencia_completa_v3.webm'
+        '3_borde_cargandose.png',
+        '4_explosion.png',
+        '5_ideas_volando.png',
+        '6_procesamiento.png',
+        '7_eureka.png',
+        '8_resultado.png',
+        'secuencia_completa_v3_cadena.webm'
     ];
 
-    console.log("\n10. Sincronizando evidencias con el directorio de artefactos...");
+    console.log("\n12. Sincronizando evidencias con el directorio de artefactos...");
     filesToCopy.forEach(fileName => {
         const src = path.join(outputDir, fileName);
         if (fs.existsSync(src)) {
@@ -346,6 +365,6 @@ const { chromium } = require('playwright');
     fs.writeFileSync(metricsPath, JSON.stringify(fpsMetrics, null, 2), 'utf8');
 
     console.log("\n================================================================================");
-    console.log("EVIDENCIAS VISUALES Y TELEMETRÍA V3 GENERADAS AL 100%");
+    console.log("EVIDENCIAS VISUALES DEL CICLO COMPLETO GENERADAS AL 100%");
     console.log("================================================================================\n");
 })();

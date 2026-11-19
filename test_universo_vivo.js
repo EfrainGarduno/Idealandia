@@ -237,23 +237,26 @@ const { chromium } = require('playwright');
             assert(phase1.isCardActive, "Tarjeta seleccionada debe tener .motor-card-active");
             assert(phase1.isCharging, "Tarjeta debe iniciar con fase de carga .motor-card-charging");
 
-            // Esperar que culmine la carga (280ms) y dispare la ráfaga frontal
-            await page.waitForTimeout(320);
+            // Esperar que culmine la carga perimetral completa (350ms) y dispare la ráfaga frontal
+            await page.waitForTimeout(380);
 
-            // Fase 2 & 3: Explosión en canvas frontal + pulso final
+            // Fase 2, 3 & 4: Explosión en canvas frontal, Ideas Volando emergentes y Conexiones iluminadas
             const phase2 = await page.evaluate(() => {
                 const uc = window.universoCreativo;
                 const activeCard = document.querySelector('.motor-select-card[data-motor="validador"]');
                 return {
                     hasPulseClass: activeCard ? activeCard.classList.contains('motor-card-just-selected') : false,
                     shockwavesCount: uc ? uc.shockwaves.length : 0,
-                    burstParticlesCount: uc ? uc.burstParticles.length : 0
+                    burstParticlesCount: uc ? uc.burstParticles.length : 0,
+                    foregroundWordsCount: uc ? uc.foregroundWords.length : 0,
+                    connectionSurgeActive: uc && uc.connectionSurge ? uc.connectionSurge.active : false
                 };
             });
 
             assert(phase2.hasPulseClass, "Tarjeta debe culminar con .motor-card-just-selected");
             assert(phase2.burstParticlesCount >= 50, `Debe haber generado ráfaga de 50+ partículas frontales (actual: ${phase2.burstParticlesCount})`);
             assert(phase2.shockwavesCount >= 1, `Debe haber generado onda de choque expansiva frontal (actual: ${phase2.shockwavesCount})`);
+            assert(phase2.foregroundWordsCount >= 1, `Debe haber generado palabras 'Ideas Volando' emergentes (actual: ${phase2.foregroundWordsCount})`);
         });
 
         await testAsync("Modo Núcleo Creativo de Procesamiento (durante ejecución IA) y Flash de Eureka", async () => {
