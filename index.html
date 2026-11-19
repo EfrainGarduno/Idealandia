@@ -1765,12 +1765,15 @@
                         </div>
                     </div>
 
-                    <!-- Panel 6: Motores de Ideas (Los 8 Motores Oficiales - Universo Creativo V2) -->
-                    <div id="workspace-panel-motores" class="workspace-panel universo-creativo-wrapper universo-vivo-wrapper" style="display: none; position: relative; min-height: 520px; padding: 6px;">
-                        <!-- Fondo Vivo & Explosión Creativa (Canvas Orgánico de Partículas, Palabras y Energía) -->
+                    <!-- Panel 6: Motores de Ideas (Los 8 Motores Oficiales - Universo Creativo V3) -->
+                    <div id="workspace-panel-motores" class="workspace-panel universo-creativo-wrapper universo-vivo-wrapper" style="display: none; position: relative; min-height: 520px; padding: 8px;">
+                        <!-- Capa 1: Canvas de Fondo (Partículas Profundas, Conexiones y Conceptos Flotantes) -->
                         <canvas id="universo-vivo-canvas"></canvas>
 
-                        <!-- Contenedor Frontal de Contenido (Garantiza legibilidad y z-index superior) -->
+                        <!-- Capa 4: Canvas Frontal (Ondas de Choque, Ráfagas Explosivas y Flash de Eureka) -->
+                        <canvas id="universo-front-canvas"></canvas>
+
+                        <!-- Contenedor Frontal de Contenido (Glassmorphism & Interacción) -->
                         <div class="universo-creativo-content universo-vivo-content">
                             <div class="universo-banner-card">
                                 <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
@@ -1788,8 +1791,19 @@
                                 </div>
                             </div>
 
-                            <!-- Selector Grid de los 8 Motores -->
-                            <div id="motores-selector-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 22px;">
+                            <!-- Capa 2: Núcleo Creativo Central ✦ IDEA ✦ -->
+                            <div id="universo-nucleo-idea" class="universo-nucleo-idea">
+                                <div class="nucleo-aura-pulse"></div>
+                                <div class="nucleo-core-badge">
+                                    <span class="nucleo-star">✦</span>
+                                    <span class="nucleo-label">IDEA</span>
+                                    <span class="nucleo-star">✦</span>
+                                </div>
+                                <span class="nucleo-subtext">Núcleo Creativo Central &bull; 8 Fuerzas Cognitivas en Sintonía</span>
+                            </div>
+
+                            <!-- Selector Grid de los 8 Motores (Capa 3: Glassmorphism + Borde Energético) -->
+                            <div id="motores-selector-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px;">
                                 <!-- Botones/Tarjetas de Selección generados dinámicamente -->
                             </div>
 
@@ -7261,7 +7275,7 @@ ${userMessage}`;
             });
 
             // -------------------------------------------------------------------------
-            // RENDERIZADO Y CONTROL DE LOS 8 MOTORES VIVOS (UNIVERSO CREATIVO V2)
+            // RENDERIZADO Y CONTROL DE LOS 8 MOTORES VIVOS (UNIVERSO CREATIVO V3)
             // -------------------------------------------------------------------------
             function loadWorkspaceMotores() {
                 const grid = document.getElementById('motores-selector-grid');
@@ -7273,18 +7287,20 @@ ${userMessage}`;
                         <div class="motor-select-card motor-living-card motor-card-${m.key} motor-stagger-${index} ${isSelected ? 'motor-card-active' : ''}" 
                              data-motor="${m.key}" 
                              onclick="seleccionarMotor('${m.key}', event)" 
-                             style="--motor-color: ${m.color}; --motor-glow: ${m.color}35; --motor-bg: ${m.color}15; --motor-color-trans: ${m.color}25; cursor: pointer; padding: 16px 18px; border-radius: 14px; position: relative;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div class="motor-icon-box">
-                                        <i class="fas ${m.icono}"></i>
+                             style="--motor-color: ${m.color}; --motor-glow: ${m.color}66; --motor-bg: ${m.color}15;">
+                            <div class="motor-card-inner">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div class="motor-icon-box">
+                                            <i class="fas ${m.icono}"></i>
+                                        </div>
+                                        <strong style="color: #0f172a; font-size: 0.98em; font-weight: 700;">${m.nombre}</strong>
                                     </div>
-                                    <strong style="color: #1e293b; font-size: 0.98em; font-weight: 700;">${m.nombre}</strong>
+                                    ${isSelected ? `<span style="font-size: 0.72em; background: ${m.color}; color: #ffffff; padding: 3px 10px; border-radius: 12px; font-weight: 700; box-shadow: 0 2px 8px ${m.color}50; letter-spacing: 0.3px;">Activo</span>` : ''}
                                 </div>
-                                ${isSelected ? `<span style="font-size: 0.72em; background: ${m.color}; color: #ffffff; padding: 3px 10px; border-radius: 12px; font-weight: 700; box-shadow: 0 2px 8px ${m.color}50; letter-spacing: 0.3px;">Activo</span>` : ''}
+                                <p style="margin: 0 0 8px 0; color: #334155; font-size: 0.85em; line-height: 1.4; font-weight: 500;">${m.desc}</p>
+                                <span style="display: block; font-size: 0.80em; color: ${m.color}; font-style: italic; font-weight: 600;">${m.pregunta}</span>
                             </div>
-                            <p style="margin: 0 0 8px 0; color: #475569; font-size: 0.84em; line-height: 1.4;">${m.desc}</p>
-                            <span style="display: block; font-size: 0.79em; color: ${m.color}; font-style: italic; opacity: 0.9;">${m.pregunta}</span>
                         </div>
                     `;
                 }).join('');
@@ -7300,30 +7316,38 @@ ${userMessage}`;
                 const motorDef = MOTORES_DEFINICIONES.find(m => m.key === key);
                 const activeCard = document.querySelector(`.motor-select-card[data-motor="${key}"]`);
                 if (activeCard) {
-                    activeCard.classList.remove('motor-card-just-selected');
-                    void activeCard.offsetWidth; // Reflow for animation restart
-                    activeCard.classList.add('motor-card-just-selected');
-                    setTimeout(() => {
-                        activeCard.classList.remove('motor-card-just-selected');
-                    }, 600);
+                    // Fase 1 y 2: Carga perimetral de energía acelerada
+                    activeCard.classList.add('motor-card-charging');
 
-                    // Explosión de Activación en Universo Creativo V2
-                    if (window.universoCreativo && typeof window.universoCreativo.triggerExplosion === 'function') {
-                        let clientX = null;
-                        let clientY = null;
-                        if (event && typeof event.clientX === 'number') {
-                            const panel = document.getElementById('workspace-panel-motores');
-                            if (panel) {
-                                const panRect = panel.getBoundingClientRect();
-                                clientX = event.clientX - panRect.left;
-                                clientY = event.clientY - panRect.top;
+                    setTimeout(() => {
+                        // Fase 3 y 4: Recorrido y detonación de la explosión frontal
+                        activeCard.classList.remove('motor-card-charging');
+                        activeCard.classList.remove('motor-card-just-selected');
+                        void activeCard.offsetWidth; // Reflow
+                        activeCard.classList.add('motor-card-just-selected');
+
+                        setTimeout(() => {
+                            activeCard.classList.remove('motor-card-just-selected');
+                        }, 650);
+
+                        // Explosión frontal en el Universo Creativo V3
+                        if (window.universoCreativo && typeof window.universoCreativo.triggerExplosion === 'function') {
+                            let clientX = null;
+                            let clientY = null;
+                            if (event && typeof event.clientX === 'number') {
+                                const panel = document.getElementById('workspace-panel-motores');
+                                if (panel) {
+                                    const panRect = panel.getBoundingClientRect();
+                                    clientX = event.clientX - panRect.left;
+                                    clientY = event.clientY - panRect.top;
+                                }
                             }
+                            window.universoCreativo.triggerExplosion(key, clientX, clientY);
+                        } else if (typeof emitMotorBurst === 'function' && motorDef) {
+                            const cardRect = activeCard.getBoundingClientRect();
+                            emitMotorBurst(motorDef.color, cardRect);
                         }
-                        window.universoCreativo.triggerExplosion(key, clientX, clientY);
-                    } else if (typeof emitMotorBurst === 'function' && motorDef) {
-                        const cardRect = activeCard.getBoundingClientRect();
-                        emitMotorBurst(motorDef.color, cardRect);
-                    }
+                    }, 120);
                 }
             }
             window.seleccionarMotor = seleccionarMotor;

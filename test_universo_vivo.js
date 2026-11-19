@@ -74,11 +74,13 @@ const { chromium } = require('playwright');
         assert(htmlContent.includes('src="/universo_creativo.js"'), "Falta script a /universo_creativo.js");
     });
 
-    test("universo_creativo.css define las reglas del Universo Creativo V2", () => {
+    test("universo_creativo.css define las reglas del Universo Creativo V3", () => {
         assert(cssContent.includes('.universo-creativo-wrapper'), "Falta .universo-creativo-wrapper");
         assert(cssContent.includes('.universo-banner-card'), "Falta .universo-banner-card");
-        assert(cssContent.includes('@keyframes motorBreathingV2'), "Falta @keyframes motorBreathingV2");
-        assert(cssContent.includes('@keyframes motorActivationBlast'), "Falta @keyframes motorActivationBlast");
+        assert(cssContent.includes('@keyframes motorBreathingV3') || cssContent.includes('@keyframes motorBreathingV2'), "Falta @keyframes motorBreathingV3");
+        assert(cssContent.includes('@keyframes rotateBorderCurrent'), "Falta @keyframes rotateBorderCurrent");
+        assert(cssContent.includes('.motor-card-charging'), "Falta .motor-card-charging");
+        assert(cssContent.includes('.motor-card-inner'), "Falta .motor-card-inner");
         assert(cssContent.includes('.motor-execution-processing'), "Falta .motor-execution-processing");
         assert(cssContent.includes('.motor-result-animated'), "Falta .motor-result-animated");
     });
@@ -136,7 +138,7 @@ const { chromium } = require('playwright');
 
         await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-        await testAsync("Inicialización del Universo Creativo V2 en DOM y Canvas", async () => {
+        await testAsync("Inicialización del Universo Creativo V3 en DOM y Doble Canvas (Fondo + Frontal)", async () => {
             await page.evaluate(() => {
                 const ideas = document.getElementById('ideas');
                 if (ideas) ideas.style.display = 'block';
@@ -156,25 +158,33 @@ const { chromium } = require('playwright');
 
             const engineState = await page.evaluate(() => {
                 const uc = window.universoCreativo;
-                const canvas = document.getElementById('universo-vivo-canvas');
+                const bgCanvas = document.getElementById('universo-vivo-canvas');
+                const frontCanvas = document.getElementById('universo-front-canvas');
+                const nucleo = document.getElementById('universo-nucleo-idea');
                 return {
                     exists: !!uc,
                     running: uc ? uc.running : false,
                     particlesCount: uc ? uc.particles.length : 0,
                     wordsCount: uc ? uc.words.length : 0,
-                    canvasW: canvas ? canvas.width : 0,
-                    canvasH: canvas ? canvas.height : 0
+                    bgCanvasW: bgCanvas ? bgCanvas.width : 0,
+                    bgCanvasH: bgCanvas ? bgCanvas.height : 0,
+                    frontCanvasW: frontCanvas ? frontCanvas.width : 0,
+                    frontCanvasH: frontCanvas ? frontCanvas.height : 0,
+                    hasFrontCanvas: !!frontCanvas,
+                    hasNucleo: !!nucleo
                 };
             });
 
             assert(engineState.exists, "window.universoCreativo debe existir");
             assert(engineState.running, "Universo Creativo debe estar ejecutándose");
+            assert(engineState.hasFrontCanvas, "Canvas Frontal (#universo-front-canvas) debe existir");
+            assert(engineState.hasNucleo, "Núcleo Creativo (#universo-nucleo-idea) debe existir");
             assert(engineState.particlesCount >= 30, `Debe tener al menos 30 partículas (actual: ${engineState.particlesCount})`);
             assert(engineState.wordsCount >= 2, `Debe tener palabras flotantes activas (actual: ${engineState.wordsCount})`);
-            assert(engineState.canvasW > 0 && engineState.canvasH > 0, "Canvas debe tener dimensiones > 0");
+            assert(engineState.bgCanvasW > 0 && engineState.frontCanvasW > 0, "Ambos Canvas deben tener dimensiones > 0");
         });
 
-        await testAsync("Renderizado de los 8 motores con sus 8 personalidades estilísticas", async () => {
+        await testAsync("Renderizado de los 8 motores con Glassmorphism (.motor-card-inner) y personalidades", async () => {
             const cardsCount = await page.locator('.motor-select-card').count();
             assert.strictEqual(cardsCount, 8, "Deben existir 8 tarjetas de motor");
 
@@ -184,6 +194,9 @@ const { chromium } = require('playwright');
                 const card = page.locator(`.motor-card-${key}`);
                 const count = await card.count();
                 assert.strictEqual(count, 1, `Debe existir tarjeta para ${key}`);
+
+                const hasInner = await card.evaluate(el => !!el.querySelector('.motor-card-inner'));
+                assert(hasInner, `Tarjeta ${key} debe tener capa glassmorphism .motor-card-inner`);
 
                 const hasStagger = await card.evaluate((el, idx) => el.classList.contains(`motor-stagger-${idx}`), i);
                 assert(hasStagger, `Tarjeta ${key} debe tener clase .motor-stagger-${i}`);
@@ -205,28 +218,42 @@ const { chromium } = require('playwright');
             assert(hoverInfo.boxShadow && hoverInfo.boxShadow !== 'none', "Debe tener sombra luminosa");
         });
 
-        await testAsync("Secuencia de EXPLOSIÓN DE ACTIVACIÓN al seleccionar un motor", async () => {
+        await testAsync("Secuencia de 4 fases de ACTIVACIÓN al seleccionar un motor", async () => {
             // Seleccionar 'validador'
             await page.evaluate(() => {
                 window.seleccionarMotor('validador');
             });
 
-            const explosionState = await page.evaluate(() => {
-                const uc = window.universoCreativo;
+            // Fase 1: Carga inmediata con corriente rápida perimetral (.motor-card-charging)
+            const phase1 = await page.evaluate(() => {
                 const activeCard = document.querySelector('.motor-select-card[data-motor="validador"]');
                 return {
                     activeKey: window.motorActivoKey,
                     isCardActive: activeCard ? activeCard.classList.contains('motor-card-active') : false,
+                    isCharging: activeCard ? activeCard.classList.contains('motor-card-charging') : false
+                };
+            });
+            assert.strictEqual(phase1.activeKey, 'validador', "Motor activo debe ser validador");
+            assert(phase1.isCardActive, "Tarjeta seleccionada debe tener .motor-card-active");
+            assert(phase1.isCharging, "Tarjeta debe iniciar con fase de carga .motor-card-charging");
+
+            // Esperar que culmine la carga (280ms) y dispare la ráfaga frontal
+            await page.waitForTimeout(320);
+
+            // Fase 2 & 3: Explosión en canvas frontal + pulso final
+            const phase2 = await page.evaluate(() => {
+                const uc = window.universoCreativo;
+                const activeCard = document.querySelector('.motor-select-card[data-motor="validador"]');
+                return {
                     hasPulseClass: activeCard ? activeCard.classList.contains('motor-card-just-selected') : false,
                     shockwavesCount: uc ? uc.shockwaves.length : 0,
                     burstParticlesCount: uc ? uc.burstParticles.length : 0
                 };
             });
 
-            assert.strictEqual(explosionState.activeKey, 'validador', "Motor activo debe ser validador");
-            assert(explosionState.isCardActive, "Tarjeta seleccionada debe tener .motor-card-active");
-            assert(explosionState.burstParticlesCount >= 30, `Debe haber generado ráfaga explosiva de partículas (actual: ${explosionState.burstParticlesCount})`);
-            assert(explosionState.shockwavesCount >= 1, `Debe haber generado onda de choque expansiva (actual: ${explosionState.shockwavesCount})`);
+            assert(phase2.hasPulseClass, "Tarjeta debe culminar con .motor-card-just-selected");
+            assert(phase2.burstParticlesCount >= 50, `Debe haber generado ráfaga de 50+ partículas frontales (actual: ${phase2.burstParticlesCount})`);
+            assert(phase2.shockwavesCount >= 1, `Debe haber generado onda de choque expansiva frontal (actual: ${phase2.shockwavesCount})`);
         });
 
         await testAsync("Modo Núcleo Creativo de Procesamiento (durante ejecución IA) y Flash de Eureka", async () => {
