@@ -20,6 +20,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const crypto = require('crypto');
 const { parsePhoneNumber, isValidPhoneNumber } = require('libphonenumber-js');
+const { getEngine, listAvailableEngines } = require('./ideaEngines');
 
 
 async function verifyToken(token, connectionPool) {
@@ -4119,71 +4120,80 @@ app.get('/api/ideas/catalogos', requireFunctionality('ideas'), requirePermission
     }
 });
 
-app.get('/api/ideas/:id', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
-    try {
-        const usuario_id = req.userId;
-        const id = Number(req.params.id);
+/**
+ * Obtiene de forma centralizada y segura el contexto autorizado de una Idea.
+ * Valida formato numérico estricto de ID, existencia de la Idea, pertenencia (ownership) y reglas de privacidad (anti-IDOR).
+ * Carga 1:1 el desarrollo (Canvas), los propósitos y las categorías asociadas.
+ *
+ * @param {Object} connectionPool - Pool de conexiones MySQL
+ * @param {number} ideaId - Identificador numérico de la Idea
+ * @param {number} userId - Identificador del usuario autenticado que solicita
+ * @returns {Promise<{ authorized: boolean, status?: number, message?: string, context?: Object }>}
+ */
+async function getAuthorizedIdeaContext(connectionPool, ideaId, userId) {
+    if (!Number.isSafeInteger(ideaId) || ideaId <= 0) {
+        return {
+            authorized: false,
+            status: 400,
+            message: 'ID de idea inválido.'
+        };
+    }
 
-        // 1. Validación numérica estricta de ID (rechaza abc, 1abc, 1.5, 0, -1, etc.)
-        if (!Number.isSafeInteger(id) || id <= 0) {
-            return res.status(400).json({ error: 'ID de idea inválido.' });
-        }
+    const [ideaRows] = await connectionPool.execute(
+        `SELECT id, usuario_id, titulo, descripcion, estado, fecha, privacidad, modalidad, version_actual, fecha_actualizacion
+         FROM ideas
+         WHERE id = ?`,
+        [ideaId]
+    );
 
-        // 2. Consulta principal de la idea
-        const [ideaRows] = await pool.execute(
-            `SELECT id, usuario_id, titulo, descripcion, estado, fecha, privacidad, modalidad, version_actual, fecha_actualizacion
-             FROM ideas
-             WHERE id = ?`,
-            [id]
-        );
+    if (ideaRows.length === 0) {
+        return {
+            authorized: false,
+            status: 404,
+            message: 'Idea no encontrada o no autorizada.'
+        };
+    }
 
-        if (ideaRows.length === 0) {
-            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
-        }
+    const idea = ideaRows[0];
 
-        const idea = ideaRows[0];
+    const isOwner = (idea.usuario_id === userId);
+    if (!isOwner && idea.privacidad !== 'publica') {
+        return {
+            authorized: false,
+            status: 404,
+            message: 'Idea no encontrada o no autorizada.'
+        };
+    }
 
-        // 3. Reglas de privacidad y protección anti-IDOR (F4.6)
-        // - 'privada': Solo consultable por su propietario.
-        // - 'compartida': En F4.6 (MVP), solo consultable por su propietario (sin acceso automático de terceros).
-        // - 'publica': Consultable por cualquier usuario autenticado con permiso 'ideas.read'.
-        const isOwner = (idea.usuario_id === usuario_id);
+    const [desRows] = await connectionPool.execute(
+        `SELECT problema, solucion, beneficiarios, recursos, inversion_estimada, moneda, complejidad, potencial, riesgos, notas, fecha_actualizacion
+         FROM idea_desarrollo
+         WHERE idea_id = ?`,
+        [ideaId]
+    );
+    const desarrollo = desRows.length > 0 ? desRows[0] : null;
 
-        if (!isOwner && idea.privacidad !== 'publica') {
-            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
-        }
+    const [propositos] = await connectionPool.execute(
+        `SELECT p.id, p.clave, p.nombre, p.descripcion, p.icono, p.orden, p.activo
+         FROM idea_propositos p
+         JOIN idea_proposito_rel r ON p.id = r.proposito_id
+         WHERE r.idea_id = ?
+         ORDER BY p.orden ASC, p.id ASC`,
+        [ideaId]
+    );
 
-        // 4. Consulta de canvas 1:1 en idea_desarrollo
-        const [desRows] = await pool.execute(
-            `SELECT problema, solucion, beneficiarios, recursos, inversion_estimada, moneda, complejidad, potencial, riesgos, notas, fecha_actualizacion
-             FROM idea_desarrollo
-             WHERE idea_id = ?`,
-            [id]
-        );
-        const desarrollo = desRows.length > 0 ? desRows[0] : null;
+    const [categorias] = await connectionPool.execute(
+        `SELECT c.id, c.clave, c.nombre, c.descripcion, c.icono, c.orden, c.activo
+         FROM categorias_idea c
+         JOIN idea_categorias ic ON c.id = ic.categoria_id
+         WHERE ic.idea_id = ?
+         ORDER BY c.orden ASC, c.id ASC`,
+        [ideaId]
+    );
 
-        // 5. Consulta de propósitos asociados mediante tabla relacional
-        const [propositos] = await pool.execute(
-            `SELECT p.id, p.clave, p.nombre, p.descripcion, p.icono, p.orden, p.activo
-             FROM idea_propositos p
-             JOIN idea_proposito_rel r ON p.id = r.proposito_id
-             WHERE r.idea_id = ?
-             ORDER BY p.orden ASC, p.id ASC`,
-            [id]
-        );
-
-        // 6. Consulta de categorías asociadas mediante tabla relacional
-        const [categorias] = await pool.execute(
-            `SELECT c.id, c.clave, c.nombre, c.descripcion, c.icono, c.orden, c.activo
-             FROM categorias_idea c
-             JOIN idea_categorias ic ON c.id = ic.categoria_id
-             WHERE ic.idea_id = ?
-             ORDER BY c.orden ASC, c.id ASC`,
-            [id]
-        );
-
-        // 7. Respuesta estructurada
-        res.status(200).json({
+    return {
+        authorized: true,
+        context: {
             idea: {
                 id: idea.id,
                 usuario_id: idea.usuario_id,
@@ -4196,6 +4206,28 @@ app.get('/api/ideas/:id', requireFunctionality('ideas'), requirePermission('idea
                 fecha: idea.fecha,
                 fecha_actualizacion: idea.fecha_actualizacion
             },
+            desarrollo,
+            categorias,
+            propositos,
+            isOwner
+        }
+    };
+}
+
+app.get('/api/ideas/:id', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
+    try {
+        const usuario_id = req.userId;
+        const id = Number(req.params.id);
+
+        const authResult = await getAuthorizedIdeaContext(pool, id, usuario_id);
+        if (!authResult.authorized) {
+            return res.status(authResult.status).json({ error: authResult.message });
+        }
+
+        const { idea, desarrollo, categorias, propositos } = authResult.context;
+
+        res.status(200).json({
+            idea,
             desarrollo,
             categorias,
             propositos
@@ -4885,6 +4917,68 @@ app.get('/api/ideas/:id/historial', requireFunctionality('ideas'), requirePermis
     }
 });
 
+app.post('/api/ideas/:id/motores/:motor', requireFunctionality('ideas'), requirePermission('ideas.use_ai'), async (req, res) => {
+    try {
+        const userId = req.userId;
+        const ideaId = Number(req.params.id);
+        const motorKey = String(req.params.motor || '').toLowerCase().trim();
+
+        // 1. Validación estricta del ID
+        if (!Number.isSafeInteger(ideaId) || ideaId <= 0) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        // 2. Validar que el motor solicitado exista en el registro
+        const engine = getEngine(motorKey);
+        if (!engine) {
+            return res.status(404).json({
+                error: `El motor '${motorKey}' no está disponible o no existe.`,
+                disponibles: listAvailableEngines().map(e => e.type)
+            });
+        }
+
+        // 3. Obtener contexto autorizado (respetando ownership, privacidad y anti-IDOR)
+        const authResult = await getAuthorizedIdeaContext(pool, ideaId, userId);
+        if (!authResult.authorized) {
+            return res.status(authResult.status).json({ error: authResult.message });
+        }
+
+        const { idea, desarrollo, propositos, categorias } = authResult.context;
+
+        // 4. Ejecutar el motor con IA (recibe contexto autorizado sin mutar datos de la idea)
+        const engineResult = await engine.run({
+            pool,
+            ai,
+            idea,
+            canvas: desarrollo,
+            propositos,
+            categorias,
+            inputs: req.body?.inputs || {},
+            userId,
+            versionIdea: idea.version_actual || 0
+        });
+
+        // 5. Respuesta estructurada
+        res.status(200).json({
+            success: true,
+            motor: engine.type,
+            motor_nombre: engine.displayName,
+            idea_id: idea.id,
+            version_idea: engineResult.versionIdea,
+            analisis_id: engineResult.analisisId,
+            resumen: engineResult.resumen,
+            resultado: engineResult.output,
+            fecha: engineResult.fecha
+        });
+
+    } catch (error) {
+        console.error('Error in /api/ideas/:id/motores/:motor (POST):', error);
+        res.status(500).json({
+            error: error.message || 'Error interno al procesar el análisis con el motor de ideas.'
+        });
+    }
+});
+
 app.listen(port, () => { console.log(`Server listening on port ${port}`); });
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -4916,7 +5010,8 @@ if (typeof module !== 'undefined' && module.exports) {
         isValidIdeaTransition,
         IDEAS_PRIVACIDADES_CATALOGO,
         IDEAS_MODALIDADES_CATALOGO,
-        IDEAS_ESTADOS_CATALOGO
+        IDEAS_ESTADOS_CATALOGO,
+        getAuthorizedIdeaContext
     };
 }
 

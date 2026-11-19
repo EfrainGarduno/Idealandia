@@ -73,8 +73,12 @@ class IdeaEngineBase {
         const clean = {};
         for (const [key, value] of Object.entries(inputs)) {
             if (typeof value === 'string') {
-                // Eliminar caracteres de control y acotar longitud
-                clean[key] = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim().slice(0, 1000);
+                // Eliminar caracteres de control, delimitar etiquetas xml y acotar longitud
+                clean[key] = value
+                    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                    .replace(/<\/?(?:idea_data|user_parameters|system_instructions)[^>]*>/gi, '')
+                    .trim()
+                    .slice(0, 1000);
             } else if (typeof value === 'number' || typeof value === 'boolean') {
                 clean[key] = value;
             }
@@ -151,9 +155,22 @@ class IdeaEngineBase {
      * @param {number} versionIdea - Versión formal de la Idea al momento del análisis
      * @returns {Promise<{ analisisId: number, fecha: Date }>}
      */
-    async persistAnalysis(pool, ideaId, userId, parsedOutput, versionIdea = 0) {
-        const resumen = parsedOutput.resumen_ejecutivo || parsedOutput.resumen || `${this.displayName} completado con éxito.`;
-        const supuestos = parsedOutput.supuestos_cuestionados || null;
+    async persistAnalysis(pool, ideaIdOrOptions, userIdParam, parsedOutputParam, versionIdeaParam = 0) {
+        let ideaId, userId, parsedOutput, versionIdea;
+        if (ideaIdOrOptions && typeof ideaIdOrOptions === 'object') {
+            ideaId = ideaIdOrOptions.ideaId;
+            userId = ideaIdOrOptions.userId;
+            parsedOutput = ideaIdOrOptions.output || ideaIdOrOptions.parsedOutput;
+            versionIdea = ideaIdOrOptions.versionIdea !== undefined ? ideaIdOrOptions.versionIdea : 0;
+        } else {
+            ideaId = ideaIdOrOptions;
+            userId = userIdParam;
+            parsedOutput = parsedOutputParam;
+            versionIdea = versionIdeaParam !== undefined ? versionIdeaParam : 0;
+        }
+
+        const resumen = (parsedOutput && (parsedOutput.resumen_ejecutivo || parsedOutput.resumen)) || `${this.displayName} completado con éxito.`;
+        const supuestos = (parsedOutput && parsedOutput.supuestos_cuestionados) || null;
 
         const connection = await pool.getConnection();
         try {
@@ -217,12 +234,15 @@ class IdeaEngineBase {
      * @param {Object} params.ai - Cliente Gemini (GoogleGenAI)
      * @param {Object} params.idea - Datos de la Idea
      * @param {Object} params.canvas - Datos del Canvas
-     * @param {Object} [params.inputs] - Parámetros adicionales
+     * @param {Array} [params.propositos=[]] - Propósitos oficiales vinculados a la Idea
+     * @param {Array} [params.categorias=[]] - Categorías vinculadas a la Idea
+     * @param {Object} [params.inputs={}] - Parámetros adicionales
      * @param {number} params.userId - Usuario ejecutor
+     * @param {number} [params.versionIdea] - Versión formal de la Idea evaluada
      * @param {boolean} [params.persist=true] - Si debe guardar en BD
-     * @returns {Promise<{ success: boolean, output: Object, persistence?: Object }>}
+     * @returns {Promise<{ success: boolean, motor: string, output: Object, resumen: string, analisisId: number|null, versionIdea: number, fecha: Date, persistence?: Object }>}
      */
-    async run({ pool, ai, idea, canvas, inputs = {}, userId, persist = true }) {
+    async run({ pool, ai, idea, canvas, propositos = [], categorias = [], inputs = {}, userId, versionIdea, persist = true }) {
         // 1. Validar contexto mínimo
         const valContext = this.validateContext(idea, canvas);
         if (!valContext.valid) {
@@ -234,20 +254,43 @@ class IdeaEngineBase {
 
         // 3. Preparar prompt e instrucciones
         const systemInstruction = this.getSystemInstructions();
-        const userPrompt = this.buildUserPrompt(idea, canvas, cleanInputs);
+        const userPrompt = this.buildUserPrompt(idea, canvas, cleanInputs, { propositos, categorias });
 
-        // 4. Invocar modelo con Gemini
+        // 4. Invocar modelo con Gemini (matriz tolerante a fallos y spikes de demanda)
+        const candidateModels = [
+            process.env.GEMINI_MODEL,
+            'gemini-3-flash-preview',
+            'gemini-3.1-flash-lite',
+            'gemini-3.6-flash'
+        ].filter(Boolean);
+
         let rawText = '';
+        let lastError = null;
+
         if (ai && ai.models && typeof ai.models.generateContent === 'function') {
-            const response = await ai.models.generateContent({
-                model: 'gemini-3.6-flash',
-                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-                config: {
-                    systemInstruction,
-                    responseMimeType: 'application/json'
+            for (const modelCandidate of candidateModels) {
+                try {
+                    const response = await ai.models.generateContent({
+                        model: modelCandidate,
+                        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                        config: {
+                            systemInstruction,
+                            responseMimeType: 'application/json'
+                        }
+                    });
+                    rawText = response.text ? (typeof response.text === 'function' ? response.text() : response.text) : '';
+                    if (rawText && rawText.trim().length > 0) {
+                        break;
+                    }
+                } catch (err) {
+                    console.warn(`[MOTOR ${this.type}] Reintentando con siguiente modelo tras error en ${modelCandidate}:`, err.message || err);
+                    lastError = err;
                 }
-            });
-            rawText = response.text ? (typeof response.text === 'function' ? response.text() : response.text) : '';
+            }
+
+            if (!rawText || rawText.trim().length === 0) {
+                throw lastError || new Error(`No se pudo obtener respuesta del modelo para el motor ${this.type}.`);
+            }
         } else {
             throw new Error('Cliente de IA (ai.models.generateContent) no disponible.');
         }
@@ -257,14 +300,20 @@ class IdeaEngineBase {
 
         // 6. Persistir si se solicita
         let persistence = null;
+        const resolvedVersion = (versionIdea !== undefined ? versionIdea : (idea && idea.version_actual !== undefined ? idea.version_actual : 0));
+
         if (persist && pool && idea && idea.id && userId) {
-            persistence = await this.persistAnalysis(pool, idea.id, userId, validatedOutput, idea.version_actual || 0);
+            persistence = await this.persistAnalysis(pool, idea.id, userId, validatedOutput, resolvedVersion);
         }
 
         return {
             success: true,
             motor: this.type,
             output: validatedOutput,
+            resumen: validatedOutput.resumen_ejecutivo || validatedOutput.resumen,
+            analisisId: persistence ? persistence.analisisId : null,
+            versionIdea: resolvedVersion,
+            fecha: persistence ? persistence.fecha : new Date(),
             persistence
         };
     }
