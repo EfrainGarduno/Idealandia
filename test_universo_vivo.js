@@ -70,8 +70,8 @@ const { chromium } = require('playwright');
     const jsContent = fs.readFileSync(jsPath, 'utf8');
 
     test("index.html incluye enlace a universo_creativo.css y script universo_creativo.js", () => {
-        assert(htmlContent.includes('href="/universo_creativo.css"'), "Falta link a /universo_creativo.css");
-        assert(htmlContent.includes('src="/universo_creativo.js"'), "Falta script a /universo_creativo.js");
+        assert(htmlContent.includes('universo_creativo.css'), "Falta link a universo_creativo.css");
+        assert(htmlContent.includes('universo_creativo.js'), "Falta script a universo_creativo.js");
     });
 
     test("universo_creativo.css define las reglas del Universo Creativo V3", () => {

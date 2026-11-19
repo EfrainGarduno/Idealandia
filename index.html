@@ -18,7 +18,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="/universo_creativo.css">
+    <link rel="stylesheet" href="universo_creativo.css">
 
     <!-- Markdown and Sanitization for Chat -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -1215,7 +1215,29 @@
                 <div id="ideas-catalogos-container" style="display: none;" aria-hidden="true"></div>
 
                 <div class="idea-form pension-form" style="margin-bottom: 30px;">
-                    <h3>Crear Nueva Idea</h3>
+                    <!-- HERO: EL NACIMIENTO DE UNA IDEA (FOCO / MOMENTO EUREKA) -->
+                    <div id="nacimiento-idea-hero" class="nacimiento-idea-hero">
+                        <canvas id="foco-particles-canvas" class="foco-particles-canvas"></canvas>
+                        <div id="foco-interactive-stage" class="foco-interactive-stage">
+                            <div id="foco-halo-outer" class="foco-halo-outer"></div>
+                            <div id="foco-halo-inner" class="foco-halo-inner"></div>
+                            <div id="foco-bulb-core" class="foco-bulb-core foco-dormido" role="button" tabindex="0" title="Haz clic para despertar tu chispa creativa" aria-label="Despertar Idea">
+                                <svg class="foco-svg" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <path d="M26 50H38M28 54H36M30 58H34" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                                    <path class="foco-glass-path" d="M32 8C20.9543 8 12 16.9543 12 28C12 34.5 15.5 40.2 21 43.5V48C21 49.1 21.9 50 23 50H41C42.1 50 43 49.1 43 48V43.5C48.5 40.2 52 34.5 52 28C52 16.9543 43.0457 8 32 8Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+                                    <path class="foco-filament-path" d="M26 36L28 26L32 30L36 26L38 36" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <circle class="foco-center-glow" cx="32" cy="27" r="4" fill="currentColor"/>
+                                </svg>
+                            </div>
+                            <div id="eureka-moment-badge" class="eureka-moment-badge">✦ EUREKA ✦</div>
+                        </div>
+                        <div class="nacimiento-text-group">
+                            <h3 id="nacimiento-hero-title">El Nacimiento de una Idea</h3>
+                            <p id="nacimiento-hero-subtitle">Aquí las posibilidades toman forma. Escribe tu visión y dale vida.</p>
+                            <p id="foco-status-hint">✦ El foco espera tu chispa creativa</p>
+                        </div>
+                    </div>
+
                     <form id="form-crear-idea">
                         <div class="form-group">
                             <label for="idea-titulo">Título (máximo 200 caracteres): <span style="color:red;">*</span></label>
@@ -1856,7 +1878,7 @@
     </footer>
     </div>
 
-    <script src="/universo_creativo.js"></script>
+    <script src="universo_creativo.js"></script>
     <script src="pension.js"></script>
     <script type="module">
         import * as THREE from 'three';
@@ -2849,6 +2871,12 @@
                                 }
                                 if (targetId === 'ideas') {
                                     if (typeof fetchAndDisplayIdeas === 'function') fetchAndDisplayIdeas();
+                                    if (window.nacimientoIdea) {
+                                        if (!window.nacimientoIdea.initialized) {
+                                            window.nacimientoIdea.init('nacimiento-idea-hero', 'foco-particles-canvas');
+                                        }
+                                        window.nacimientoIdea.triggerFocoDespertar();
+                                    }
                                 }
                             } else {
                                 section.style.display = 'none';
@@ -4977,7 +5005,13 @@
 
                     populateCanvasEditForm(window.currentWorkspaceIdea.desarrollo, estadoOficial);
                     setCanvasDirty(false);
-                    showCanvasStatus('Canvas guardado correctamente.', 'success');
+                    showCanvasStatus('Desarrollo de la Idea guardado correctamente.', 'success');
+                    const canvasPanel = document.getElementById('workspace-panel-canvas');
+                    if (canvasPanel) {
+                        canvasPanel.classList.remove('desarrollo-evolucion-flash');
+                        void canvasPanel.offsetWidth;
+                        canvasPanel.classList.add('desarrollo-evolucion-flash');
+                    }
 
                 } catch (err) {
                     console.error('Error guardando Canvas:', err);
@@ -6521,6 +6555,8 @@ ${userMessage}`;
                 if (thinkingEl) {
                     thinkingEl.style.display = 'flex';
                 }
+                const contextHeader = document.getElementById('idealita-context-header');
+                if (contextHeader) contextHeader.classList.add('idealita-thinking-vortex');
 
                 // 3. Crear burbuja de respuesta para Idealita
                 const idealitaBubbleEl = renderIdealitaBubble('idealita', '', true);
@@ -6621,6 +6657,10 @@ ${userMessage}`;
                         idealitaBubbleEl.innerHTML = `<span style="color: #dc2626;"><i class="fas fa-exclamation-triangle"></i> ${escapeHTML(msg)}</span>`;
                     }
                 } finally {
+                    const contextHeader = document.getElementById('idealita-context-header');
+                    if (contextHeader) contextHeader.classList.remove('idealita-thinking-vortex');
+                    if (idealitaBubbleEl) idealitaBubbleEl.classList.add('idealita-message-reveal');
+
                     window.isSendingIdealitaMessage = false;
                     if (sendBtn) sendBtn.disabled = false;
                     if (inputEl) {
@@ -7726,8 +7766,10 @@ ${userMessage}`;
                         } else {
                             ideas.forEach(idea => {
                                 const ideaDiv = document.createElement('div');
-                                ideaDiv.className = 'idea-card';
+                                ideaDiv.className = 'idea-card idea-card-viva';
                                 ideaDiv.dataset.ideaId = String(idea.id);
+                                const estadoOficial = getEstadoOficial(idea.estado);
+                                ideaDiv.classList.add(`idea-estado-${estadoOficial || 'semilla'}`);
                                 ideaDiv.style.background = '#ffffff';
                                 ideaDiv.style.border = '1px solid #e0e0e0';
                                 ideaDiv.style.borderRadius = '10px';
@@ -7740,7 +7782,6 @@ ${userMessage}`;
                                 ideaDiv.style.width = '100%';
                                 ideaDiv.style.maxWidth = '100%';
 
-                                const estadoOficial = getEstadoOficial(idea.estado);
                                 const estadoInfo = getEstadoInfo(estadoOficial);
                                 const privInfo = getPrivacidadInfo(idea.privacidad);
                                 const modInfo = getModalidadInfo(idea.modalidad);
@@ -8105,6 +8146,10 @@ ${userMessage}`;
                         if (typeof showModal === 'function') {
                             showModal(data.message || 'Idea creada exitosamente.');
                         }
+                        // Feedback visual de nacimiento en el foco Eureka
+                        if (window.nacimientoIdea && typeof window.nacimientoIdea.triggerFocoNacimiento === 'function') {
+                            window.nacimientoIdea.triggerFocoNacimiento();
+                        }
                         // Limpieza del formulario
                         if (tituloInput) tituloInput.value = '';
                         if (descInput) descInput.value = '';
@@ -8117,6 +8162,12 @@ ${userMessage}`;
                         }
                         if (typeof fetchAndDisplayIdeas === 'function') {
                             await fetchAndDisplayIdeas();
+                            // Resaltar suavemente la tarjeta recién nacida
+                            const firstCard = document.querySelector('#lista-ideas .idea-card');
+                            if (firstCard) {
+                                firstCard.classList.add('idea-card-just-born');
+                                setTimeout(() => firstCard.classList.remove('idea-card-just-born'), 2500);
+                            }
                         }
                     } else {
                         if (typeof showModal === 'function') {
@@ -8139,6 +8190,28 @@ ${userMessage}`;
             const btnAgregarIdea = document.getElementById('btn-agregar-idea');
             if (btnAgregarIdea) {
                 btnAgregarIdea.addEventListener('click', handleCrearIdea);
+            }
+
+            // Identidad Visual: Reactividad del Foco / Nacimiento de una Idea
+            const inputIdeaTitulo = document.getElementById('idea-titulo');
+            if (inputIdeaTitulo) {
+                inputIdeaTitulo.addEventListener('input', (e) => {
+                    if (window.nacimientoIdea) {
+                        window.nacimientoIdea.triggerFocoEscribiendo('titulo', (e.target.value || '').length);
+                    }
+                });
+            }
+            const inputIdeaDesc = document.getElementById('idea-descripcion');
+            if (inputIdeaDesc) {
+                inputIdeaDesc.addEventListener('input', (e) => {
+                    if (window.nacimientoIdea) {
+                        window.nacimientoIdea.triggerFocoEscribiendo('descripcion', (e.target.value || '').length);
+                    }
+                });
+            }
+            // Auto-inicialización si el hero está presente en el DOM
+            if (window.nacimientoIdea && document.getElementById('nacimiento-idea-hero')) {
+                window.nacimientoIdea.init('nacimiento-idea-hero', 'foco-particles-canvas');
             }
 
             // Chat logic

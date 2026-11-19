@@ -961,8 +961,268 @@
         }
     }
 
-    // Instancia Singleton Global
+    /**
+     * =============================================================================
+     * MOTOR DE NACIMIENTO DE UNA IDEA (EL FOCO / MOMENTO EUREKA)
+     * =============================================================================
+     */
+    class NacimientoIdeaEngine {
+        constructor() {
+            this.hero = null;
+            this.canvas = null;
+            this.ctx = null;
+            this.bulb = null;
+            this.badge = null;
+            this.statusHint = null;
+            this.particles = [];
+            this.running = false;
+            this.rafId = null;
+            this.state = 'dormido';
+            this.width = 300;
+            this.height = 160;
+            this.dpr = 1;
+            this.initialized = false;
+
+            this.loop = this.loop.bind(this);
+            this.resize = this.resize.bind(this);
+        }
+
+        init(heroId = 'nacimiento-idea-hero', canvasId = 'foco-particles-canvas') {
+            this.hero = document.getElementById(heroId);
+            this.canvas = document.getElementById(canvasId);
+            this.bulb = document.getElementById('foco-bulb-core');
+            this.badge = document.getElementById('eureka-moment-badge');
+            this.statusHint = document.getElementById('foco-status-hint');
+
+            if (!this.canvas || !this.bulb) return false;
+            this.ctx = this.canvas.getContext('2d');
+            this.resize();
+
+            // Click directo en el foco para despertar o detonar Eureka manualmente
+            this.bulb.addEventListener('click', () => {
+                this.triggerFocoDespertar();
+            });
+
+            window.addEventListener('resize', this.resize);
+
+            this.setBulbState('dormido');
+            this.start();
+            this.initialized = true;
+            return true;
+        }
+
+        resize() {
+            if (!this.canvas || !this.hero) return;
+            this.dpr = window.devicePixelRatio || 1;
+            const rect = this.hero.getBoundingClientRect();
+            this.width = Math.max(rect.width || 300, 200);
+            this.height = Math.max(rect.height || 160, 100);
+
+            this.canvas.width = Math.floor(this.width * this.dpr);
+            this.canvas.height = Math.floor(this.height * this.dpr);
+            this.canvas.style.width = this.width + 'px';
+            this.canvas.style.height = this.height + 'px';
+            if (this.ctx) {
+                this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+            }
+        }
+
+        getBulbCenter() {
+            if (!this.bulb || !this.hero) return { x: this.width / 2, y: 60 };
+            const bRect = this.bulb.getBoundingClientRect();
+            const hRect = this.hero.getBoundingClientRect();
+            return {
+                x: bRect.left + bRect.width / 2 - hRect.left,
+                y: bRect.top + bRect.height / 2 - hRect.top
+            };
+        }
+
+        triggerFocoDespertar() {
+            if (!this.bulb) return;
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                this.setBulbState('encendido');
+                if (this.statusHint) this.statusHint.textContent = '✦ Foco encendido: escribe tu idea para darle vida';
+                return;
+            }
+
+            // Paso 1: Foco despierta con pulso y halo creciente
+            this.setBulbState('despertando');
+            if (this.statusHint) {
+                this.statusHint.textContent = '✦ Una idea comienza a despertar...';
+                this.statusHint.style.color = '#8b5cf6';
+            }
+
+            setTimeout(() => {
+                // Paso 2: Momento EUREKA (máxima luminosidad, chispas y badge ✦ EUREKA ✦)
+                this.setBulbState('eureka');
+                const center = this.getBulbCenter();
+
+                // Emisión de chispas estelares doradas y violetas
+                for (let i = 0; i < 38; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 4.8 + 1.8;
+                    this.particles.push({
+                        x: center.x,
+                        y: center.y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed - 0.5,
+                        radius: Math.random() * 2.8 + 1.2,
+                        color: (i % 3 === 0) ? '#ffffff' : ((i % 2 === 0) ? '#f59e0b' : '#8b5cf6'),
+                        alpha: 1.0,
+                        life: 1.0,
+                        decay: Math.random() * 0.02 + 0.014
+                    });
+                }
+
+                if (this.badge) {
+                    this.badge.classList.remove('badge-eureka-visible');
+                    void this.badge.offsetWidth;
+                    this.badge.classList.add('badge-eureka-visible');
+                }
+
+                if (this.statusHint) {
+                    this.statusHint.textContent = '✦ ¡Eureka! Las posibilidades se abren';
+                    this.statusHint.style.color = '#f59e0b';
+                }
+
+                // Paso 3: Dispersión suave y foco queda encendido
+                setTimeout(() => {
+                    this.setBulbState('encendido');
+                    if (this.statusHint) {
+                        this.statusHint.textContent = '✦ Foco encendido: escribe tu idea para darle vida';
+                        this.statusHint.style.color = '#64748b';
+                    }
+                }, 1350);
+
+            }, 550);
+        }
+
+        triggerFocoEscribiendo(campo = 'titulo', longitud = 0) {
+            if (!this.bulb) return;
+            this.bulb.classList.add('foco-escribiendo');
+            clearTimeout(this._writeTimeout);
+            this._writeTimeout = setTimeout(() => {
+                if (this.bulb) this.bulb.classList.remove('foco-escribiendo');
+            }, 280);
+
+            // Generar micro-partículas ascendentes hacia el foco
+            if (this.particles.length < 24) {
+                const center = this.getBulbCenter();
+                this.particles.push({
+                    x: center.x + (Math.random() - 0.5) * 70,
+                    y: center.y + 35 + Math.random() * 20,
+                    vx: (Math.random() - 0.5) * 0.8,
+                    vy: -Math.random() * 1.5 - 0.6,
+                    radius: Math.random() * 2.2 + 1,
+                    color: (campo === 'titulo') ? '#8b5cf6' : '#f59e0b',
+                    alpha: 0.85,
+                    life: 0.85,
+                    decay: 0.022
+                });
+            }
+
+            if (this.statusHint) {
+                if (longitud > 25) {
+                    this.statusHint.textContent = '✦ La idea está tomando forma...';
+                    this.statusHint.style.color = '#059669';
+                } else {
+                    this.statusHint.textContent = '✦ Dando forma a tu pensamiento...';
+                    this.statusHint.style.color = '#8b5cf6';
+                }
+            }
+        }
+
+        triggerFocoNacimiento() {
+            if (!this.bulb) return;
+            this.setBulbState('nacimiento');
+            const center = this.getBulbCenter();
+
+            // Pequeña explosión de nacimiento: 💡 → ✦ → ✧ → partículas
+            for (let i = 0; i < 48; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5.2 + 2.0;
+                this.particles.push({
+                    x: center.x,
+                    y: center.y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 0.8,
+                    radius: Math.random() * 3.4 + 1.4,
+                    color: (i % 3 === 0) ? '#ffffff' : ((i % 2 === 0) ? '#10b981' : '#f59e0b'),
+                    alpha: 1.0,
+                    life: 1.0,
+                    decay: Math.random() * 0.018 + 0.012
+                });
+            }
+
+            if (this.statusHint) {
+                this.statusHint.textContent = '✦ ¡Tu Idea acaba de nacer!';
+                this.statusHint.style.color = '#10b981';
+            }
+
+            setTimeout(() => {
+                this.setBulbState('encendido');
+            }, 1200);
+        }
+
+        setBulbState(newState) {
+            if (!this.bulb) return;
+            this.bulb.classList.remove('foco-dormido', 'foco-despertando', 'foco-eureka', 'foco-encendido', 'foco-nacimiento');
+            this.bulb.classList.add(`foco-${newState}`);
+            this.state = newState;
+        }
+
+        loop() {
+            if (!this.running) return;
+
+            if (this.ctx && this.canvas) {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= p.decay;
+
+                    if (p.life <= 0) {
+                        this.particles.splice(i, 1);
+                        continue;
+                    }
+
+                    this.ctx.save();
+                    this.ctx.globalAlpha = Math.max(0, p.life);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.shadowColor = p.color;
+                    this.ctx.shadowBlur = 8;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
+            }
+
+            this.rafId = requestAnimationFrame(this.loop);
+        }
+
+        start() {
+            if (this.running) return;
+            this.running = true;
+            this.rafId = requestAnimationFrame(this.loop);
+        }
+
+        stop() {
+            if (this.rafId) {
+                cancelAnimationFrame(this.rafId);
+                this.rafId = null;
+            }
+            this.running = false;
+        }
+    }
+
+    // Instancias Globales
     window.UniversoCreativo = UniversoCreativoEngine;
     window.universoCreativo = new UniversoCreativoEngine();
+
+    window.NacimientoIdea = NacimientoIdeaEngine;
+    window.nacimientoIdea = new NacimientoIdeaEngine();
 
 })(window);
