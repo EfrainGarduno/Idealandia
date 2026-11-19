@@ -33,6 +33,262 @@
           }
         }
     </script>
+
+    <!-- =========================================================================
+         UNIVERSO VIVO DE IDEAS (V1) - ESTILOS VISUALES
+         ========================================================================= -->
+    <style id="universo-vivo-styles">
+        .universo-vivo-wrapper {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #universo-vivo-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            border-radius: 12px;
+        }
+
+        .universo-vivo-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 1. Microanimación de Respiración Orgánica Staggered */
+        @keyframes motorBreathing {
+            0%, 100% {
+                transform: translateY(0px) scale(1);
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+            }
+            50% {
+                transform: translateY(-2.5px) scale(1.008);
+                box-shadow: 0 6px 18px var(--motor-glow, rgba(108, 64, 247, 0.1));
+            }
+        }
+
+        .motor-living-card {
+            position: relative;
+            overflow: hidden;
+            will-change: transform, box-shadow;
+            animation: motorBreathing 5.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+                        box-shadow 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+                        border-color 0.25s ease,
+                        background-color 0.25s ease;
+        }
+
+        /* Delays desfasados entre los 8 motores (0.0s a 4.9s) */
+        .motor-stagger-0 { animation-delay: 0.0s; }
+        .motor-stagger-1 { animation-delay: 0.7s; }
+        .motor-stagger-2 { animation-delay: 1.4s; }
+        .motor-stagger-3 { animation-delay: 2.1s; }
+        .motor-stagger-4 { animation-delay: 2.8s; }
+        .motor-stagger-5 { animation-delay: 3.5s; }
+        .motor-stagger-6 { animation-delay: 4.2s; }
+        .motor-stagger-7 { animation-delay: 4.9s; }
+
+        /* 2. Hover General de los Motores */
+        .motor-living-card:hover {
+            transform: translateY(-4px) scale(1.018) !important;
+            box-shadow: 0 10px 24px var(--motor-glow, rgba(108, 64, 247, 0.18)) !important;
+            border-color: var(--motor-color) !important;
+            animation-play-state: paused;
+        }
+
+        .motor-living-card .motor-icon-box {
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        background-color 0.25s ease,
+                        color 0.25s ease,
+                        box-shadow 0.3s ease;
+        }
+
+        .motor-living-card:hover .motor-icon-box {
+            transform: scale(1.18) rotate(3deg);
+            background-color: var(--motor-color) !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 12px var(--motor-glow, rgba(108, 64, 247, 0.25));
+        }
+
+        /* 3. Microinteracciones Especializadas por Naturaleza de Motor */
+
+        /* Explorador: Destellos estelares y dispersión sutil */
+        .motor-card-explorador::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(108, 64, 247, 0.14) 10%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+        .motor-card-explorador:hover::after {
+            opacity: 1;
+            animation: exploradorDisperse 3.5s linear infinite;
+        }
+        @keyframes exploradorDisperse {
+            0% { transform: rotate(0deg) scale(0.92); }
+            50% { transform: rotate(180deg) scale(1.08); }
+            100% { transform: rotate(360deg) scale(0.92); }
+        }
+
+        /* Madurador: Sensación de crecimiento orgánico / florecimiento */
+        @keyframes maduradorGrow {
+            0% { transform: scale(1.15) translateY(0); }
+            100% { transform: scale(1.26) translateY(-2px); }
+        }
+        .motor-card-madurador:hover .motor-icon-box {
+            animation: maduradorGrow 1.4s ease-in-out infinite alternate !important;
+        }
+
+        /* Validador: Anillo de pulso / convergencia */
+        @keyframes validadorPulseRing {
+            0% { transform: scale(0.96); opacity: 0.7; }
+            100% { transform: scale(1.03); opacity: 0; }
+        }
+        .motor-card-validador::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 10px;
+            border: 2px solid #d97706;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .motor-card-validador:hover::before {
+            animation: validadorPulseRing 1.5s ease-out infinite;
+        }
+
+        /* Negocio: Ascenso e impulso superior */
+        @keyframes negocioAscent {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-3px); }
+        }
+        .motor-card-negocio:hover {
+            transform: translateY(-6px) scale(1.02) !important;
+        }
+        .motor-card-negocio:hover .motor-icon-box {
+            animation: negocioAscent 1.1s ease-in-out infinite alternate !important;
+        }
+
+        /* Impacto: Onda expansiva / ripple */
+        @keyframes impactoRipple {
+            0% { width: 0; height: 0; opacity: 0.75; }
+            100% { width: 300px; height: 300px; opacity: 0; }
+        }
+        .motor-card-impacto::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(22, 163, 74, 0.22);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .motor-card-impacto:hover::before {
+            animation: impactoRipple 1.6s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+        }
+
+        /* Propósito: Latido rítmico tipo corazón */
+        @keyframes propositoHeartbeat {
+            0% { transform: scale(1.15); }
+            14% { transform: scale(1.3); }
+            28% { transform: scale(1.16); }
+            42% { transform: scale(1.26); }
+            70% { transform: scale(1.15); }
+            100% { transform: scale(1.15); }
+        }
+        .motor-card-proposito:hover .motor-icon-box {
+            animation: propositoHeartbeat 1.2s ease-in-out infinite !important;
+        }
+
+        /* Conector: Nodos luminosos en vértices */
+        .motor-card-conector::before,
+        .motor-card-conector::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #8b5cf6;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .motor-card-conector::before { top: 9px; right: 9px; }
+        .motor-card-conector::after { bottom: 9px; left: 9px; }
+        .motor-card-conector:hover::before,
+        .motor-card-conector:hover::after {
+            opacity: 0.95;
+            box-shadow: 0 0 8px #8b5cf6, 0 0 14px #8b5cf6;
+            animation: conectorBlink 1.2s ease-in-out infinite alternate;
+        }
+        @keyframes conectorBlink {
+            0% { transform: scale(0.85); opacity: 0.5; }
+            100% { transform: scale(1.35); opacity: 1; }
+        }
+
+        /* Ejecutor: Impulso direccional hacia adelante y arriba */
+        @keyframes ejecutorThrust {
+            0% { transform: translate(0, 0) scale(1.18) rotate(0deg); }
+            100% { transform: translate(2px, -3px) scale(1.24) rotate(6deg); }
+        }
+        .motor-card-ejecutor:hover {
+            transform: translate(2px, -5px) scale(1.02) !important;
+        }
+        .motor-card-ejecutor:hover .motor-icon-box {
+            animation: ejecutorThrust 0.85s ease-in-out infinite alternate !important;
+        }
+
+        /* 4. Transición de Energía al Seleccionar */
+        @keyframes motorSelectPulse {
+            0% {
+                transform: scale(0.96);
+                box-shadow: 0 0 0 0 var(--motor-glow, rgba(108, 64, 247, 0.45));
+            }
+            45% {
+                transform: scale(1.025);
+                box-shadow: 0 0 0 12px rgba(108, 64, 247, 0);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 14px var(--motor-glow, rgba(108, 64, 247, 0.18));
+            }
+        }
+        .motor-card-just-selected {
+            animation: motorSelectPulse 0.45s ease-out !important;
+        }
+
+        /* 5. Tarjeta de Ejecución */
+        #motor-execution-card {
+            transition: border-color 0.35s ease, box-shadow 0.35s ease;
+        }
+
+        /* 6. Accesibilidad: prefers-reduced-motion */
+        @media (prefers-reduced-motion: reduce) {
+            .motor-living-card,
+            .motor-living-card *,
+            .motor-card-just-selected,
+            #universo-vivo-canvas {
+                animation: none !important;
+                transition: none !important;
+            }
+            .motor-living-card:hover {
+                transform: none !important;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -1508,55 +1764,61 @@
                         </div>
                     </div>
 
-                    <!-- Panel 6: Motores de Ideas (Los 8 Motores Oficiales) -->
-                    <div id="workspace-panel-motores" class="workspace-panel" style="display: none;">
-                        <div style="background: linear-gradient(135deg, #f8fafc 0%, #ede9fe 100%); border: 1px solid #ddd6fe; border-radius: 10px; padding: 18px 20px; margin-bottom: 22px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                                <div>
-                                    <h3 style="margin: 0 0 6px 0; color: #1e1b4b; font-size: 1.2em; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                                        <i class="fas fa-cogs" style="color: #6c40f7;"></i> Motores Cognitivos de Ideas
-                                    </h3>
-                                    <p style="margin: 0; color: #475569; font-size: 0.9em; line-height: 1.4;">
-                                        Ocho capacidades de análisis profundo sobre la misma Idea. <em>El Motor propone, cuestiona y analiza; tú decides qué recomendaciones aplicar en el Desarrollo de tu Idea.</em>
-                                    </p>
+                    <!-- Panel 6: Motores de Ideas (Los 8 Motores Oficiales - Universo Vivo V1) -->
+                    <div id="workspace-panel-motores" class="workspace-panel universo-vivo-wrapper" style="display: none; position: relative; min-height: 480px; padding: 4px;">
+                        <!-- Fondo Vivo (Canvas Orgánico de Partículas y Energía Creativa) -->
+                        <canvas id="universo-vivo-canvas"></canvas>
+
+                        <!-- Contenedor Frontal de Contenido (Garantiza legibilidad y z-index superior) -->
+                        <div class="universo-vivo-content">
+                            <div style="background: linear-gradient(135deg, rgba(248, 250, 252, 0.94) 0%, rgba(237, 233, 254, 0.94) 100%); backdrop-filter: blur(8px); border: 1px solid #ddd6fe; border-radius: 10px; padding: 18px 20px; margin-bottom: 22px; box-shadow: 0 2px 8px rgba(108, 64, 247, 0.04);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                    <div>
+                                        <h3 style="margin: 0 0 6px 0; color: #1e1b4b; font-size: 1.2em; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-cogs" style="color: #6c40f7;"></i> Motores Cognitivos de Ideas
+                                        </h3>
+                                        <p style="margin: 0; color: #475569; font-size: 0.9em; line-height: 1.4;">
+                                            Ocho capacidades de análisis profundo sobre la misma Idea. <em>El Motor propone, cuestiona y analiza; tú decides qué recomendaciones aplicar en el Desarrollo de tu Idea.</em>
+                                        </p>
+                                    </div>
+                                    <span style="font-size: 0.78em; background: #6c40f7; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-weight: 600; box-shadow: 0 2px 6px rgba(108, 64, 247, 0.25);">8 Motores Oficiales</span>
                                 </div>
-                                <span style="font-size: 0.78em; background: #6c40f7; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-weight: 600;">8 Motores Oficiales</span>
                             </div>
-                        </div>
 
-                        <!-- Selector Grid de los 8 Motores -->
-                        <div id="motores-selector-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 22px;">
-                            <!-- Botones/Tarjetas de Selección generados dinámicamente -->
-                        </div>
+                            <!-- Selector Grid de los 8 Motores -->
+                            <div id="motores-selector-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 22px;">
+                                <!-- Botones/Tarjetas de Selección generados dinámicamente -->
+                            </div>
 
-                        <!-- Área de Configuración y Ejecución del Motor Seleccionado -->
-                        <div id="motor-execution-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
-                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;">
-                                <div>
-                                    <h4 id="motor-selected-title" style="margin: 0 0 4px 0; color: #1e293b; font-size: 1.1em; font-weight: 700;">Motor Explorador</h4>
-                                    <p id="motor-selected-desc" style="margin: 0; color: #64748b; font-size: 0.88em;">Explora ángulos ocultos y desafía supuestos fundamentales.</p>
+                            <!-- Área de Configuración y Ejecución del Motor Seleccionado -->
+                            <div id="motor-execution-card" style="background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(8px); border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;">
+                                    <div>
+                                        <h4 id="motor-selected-title" style="margin: 0 0 4px 0; color: #1e293b; font-size: 1.1em; font-weight: 700;">Motor Explorador</h4>
+                                        <p id="motor-selected-desc" style="margin: 0; color: #64748b; font-size: 0.88em;">Explora ángulos ocultos y desafía supuestos fundamentales.</p>
+                                    </div>
+                                    <span id="motor-selected-pregunta" style="font-size: 0.82em; font-style: italic; color: #6c40f7; background: #f5f3ff; padding: 6px 12px; border-radius: 6px;">"¿Qué posibilidades todavía no estamos viendo?"</span>
                                 </div>
-                                <span id="motor-selected-pregunta" style="font-size: 0.82em; font-style: italic; color: #6c40f7; background: #f5f3ff; padding: 6px 12px; border-radius: 6px;">"¿Qué posibilidades todavía no estamos viendo?"</span>
+
+                                <div style="margin-bottom: 16px;">
+                                    <label for="motor-user-input" style="display: block; font-size: 0.88em; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                        Foco o pregunta específica para este análisis (opcional):
+                                    </label>
+                                    <input type="text" id="motor-user-input" class="form-control" placeholder="Ej. Centrarse en viabilidad operativa y adopción comunitaria" style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9em; box-sizing: border-box; font-family: 'Poppins', sans-serif;">
+                                </div>
+
+                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                                    <button type="button" id="btn-ejecutar-motor" onclick="ejecutarMotorActivo()" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; background: #6c40f7; color: #ffffff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px; font-family: 'Poppins', sans-serif; transition: background-color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;">
+                                        <i class="fas fa-play" aria-hidden="true"></i> <span id="btn-ejecutar-motor-text">Ejecutar Análisis</span>
+                                    </button>
+                                    <span id="motor-status-message" style="display: none; font-size: 0.88em; font-weight: 500;"></span>
+                                </div>
                             </div>
 
-                            <div style="margin-bottom: 16px;">
-                                <label for="motor-user-input" style="display: block; font-size: 0.88em; font-weight: 600; color: #334155; margin-bottom: 6px;">
-                                    Foco o pregunta específica para este análisis (opcional):
-                                </label>
-                                <input type="text" id="motor-user-input" class="form-control" placeholder="Ej. Centrarse en viabilidad operativa y adopción comunitaria" style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9em; box-sizing: border-box; font-family: 'Poppins', sans-serif;">
+                            <!-- Contenedor del Resultado del Motor -->
+                            <div id="motor-result-container" style="display: none;">
+                                <!-- Tarjeta de Resultado Dinámica -->
                             </div>
-
-                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-                                <button type="button" id="btn-ejecutar-motor" onclick="ejecutarMotorActivo()" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; background: #6c40f7; color: #ffffff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px; font-family: 'Poppins', sans-serif;">
-                                    <i class="fas fa-play" aria-hidden="true"></i> <span id="btn-ejecutar-motor-text">Ejecutar Análisis</span>
-                                </button>
-                                <span id="motor-status-message" style="display: none; font-size: 0.88em; font-weight: 500;"></span>
-                            </div>
-                        </div>
-
-                        <!-- Contenedor del Resultado del Motor -->
-                        <div id="motor-result-container" style="display: none;">
-                            <!-- Tarjeta de Resultado Dinámica -->
                         </div>
                     </div>
                 </div>
@@ -4340,8 +4602,17 @@
                     loadIdeaHistorial();
                 }
 
-                if (tabName === 'motores' && typeof loadWorkspaceMotores === 'function') {
-                    loadWorkspaceMotores();
+                if (tabName === 'motores') {
+                    if (typeof loadWorkspaceMotores === 'function') {
+                        loadWorkspaceMotores();
+                    }
+                    if (typeof startUniversoVivoAnimation === 'function') {
+                        startUniversoVivoAnimation();
+                    }
+                } else {
+                    if (typeof stopUniversoVivoAnimation === 'function') {
+                        stopUniversoVivoAnimation();
+                    }
                 }
 
                 if (tabName === 'idealita' && typeof loadIdeaIdealita === 'function') {
@@ -6737,7 +7008,7 @@ ${userMessage}`;
                 }
             }
             // =========================================================================
-            // MOTORES DE IDEAS (8 MOTORES OFICIALES) - INTEGRACIÓN WORKSPACE
+            // MOTORES DE IDEAS (8 MOTORES OFICIALES) - UNIVERSO VIVO DE IDEAS V1
             // =========================================================================
             const MOTORES_DEFINICIONES = [
                 { key: 'explorador', nombre: 'Motor Explorador', icono: 'fa-compass', color: '#6c40f7', pregunta: '¿Qué posibilidades todavía no estamos viendo?', desc: 'Ángulos no vistos, analogías externas, supuestos y pivotes.' },
@@ -6752,22 +7023,249 @@ ${userMessage}`;
             window.MOTORES_DEFINICIONES = MOTORES_DEFINICIONES;
             window.motorActivoKey = 'explorador';
 
+            // -------------------------------------------------------------------------
+            // UNIVERSO VIVO CANVAS: Partículas Ligeras y Energía Fluida (60 FPS)
+            // -------------------------------------------------------------------------
+            let universoVivoRafId = null;
+            let universoVivoParticles = [];
+            let universoVivoBursts = [];
+            let universoVivoInitialized = false;
+
+            function initUniversoVivoCanvas() {
+                const canvas = document.getElementById('universo-vivo-canvas');
+                const panel = document.getElementById('workspace-panel-motores');
+                if (!canvas || !panel) return;
+
+                const dpr = window.devicePixelRatio || 1;
+                const width = Math.max(panel.clientWidth || panel.offsetWidth || 320, 320);
+                const height = Math.max(panel.clientHeight || panel.offsetHeight || 500, 500);
+
+                canvas.width = Math.floor(width * dpr);
+                canvas.height = Math.floor(height * dpr);
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+
+                const isMobile = (window.innerWidth < 640);
+                const count = isMobile ? 18 : 34;
+
+                const palette = [
+                    '#6c40f7', // Explorador
+                    '#059669', // Madurador
+                    '#d97706', // Validador
+                    '#0284c7', // Negocio
+                    '#16a34a', // Impacto
+                    '#e11d48', // Propósito
+                    '#8b5cf6', // Conector
+                    '#ea580c'  // Ejecutor
+                ];
+
+                universoVivoParticles = [];
+                for (let i = 0; i < count; i++) {
+                    universoVivoParticles.push({
+                        x: Math.random() * width,
+                        y: Math.random() * height,
+                        radius: Math.random() * 2.2 + 1.2,
+                        color: palette[Math.floor(Math.random() * palette.length)],
+                        baseAlpha: Math.random() * 0.22 + 0.12,
+                        alpha: 0.18,
+                        twinkleSpeed: Math.random() * 0.02 + 0.012,
+                        twinkleAngle: Math.random() * Math.PI * 2,
+                        vx: (Math.random() - 0.5) * 0.3,
+                        vy: -Math.random() * 0.28 - 0.06, // suave deriva ascendente
+                        oscFreq: Math.random() * 0.014 + 0.006,
+                        oscAmp: Math.random() * 0.38 + 0.18,
+                        phase: Math.random() * Math.PI * 2
+                    });
+                }
+                window.universoVivoParticles = universoVivoParticles;
+                universoVivoInitialized = true;
+            }
+            window.initUniversoVivoCanvas = initUniversoVivoCanvas;
+
+            function emitMotorBurst(color, rect) {
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+                const canvas = document.getElementById('universo-vivo-canvas');
+                const panel = document.getElementById('workspace-panel-motores');
+                if (!canvas || !panel) return;
+
+                const panelRect = panel.getBoundingClientRect();
+                const originX = rect ? (rect.left + rect.width / 2 - panelRect.left) : (panelRect.width / 2);
+                const originY = rect ? (rect.top + rect.height / 2 - panelRect.top) : 220;
+
+                const burstCount = 14;
+                for (let i = 0; i < burstCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 2.2 + 0.8;
+                    universoVivoBursts.push({
+                        x: originX,
+                        y: originY,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed - 0.4,
+                        radius: Math.random() * 2.6 + 1.4,
+                        color: color || '#6c40f7',
+                        life: 1.0,
+                        decay: Math.random() * 0.024 + 0.02
+                    });
+                }
+            }
+            window.emitMotorBurst = emitMotorBurst;
+
+            function loopUniversoVivo() {
+                const panel = document.getElementById('workspace-panel-motores');
+                const canvas = document.getElementById('universo-vivo-canvas');
+                if (!panel || !canvas || panel.style.display === 'none' || document.hidden) {
+                    universoVivoRafId = null;
+                    return;
+                }
+
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    universoVivoRafId = null;
+                    return;
+                }
+
+                const ctx = canvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+                const width = canvas.width / dpr;
+                const height = canvas.height / dpr;
+
+                ctx.save();
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.clearRect(0, 0, width, height);
+
+                // 1. Partículas orgánicas vivas
+                for (let i = 0; i < universoVivoParticles.length; i++) {
+                    const p = universoVivoParticles[i];
+                    p.twinkleAngle += p.twinkleSpeed;
+                    p.alpha = p.baseAlpha + Math.sin(p.twinkleAngle) * 0.1;
+                    if (p.alpha < 0.05) p.alpha = 0.05;
+
+                    p.phase += p.oscFreq;
+                    p.x += p.vx + Math.sin(p.phase) * p.oscAmp;
+                    p.y += p.vy;
+
+                    // Reaparecer suavemente al cruzar bordes
+                    if (p.x < -12) p.x = width + 12;
+                    if (p.x > width + 12) p.x = -12;
+                    if (p.y < -12) p.y = height + 12;
+                    if (p.y > height + 12) p.y = -12;
+
+                    // Punto luminoso
+                    ctx.save();
+                    ctx.globalAlpha = p.alpha;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Fila de conexiones sutiles muy tenues
+                    for (let j = i + 1; j < universoVivoParticles.length; j++) {
+                        const p2 = universoVivoParticles[j];
+                        const dx = p.x - p2.x;
+                        const dy = p.y - p2.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 65) {
+                            ctx.save();
+                            const lineAlpha = (1 - dist / 65) * 0.045;
+                            ctx.globalAlpha = lineAlpha;
+                            ctx.strokeStyle = p.color;
+                            ctx.lineWidth = 0.75;
+                            ctx.beginPath();
+                            ctx.moveTo(p.x, p.y);
+                            ctx.lineTo(p2.x, p2.y);
+                            ctx.stroke();
+                            ctx.restore();
+                        }
+                    }
+                }
+
+                // 2. Destellos y ráfagas de energía temporales
+                for (let b = universoVivoBursts.length - 1; b >= 0; b--) {
+                    const burst = universoVivoBursts[b];
+                    burst.x += burst.vx;
+                    burst.y += burst.vy;
+                    burst.life -= burst.decay;
+
+                    if (burst.life <= 0) {
+                        universoVivoBursts.splice(b, 1);
+                        continue;
+                    }
+
+                    ctx.save();
+                    ctx.globalAlpha = burst.life * 0.5;
+                    ctx.fillStyle = burst.color;
+                    ctx.beginPath();
+                    ctx.arc(burst.x, burst.y, burst.radius * burst.life, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                ctx.restore();
+                universoVivoRafId = requestAnimationFrame(loopUniversoVivo);
+            }
+
+            function startUniversoVivoAnimation() {
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+                const panel = document.getElementById('workspace-panel-motores');
+                if (!panel || panel.style.display === 'none') return;
+
+                if (!universoVivoInitialized) {
+                    initUniversoVivoCanvas();
+                }
+                if (!universoVivoRafId) {
+                    universoVivoRafId = requestAnimationFrame(loopUniversoVivo);
+                }
+            }
+            window.startUniversoVivoAnimation = startUniversoVivoAnimation;
+
+            function stopUniversoVivoAnimation() {
+                if (universoVivoRafId) {
+                    cancelAnimationFrame(universoVivoRafId);
+                    universoVivoRafId = null;
+                }
+            }
+            window.stopUniversoVivoAnimation = stopUniversoVivoAnimation;
+
+            window.addEventListener('resize', () => {
+                const panel = document.getElementById('workspace-panel-motores');
+                if (panel && panel.style.display !== 'none') {
+                    initUniversoVivoCanvas();
+                }
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    stopUniversoVivoAnimation();
+                } else {
+                    const panel = document.getElementById('workspace-panel-motores');
+                    if (panel && panel.style.display !== 'none') {
+                        startUniversoVivoAnimation();
+                    }
+                }
+            });
+
+            // -------------------------------------------------------------------------
+            // RENDERIZADO Y CONTROL DE LOS 8 MOTORES VIVOS
+            // -------------------------------------------------------------------------
             function loadWorkspaceMotores() {
                 const grid = document.getElementById('motores-selector-grid');
                 if (!grid) return;
 
-                grid.innerHTML = MOTORES_DEFINICIONES.map(m => {
+                grid.innerHTML = MOTORES_DEFINICIONES.map((m, index) => {
                     const isSelected = (m.key === window.motorActivoKey);
                     return `
-                        <div class="motor-select-card" data-motor="${m.key}" onclick="seleccionarMotor('${m.key}')" style="cursor: pointer; padding: 14px 16px; border-radius: 8px; border: 2px solid ${isSelected ? m.color : '#e2e8f0'}; background: ${isSelected ? '#f8fafc' : '#ffffff'}; transition: all 0.2s; box-shadow: ${isSelected ? '0 2px 8px rgba(0,0,0,0.06)' : 'none'};">
+                        <div class="motor-select-card motor-living-card motor-card-${m.key} motor-stagger-${index} ${isSelected ? 'motor-card-active' : ''}" 
+                             data-motor="${m.key}" 
+                             onclick="seleccionarMotor('${m.key}', event)" 
+                             style="--motor-color: ${m.color}; --motor-glow: ${m.color}25; cursor: pointer; padding: 14px 16px; border-radius: 10px; border: 2px solid ${isSelected ? m.color : '#e2e8f0'}; background: #ffffff; box-shadow: ${isSelected ? `0 4px 14px ${m.color}22` : '0 2px 6px rgba(0,0,0,0.03)'}; position: relative;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <div style="width: 32px; height: 32px; border-radius: 6px; background: ${m.color}15; color: ${m.color}; display: flex; align-items: center; justify-content: center; font-size: 14px;">
+                                    <div class="motor-icon-box" style="width: 32px; height: 32px; border-radius: 6px; background: ${m.color}15; color: ${m.color}; display: flex; align-items: center; justify-content: center; font-size: 14px;">
                                         <i class="fas ${m.icono}"></i>
                                     </div>
                                     <strong style="color: #1e293b; font-size: 0.95em;">${m.nombre}</strong>
                                 </div>
-                                ${isSelected ? `<span style="font-size: 0.72em; background: ${m.color}; color: #ffffff; padding: 2px 8px; border-radius: 10px; font-weight: 600;">Activo</span>` : ''}
+                                ${isSelected ? `<span style="font-size: 0.72em; background: ${m.color}; color: #ffffff; padding: 2px 8px; border-radius: 10px; font-weight: 600; box-shadow: 0 1px 4px ${m.color}40;">Activo</span>` : ''}
                             </div>
                             <p style="margin: 0 0 6px 0; color: #475569; font-size: 0.82em; line-height: 1.35;">${m.desc}</p>
                             <span style="display: block; font-size: 0.78em; color: #64748b; font-style: italic;">${m.pregunta}</span>
@@ -6779,9 +7277,25 @@ ${userMessage}`;
             }
             window.loadWorkspaceMotores = loadWorkspaceMotores;
 
-            function seleccionarMotor(key) {
+            function seleccionarMotor(key, event) {
                 window.motorActivoKey = key;
                 loadWorkspaceMotores();
+
+                const motorDef = MOTORES_DEFINICIONES.find(m => m.key === key);
+                const activeCard = document.querySelector(`.motor-select-card[data-motor="${key}"]`);
+                if (activeCard) {
+                    activeCard.classList.remove('motor-card-just-selected');
+                    void activeCard.offsetWidth; // Reflow for animation restart
+                    activeCard.classList.add('motor-card-just-selected');
+                    setTimeout(() => {
+                        activeCard.classList.remove('motor-card-just-selected');
+                    }, 500);
+
+                    if (typeof emitMotorBurst === 'function' && motorDef) {
+                        const cardRect = activeCard.getBoundingClientRect();
+                        emitMotorBurst(motorDef.color, cardRect);
+                    }
+                }
             }
             window.seleccionarMotor = seleccionarMotor;
 
@@ -6791,11 +7305,25 @@ ${userMessage}`;
                 const descEl = document.getElementById('motor-selected-desc');
                 const pregEl = document.getElementById('motor-selected-pregunta');
                 const inputEl = document.getElementById('motor-user-input');
+                const execCard = document.getElementById('motor-execution-card');
+                const btn = document.getElementById('btn-ejecutar-motor');
 
                 if (titleEl) titleEl.textContent = motor.nombre;
                 if (descEl) descEl.textContent = motor.desc;
-                if (pregEl) pregEl.textContent = `"${motor.pregunta}"`;
+                if (pregEl) {
+                    pregEl.textContent = `"${motor.pregunta}"`;
+                    pregEl.style.color = motor.color;
+                    pregEl.style.backgroundColor = `${motor.color}12`;
+                }
                 if (inputEl) inputEl.placeholder = `Pregunta o foco específico para ${motor.nombre} (opcional)`;
+                if (execCard) {
+                    execCard.style.borderColor = `${motor.color}45`;
+                    execCard.style.boxShadow = `0 4px 18px ${motor.color}15`;
+                }
+                if (btn) {
+                    btn.style.backgroundColor = motor.color;
+                    btn.style.boxShadow = `0 2px 10px ${motor.color}40`;
+                }
             }
 
             async function ejecutarMotorActivo() {
