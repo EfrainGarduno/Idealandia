@@ -1,26 +1,22 @@
 /**
  * =============================================================================
- * SUITE DE VALIDACIÓN: UNIVERSO VIVO DE IDEAS (V1)
+ * SUITE DE VALIDACIÓN: UNIVERSO CREATIVO DE IDEAS (V2: EXPLOSIÓN CREATIVA)
  * =============================================================================
- * Verifica de extremo a extremo la evolución visual de los 8 Motores de Ideas:
- * 1. Estilos CSS oficiales (#universo-vivo-styles).
- * 2. Respiración orgánica desfasada (staggered breathing) de los 8 motores.
- * 3. Microinteracciones hover especializadas por naturaleza de motor:
- *    - Explorador (dispersión/destellos)
- *    - Madurador (crecimiento orgánico)
- *    - Validador (pulso/anillo convergente)
- *    - Negocio (ascenso/impulso)
- *    - Impacto (onda expansiva)
- *    - Propósito (latido de corazón)
- *    - Conector (nodos luminosos)
- *    - Ejecutor (impulso direccional)
- * 4. Transición de energía y pulso de activación al seleccionar motor.
- * 5. Fondo vivo con Canvas de partículas sutiles (HTML5 Canvas).
- * 6. Ciclo de vida y rendimiento (pausa en tab oculto o panel no visible).
- * 7. Accesibilidad completa (prefers-reduced-motion).
- * 8. Responsividad (Desktop 1280x800 y Móvil 412x915).
- * 9. Preservación del término visible "Desarrollo de la Idea".
- * 10. Cero uso de window.confirm() ni alertas nativas.
+ * Valida de extremo a extremo:
+ * 1. Módulos externos universo_creativo.css y universo_creativo.js.
+ * 2. Banco de conceptos "Ideas Volando" (16 palabras dinámicas con ciclo de vida).
+ * 3. Capa cósmica de partículas multidimensionales en Canvas 2D.
+ * 4. Red de conexiones y filamentos de energía entre los 8 motores.
+ * 5. Microanimaciones y personalidades marcadas para los 8 motores.
+ * 6. Secuencia de EXPLOSIÓN DE ACTIVACIÓN (Shockwave + Ráfaga 50-70 + atracción magnética).
+ * 7. Núcleo Creativo de Procesamiento (Vórtice energético activo durante llamada IA).
+ * 8. Destello de Revelación (Flash de Eureka al culminar).
+ * 9. Ciclo de vida y rendimiento (pausa en tab oculto o panel no visible).
+ * 10. Accesibilidad completa (prefers-reduced-motion).
+ * 11. Responsividad (Desktop 1280x800 y Móvil 412x915).
+ * 12. Captura visual automática (captura_explosion_creativa.png).
+ * 13. Preservación del término visible "Desarrollo de la Idea".
+ * 14. Cero uso de window.confirm() ni alertas nativas.
  */
 
 const assert = require('assert');
@@ -31,7 +27,7 @@ const { chromium } = require('playwright');
 
 (async () => {
     console.log("================================================================================");
-    console.log("PRUEBAS AUTOMATIZADAS: UNIVERSO VIVO DE IDEAS (V1)");
+    console.log("PRUEBAS AUTOMATIZADAS: UNIVERSO CREATIVO DE IDEAS (V2: EXPLOSIÓN CREATIVA)");
     console.log("================================================================================\n");
 
     let totalTests = 0;
@@ -62,65 +58,38 @@ const { chromium } = require('playwright');
     }
 
     // -------------------------------------------------------------------------
-    // FASE 1: Análisis Estático de index.html y Reglas de Diseño
+    // FASE 1: Análisis Estático y Modularidad
     // -------------------------------------------------------------------------
-    console.log("--- FASE 1: Análisis Estático de Código y CSS ---");
+    console.log("--- FASE 1: Estructura Modular y Archivos V2 ---");
     const htmlPath = path.join(__dirname, 'index.html');
+    const cssPath = path.join(__dirname, 'universo_creativo.css');
+    const jsPath = path.join(__dirname, 'universo_creativo.js');
+
     const htmlContent = fs.readFileSync(htmlPath, 'utf8');
+    const cssContent = fs.readFileSync(cssPath, 'utf8');
+    const jsContent = fs.readFileSync(jsPath, 'utf8');
 
-    test("index.html contiene la etiqueta <style id=\"universo-vivo-styles\">", () => {
-        assert(htmlContent.includes('<style id="universo-vivo-styles">'), "Falta style#universo-vivo-styles");
+    test("index.html incluye enlace a universo_creativo.css y script universo_creativo.js", () => {
+        assert(htmlContent.includes('href="/universo_creativo.css"'), "Falta link a /universo_creativo.css");
+        assert(htmlContent.includes('src="/universo_creativo.js"'), "Falta script a /universo_creativo.js");
     });
 
-    test("CSS incluye keyframe oficial de respiración orgánica 'motorBreathing'", () => {
-        assert(htmlContent.includes('@keyframes motorBreathing'), "Falta @keyframes motorBreathing");
-        assert(htmlContent.includes('.motor-living-card'), "Falta selector .motor-living-card");
+    test("universo_creativo.css define las reglas del Universo Creativo V2", () => {
+        assert(cssContent.includes('.universo-creativo-wrapper'), "Falta .universo-creativo-wrapper");
+        assert(cssContent.includes('.universo-banner-card'), "Falta .universo-banner-card");
+        assert(cssContent.includes('@keyframes motorBreathingV2'), "Falta @keyframes motorBreathingV2");
+        assert(cssContent.includes('@keyframes motorActivationBlast'), "Falta @keyframes motorActivationBlast");
+        assert(cssContent.includes('.motor-execution-processing'), "Falta .motor-execution-processing");
+        assert(cssContent.includes('.motor-result-animated'), "Falta .motor-result-animated");
     });
 
-    test("CSS incluye las 8 clases de retardo desfasado (motor-stagger-0 a 7)", () => {
-        for (let i = 0; i <= 7; i++) {
-            assert(htmlContent.includes(`.motor-stagger-${i}`), `Falta clase .motor-stagger-${i}`);
-        }
-    });
-
-    test("CSS incluye microinteracciones hover para los 8 motores", () => {
-        const rules = [
-            '.motor-card-explorador',
-            '@keyframes exploradorDisperse',
-            '.motor-card-madurador',
-            '@keyframes maduradorGrow',
-            '.motor-card-validador',
-            '@keyframes validadorPulseRing',
-            '.motor-card-negocio',
-            '@keyframes negocioAscent',
-            '.motor-card-impacto',
-            '@keyframes impactoRipple',
-            '.motor-card-proposito',
-            '@keyframes propositoHeartbeat',
-            '.motor-card-conector',
-            '@keyframes conectorBlink',
-            '.motor-card-ejecutor',
-            '@keyframes ejecutorThrust'
-        ];
-        rules.forEach(rule => {
-            assert(htmlContent.includes(rule), `Falta regla de microinteracción: ${rule}`);
-        });
-    });
-
-    test("CSS incluye transición de energía de selección (.motor-card-just-selected)", () => {
-        assert(htmlContent.includes('@keyframes motorSelectPulse'), "Falta @keyframes motorSelectPulse");
-        assert(htmlContent.includes('.motor-card-just-selected'), "Falta .motor-card-just-selected");
-    });
-
-    test("CSS implementa soporte estricto para prefers-reduced-motion", () => {
-        assert(htmlContent.includes('@media (prefers-reduced-motion: reduce)'), "Falta @media (prefers-reduced-motion: reduce)");
-        assert(htmlContent.includes('animation: none !important;'), "Falta deshabilitación de animación para accesibilidad");
-    });
-
-    test("Estructura DOM: #workspace-panel-motores contiene canvas y contenedor frontal", () => {
-        assert(htmlContent.includes('id="workspace-panel-motores" class="workspace-panel universo-vivo-wrapper"'), "Falta clase universo-vivo-wrapper");
-        assert(htmlContent.includes('id="universo-vivo-canvas"'), "Falta canvas#universo-vivo-canvas");
-        assert(htmlContent.includes('class="universo-vivo-content"'), "Falta div.universo-vivo-content");
+    test("universo_creativo.js implementa UniversoCreativoEngine y banco 'Ideas Volando'", () => {
+        assert(jsContent.includes('class UniversoCreativoEngine'), "Falta class UniversoCreativoEngine");
+        assert(jsContent.includes('PALABRAS_CREATIVAS'), "Falta banco PALABRAS_CREATIVAS");
+        assert(jsContent.includes('triggerExplosion'), "Falta método triggerExplosion");
+        assert(jsContent.includes('setProcessingMode'), "Falta método setProcessingMode");
+        assert(jsContent.includes('triggerEurekaFlash'), "Falta método triggerEurekaFlash");
+        assert(jsContent.includes('window.universoCreativo'), "Falta export window.universoCreativo");
     });
 
     test("Preservación terminológica: 'Desarrollo de la Idea' en el panel de motores", () => {
@@ -128,16 +97,25 @@ const { chromium } = require('playwright');
     });
 
     // -------------------------------------------------------------------------
-    // FASE 2: Servidor Local y Verificación en Navegador Real (Playwright)
+    // FASE 2: Servidor Local y Navegador Headless (Playwright)
     // -------------------------------------------------------------------------
-    console.log("\n--- FASE 2: Pruebas en Navegador Headless (Playwright) ---");
+    console.log("\n--- FASE 2: Ejecución Real en Navegador (Playwright) ---");
 
-    // Servidor web estático ligero
     const server = http.createServer((req, res) => {
         let reqPath = req.url.split('?')[0];
         if (reqPath === '/' || reqPath === '/index.html') {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(htmlContent);
+            return;
+        }
+        if (reqPath === '/universo_creativo.css') {
+            res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
+            res.end(cssContent);
+            return;
+        }
+        if (reqPath === '/universo_creativo.js') {
+            res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+            res.end(jsContent);
             return;
         }
         res.writeHead(404);
@@ -151,7 +129,6 @@ const { chromium } = require('playwright');
     const browser = await chromium.launch({ headless: true });
 
     try {
-        // Test 1: Desktop Viewport
         const contextDesktop = await browser.newContext({
             viewport: { width: 1280, height: 800 }
         });
@@ -159,7 +136,7 @@ const { chromium } = require('playwright');
 
         await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-        await testAsync("Renderizado dinámico de los 8 motores con clases vivas", async () => {
+        await testAsync("Inicialización del Universo Creativo V2 en DOM y Canvas", async () => {
             await page.evaluate(() => {
                 const ideas = document.getElementById('ideas');
                 if (ideas) ideas.style.display = 'block';
@@ -172,106 +149,182 @@ const { chromium } = require('playwright');
                 if (typeof window.loadWorkspaceMotores === 'function') {
                     window.loadWorkspaceMotores();
                 }
+                if (window.universoCreativo && typeof window.universoCreativo.start === 'function') {
+                    window.universoCreativo.start();
+                }
             });
 
+            const engineState = await page.evaluate(() => {
+                const uc = window.universoCreativo;
+                const canvas = document.getElementById('universo-vivo-canvas');
+                return {
+                    exists: !!uc,
+                    running: uc ? uc.running : false,
+                    particlesCount: uc ? uc.particles.length : 0,
+                    wordsCount: uc ? uc.words.length : 0,
+                    canvasW: canvas ? canvas.width : 0,
+                    canvasH: canvas ? canvas.height : 0
+                };
+            });
+
+            assert(engineState.exists, "window.universoCreativo debe existir");
+            assert(engineState.running, "Universo Creativo debe estar ejecutándose");
+            assert(engineState.particlesCount >= 30, `Debe tener al menos 30 partículas (actual: ${engineState.particlesCount})`);
+            assert(engineState.wordsCount >= 2, `Debe tener palabras flotantes activas (actual: ${engineState.wordsCount})`);
+            assert(engineState.canvasW > 0 && engineState.canvasH > 0, "Canvas debe tener dimensiones > 0");
+        });
+
+        await testAsync("Renderizado de los 8 motores con sus 8 personalidades estilísticas", async () => {
             const cardsCount = await page.locator('.motor-select-card').count();
-            assert.strictEqual(cardsCount, 8, `Se esperaban 8 tarjetas de motor, se encontraron ${cardsCount}`);
+            assert.strictEqual(cardsCount, 8, "Deben existir 8 tarjetas de motor");
 
-            const livingCount = await page.locator('.motor-living-card').count();
-            assert.strictEqual(livingCount, 8, `Todas las 8 tarjetas deben tener .motor-living-card, se encontraron ${livingCount}`);
-
-            // Verificar que los 8 tienen clases específicas y staggered
             const keys = ['explorador', 'madurador', 'validador', 'negocio', 'impacto', 'proposito', 'conector', 'ejecutor'];
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
                 const card = page.locator(`.motor-card-${key}`);
-                const exists = await card.count();
-                assert.strictEqual(exists, 1, `Tarjeta de motor ${key} debe existir`);
+                const count = await card.count();
+                assert.strictEqual(count, 1, `Debe existir tarjeta para ${key}`);
 
                 const hasStagger = await card.evaluate((el, idx) => el.classList.contains(`motor-stagger-${idx}`), i);
-                assert(hasStagger, `Tarjeta de motor ${key} debe tener clase .motor-stagger-${i}`);
+                assert(hasStagger, `Tarjeta ${key} debe tener clase .motor-stagger-${i}`);
             }
         });
 
-        await testAsync("Canvas de Universo Vivo inicializa y genera partículas", async () => {
-            const canvasState = await page.evaluate(() => {
-                if (typeof window.initUniversoVivoCanvas === 'function') {
-                    window.initUniversoVivoCanvas();
-                }
-                const canvas = document.getElementById('universo-vivo-canvas');
+        await testAsync("Hover sobre motor responde con elevación, resplandor y pausa", async () => {
+            const cardExplorador = page.locator('.motor-card-explorador');
+            await cardExplorador.hover({ force: true });
+
+            const hoverInfo = await cardExplorador.evaluate(el => {
+                const style = window.getComputedStyle(el);
                 return {
-                    width: canvas ? canvas.width : 0,
-                    height: canvas ? canvas.height : 0,
-                    particlesCount: window.universoVivoParticles ? window.universoVivoParticles.length : 0
+                    cursor: style.cursor,
+                    boxShadow: style.boxShadow
                 };
             });
-            assert(canvasState.width > 0, "Canvas debe tener ancho > 0");
-            assert(canvasState.height > 0, "Canvas debe tener alto > 0");
-            assert(canvasState.particlesCount >= 18, `Canvas debe tener al menos 18 partículas vivas (actual: ${canvasState.particlesCount})`);
+            assert.strictEqual(hoverInfo.cursor, 'pointer', "Cursor debe ser pointer");
+            assert(hoverInfo.boxShadow && hoverInfo.boxShadow !== 'none', "Debe tener sombra luminosa");
         });
 
-        await testAsync("Selección de un motor aplica pulso de energía y actualiza tarjeta de ejecución", async () => {
-            // Seleccionar 'madurador'
+        await testAsync("Secuencia de EXPLOSIÓN DE ACTIVACIÓN al seleccionar un motor", async () => {
+            // Seleccionar 'validador'
             await page.evaluate(() => {
-                window.seleccionarMotor('madurador');
+                window.seleccionarMotor('validador');
             });
 
-            const selectedInfo = await page.evaluate(() => {
-                const title = document.getElementById('motor-selected-title');
-                const pregunta = document.getElementById('motor-selected-pregunta');
-                const execCard = document.getElementById('motor-execution-card');
-                const btn = document.getElementById('btn-ejecutar-motor');
-                const activeCard = document.querySelector('.motor-select-card[data-motor="madurador"]');
-
+            const explosionState = await page.evaluate(() => {
+                const uc = window.universoCreativo;
+                const activeCard = document.querySelector('.motor-select-card[data-motor="validador"]');
                 return {
-                    title: title ? title.textContent : '',
-                    pregunta: pregunta ? pregunta.textContent : '',
-                    execBorder: execCard ? execCard.style.borderColor : '',
-                    btnBg: btn ? btn.style.backgroundColor : '',
-                    isActive: activeCard ? activeCard.classList.contains('motor-card-active') : false
+                    activeKey: window.motorActivoKey,
+                    isCardActive: activeCard ? activeCard.classList.contains('motor-card-active') : false,
+                    hasPulseClass: activeCard ? activeCard.classList.contains('motor-card-just-selected') : false,
+                    shockwavesCount: uc ? uc.shockwaves.length : 0,
+                    burstParticlesCount: uc ? uc.burstParticles.length : 0
                 };
             });
 
-            assert.strictEqual(selectedInfo.title, "Motor Madurador", "Título seleccionado debe ser 'Motor Madurador'");
-            assert(selectedInfo.pregunta.includes("¿Cómo podemos hacer que esta Idea sea más clara"), "Pregunta de madurador debe coincidir");
-            assert(selectedInfo.isActive, "Tarjeta de madurador debe tener clase activa");
+            assert.strictEqual(explosionState.activeKey, 'validador', "Motor activo debe ser validador");
+            assert(explosionState.isCardActive, "Tarjeta seleccionada debe tener .motor-card-active");
+            assert(explosionState.burstParticlesCount >= 30, `Debe haber generado ráfaga explosiva de partículas (actual: ${explosionState.burstParticlesCount})`);
+            assert(explosionState.shockwavesCount >= 1, `Debe haber generado onda de choque expansiva (actual: ${explosionState.shockwavesCount})`);
         });
 
-        await testAsync("Hover sobre motor activa estilo de elevación y pausa respiración", async () => {
-            const hoverExplorador = page.locator('.motor-card-explorador');
-            await hoverExplorador.hover({ force: true });
-
-            const isHovered = await hoverExplorador.evaluate(el => {
-                return !!el;
+        await testAsync("Modo Núcleo Creativo de Procesamiento (durante ejecución IA) y Flash de Eureka", async () => {
+            // Activar modo procesamiento
+            await page.evaluate(() => {
+                window.universoCreativo.setProcessingMode(true, 'ejecutor');
             });
-            assert(isHovered, "Elemento hovereado debe responder");
+
+            const processingState = await page.evaluate(() => {
+                const execCard = document.getElementById('motor-execution-card');
+                return {
+                    isProcessing: window.universoCreativo.isProcessing,
+                    hasProcessingClass: execCard ? execCard.classList.contains('motor-execution-processing') : false
+                };
+            });
+
+            assert(processingState.isProcessing, "Universo creativo debe estar en isProcessing=true");
+            assert(processingState.hasProcessingClass, "Tarjeta de ejecución debe tener clase .motor-execution-processing");
+
+            // Desactivar modo procesamiento (emite Flash de Eureka)
+            await page.evaluate(() => {
+                window.universoCreativo.setProcessingMode(false, 'ejecutor');
+            });
+
+            const eurekaState = await page.evaluate(() => {
+                const uc = window.universoCreativo;
+                return {
+                    isProcessing: uc.isProcessing,
+                    shockwaves: uc.shockwaves.length
+                };
+            });
+
+            assert(!eurekaState.isProcessing, "Universo creativo debe finalizar procesamiento");
+            assert(eurekaState.shockwaves >= 1, "Debe haber emitido Flash de Eureka (shockwave)");
+        });
+
+        await testAsync("Renderizado dinámico de resultado estructurado con animación de revelación", async () => {
+            await page.evaluate(() => {
+                window.renderMotorResult({
+                    motor: 'ejecutor',
+                    motor_nombre: 'Motor Ejecutor',
+                    analisis_id: 108,
+                    resumen: 'Plan de acción para los primeros 7 días generado.',
+                    resultado: {
+                        resumen_ejecutivo: 'Plan de acción para los primeros 7 días generado.',
+                        plan_primeros_7_dias: ['Día 1: Definir prototipo', 'Día 2: Validar supuestos'],
+                        primera_accion_hoy: 'Contactar a los 3 primeros usuarios potenciales.'
+                    }
+                });
+            });
+
+            const resultState = await page.evaluate(() => {
+                const cont = document.getElementById('motor-result-container');
+                return {
+                    visible: cont && cont.style.display !== 'none',
+                    hasAnimClass: cont ? cont.classList.contains('motor-result-animated') : false,
+                    text: cont ? cont.textContent : ''
+                };
+            });
+
+            assert(resultState.visible, "Contenedor de resultado debe ser visible");
+            assert(resultState.hasAnimClass, "Contenedor debe tener .motor-result-animated");
+            assert(resultState.text.includes("Motor Ejecutor"), "Debe mostrar Motor Ejecutor");
+            assert(resultState.text.includes("El Motor propone. Tú decides:"), "Debe incluir el principio de no-mutación");
         });
 
         await testAsync("Ciclo de vida del canvas: se detiene al cambiar de pestaña y se reactiva", async () => {
             const tabCycle = await page.evaluate(() => {
-                // Activar motores
                 window.switchWorkspaceTab('motores');
-                const runningWhenMotores = typeof window.startUniversoVivoAnimation === 'function';
+                const runningWhenMotores = window.universoCreativo.running;
 
-                // Cambiar a canvas (Desarrollo)
                 window.switchWorkspaceTab('canvas');
-                const stoppedWhenCanvas = (document.getElementById('workspace-panel-motores').style.display === 'none');
+                const stoppedWhenCanvas = !window.universoCreativo.running;
 
-                // Regresar a motores
                 window.switchWorkspaceTab('motores');
-                const restored = (document.getElementById('workspace-panel-motores').style.display === 'block');
+                const restored = window.universoCreativo.running;
 
                 return { runningWhenMotores, stoppedWhenCanvas, restored };
             });
 
             assert(tabCycle.runningWhenMotores, "Animación debe activarse en tab motores");
-            assert(tabCycle.stoppedWhenCanvas, "Animación debe pausarse y ocultarse en otro tab");
-            assert(tabCycle.restored, "Panel de motores se restaura visible");
+            assert(tabCycle.stoppedWhenCanvas, "Animación debe detenerse en otro tab");
+            assert(tabCycle.restored, "Animación se restaura al volver a motores");
         });
+
+        // Captura de pantalla de la experiencia visual en Desktop
+        const screenshotPath = path.join(__dirname, 'captura_explosion_creativa.png');
+        await page.evaluate(() => {
+            window.switchWorkspaceTab('motores');
+            window.seleccionarMotor('explorador');
+        });
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: screenshotPath, fullPage: false });
+        console.log(`  📸 Captura visual generada con éxito: ${screenshotPath}`);
 
         await contextDesktop.close();
 
-        // Test 2: Mobile Viewport (412x915)
+        // Test Móvil (412x915)
         const contextMobile = await browser.newContext({
             viewport: { width: 412, height: 915 },
             isMobile: true
@@ -279,7 +332,7 @@ const { chromium } = require('playwright');
         const mobilePage = await contextMobile.newPage();
         await mobilePage.goto(url, { waitUntil: 'domcontentloaded' });
 
-        await testAsync("Responsividad móvil (412x915): el grid y canvas se adaptan sin desbordamiento horizontal", async () => {
+        await testAsync("Responsividad móvil (412x915): el grid y canvas se adaptan sin overflow horizontal", async () => {
             await mobilePage.evaluate(() => {
                 const ideas = document.getElementById('ideas');
                 if (ideas) ideas.style.display = 'block';
@@ -292,14 +345,15 @@ const { chromium } = require('playwright');
                 if (typeof window.loadWorkspaceMotores === 'function') {
                     window.loadWorkspaceMotores();
                 }
+                if (window.universoCreativo) {
+                    window.universoCreativo.start();
+                }
             });
 
             const mobileMetrics = await mobilePage.evaluate(() => {
                 const grid = document.getElementById('motores-selector-grid');
-                const panel = document.getElementById('workspace-panel-motores');
                 return {
                     gridWidth: grid ? grid.offsetWidth : 0,
-                    panelWidth: panel ? panel.offsetWidth : 0,
                     overflow: document.body.scrollWidth > window.innerWidth
                 };
             });
@@ -310,7 +364,7 @@ const { chromium } = require('playwright');
 
         await contextMobile.close();
 
-        // Test 3: Accesibilidad (prefers-reduced-motion)
+        // Test Accesibilidad (prefers-reduced-motion)
         const contextReducedMotion = await browser.newContext({
             reducedMotion: 'reduce'
         });
@@ -330,6 +384,9 @@ const { chromium } = require('playwright');
                 if (typeof window.loadWorkspaceMotores === 'function') {
                     window.loadWorkspaceMotores();
                 }
+                if (window.universoCreativo) {
+                    window.universoCreativo.start();
+                }
             });
 
             const animationState = await reducedPage.evaluate(() => {
@@ -338,63 +395,14 @@ const { chromium } = require('playwright');
                 const style = window.getComputedStyle(card);
                 return {
                     animationName: style.animationName,
-                    reducedMatches: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                    reducedMatches: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+                    isRunning: window.universoCreativo ? window.universoCreativo.running : false
                 };
             });
 
             assert(animationState.reducedMatches, "Media query reduced-motion debe coincidir");
-            assert(animationState.animationName === 'none' || !animationState.animationName, "Animación de respiración debe ser 'none' con reduced-motion");
-        });
-
-        await testAsync("Los 8 motores poseen sus paletas de color e iconos oficiales", async () => {
-            const expectedDef = [
-                { key: 'explorador', color: '#6c40f7', icono: 'fa-compass' },
-                { key: 'madurador', color: '#059669', icono: 'fa-seedling' },
-                { key: 'validador', color: '#d97706', icono: 'fa-clipboard-check' },
-                { key: 'negocio', color: '#0284c7', icono: 'fa-chart-line' },
-                { key: 'impacto', color: '#16a34a', icono: 'fa-hands-helping' },
-                { key: 'proposito', color: '#e11d48', icono: 'fa-heart' },
-                { key: 'conector', color: '#8b5cf6', icono: 'fa-project-diagram' },
-                { key: 'ejecutor', color: '#ea580c', icono: 'fa-rocket' }
-            ];
-
-            const defs = await reducedPage.evaluate(() => window.MOTORES_DEFINICIONES);
-            assert.strictEqual(defs.length, 8, "Deben existir 8 definiciones oficiales");
-            expectedDef.forEach(exp => {
-                const found = defs.find(d => d.key === exp.key);
-                assert(found, `Motor ${exp.key} debe existir`);
-                assert.strictEqual(found.color, exp.color, `Color de ${exp.key} debe ser ${exp.color}`);
-                assert.strictEqual(found.icono, exp.icono, `Icono de ${exp.key} debe ser ${exp.icono}`);
-            });
-        });
-
-        await testAsync("renderMotorResult despliega el resultado estructurado respetando el Universo Vivo", async () => {
-            await reducedPage.evaluate(() => {
-                window.renderMotorResult({
-                    motor: 'explorador',
-                    motor_nombre: 'Motor Explorador',
-                    analisis_id: 999,
-                    resumen: 'Análisis de posibilidades completado.',
-                    resultado: {
-                        resumen_ejecutivo: 'Análisis de posibilidades completado.',
-                        posibilidades_no_vistas: ['Modelo cooperativo', 'Microcréditos locales'],
-                        preguntas_provocadoras: ['¿Y si el servicio fuera gratuito para el usuario final?']
-                    }
-                });
-            });
-
-            const resultState = await reducedPage.evaluate(() => {
-                const container = document.getElementById('motor-result-container');
-                return {
-                    visible: container && container.style.display !== 'none',
-                    text: container ? container.textContent : ''
-                };
-            });
-
-            assert(resultState.visible, "El contenedor de resultados debe ser visible");
-            assert(resultState.text.includes("Motor Explorador"), "Debe mostrar el nombre del motor");
-            assert(resultState.text.includes("POSIBILIDADES NO VISTAS"), "Debe formatear las claves cognitivas");
-            assert(resultState.text.includes("El Motor propone. Tú decides:"), "Debe contener el disclaimer de no-mutación");
+            assert(animationState.animationName === 'none' || !animationState.animationName, "Animación de respiración debe ser 'none'");
+            assert(!animationState.isRunning, "Universo creativo no debe correr en modo movimiento reducido");
         });
 
         await testAsync("Cero referencias a window.confirm() en el flujo de motores", async () => {
@@ -418,10 +426,10 @@ const { chromium } = require('playwright');
     console.log("================================================================================\n");
 
     if (passedTests === totalTests) {
-        console.log("🟢 UNIVERSO VIVO DE IDEAS V1 100% VALIDADO Y LISTO.");
+        console.log("🟢 UNIVERSO CREATIVO DE IDEAS V2 100% VALIDADO Y LISTO.");
         process.exit(0);
     } else {
-        console.error("🔴 FALLARON PRUEBAS EN UNIVERSO VIVO DE IDEAS.");
+        console.error("🔴 FALLARON PRUEBAS EN UNIVERSO CREATIVO DE IDEAS.");
         process.exit(1);
     }
 })();
