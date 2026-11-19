@@ -123,9 +123,141 @@ const ADMIN_PERMISOS = [
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
     'administracion': ADMIN_PERMISOS,
     'admin': ADMIN_PERMISOS,
-    'ideas': ['ideas.read', 'ideas.create', 'ideas.update', 'ideas.delete'],
+    'ideas': [
+        'ideas.read',
+        'ideas.create',
+        'ideas.update',
+        'ideas.delete',
+        'ideas.develop',
+        'ideas.use_ai'
+    ],
     'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
 };
+
+// =============================================================================
+// MÓDULO IDEAS - CONSTANTES Y ADAPTADOR DE ESTADOS (FASE 4 / F4.1)
+// =============================================================================
+const IDEAS_ESTADOS_OFICIALES = Object.freeze([
+    'semilla',
+    'en_desarrollo',
+    'en_validacion',
+    'lista',
+    'en_accion',
+    'realizada',
+    'archivada'
+]);
+
+const IDEAS_ESTADOS_LEGADOS_MAP = Object.freeze({
+    'pendiente': 'semilla',
+    'en progreso': 'en_desarrollo',
+    'completada': 'realizada',
+    'descartada': 'archivada'
+});
+
+const IDEAS_OFICIAL_A_LEGADO_MAP = Object.freeze({
+    'semilla': 'pendiente',
+    'en_desarrollo': 'en progreso',
+    'en_validacion': 'en progreso',
+    'lista': 'en progreso',
+    'en_accion': 'en progreso',
+    'realizada': 'completada',
+    'archivada': 'descartada'
+});
+
+const IDEAS_TRANSICIONES_VALIDAS = Object.freeze({
+    'semilla': Object.freeze(['en_desarrollo', 'archivada']),
+    'en_desarrollo': Object.freeze(['en_validacion', 'archivada']),
+    'en_validacion': Object.freeze(['en_desarrollo', 'lista', 'archivada']),
+    'lista': Object.freeze(['en_accion', 'en_desarrollo', 'archivada']),
+    'en_accion': Object.freeze(['realizada', 'en_desarrollo', 'archivada']),
+    'realizada': Object.freeze(['archivada']),
+    'archivada': Object.freeze(['en_desarrollo']) // reactivación al flujo de desarrollo
+});
+
+const IDEAS_PRIVACIDADES_CATALOGO = Object.freeze([
+    Object.freeze({ clave: 'privada', nombre: 'Privada', descripcion: 'Visible únicamente por el autor.' }),
+    Object.freeze({ clave: 'compartida', nombre: 'Compartida', descripcion: 'Visible para colaboradores o asociados.' }),
+    Object.freeze({ clave: 'publica', nombre: 'Pública', descripcion: 'Visible para toda la comunidad.' })
+]);
+
+const IDEAS_MODALIDADES_CATALOGO = Object.freeze([
+    Object.freeze({ clave: 'individual', nombre: 'Individual', descripcion: 'Desarrollo individual por el autor.' }),
+    Object.freeze({ clave: 'colaborativa', nombre: 'Colaborativa', descripcion: 'Abierta al trabajo en equipo y co-creación.' }),
+    Object.freeze({ clave: 'busco_inversion', nombre: 'Búsqueda de Inversión', descripcion: 'En búsqueda de inversión o financiamiento.' }),
+    Object.freeze({ clave: 'busco_mentoria', nombre: 'Búsqueda de Mentoría', descripcion: 'En búsqueda de mentoría o asesoría estratégica.' }),
+    Object.freeze({ clave: 'busco_apoyo', nombre: 'Búsqueda de Apoyo', descripcion: 'En búsqueda de apoyo, aliados o difusión.' })
+]);
+
+const IDEAS_ESTADOS_CATALOGO = Object.freeze([
+    Object.freeze({ clave: 'semilla', nombre: 'Semilla', descripcion: 'Idea inicial registrada en la plataforma.' }),
+    Object.freeze({ clave: 'en_desarrollo', nombre: 'En Desarrollo', descripcion: 'Idea en proceso activo de estructuración y maduración.' }),
+    Object.freeze({ clave: 'en_validacion', nombre: 'En Validación', descripcion: 'Validación de hipótesis, viabilidad y mercado.' }),
+    Object.freeze({ clave: 'lista', nombre: 'Lista', descripcion: 'Idea madura y lista para su ejecución o presentación.' }),
+    Object.freeze({ clave: 'en_accion', nombre: 'En Acción', descripcion: 'Idea en fase operativa de implementación y lanzamiento.' }),
+    Object.freeze({ clave: 'realizada', nombre: 'Realizada', descripcion: 'Idea consolidada y ejecutada exitosamente.' }),
+    Object.freeze({ clave: 'archivada', nombre: 'Archivada', descripcion: 'Idea pausada, descartada o archivada para futura referencia.' })
+]);
+
+/**
+ * Comprueba si una transición entre dos estados es permitida por la máquina de estados oficial.
+ *
+ * @param {string} estadoOrigen - Estado de partida (oficial o legado).
+ * @param {string} estadoDestino - Estado de llegada (oficial o legado).
+ * @returns {boolean}
+ */
+function isValidIdeaTransition(estadoOrigen, estadoDestino) {
+    const origenOficial = normalizeIdeaEstado(estadoOrigen);
+    const destinoOficial = normalizeIdeaEstado(estadoDestino);
+    if (!origenOficial || !destinoOficial) return false;
+    const permitidas = IDEAS_TRANSICIONES_VALIDAS[origenOficial] || [];
+    return permitidas.includes(destinoOficial);
+}
+
+/**
+ * Normaliza y adapta un estado de idea recibido (soporta oficial y legado).
+ * Devuelve el estado oficial correspondiente o null si el estado no es reconocido.
+ *
+ * @param {string} rawEstado - Estado a normalizar.
+ * @returns {string|null} - Estado oficial o null si es inválido.
+ */
+function normalizeIdeaEstado(rawEstado) {
+    if (!rawEstado || typeof rawEstado !== 'string') return null;
+    const clean = rawEstado.trim().toLowerCase();
+
+    // 1. Estado oficial válido
+    if (IDEAS_ESTADOS_OFICIALES.includes(clean)) {
+        return clean;
+    }
+
+    // 2. Estado legado temporal mapeado a oficial
+    if (IDEAS_ESTADOS_LEGADOS_MAP[clean]) {
+        return IDEAS_ESTADOS_LEGADOS_MAP[clean];
+    }
+
+    return null;
+}
+
+/**
+ * Comprueba si un estado (oficial o legado) es reconocido por el sistema.
+ *
+ * @param {string} rawEstado
+ * @returns {boolean}
+ */
+function isValidIdeaEstado(rawEstado) {
+    return normalizeIdeaEstado(rawEstado) !== null;
+}
+
+/**
+ * Convierte un estado oficial al equivalente legado más cercano para compatibilidad temporal.
+ *
+ * @param {string} oficialEstado
+ * @returns {string}
+ */
+function toLegacyIdeaEstado(oficialEstado) {
+    if (!oficialEstado || typeof oficialEstado !== 'string') return '';
+    const clean = oficialEstado.trim().toLowerCase();
+    return IDEAS_OFICIAL_A_LEGADO_MAP[clean] || clean;
+}
 
 
 
@@ -3787,10 +3919,34 @@ app.get('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.re
     try {
         const usuario_id = req.userId;
 
-        const [ideas] = await pool.execute(
-            'SELECT id, usuario_id, titulo, descripcion, estado, fecha FROM ideas WHERE usuario_id = ? ORDER BY fecha DESC',
-            [usuario_id]
-        );
+        let query = 'SELECT id, usuario_id, titulo, descripcion, estado, fecha, privacidad, modalidad, version_actual, fecha_actualizacion FROM ideas WHERE usuario_id = ?';
+        const params = [usuario_id];
+
+        // Filtro opcional por estado con adaptador de compatibilidad
+        if (req.query.estado && typeof req.query.estado === 'string') {
+            const normalizedState = normalizeIdeaEstado(req.query.estado);
+            if (normalizedState) {
+                const legacyState = toLegacyIdeaEstado(normalizedState);
+                if (legacyState !== normalizedState) {
+                    query += ' AND (estado = ? OR estado = ?)';
+                    params.push(normalizedState, legacyState);
+                } else {
+                    query += ' AND estado = ?';
+                    params.push(normalizedState);
+                }
+            }
+        }
+
+        // Filtro opcional por búsqueda de texto
+        if (req.query.q && typeof req.query.q === 'string' && req.query.q.trim() !== '') {
+            const searchTerm = `%${req.query.q.trim()}%`;
+            query += ' AND (titulo LIKE ? OR descripcion LIKE ?)';
+            params.push(searchTerm, searchTerm);
+        }
+
+        query += ' ORDER BY fecha DESC';
+
+        const [ideas] = await pool.execute(query, params);
 
         res.status(200).json({ ideas });
     } catch (error) {
@@ -3800,11 +3956,13 @@ app.get('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.re
 });
 
 app.post('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.create'), async (req, res) => {
+    let connection;
     try {
         const usuario_id = req.userId;
 
-        let { titulo, descripcion, estado } = req.body;
+        let { titulo, descripcion, estado, privacidad, modalidad } = req.body;
 
+        // 1. Validación estricta de título
         if (!titulo || typeof titulo !== 'string' || titulo.trim() === '') {
             return res.status(400).json({ error: 'El título es obligatorio y no puede estar vacío.' });
         }
@@ -3814,6 +3972,7 @@ app.post('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.c
             return res.status(400).json({ error: 'El título no puede exceder los 200 caracteres.' });
         }
 
+        // 2. Validación de descripción
         if (descripcion !== undefined && descripcion !== null) {
             if (typeof descripcion !== 'string') {
                 return res.status(400).json({ error: 'La descripción debe ser texto.' });
@@ -3823,95 +3982,882 @@ app.post('/api/ideas', requireFunctionality('ideas'), requirePermission('ideas.c
             descripcion = null;
         }
 
-        const validStates = ['pendiente', 'en progreso', 'completada', 'descartada'];
-        if (!estado || typeof estado !== 'string' || estado.trim() === '') {
-            estado = 'pendiente';
+        // 3. Validación estricta de estado al crear (F4.2)
+        // La Idea siempre nace como 'semilla'. Solo se acepta 'semilla' o el alias temporal 'pendiente'.
+        if (estado !== undefined && estado !== null && String(estado).trim() !== '') {
+            const cleanEstado = String(estado).trim().toLowerCase();
+            if (cleanEstado === 'semilla' || cleanEstado === 'pendiente') {
+                estado = 'semilla';
+            } else {
+                return res.status(400).json({ error: 'Toda nueva idea debe iniciar en estado semilla.' });
+            }
         } else {
-            estado = estado.trim().toLowerCase();
-            if (!validStates.includes(estado)) {
-                return res.status(400).json({ error: 'Estado inválido.' });
-            }
-            if (estado.length > 50) {
-                return res.status(400).json({ error: 'El estado no puede exceder los 50 caracteres.' });
-            }
+            estado = 'semilla';
         }
 
-        const [result] = await pool.execute(
-            'INSERT INTO ideas (usuario_id, titulo, descripcion, estado) VALUES (?, ?, ?, ?)',
-            [usuario_id, titulo, descripcion, estado]
+        // 4. Validación de privacidad (catálogo cerrado)
+        const validPrivacidad = ['privada', 'compartida', 'publica'];
+        if (privacidad !== undefined && privacidad !== null && String(privacidad).trim() !== '') {
+            const cleanPriv = String(privacidad).trim().toLowerCase();
+            if (!validPrivacidad.includes(cleanPriv)) {
+                return res.status(400).json({ error: 'Valor de privacidad inválido.' });
+            }
+            privacidad = cleanPriv;
+        } else {
+            privacidad = 'privada';
+        }
+
+        // 5. Validación de modalidad (catálogo cerrado)
+        const validModalidad = ['individual', 'colaborativa', 'busco_inversion', 'busco_mentoria', 'busco_apoyo'];
+        if (modalidad !== undefined && modalidad !== null && String(modalidad).trim() !== '') {
+            const cleanMod = String(modalidad).trim().toLowerCase();
+            if (!validModalidad.includes(cleanMod)) {
+                return res.status(400).json({ error: 'Valor de modalidad inválido.' });
+            }
+            modalidad = cleanMod;
+        } else {
+            modalidad = 'individual';
+        }
+
+        // 6. Transacción atómica de creación: ideas + idea_desarrollo + idea_historial
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        const [result] = await connection.execute(
+            'INSERT INTO ideas (usuario_id, titulo, descripcion, estado, privacidad, modalidad, version_actual) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [usuario_id, titulo, descripcion, 'semilla', privacidad, modalidad, 0]
+        );
+        const ideaId = result.insertId;
+
+        // Fila 1:1 en idea_desarrollo
+        await connection.execute(
+            'INSERT INTO idea_desarrollo (idea_id, moneda) VALUES (?, ?)',
+            [ideaId, 'MXN']
         );
 
-        res.status(201).json({ message: 'Idea creada exitosamente.', id: result.insertId });
+        // Registro de auditoría inicial en idea_historial
+        const datosHistorial = JSON.stringify({
+            origen: 'api_post',
+            privacidad,
+            modalidad
+        });
+        await connection.execute(
+            'INSERT INTO idea_historial (idea_id, usuario_id, tipo_evento, descripcion, datos) VALUES (?, ?, ?, ?, ?)',
+            [ideaId, usuario_id, 'creacion', 'Idea creada en estado semilla', datosHistorial]
+        );
+
+        await connection.commit();
+
+        res.status(201).json({
+            message: 'Idea creada exitosamente.',
+            id: ideaId,
+            estado: 'semilla',
+            privacidad,
+            modalidad,
+            version_actual: 0
+        });
 
     } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
         console.error('Error in /api/ideas (POST):', error);
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-             res.status(401).json({ error: 'Token inválido o expirado.' });
-        } else {
-             res.status(500).json({ error: 'Error interno del servidor al crear la idea.' });
+        res.status(500).json({ error: 'Error interno del servidor al crear la idea.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
         }
     }
 });
 
+app.get('/api/ideas/catalogos', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
+    try {
+        const [propositos] = await pool.execute(
+            'SELECT id, clave, nombre, descripcion, icono, orden, activo FROM idea_propositos WHERE activo = ? ORDER BY orden ASC, id ASC',
+            [1]
+        );
+
+        const [categorias] = await pool.execute(
+            'SELECT id, clave, nombre, descripcion, icono, orden, activo FROM categorias_idea WHERE activo = ? ORDER BY orden ASC, id ASC',
+            [1]
+        );
+
+        res.status(200).json({
+            categorias,
+            propositos,
+            privacidad: IDEAS_PRIVACIDADES_CATALOGO,
+            modalidades: IDEAS_MODALIDADES_CATALOGO,
+            estados: IDEAS_ESTADOS_CATALOGO
+        });
+    } catch (error) {
+        console.error('Error in /api/ideas/catalogos (GET):', error);
+        res.status(500).json({ error: 'Error al obtener catálogos de ideas.' });
+    }
+});
+
+app.get('/api/ideas/:id', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
+    try {
+        const usuario_id = req.userId;
+        const id = Number(req.params.id);
+
+        // 1. Validación numérica estricta de ID (rechaza abc, 1abc, 1.5, 0, -1, etc.)
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        // 2. Consulta principal de la idea
+        const [ideaRows] = await pool.execute(
+            `SELECT id, usuario_id, titulo, descripcion, estado, fecha, privacidad, modalidad, version_actual, fecha_actualizacion
+             FROM ideas
+             WHERE id = ?`,
+            [id]
+        );
+
+        if (ideaRows.length === 0) {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        const idea = ideaRows[0];
+
+        // 3. Reglas de privacidad y protección anti-IDOR (F4.6)
+        // - 'privada': Solo consultable por su propietario.
+        // - 'compartida': En F4.6 (MVP), solo consultable por su propietario (sin acceso automático de terceros).
+        // - 'publica': Consultable por cualquier usuario autenticado con permiso 'ideas.read'.
+        const isOwner = (idea.usuario_id === usuario_id);
+
+        if (!isOwner && idea.privacidad !== 'publica') {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        // 4. Consulta de canvas 1:1 en idea_desarrollo
+        const [desRows] = await pool.execute(
+            `SELECT problema, solucion, beneficiarios, recursos, inversion_estimada, moneda, complejidad, potencial, riesgos, notas, fecha_actualizacion
+             FROM idea_desarrollo
+             WHERE idea_id = ?`,
+            [id]
+        );
+        const desarrollo = desRows.length > 0 ? desRows[0] : null;
+
+        // 5. Consulta de propósitos asociados mediante tabla relacional
+        const [propositos] = await pool.execute(
+            `SELECT p.id, p.clave, p.nombre, p.descripcion, p.icono, p.orden, p.activo
+             FROM idea_propositos p
+             JOIN idea_proposito_rel r ON p.id = r.proposito_id
+             WHERE r.idea_id = ?
+             ORDER BY p.orden ASC, p.id ASC`,
+            [id]
+        );
+
+        // 6. Consulta de categorías asociadas mediante tabla relacional
+        const [categorias] = await pool.execute(
+            `SELECT c.id, c.clave, c.nombre, c.descripcion, c.icono, c.orden, c.activo
+             FROM categorias_idea c
+             JOIN idea_categorias ic ON c.id = ic.categoria_id
+             WHERE ic.idea_id = ?
+             ORDER BY c.orden ASC, c.id ASC`,
+            [id]
+        );
+
+        // 7. Respuesta estructurada
+        res.status(200).json({
+            idea: {
+                id: idea.id,
+                usuario_id: idea.usuario_id,
+                titulo: idea.titulo,
+                descripcion: idea.descripcion,
+                estado: normalizeIdeaEstado(idea.estado),
+                privacidad: idea.privacidad,
+                modalidad: idea.modalidad,
+                version_actual: idea.version_actual,
+                fecha: idea.fecha,
+                fecha_actualizacion: idea.fecha_actualizacion
+            },
+            desarrollo,
+            categorias,
+            propositos
+        });
+
+    } catch (error) {
+        console.error('Error in /api/ideas/:id (GET):', error);
+        res.status(500).json({ error: 'Error interno del servidor al obtener la idea.' });
+    }
+});
 
 app.delete('/api/ideas/:id', requireFunctionality('ideas'), requirePermission('ideas.delete'), async (req, res) => {
     try {
         const usuario_id = req.userId;
-        const idea_id = req.params.id;
+        const id = Number(req.params.id);
 
-        if (!idea_id || isNaN(idea_id)) {
+        // 1. Validación numérica estricta de ID (rechaza abc, 1abc, 1.5, 0, -1, etc.)
+        if (!Number.isSafeInteger(id) || id <= 0) {
             return res.status(400).json({ error: 'ID de idea inválido.' });
         }
 
-        const [result] = await pool.execute(
-            'DELETE FROM ideas WHERE id = ? AND usuario_id = ? AND estado = ?',
-            [idea_id, usuario_id, 'pendiente']
+        // 2. Consultar existencia y ownership de la idea (mitigación anti-IDOR)
+        const [rows] = await pool.execute(
+            'SELECT id, usuario_id, estado FROM ideas WHERE id = ?',
+            [id]
         );
 
-        if (result.affectedRows === 0) {
-            return res.status(403).json({ error: 'La idea no existe, no te pertenece o no está en estado pendiente.' });
+        if (rows.length === 0 || rows[0].usuario_id !== usuario_id) {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
         }
+
+        const idea = rows[0];
+
+        // 3. Regla fundamental F4.3: solo se permite eliminación física si estado es 'semilla' (o alias legacy 'pendiente')
+        if (idea.estado !== 'semilla' && idea.estado !== 'pendiente') {
+            return res.status(400).json({ error: 'Solo las ideas en estado semilla pueden eliminarse.' });
+        }
+
+        // 4. Eliminación física (cascada automática hacia satélites por FK ON DELETE CASCADE)
+        await pool.execute('DELETE FROM ideas WHERE id = ?', [id]);
 
         res.status(200).json({ message: 'Idea eliminada correctamente.' });
 
     } catch (error) {
         console.error('Error in /api/ideas/:id (DELETE):', error);
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-             res.status(401).json({ error: 'Token inválido o expirado.' });
-        } else {
-             res.status(500).json({ error: 'Error interno del servidor al eliminar la idea.' });
-        }
+        res.status(500).json({ error: 'Error interno del servidor al eliminar la idea.' });
     }
 });
 
 app.put('/api/ideas/:id/estado', requireFunctionality('ideas'), requirePermission('ideas.update'), async (req, res) => {
+    let connection;
     try {
         const usuario_id = req.userId;
-        const idea_id = req.params.id;
-        const { estado } = req.body;
+        const id = Number(req.params.id);
 
-        if (!idea_id || isNaN(idea_id)) {
+        // 1. Validación numérica estricta de ID
+        if (!Number.isSafeInteger(id) || id <= 0) {
             return res.status(400).json({ error: 'ID de idea inválido.' });
         }
 
-        const estadosValidos = ['pendiente', 'en progreso', 'completada', 'descartada'];
-        if (!estadosValidos.includes(estado)) {
+        // 2. Validación de entrada del estado solicitado
+        let { estado, motivo_cambio } = req.body;
+        if (!estado || typeof estado !== 'string' || estado.trim() === '') {
+            return res.status(400).json({ error: 'El estado destino es obligatorio.' });
+        }
+
+        const destinoOficial = normalizeIdeaEstado(estado);
+        if (!destinoOficial) {
             return res.status(400).json({ error: 'Estado inválido.' });
         }
 
-        const [result] = await pool.execute(
-            'UPDATE ideas SET estado = ? WHERE id = ? AND usuario_id = ?',
-            [estado, idea_id, usuario_id]
+        if (motivo_cambio !== undefined && motivo_cambio !== null) {
+            if (typeof motivo_cambio !== 'string') {
+                return res.status(400).json({ error: 'El motivo de cambio debe ser texto.' });
+            }
+            motivo_cambio = motivo_cambio.trim().substring(0, 255);
+        } else {
+            motivo_cambio = null;
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 3. Consultar la idea con lock FOR UPDATE para evitar colisiones concurrentes
+        const [rows] = await connection.execute(
+            'SELECT id, usuario_id, titulo, descripcion, estado, version_actual FROM ideas WHERE id = ? FOR UPDATE',
+            [id]
         );
 
-        if (result.affectedRows === 0) {
+        if (rows.length === 0 || rows[0].usuario_id !== usuario_id) {
+            await connection.rollback();
             return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
         }
 
-        res.status(200).json({ message: 'Estado actualizado correctamente.' });
+        const idea = rows[0];
+        const estadoActual = normalizeIdeaEstado(idea.estado);
+
+        // Si ya se encuentra en el estado solicitado, responder sin cambios (idempotencia)
+        if (estadoActual === destinoOficial) {
+            await connection.rollback();
+            return res.status(200).json({
+                message: 'La idea ya se encuentra en el estado solicitado.',
+                estado: destinoOficial,
+                version_actual: idea.version_actual
+            });
+        }
+
+        // 4. Validar transición contra la máquina de estados oficial
+        const transicionesPermitidas = IDEAS_TRANSICIONES_VALIDAS[estadoActual] || [];
+        if (!transicionesPermitidas.includes(destinoOficial)) {
+            await connection.rollback();
+            return res.status(400).json({
+                error: `Transición no permitida: no se puede pasar de '${estadoActual}' a '${destinoOficial}'.`
+            });
+        }
+
+        let nuevaVersionActual = idea.version_actual;
+
+        // 5. TRANSICIÓN ESPECIAL: semilla -> en_desarrollo (Generación de Versión 1)
+        if (estadoActual === 'semilla' && destinoOficial === 'en_desarrollo') {
+            // Protección contra doble creación: solo crear versión 1 si version_actual === 0 y no existe versión 1
+            if (idea.version_actual === 0) {
+                const [existVer1] = await connection.execute(
+                    'SELECT id FROM idea_versiones WHERE idea_id = ? AND numero_version = 1',
+                    [id]
+                );
+
+                if (existVer1.length === 0) {
+                    // Obtener datos actuales de idea_desarrollo
+                    const [desRows] = await connection.execute(
+                        'SELECT problema, solucion FROM idea_desarrollo WHERE idea_id = ?',
+                        [id]
+                    );
+                    const problema = desRows.length > 0 ? desRows[0].problema : null;
+                    const solucion = desRows.length > 0 ? desRows[0].solucion : null;
+
+                    // A. Insertar snapshot formal en idea_versiones (Versión 1)
+                    await connection.execute(
+                        `INSERT INTO idea_versiones (
+                            idea_id, numero_version, titulo, descripcion, problema, solucion, usuario_id, motivo_cambio, fecha_creacion
+                        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, NOW())`,
+                        [
+                            id,
+                            idea.titulo,
+                            idea.descripcion,
+                            problema,
+                            solucion,
+                            usuario_id,
+                            motivo_cambio || 'Consolidación inicial: transición automática a desarrollo'
+                        ]
+                    );
+
+                    // Registrar evento de nueva versión en idea_historial
+                    await connection.execute(
+                        `INSERT INTO idea_historial (idea_id, usuario_id, tipo_evento, descripcion, datos)
+                        VALUES (?, ?, 'nueva_version', 'Versión 1 consolidada automáticamente al iniciar desarrollo', ?)`,
+                        [
+                            id,
+                            usuario_id,
+                            JSON.stringify({ version: 1, origen: 'transicion_semilla_a_en_desarrollo' })
+                        ]
+                    );
+                }
+
+                nuevaVersionActual = 1;
+            }
+
+            // B. Actualizar estado y version_actual en ideas
+            await connection.execute(
+                'UPDATE ideas SET estado = ?, version_actual = ? WHERE id = ?',
+                [destinoOficial, nuevaVersionActual, id]
+            );
+
+            // C. Registrar evento de cambio de estado en idea_historial
+            await connection.execute(
+                `INSERT INTO idea_historial (idea_id, usuario_id, tipo_evento, descripcion, datos)
+                VALUES (?, ?, 'cambio_estado', 'Cambio de estado de semilla a en_desarrollo', ?)`,
+                [
+                    id,
+                    usuario_id,
+                    JSON.stringify({
+                        estado_anterior: estadoActual,
+                        estado_nuevo: destinoOficial,
+                        motivo: motivo_cambio || null,
+                        version_generada: nuevaVersionActual
+                    })
+                ]
+            );
+
+        } else {
+            // 6. OTRAS TRANSICIONES: actualizan estado e historial, SIN alterar version_actual ni crear versiones
+            await connection.execute(
+                'UPDATE ideas SET estado = ? WHERE id = ?',
+                [destinoOficial, id]
+            );
+
+            const descEvento = destinoOficial === 'archivada'
+                ? `Idea archivada desde ${estadoActual}`
+                : `Cambio de estado de ${estadoActual} a ${destinoOficial}`;
+
+            await connection.execute(
+                `INSERT INTO idea_historial (idea_id, usuario_id, tipo_evento, descripcion, datos)
+                VALUES (?, ?, 'cambio_estado', ?, ?)`,
+                [
+                    id,
+                    usuario_id,
+                    descEvento,
+                    JSON.stringify({
+                        estado_anterior: estadoActual,
+                        estado_nuevo: destinoOficial,
+                        motivo: motivo_cambio || null
+                    })
+                ]
+            );
+        }
+
+        await connection.commit();
+
+        res.status(200).json({
+            message: 'Estado actualizado correctamente.',
+            estado_anterior: estadoActual,
+            nuevo_estado: destinoOficial,
+            version_actual: nuevaVersionActual
+        });
+
     } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
         console.error('Error in /api/ideas/:id/estado (PUT):', error);
-        res.status(500).json({ error: 'Error interno del servidor.' });
+        res.status(500).json({ error: 'Error interno del servidor al actualizar el estado.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+app.put('/api/ideas/:id/desarrollo', requireFunctionality('ideas'), requirePermission('ideas.update'), async (req, res) => {
+    let connection;
+    try {
+        const usuario_id = req.userId;
+        const id = Number(req.params.id);
+
+        // 1. Validación numérica estricta de ID
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        // 2. Validación de cuerpo de solicitud
+        if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+            return res.status(400).json({ error: 'El cuerpo de la solicitud debe ser un objeto.' });
+        }
+
+        // 3. Campos permitidos del canvas y validación de tipos
+        const allowedTextFields = ['problema', 'solucion', 'beneficiarios', 'recursos', 'riesgos', 'notas'];
+        const cleanedValues = {};
+        const camposModificados = [];
+
+        // Validar campos de texto largos
+        for (const field of allowedTextFields) {
+            if (field in req.body) {
+                const val = req.body[field];
+                if (val === null) {
+                    cleanedValues[field] = null;
+                } else if (typeof val === 'string') {
+                    const trimmed = val.trim();
+                    if (trimmed.length > 65535) {
+                        return res.status(400).json({ error: `El campo ${field} excede la longitud máxima permitida.` });
+                    }
+                    cleanedValues[field] = trimmed;
+                } else {
+                    return res.status(400).json({ error: `El campo ${field} debe ser texto o null.` });
+                }
+                camposModificados.push(field);
+            }
+        }
+
+        // Validar complejidad (varchar 20)
+        if ('complejidad' in req.body) {
+            const val = req.body.complejidad;
+            if (val === null) {
+                cleanedValues.complejidad = null;
+            } else if (typeof val === 'string') {
+                const trimmed = val.trim();
+                if (trimmed.length > 20) {
+                    return res.status(400).json({ error: 'El campo complejidad no puede exceder 20 caracteres.' });
+                }
+                cleanedValues.complejidad = trimmed;
+            } else {
+                return res.status(400).json({ error: 'El campo complejidad debe ser texto o null.' });
+            }
+            camposModificados.push('complejidad');
+        }
+
+        // Validar potencial (varchar 20)
+        if ('potencial' in req.body) {
+            const val = req.body.potencial;
+            if (val === null) {
+                cleanedValues.potencial = null;
+            } else if (typeof val === 'string') {
+                const trimmed = val.trim();
+                if (trimmed.length > 20) {
+                    return res.status(400).json({ error: 'El campo potencial no puede exceder 20 caracteres.' });
+                }
+                cleanedValues.potencial = trimmed;
+            } else {
+                return res.status(400).json({ error: 'El campo potencial debe ser texto o null.' });
+            }
+            camposModificados.push('potencial');
+        }
+
+        // Validar inversion_estimada (decimal 12,2 o null)
+        if ('inversion_estimada' in req.body) {
+            const val = req.body.inversion_estimada;
+            if (val === null) {
+                cleanedValues.inversion_estimada = null;
+            } else {
+                if (typeof val === 'boolean' || typeof val === 'object' || Array.isArray(val)) {
+                    return res.status(400).json({ error: 'El campo inversion_estimada debe ser numérico o null.' });
+                }
+                const num = Number(val);
+                if (isNaN(num) || !Number.isFinite(num) || num < 0 || num > 9999999999.99) {
+                    return res.status(400).json({ error: 'El campo inversion_estimada debe ser un número positivo válido (máximo 12 dígitos).' });
+                }
+                cleanedValues.inversion_estimada = Math.round(num * 100) / 100;
+            }
+            camposModificados.push('inversion_estimada');
+        }
+
+        // Validar moneda (varchar 3, exactamente 3 letras ISO)
+        if ('moneda' in req.body) {
+            const val = req.body.moneda;
+            if (typeof val !== 'string') {
+                return res.status(400).json({ error: 'El campo moneda debe ser texto de 3 caracteres.' });
+            }
+            const cleanMoneda = val.trim().toUpperCase();
+            if (!/^[A-Z]{3}$/.test(cleanMoneda)) {
+                return res.status(400).json({ error: 'El campo moneda debe contener exactamente 3 letras (ej. MXN, USD).' });
+            }
+            cleanedValues.moneda = cleanMoneda;
+            camposModificados.push('moneda');
+        }
+
+        // Comprobar que al menos un campo editable fue enviado
+        if (camposModificados.length === 0) {
+            return res.status(400).json({ error: 'No se enviaron campos válidos para actualizar el canvas.' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 4. Consultar existencia y propiedad de la idea (mitigación anti-IDOR)
+        const [ideaRows] = await connection.execute(
+            'SELECT id, usuario_id, estado, version_actual FROM ideas WHERE id = ?',
+            [id]
+        );
+
+        if (ideaRows.length === 0 || ideaRows[0].usuario_id !== usuario_id) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        const idea = ideaRows[0];
+
+        // 5. Verificar existencia del registro 1:1 en idea_desarrollo
+        const [desCheck] = await connection.execute(
+            'SELECT idea_id FROM idea_desarrollo WHERE idea_id = ?',
+            [id]
+        );
+
+        if (desCheck.length === 0) {
+            await connection.rollback();
+            return res.status(500).json({ error: 'Registro de desarrollo no encontrado para la idea.' });
+        }
+
+        // 6. Construir dinámicamente la actualización parcial segura
+        const updateClauses = [];
+        const updateParams = [];
+
+        for (const field of camposModificados) {
+            updateClauses.push(`${field} = ?`);
+            updateParams.push(cleanedValues[field]);
+        }
+
+        updateClauses.push('fecha_actualizacion = NOW()');
+        updateParams.push(id);
+
+        await connection.execute(
+            `UPDATE idea_desarrollo SET ${updateClauses.join(', ')} WHERE idea_id = ?`,
+            updateParams
+        );
+
+        // 7. Registro de auditoría ligero en idea_historial (sin duplicar contenido completo)
+        const datosHistorial = JSON.stringify({
+            campos_modificados: camposModificados
+        });
+
+        await connection.execute(
+            `INSERT INTO idea_historial (idea_id, usuario_id, tipo_evento, descripcion, datos)
+             VALUES (?, ?, 'actualizacion', 'Actualización del canvas de desarrollo', ?)`,
+            [id, usuario_id, datosHistorial]
+        );
+
+        // 8. Consultar canvas actualizado para responder al cliente
+        const [desRows] = await connection.execute(
+            `SELECT problema, solucion, beneficiarios, recursos, inversion_estimada, moneda, complejidad, potencial, riesgos, notas, fecha_actualizacion
+             FROM idea_desarrollo
+             WHERE idea_id = ?`,
+            [id]
+        );
+
+        await connection.commit();
+
+        res.status(200).json({
+            message: 'Canvas de desarrollo actualizado correctamente.',
+            idea: {
+                id: idea.id,
+                estado: normalizeIdeaEstado(idea.estado),
+                version_actual: idea.version_actual
+            },
+            desarrollo: desRows[0]
+        });
+
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in /api/ideas/:id/desarrollo (PUT):', error);
+        res.status(500).json({ error: 'Error interno del servidor al actualizar el canvas de desarrollo.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+app.post('/api/ideas/:id/versiones', requireFunctionality('ideas'), requirePermission('ideas.update'), async (req, res) => {
+    let connection;
+    try {
+        const usuario_id = req.userId;
+        const id = Number(req.params.id);
+
+        // 1. Validación numérica estricta de ID
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        // 2. Validación del motivo de cambio
+        let { motivo_cambio } = req.body || {};
+        if (motivo_cambio !== undefined && motivo_cambio !== null) {
+            if (typeof motivo_cambio !== 'string') {
+                return res.status(400).json({ error: 'El motivo de cambio debe ser texto.' });
+            }
+            motivo_cambio = motivo_cambio.trim().substring(0, 255);
+            if (motivo_cambio.length === 0) {
+                motivo_cambio = null;
+            }
+        } else {
+            motivo_cambio = null;
+        }
+        const finalMotivo = motivo_cambio || 'Consolidación formal de versión';
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 3. Obtener idea con lock pesimista FOR UPDATE
+        const [ideaRows] = await connection.execute(
+            'SELECT id, usuario_id, titulo, descripcion, estado, version_actual FROM ideas WHERE id = ? FOR UPDATE',
+            [id]
+        );
+
+        if (ideaRows.length === 0 || ideaRows[0].usuario_id !== usuario_id) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        const idea = ideaRows[0];
+        const estadoActual = normalizeIdeaEstado(idea.estado);
+
+        // 4. Estados permitidos: en_desarrollo, en_validacion, lista, en_accion (rechaza semilla, realizada, archivada)
+        const estadosPermitidos = ['en_desarrollo', 'en_validacion', 'lista', 'en_accion'];
+        if (!estadosPermitidos.includes(estadoActual)) {
+            await connection.rollback();
+            return res.status(400).json({
+                error: `No se pueden crear versiones formales en estado '${estadoActual}'. Solo se permite en: ${estadosPermitidos.join(', ')}.`
+            });
+        }
+
+        // 5. Determinar siguiente número de versión con lock de concurrencia
+        const [maxVerRows] = await connection.execute(
+            'SELECT COALESCE(MAX(numero_version), 0) AS max_version FROM idea_versiones WHERE idea_id = ? FOR UPDATE',
+            [id]
+        );
+        const siguienteVersion = maxVerRows[0].max_version + 1;
+
+        // 6. Obtener datos actuales de idea_desarrollo para el snapshot formal
+        const [desRows] = await connection.execute(
+            'SELECT problema, solucion FROM idea_desarrollo WHERE idea_id = ?',
+            [id]
+        );
+        const problema = desRows.length > 0 ? desRows[0].problema : null;
+        const solucion = desRows.length > 0 ? desRows[0].solucion : null;
+
+        // 7. Insertar snapshot inmutable en idea_versiones
+        const [insertVer] = await connection.execute(
+            `INSERT INTO idea_versiones (
+                idea_id, numero_version, titulo, descripcion, problema, solucion, usuario_id, motivo_cambio, fecha_creacion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [
+                id,
+                siguienteVersion,
+                idea.titulo,
+                idea.descripcion,
+                problema,
+                solucion,
+                usuario_id,
+                finalMotivo
+            ]
+        );
+        const versionId = insertVer.insertId;
+
+        // 8. Actualizar version_actual en ideas
+        await connection.execute(
+            'UPDATE ideas SET version_actual = ?, fecha_actualizacion = NOW() WHERE id = ?',
+            [siguienteVersion, id]
+        );
+
+        // 9. Registrar auditoría ligera en idea_historial
+        await connection.execute(
+            `INSERT INTO idea_historial (idea_id, usuario_id, tipo_evento, descripcion, datos)
+             VALUES (?, ?, 'nueva_version', ?, ?)`,
+            [
+                id,
+                usuario_id,
+                `Versión ${siguienteVersion} consolidada formalmente`,
+                JSON.stringify({
+                    version: siguienteVersion,
+                    motivo: finalMotivo
+                })
+            ]
+        );
+
+        await connection.commit();
+
+        res.status(201).json({
+            message: 'Versión formal creada exitosamente.',
+            version: {
+                id: versionId,
+                idea_id: id,
+                numero_version: siguienteVersion,
+                titulo: idea.titulo,
+                descripcion: idea.descripcion,
+                problema,
+                solucion,
+                usuario_id,
+                motivo_cambio: finalMotivo
+            },
+            idea: {
+                id,
+                version_actual: siguienteVersion
+            }
+        });
+
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in /api/ideas/:id/versiones (POST):', error);
+        res.status(500).json({ error: 'Error interno del servidor al crear la versión.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+app.get('/api/ideas/:id/versiones', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
+    try {
+        const usuario_id = req.userId;
+        const id = Number(req.params.id);
+
+        // 1. Validación numérica estricta de ID
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        // 2. Comprobar existencia, propiedad y privacidad
+        const [ideaRows] = await pool.execute(
+            'SELECT id, usuario_id, privacidad, version_actual FROM ideas WHERE id = ?',
+            [id]
+        );
+
+        if (ideaRows.length === 0) {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        const idea = ideaRows[0];
+        const isOwner = (idea.usuario_id === usuario_id);
+
+        if (!isOwner && idea.privacidad !== 'publica') {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        // 3. Consultar versiones históricas ordenadas ascendentemente por número de versión
+        const [versiones] = await pool.execute(
+            `SELECT id, idea_id, numero_version, titulo, descripcion, problema, solucion, usuario_id, motivo_cambio, fecha_creacion
+             FROM idea_versiones
+             WHERE idea_id = ?
+             ORDER BY numero_version ASC`,
+            [id]
+        );
+
+        res.status(200).json({
+            idea_id: id,
+            version_actual: idea.version_actual,
+            total_versiones: versiones.length,
+            versiones
+        });
+
+    } catch (error) {
+        console.error('Error in /api/ideas/:id/versiones (GET):', error);
+        res.status(500).json({ error: 'Error interno del servidor al obtener las versiones.' });
+    }
+});
+
+app.get('/api/ideas/:id/historial', requireFunctionality('ideas'), requirePermission('ideas.read'), async (req, res) => {
+    try {
+        const usuario_id = req.userId;
+        const id = Number(req.params.id);
+
+        // 1. Validación numérica estricta de ID
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de idea inválido.' });
+        }
+
+        // 2. Comprobar existencia, propiedad y privacidad de la idea
+        const [ideaRows] = await pool.execute(
+            'SELECT id, usuario_id, privacidad FROM ideas WHERE id = ?',
+            [id]
+        );
+
+        if (ideaRows.length === 0) {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        const idea = ideaRows[0];
+        const isOwner = (idea.usuario_id === usuario_id);
+
+        // Reglas de privacidad idénticas a F4.6 y F4.8:
+        // - 'privada': Solo propietario (terceros reciben 404 anti-IDOR).
+        // - 'compartida': Solo propietario en esta fase (terceros reciben 404).
+        // - 'publica': Cualquier usuario autenticado con permiso 'ideas.read'.
+        if (!isOwner && idea.privacidad !== 'publica') {
+            return res.status(404).json({ error: 'Idea no encontrada o no autorizada.' });
+        }
+
+        // 3. Consultar eventos del historial en orden cronológico consistente
+        const [eventos] = await pool.execute(
+            `SELECT id, idea_id, usuario_id, tipo_evento, descripcion, datos, fecha
+             FROM idea_historial
+             WHERE idea_id = ?
+             ORDER BY fecha ASC, id ASC`,
+            [id]
+        );
+
+        // Formatear datos JSON de manera segura y estructurada
+        const historialFormateado = eventos.map(e => ({
+            id: e.id,
+            idea_id: e.idea_id,
+            usuario_id: e.usuario_id,
+            tipo_evento: e.tipo_evento,
+            descripcion: e.descripcion,
+            datos: typeof e.datos === 'string' ? JSON.parse(e.datos) : (e.datos || null),
+            fecha: e.fecha
+        }));
+
+        res.status(200).json({
+            idea_id: id,
+            total_eventos: historialFormateado.length,
+            historial: historialFormateado
+        });
+
+    } catch (error) {
+        console.error('Error in /api/ideas/:id/historial (GET):', error);
+        res.status(500).json({ error: 'Error interno del servidor al obtener el historial de la idea.' });
     }
 });
 
@@ -3935,7 +4881,18 @@ if (typeof module !== 'undefined' && module.exports) {
         extractTotalSemanasFromIMSSDocument,
         parseIMSSWithGemini,
         requireFunctionality,
-        FUNCIONALIDAD_CODE_ALIASES
+        FUNCIONALIDAD_CODE_ALIASES,
+        IDEAS_ESTADOS_OFICIALES,
+        IDEAS_ESTADOS_LEGADOS_MAP,
+        IDEAS_OFICIAL_A_LEGADO_MAP,
+        normalizeIdeaEstado,
+        isValidIdeaEstado,
+        toLegacyIdeaEstado,
+        IDEAS_TRANSICIONES_VALIDAS,
+        isValidIdeaTransition,
+        IDEAS_PRIVACIDADES_CATALOGO,
+        IDEAS_MODALIDADES_CATALOGO,
+        IDEAS_ESTADOS_CATALOGO
     };
 }
 
