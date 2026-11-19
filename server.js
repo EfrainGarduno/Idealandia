@@ -1014,8 +1014,12 @@ app.post('/api/chat', async (req, res) => {
         // Collect function calls if they occur first
         let functionCall = null;
         let functionName = null;
+        let modelResponseParts = [];
 
         for await (const chunk of aiResponseStream) {
+            if (chunk.candidates && chunk.candidates[0] && chunk.candidates[0].content && chunk.candidates[0].content.parts) {
+                modelResponseParts.push(...chunk.candidates[0].content.parts);
+            }
             if (chunk.functionCalls && chunk.functionCalls.length > 0) {
                 functionCall = chunk.functionCalls[0];
                 functionName = functionCall.name;
@@ -1026,34 +1030,60 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (functionCall && functionName === 'consultar_documentacion') {
-            const query = functionCall.args.tema || message;
+            const query = (functionCall.args && functionCall.args.tema) || message;
             const docResult = await searchKnowledge(pool, userId, query);
 
-            // Second turn: send tool result back
-            const secondTurnStream = await ai.models.generateContentStream({
-                model: selectedModel || 'gemini-3-flash-preview',
-                contents: [
-                    { role: 'user', parts: [{ text: message }] },
-                    { role: 'model', parts: [{ functionCall: functionCall }] },
-                    {
-                        role: 'user',
-                        parts: [{
-                            functionResponse: {
-                                name: functionName,
-                                response: { result: docResult }
-                            }
-                        }]
-                    }
-                ],
-                config: {
-                    systemInstruction: chatSysInstr,
-                    tools: idealandiaTools
-                }
-            });
+            // Second turn: send tool result back with graceful fallback against thought_signature errors
+            try {
+                const partsForModel = (modelResponseParts.length > 0)
+                    ? modelResponseParts
+                    : [{ functionCall: functionCall }];
 
-            for await (const chunk of secondTurnStream) {
-                if (chunk.text) {
-                    res.write(chunk.text);
+                const secondTurnStream = await ai.models.generateContentStream({
+                    model: selectedModel || 'gemini-3-flash-preview',
+                    contents: [
+                        { role: 'user', parts: [{ text: message }] },
+                        { role: 'model', parts: partsForModel },
+                        {
+                            role: 'user',
+                            parts: [{
+                                functionResponse: {
+                                    name: functionName,
+                                    response: { result: docResult }
+                                }
+                            }]
+                        }
+                    ],
+                    config: {
+                        systemInstruction: chatSysInstr,
+                        tools: idealandiaTools
+                    }
+                });
+
+                for await (const chunk of secondTurnStream) {
+                    if (chunk.text) {
+                        res.write(chunk.text);
+                    }
+                }
+            } catch (toolTurnErr) {
+                console.warn('[API/CHAT] Conmutando a síntesis directa de conocimiento tras fallo en turno de herramienta (thought_signature):', toolTurnErr.message || toolTurnErr);
+                try {
+                    const directResponse = await ai.models.generateContent({
+                        model: selectedModel || 'gemini-3-flash-preview',
+                        contents: [{
+                            role: 'user',
+                            parts: [{
+                                text: `Pregunta del usuario: ${message}\n\nConocimiento interno disponible:\n${JSON.stringify(docResult)}\n\nPor favor responde amablemente a la pregunta del usuario como Idealita integrando este conocimiento.`
+                            }]
+                        }],
+                        config: { systemInstruction: chatSysInstr }
+                    });
+                    const fallbackText = directResponse.text ? (typeof directResponse.text === 'function' ? directResponse.text() : directResponse.text) : '';
+                    if (fallbackText) {
+                        res.write(fallbackText);
+                    }
+                } catch (fallbackErr) {
+                    console.error('[API/CHAT] Error en fallback de conocimiento:', fallbackErr);
                 }
             }
         }

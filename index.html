@@ -1079,7 +1079,7 @@
                     <!-- Barra de Pestañas -->
                     <div id="workspace-tabs-bar" style="display: flex; gap: 6px; border-bottom: 2px solid #e2e8f0; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 20px; scrollbar-width: thin;">
                         <button type="button" class="workspace-tab-btn active" data-tab="canvas" style="padding: 12px 18px; border: none; background: none; border-bottom: 3px solid #6c40f7; color: #6c40f7; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; font-family: 'Poppins', sans-serif;">
-                            <i class="fas fa-pencil-ruler" aria-hidden="true"></i> Canvas
+                            <i class="fas fa-pencil-ruler" aria-hidden="true"></i> Desarrollo de la Idea
                         </button>
                         <button type="button" class="workspace-tab-btn" data-tab="info" style="padding: 12px 18px; border: none; background: none; border-bottom: 3px solid transparent; color: #64748b; font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; font-family: 'Poppins', sans-serif;">
                             <i class="fas fa-tags" aria-hidden="true"></i> Información / Clasificación
@@ -1090,24 +1090,27 @@
                         <button type="button" class="workspace-tab-btn" data-tab="historial" style="padding: 12px 18px; border: none; background: none; border-bottom: 3px solid transparent; color: #64748b; font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; font-family: 'Poppins', sans-serif;">
                             <i class="fas fa-stream" aria-hidden="true"></i> Historial
                         </button>
+                        <button type="button" class="workspace-tab-btn" data-tab="motores" style="padding: 12px 18px; border: none; background: none; border-bottom: 3px solid transparent; color: #64748b; font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; font-family: 'Poppins', sans-serif;">
+                            <i class="fas fa-cogs" aria-hidden="true"></i> Motores de Ideas
+                        </button>
                         <button type="button" class="workspace-tab-btn" data-tab="idealita" style="padding: 12px 18px; border: none; background: none; border-bottom: 3px solid transparent; color: #64748b; font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; font-family: 'Poppins', sans-serif;">
                             <i class="fas fa-brain" aria-hidden="true"></i> Idealita
                         </button>
                     </div>
 
-                    <!-- Panel 1: Canvas (Modo Edición / Visualización F5.5) -->
+                    <!-- Panel 1: Desarrollo de la Idea (Modo Edición / Visualización F5.5) -->
                     <div id="workspace-panel-canvas" class="workspace-panel" style="display: block;">
                         <!-- Aviso para Ideas en estado realizada o archivada -->
                         <div id="canvas-readonly-notice" style="display: none; padding: 14px 18px; background-color: #f1f5f9; border-left: 4px solid #64748b; border-radius: 6px; margin-bottom: 20px; color: #475569; font-size: 0.92em;">
                             <i class="fas fa-lock" style="margin-right: 8px; color: #64748b;" aria-hidden="true"></i>
-                            Esta Idea está en estado <strong><span id="canvas-readonly-estado"></span></strong> y su Canvas es de solo lectura.
+                            Esta Idea está en estado <strong><span id="canvas-readonly-estado"></span></strong> y su Desarrollo es de solo lectura.
                         </div>
 
                         <!-- Barra de acciones: Guardar / Cancelar / Dirty indicator -->
                         <div id="canvas-actions-bar" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 14px 18px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
                             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                                 <button type="button" id="btn-guardar-canvas" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background-color: #6c40f7; color: #ffffff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px; font-family: 'Poppins', sans-serif;">
-                                    <i class="fas fa-save" aria-hidden="true"></i> Guardar cambios
+                                    <i class="fas fa-save" aria-hidden="true"></i> Guardar Desarrollo
                                 </button>
                                 <button type="button" id="btn-cancelar-canvas" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 44px; font-family: 'Poppins', sans-serif;">
                                     <i class="fas fa-times" aria-hidden="true"></i> Cancelar cambios
@@ -1236,11 +1239,11 @@
 
                     <!-- Panel 3: Versiones Formales (F5.7) -->
                     <div id="workspace-panel-versiones" class="workspace-panel" style="display: none;">
-                        <!-- Banner informativo del principio de separación Canvas vs Versión Formal -->
+                        <!-- Banner informativo del principio de separación Desarrollo vs Versión Formal -->
                         <div style="background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%); border: 1px solid #c7d2fe; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px;">
                             <i class="fas fa-info-circle" style="color: #6366f1; font-size: 18px; margin-top: 2px;" aria-hidden="true"></i>
                             <div style="font-size: 0.88em; color: #334155; line-height: 1.45;">
-                                <strong>Principio de Versiones Formales:</strong> El <em>Canvas de Desarrollo</em> es un espacio de trabajo continuo y mutable. Una <em>Versión Formal</em> representa una instantánea inmutable y consolidada de la Idea en un punto específico de su evolución. <strong>Guardar el Canvas ≠ Crear una versión.</strong>
+                                <strong>Principio de Versiones Formales:</strong> El <em>Desarrollo de la Idea</em> es un espacio de trabajo continuo y mutable. Una <em>Versión Formal</em> representa una instantánea inmutable y consolidada de la Idea en un punto específico de su evolución. <strong>Guardar el Desarrollo ≠ Crear una versión.</strong>
                             </div>
                         </div>
 
@@ -1253,10 +1256,10 @@
                                 Se tomará una fotografía inmutable del título, descripción, problema y solución actuales de la Idea.
                             </p>
 
-                            <!-- Advertencia si hay cambios sin guardar en Canvas -->
+                            <!-- Advertencia si hay cambios sin guardar en Desarrollo -->
                             <div id="versiones-dirty-warning" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; color: #92400e; font-size: 0.88em; align-items: center; gap: 8px;">
                                 <i class="fas fa-exclamation-triangle" style="color: #d97706;"></i>
-                                <span>Hay cambios sin guardar en el Canvas. Guarda los cambios antes de crear una nueva versión.</span>
+                                <span>Hay cambios sin guardar en el Desarrollo de la Idea. Guarda los cambios antes de crear una nueva versión.</span>
                             </div>
 
                             <form id="form-crear-version" onsubmit="event.preventDefault(); crearNuevaVersion();">
@@ -1351,7 +1354,7 @@
                             <div id="historial-empty" style="display: none; padding: 36px 20px; text-align: center; color: #64748b; background: #f8fafc; border-radius: 6px; border: 1px dashed #e2e8f0;">
                                 <i class="fas fa-calendar-times" style="font-size: 32px; color: #94a3b8; margin-bottom: 10px; display: block;" aria-hidden="true"></i>
                                 <h5 style="margin: 0 0 6px 0; color: #334155; font-size: 1em;">Aún no hay eventos registrados para esta Idea.</h5>
-                                <p style="margin: 0; font-size: 0.88em; color: #64748b; max-width: 480px; margin: 0 auto;">Los acontecimientos como cambios de estado, modificaciones del canvas o consolidación de versiones se registrarán aquí automáticamente.</p>
+                                <p style="margin: 0; font-size: 0.88em; color: #64748b; max-width: 480px; margin: 0 auto;">Los acontecimientos como cambios de estado, modificaciones del desarrollo de la idea, análisis de motores o consolidación de versiones se registrarán aquí automáticamente.</p>
                             </div>
 
                             <!-- Contenedor Timeline Vertical -->
@@ -1365,7 +1368,7 @@
                         <div id="idealita-context-loading" style="display: none; padding: 36px 20px; text-align: center; color: #64748b; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
                             <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #6c40f7; margin-bottom: 12px; display: block;" aria-hidden="true"></i>
                             <div style="font-size: 1.05em; font-weight: 600; color: #1e293b; margin-bottom: 6px;">Preparando a Idealita con el contexto de tu Idea…</div>
-                            <p style="margin: 0; font-size: 0.88em; color: #64748b;">Recopilando Canvas de desarrollo, clasificación oficial y evolución formal.</p>
+                            <p style="margin: 0; font-size: 0.88em; color: #64748b;">Recopilando Desarrollo de la Idea, clasificación oficial y evolución formal.</p>
                         </div>
 
                         <!-- Contenedor Principal Contextual -->
@@ -1502,6 +1505,58 @@
                                     </form>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel 6: Motores de Ideas (Los 8 Motores Oficiales) -->
+                    <div id="workspace-panel-motores" class="workspace-panel" style="display: none;">
+                        <div style="background: linear-gradient(135deg, #f8fafc 0%, #ede9fe 100%); border: 1px solid #ddd6fe; border-radius: 10px; padding: 18px 20px; margin-bottom: 22px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                <div>
+                                    <h3 style="margin: 0 0 6px 0; color: #1e1b4b; font-size: 1.2em; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-cogs" style="color: #6c40f7;"></i> Motores Cognitivos de Ideas
+                                    </h3>
+                                    <p style="margin: 0; color: #475569; font-size: 0.9em; line-height: 1.4;">
+                                        Ocho capacidades de análisis profundo sobre la misma Idea. <em>El Motor propone, cuestiona y analiza; tú decides qué recomendaciones aplicar en el Desarrollo de tu Idea.</em>
+                                    </p>
+                                </div>
+                                <span style="font-size: 0.78em; background: #6c40f7; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-weight: 600;">8 Motores Oficiales</span>
+                            </div>
+                        </div>
+
+                        <!-- Selector Grid de los 8 Motores -->
+                        <div id="motores-selector-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 22px;">
+                            <!-- Botones/Tarjetas de Selección generados dinámicamente -->
+                        </div>
+
+                        <!-- Área de Configuración y Ejecución del Motor Seleccionado -->
+                        <div id="motor-execution-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;">
+                                <div>
+                                    <h4 id="motor-selected-title" style="margin: 0 0 4px 0; color: #1e293b; font-size: 1.1em; font-weight: 700;">Motor Explorador</h4>
+                                    <p id="motor-selected-desc" style="margin: 0; color: #64748b; font-size: 0.88em;">Explora ángulos ocultos y desafía supuestos fundamentales.</p>
+                                </div>
+                                <span id="motor-selected-pregunta" style="font-size: 0.82em; font-style: italic; color: #6c40f7; background: #f5f3ff; padding: 6px 12px; border-radius: 6px;">"¿Qué posibilidades todavía no estamos viendo?"</span>
+                            </div>
+
+                            <div style="margin-bottom: 16px;">
+                                <label for="motor-user-input" style="display: block; font-size: 0.88em; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                    Foco o pregunta específica para este análisis (opcional):
+                                </label>
+                                <input type="text" id="motor-user-input" class="form-control" placeholder="Ej. Centrarse en viabilidad operativa y adopción comunitaria" style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9em; box-sizing: border-box; font-family: 'Poppins', sans-serif;">
+                            </div>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                                <button type="button" id="btn-ejecutar-motor" onclick="ejecutarMotorActivo()" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; background: #6c40f7; color: #ffffff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px; font-family: 'Poppins', sans-serif;">
+                                    <i class="fas fa-play" aria-hidden="true"></i> <span id="btn-ejecutar-motor-text">Ejecutar Análisis</span>
+                                </button>
+                                <span id="motor-status-message" style="display: none; font-size: 0.88em; font-weight: 500;"></span>
+                            </div>
+                        </div>
+
+                        <!-- Contenedor del Resultado del Motor -->
+                        <div id="motor-result-container" style="display: none;">
+                            <!-- Tarjeta de Resultado Dinámica -->
                         </div>
                     </div>
                 </div>
@@ -4285,6 +4340,10 @@
                     loadIdeaHistorial();
                 }
 
+                if (tabName === 'motores' && typeof loadWorkspaceMotores === 'function') {
+                    loadWorkspaceMotores();
+                }
+
                 if (tabName === 'idealita' && typeof loadIdeaIdealita === 'function') {
                     loadIdeaIdealita();
                 }
@@ -6677,6 +6736,219 @@ ${userMessage}`;
                     window.workspaceLoading = false;
                 }
             }
+            // =========================================================================
+            // MOTORES DE IDEAS (8 MOTORES OFICIALES) - INTEGRACIÓN WORKSPACE
+            // =========================================================================
+            const MOTORES_DEFINICIONES = [
+                { key: 'explorador', nombre: 'Motor Explorador', icono: 'fa-compass', color: '#6c40f7', pregunta: '¿Qué posibilidades todavía no estamos viendo?', desc: 'Ángulos no vistos, analogías externas, supuestos y pivotes.' },
+                { key: 'madurador', nombre: 'Motor Madurador', icono: 'fa-seedling', color: '#059669', pregunta: '¿Cómo podemos hacer que esta Idea sea más clara, sólida y completa?', desc: 'Consistencia lógica, robustez conceptual y propuesta de valor.' },
+                { key: 'validador', nombre: 'Motor Validador', icono: 'fa-clipboard-check', color: '#d97706', pregunta: '¿Qué tendría que ser cierto para que funcione y cómo comprobarlo?', desc: 'Hipótesis críticas, riesgos prioritarios y experimentos prácticos.' },
+                { key: 'negocio', nombre: 'Motor de Negocio', icono: 'fa-chart-line', color: '#0284c7', pregunta: '¿Cómo puede crear y sostener valor económico?', desc: 'Modelos de ingresos viables, monetización y estructura de costos.' },
+                { key: 'impacto', nombre: 'Motor de Impacto', icono: 'fa-hands-helping', color: '#16a34a', pregunta: '¿Qué valor o impacto puede crear para las personas y el entorno?', desc: 'Beneficiarios directos/indirectos, huella social/ambiental y teoría del cambio.' },
+                { key: 'proposito', nombre: 'Motor de Propósito', icono: 'fa-heart', color: '#e11d48', pregunta: '¿Por qué debería existir esta Idea y qué sentido tiene?', desc: 'Intención ética, valores fundamentales y alineación de sentido.' },
+                { key: 'conector', nombre: 'Motor Conector', icono: 'fa-project-diagram', color: '#8b5cf6', pregunta: '¿Con quién, con qué recursos o iniciativas podría conectarse?', desc: 'Alianzas estratégicas, perfiles colaboradores clave y sinergias.' },
+                { key: 'ejecutor', nombre: 'Motor Ejecutor', icono: 'fa-rocket', color: '#ea580c', pregunta: '¿Qué hacemos concretamente para empezar a convertirla en realidad?', desc: 'Plan de primeros 7 días, hitos a 30-60-90 días y primera acción de hoy.' }
+            ];
+            window.MOTORES_DEFINICIONES = MOTORES_DEFINICIONES;
+            window.motorActivoKey = 'explorador';
+
+            function loadWorkspaceMotores() {
+                const grid = document.getElementById('motores-selector-grid');
+                if (!grid) return;
+
+                grid.innerHTML = MOTORES_DEFINICIONES.map(m => {
+                    const isSelected = (m.key === window.motorActivoKey);
+                    return `
+                        <div class="motor-select-card" data-motor="${m.key}" onclick="seleccionarMotor('${m.key}')" style="cursor: pointer; padding: 14px 16px; border-radius: 8px; border: 2px solid ${isSelected ? m.color : '#e2e8f0'}; background: ${isSelected ? '#f8fafc' : '#ffffff'}; transition: all 0.2s; box-shadow: ${isSelected ? '0 2px 8px rgba(0,0,0,0.06)' : 'none'};">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="width: 32px; height: 32px; border-radius: 6px; background: ${m.color}15; color: ${m.color}; display: flex; align-items: center; justify-content: center; font-size: 14px;">
+                                        <i class="fas ${m.icono}"></i>
+                                    </div>
+                                    <strong style="color: #1e293b; font-size: 0.95em;">${m.nombre}</strong>
+                                </div>
+                                ${isSelected ? `<span style="font-size: 0.72em; background: ${m.color}; color: #ffffff; padding: 2px 8px; border-radius: 10px; font-weight: 600;">Activo</span>` : ''}
+                            </div>
+                            <p style="margin: 0 0 6px 0; color: #475569; font-size: 0.82em; line-height: 1.35;">${m.desc}</p>
+                            <span style="display: block; font-size: 0.78em; color: #64748b; font-style: italic;">${m.pregunta}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                actualizarInfoMotorSeleccionado();
+            }
+            window.loadWorkspaceMotores = loadWorkspaceMotores;
+
+            function seleccionarMotor(key) {
+                window.motorActivoKey = key;
+                loadWorkspaceMotores();
+            }
+            window.seleccionarMotor = seleccionarMotor;
+
+            function actualizarInfoMotorSeleccionado() {
+                const motor = MOTORES_DEFINICIONES.find(m => m.key === window.motorActivoKey) || MOTORES_DEFINICIONES[0];
+                const titleEl = document.getElementById('motor-selected-title');
+                const descEl = document.getElementById('motor-selected-desc');
+                const pregEl = document.getElementById('motor-selected-pregunta');
+                const inputEl = document.getElementById('motor-user-input');
+
+                if (titleEl) titleEl.textContent = motor.nombre;
+                if (descEl) descEl.textContent = motor.desc;
+                if (pregEl) pregEl.textContent = `"${motor.pregunta}"`;
+                if (inputEl) inputEl.placeholder = `Pregunta o foco específico para ${motor.nombre} (opcional)`;
+            }
+
+            async function ejecutarMotorActivo() {
+                const id = Number(window.currentWorkspaceIdeaId || (window.currentWorkspaceIdea && window.currentWorkspaceIdea.idea && window.currentWorkspaceIdea.idea.id));
+                if (!Number.isSafeInteger(id) || id <= 0) {
+                    alert('ID de Idea no disponible para ejecutar el motor.');
+                    return;
+                }
+
+                const motorKey = window.motorActivoKey || 'explorador';
+                const motorDef = MOTORES_DEFINICIONES.find(m => m.key === motorKey) || MOTORES_DEFINICIONES[0];
+                const inputVal = (document.getElementById('motor-user-input') && document.getElementById('motor-user-input').value) || '';
+
+                const btn = document.getElementById('btn-ejecutar-motor');
+                const btnText = document.getElementById('btn-ejecutar-motor-text');
+                const statusMsg = document.getElementById('motor-status-message');
+                const resultCont = document.getElementById('motor-result-container');
+
+                if (btn) btn.disabled = true;
+                if (btnText) btnText.textContent = `Analizando con ${motorDef.nombre}…`;
+                if (statusMsg) {
+                    statusMsg.style.display = 'inline-block';
+                    statusMsg.style.color = '#6c40f7';
+                    statusMsg.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ejecutando servicio cognitivo…';
+                }
+
+                try {
+                    const payload = {};
+                    if (inputVal.trim()) {
+                        payload.foco_exploratorio = inputVal.trim();
+                        payload.area_enfoque = inputVal.trim();
+                        payload.mayor_preocupacion = inputVal.trim();
+                    }
+
+                    const response = await fetch(`/api/ideas/${id}/motores/${motorKey}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const resJson = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(resJson.error || `Error ${response.status} al ejecutar el motor.`);
+                    }
+
+                    if (statusMsg) {
+                        statusMsg.style.color = '#059669';
+                        statusMsg.innerHTML = '<i class="fas fa-check-circle"></i> Análisis completado y registrado en el Historial.';
+                    }
+
+                    renderMotorResult(resJson);
+
+                } catch (err) {
+                    if (statusMsg) {
+                        statusMsg.style.color = '#dc2626';
+                        statusMsg.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message || 'Error al ejecutar el motor.'}`;
+                    }
+                } finally {
+                    if (btn) btn.disabled = false;
+                    if (btnText) btnText.textContent = 'Ejecutar Análisis';
+                }
+            }
+            window.ejecutarMotorActivo = ejecutarMotorActivo;
+
+            function renderMotorResult(resData) {
+                const cont = document.getElementById('motor-result-container');
+                if (!cont) return;
+
+                const r = resData.resultado || {};
+                const resumen = resData.resumen || r.resumen_ejecutivo || 'Análisis finalizado con éxito.';
+                const motorNombre = resData.motor_nombre || resData.motor || 'Motor de Ideas';
+
+                let sectionsHtml = '';
+
+                for (const [key, value] of Object.entries(r)) {
+                    if (key === 'resumen_ejecutivo') continue;
+
+                    const titleFormatted = key.replace(/_/g, ' ').toUpperCase();
+
+                    if (Array.isArray(value)) {
+                        sectionsHtml += `
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 14px;">
+                                <h5 style="margin: 0 0 10px 0; color: #4338ca; font-size: 0.9em; letter-spacing: 0.5px;">${titleFormatted} (${value.length})</h5>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    ${value.map((item, idx) => {
+                                        if (typeof item === 'string') {
+                                            return `<div style="font-size: 0.88em; color: #334155; line-height: 1.4; padding: 6px 10px; background: #f8fafc; border-radius: 4px;">• ${item}</div>`;
+                                        } else if (item && typeof item === 'object') {
+                                            const itemLines = Object.entries(item).map(([k, v]) => `<strong>${k.replace(/_/g, ' ')}:</strong> ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ');
+                                            return `<div style="font-size: 0.86em; color: #334155; line-height: 1.4; padding: 8px 12px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #6c40f7;">${itemLines}</div>`;
+                                        }
+                                        return '';
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else if (value && typeof value === 'object') {
+                        const subLines = Object.entries(value).map(([k, v]) => `<div><strong style="color: #64748b; font-size: 0.82em; text-transform: uppercase;">${k.replace(/_/g, ' ')}:</strong> <div style="color: #1e293b; margin-top: 2px;">${Array.isArray(v) ? v.map(vi => `• ${vi}`).join('<br>') : v}</div></div>`).join('');
+                        sectionsHtml += `
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 14px;">
+                                <h5 style="margin: 0 0 10px 0; color: #4338ca; font-size: 0.9em; letter-spacing: 0.5px;">${titleFormatted}</h5>
+                                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.88em;">
+                                    ${subLines}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        sectionsHtml += `
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 14px;">
+                                <h5 style="margin: 0 0 6px 0; color: #4338ca; font-size: 0.9em; letter-spacing: 0.5px;">${titleFormatted}</h5>
+                                <p style="margin: 0; color: #334155; font-size: 0.88em; line-height: 1.45;">${value}</p>
+                            </div>
+                        `;
+                    }
+                }
+
+                cont.innerHTML = `
+                    <div style="background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%); border: 1px solid #c4b5fd; border-radius: 10px; padding: 20px; box-shadow: 0 4px 12px rgba(108, 64, 247, 0.08);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e9d5ff;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="background: #6c40f7; color: #ffffff; font-size: 0.75em; font-weight: 700; padding: 3px 10px; border-radius: 12px; text-transform: uppercase;">Resultado del Análisis</span>
+                                <h4 style="margin: 0; color: #1e1b4b; font-size: 1.15em; font-weight: 700;">${motorNombre}</h4>
+                            </div>
+                            <span style="font-size: 0.82em; color: #64748b;">Análisis ID: #${resData.analisis_id || 'N/A'}</span>
+                        </div>
+
+                        <!-- Resumen Ejecutivo -->
+                        <div style="background: #ffffff; border-left: 4px solid #6c40f7; border-radius: 6px; padding: 14px 18px; margin-bottom: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                            <div style="font-size: 0.78em; font-weight: 700; color: #6c40f7; text-transform: uppercase; margin-bottom: 4px;">Resumen Ejecutivo</div>
+                            <p style="margin: 0; color: #1e293b; font-size: 0.92em; line-height: 1.5; font-weight: 500;">${resumen}</p>
+                        </div>
+
+                        <!-- Secciones Cognitivas Específicas -->
+                        <div style="margin-bottom: 18px;">
+                            ${sectionsHtml}
+                        </div>
+
+                        <!-- Aviso del Principio de No Mutación -->
+                        <div style="background: #f1f5f9; border-radius: 6px; padding: 10px 14px; font-size: 0.82em; color: #475569; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-info-circle" style="color: #64748b;"></i>
+                            <span><strong>El Motor propone. Tú decides:</strong> Este análisis no modificó la Idea ni su Desarrollo. Si deseas aplicar alguna de las sugerencias, incorpórala editando el Desarrollo de tu Idea.</span>
+                        </div>
+                    </div>
+                `;
+
+                cont.style.display = 'block';
+                cont.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            window.renderMotorResult = renderMotorResult;
+
             window.openIdeaWorkspace = openIdeaWorkspace;
             setupWorkspaceTabs();
             setupCanvasEditEvents();

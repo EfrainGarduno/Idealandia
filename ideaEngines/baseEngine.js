@@ -64,11 +64,29 @@ class IdeaEngineBase {
     }
 
     /**
+     * Sanitiza un campo de texto de la Idea o su Desarrollo para evitar inyecciones XML,
+     * preservando el contenido legítimo completo hasta una longitud amplia (10,000 caracteres).
+     * @param {*} value
+     * @param {number} [maxLength=10000]
+     * @returns {string}
+     */
+    sanitizeIdeaField(value, maxLength = 10000) {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        return str
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+            .replace(/<\/?(?:idea_data|user_parameters|system_instructions)[^>]*>/gi, '')
+            .trim()
+            .slice(0, maxLength);
+    }
+
+    /**
      * Sanitiza entradas libres del usuario para evitar inyecciones de prompts o datos sensibles.
      * @param {Object} inputs
+     * @param {number} [maxLength=3000]
      * @returns {Object}
      */
-    sanitizeInputs(inputs) {
+    sanitizeInputs(inputs, maxLength = 3000) {
         if (!inputs || typeof inputs !== 'object') return {};
         const clean = {};
         for (const [key, value] of Object.entries(inputs)) {
@@ -78,12 +96,53 @@ class IdeaEngineBase {
                     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
                     .replace(/<\/?(?:idea_data|user_parameters|system_instructions)[^>]*>/gi, '')
                     .trim()
-                    .slice(0, 1000);
+                    .slice(0, maxLength);
             } else if (typeof value === 'number' || typeof value === 'boolean') {
                 clean[key] = value;
             }
         }
         return clean;
+    }
+
+    /**
+     * Genera la representación XML estandarizada y segura de los datos autorizados de la Idea.
+     * Utilizada por todos los motores para garantizar defensa contra prompt injection.
+     * @param {Object} idea
+     * @param {Object} canvas
+     * @param {Object} [meta={}]
+     * @returns {string}
+     */
+    formatIdeaDataXml(idea = {}, canvas = {}, meta = {}) {
+        const c = canvas || {};
+        const propositosList = (meta.propositos && meta.propositos.length > 0)
+            ? meta.propositos.map(p => this.sanitizeIdeaField(p.nombre || p.clave)).join(', ')
+            : 'Ninguno registrado';
+        const categoriasList = (meta.categorias && meta.categorias.length > 0)
+            ? meta.categorias.map(cat => this.sanitizeIdeaField(cat.nombre || cat.clave)).join(', ')
+            : 'Ninguna asignada';
+
+        let xml = `<idea_data>\n`;
+        xml += `  <titulo>${this.sanitizeIdeaField(idea.titulo) || 'Sin título'}</titulo>\n`;
+        xml += `  <descripcion>${this.sanitizeIdeaField(idea.descripcion) || 'Sin descripción detallada'}</descripcion>\n`;
+        xml += `  <estado_oficial>${this.sanitizeIdeaField(idea.estado) || 'semilla'}</estado_oficial>\n`;
+        xml += `  <modalidad>${this.sanitizeIdeaField(idea.modalidad) || 'individual'}</modalidad>\n`;
+        xml += `  <privacidad>${this.sanitizeIdeaField(idea.privacidad) || 'privada'}</privacidad>\n`;
+        xml += `  <version_actual>v${idea.version_actual !== undefined ? idea.version_actual : 0}</version_actual>\n`;
+        xml += `  <categorias>${categoriasList}</categorias>\n`;
+        xml += `  <propositos>${propositosList}</propositos>\n`;
+        xml += `  <desarrollo>\n`;
+        xml += `    <problema>${this.sanitizeIdeaField(c.problema) || 'No especificado aún'}</problema>\n`;
+        xml += `    <solucion>${this.sanitizeIdeaField(c.solucion) || 'No especificada aún'}</solucion>\n`;
+        xml += `    <beneficiarios>${this.sanitizeIdeaField(c.beneficiarios) || 'No especificados aún'}</beneficiarios>\n`;
+        xml += `    <recursos>${this.sanitizeIdeaField(c.recursos) || 'No especificados aún'}</recursos>\n`;
+        xml += `    <inversion_estimada>${c.inversion_estimada ? `${this.sanitizeIdeaField(c.inversion_estimada)} ${this.sanitizeIdeaField(c.moneda) || 'MXN'}` : 'No calculada'}</inversion_estimada>\n`;
+        xml += `    <complejidad>${this.sanitizeIdeaField(c.complejidad) || 'No definida'}</complejidad>\n`;
+        xml += `    <potencial>${this.sanitizeIdeaField(c.potencial) || 'No definido'}</potencial>\n`;
+        xml += `    <riesgos>${this.sanitizeIdeaField(c.riesgos) || 'No documentados'}</riesgos>\n`;
+        xml += `    <notas>${this.sanitizeIdeaField(c.notas) || 'Sin notas adicionales'}</notas>\n`;
+        xml += `  </desarrollo>\n`;
+        xml += `</idea_data>\n`;
+        return xml;
     }
 
     /**
@@ -283,7 +342,24 @@ class IdeaEngineBase {
                         break;
                     }
                 } catch (err) {
-                    console.warn(`[MOTOR ${this.type}] Reintentando con siguiente modelo tras error en ${modelCandidate}:`, err.message || err);
+                    const isTransient = err && (
+                        err.status === 503 ||
+                        err.status === 429 ||
+                        (err.message && (
+                            err.message.includes('503') ||
+                            err.message.includes('429') ||
+                            err.message.includes('UNAVAILABLE') ||
+                            err.message.includes('RESOURCE_EXHAUSTED') ||
+                            err.message.includes('high demand')
+                        ))
+                    );
+
+                    if (!isTransient) {
+                        // Error de programación, validación o rechazo permanente; no ocultar con fallback
+                        throw err;
+                    }
+
+                    console.warn(`[MOTOR ${this.type}] Reintentando con siguiente modelo tras error transitorio en ${modelCandidate}:`, err.message || err);
                     lastError = err;
                 }
             }
