@@ -571,7 +571,7 @@ const chatSysInstr = "Eres 'idealita', un asistente virtual de Idealandia. Siemp
 
 // Keep the old object for backward compatibility if needed, but we'll use ai.models.generateContentStream in the POST
 const chat = ai.chats.create({
-    model: 'gemini-3.6-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
     config: {
         systemInstruction: chatSysInstr,
         tools: idealandiaTools
@@ -977,14 +977,38 @@ app.post('/api/chat', async (req, res) => {
             } catch (e) {}
         }
 
-        let aiResponseStream = await ai.models.generateContentStream({
-            model: 'gemini-3.6-flash',
-            contents: [{ role: 'user', parts: [{ text: message }] }],
-            config: {
-                systemInstruction: chatSysInstr,
-                tools: idealandiaTools
+        const candidateChatModels = [
+            process.env.GEMINI_MODEL,
+            'gemini-3-flash-preview',
+            'gemini-3.1-flash-lite',
+            'gemini-3.6-flash'
+        ].filter(Boolean);
+
+        let aiResponseStream = null;
+        let selectedModel = null;
+        let lastStreamError = null;
+
+        for (const modelCandidate of candidateChatModels) {
+            try {
+                aiResponseStream = await ai.models.generateContentStream({
+                    model: modelCandidate,
+                    contents: [{ role: 'user', parts: [{ text: message }] }],
+                    config: {
+                        systemInstruction: chatSysInstr,
+                        tools: idealandiaTools
+                    }
+                });
+                selectedModel = modelCandidate;
+                break;
+            } catch (err) {
+                console.warn(`[API/CHAT] Reintentando con siguiente modelo tras error en ${modelCandidate}:`, err.message || err);
+                lastStreamError = err;
             }
-        });
+        }
+
+        if (!aiResponseStream) {
+            throw lastStreamError || new Error('No se pudo conectar con ningún modelo de Gemini disponible');
+        }
 
         // Collect function calls if they occur first
         let functionCall = null;
@@ -1006,7 +1030,7 @@ app.post('/api/chat', async (req, res) => {
 
             // Second turn: send tool result back
             const secondTurnStream = await ai.models.generateContentStream({
-                model: 'gemini-3.6-flash',
+                model: selectedModel || 'gemini-3-flash-preview',
                 contents: [
                     { role: 'user', parts: [{ text: message }] },
                     { role: 'model', parts: [{ functionCall: functionCall }] },

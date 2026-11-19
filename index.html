@@ -4913,7 +4913,13 @@
 
                 // 2. Guardia de cambios sin guardar en Canvas (F5.6 - Sección 15)
                 if (window.workspaceCanvasDirty) {
-                    const confirmarDescarte = confirm('Hay cambios sin guardar en el Canvas. Si cambias el estado ahora, ¿deseas continuar y descartar esos cambios?');
+                    let confirmarDescarte = false;
+                    if (typeof window.showConfirm === 'function') {
+                        confirmarDescarte = await window.showConfirm(
+                            'Hay cambios sin guardar en el Canvas. Si cambias el estado ahora, ¿deseas continuar y descartar esos cambios?',
+                            { confirmText: 'Continuar y descartar', cancelText: 'Permanecer aquí' }
+                        );
+                    }
                     if (!confirmarDescarte) {
                         return; // Conservar Canvas y dirty state
                     }
@@ -4930,7 +4936,20 @@
                     mensajeConfirmacion = `¿Deseas reactivar la Idea "${idea.titulo || 'Sin título'}" al estado En desarrollo?`;
                 }
 
-                const confirmar = confirm(mensajeConfirmacion);
+                let btnConfirmText = 'Confirmar';
+                if (destinoOficial === 'archivada') {
+                    btnConfirmText = 'Archivar';
+                } else if (estadoActual === 'archivada' && destinoOficial === 'en_desarrollo') {
+                    btnConfirmText = 'Reactivar';
+                }
+
+                let confirmar = false;
+                if (typeof window.showConfirm === 'function') {
+                    confirmar = await window.showConfirm(mensajeConfirmacion, {
+                        confirmText: btnConfirmText,
+                        cancelText: 'Cancelar'
+                    });
+                }
                 if (!confirmar) {
                     return;
                 }

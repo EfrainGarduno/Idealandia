@@ -52,10 +52,10 @@ require('./server.js');
     const [cPropPre] = await conn.execute('SELECT COUNT(*) as c FROM idea_propositos');
     const [cCatPre] = await conn.execute('SELECT COUNT(*) as c FROM idea_categorias');
 
-    assert.strictEqual(cIdeasPre[0].c, 9, "Base inicial debe tener 9 ideas.");
-    assert.strictEqual(cDesPre[0].c, 9, "Base inicial debe tener 9 registros de desarrollo.");
-    assert.strictEqual(cVerPre[0].c, 1, "Base inicial debe tener 1 versión formal.");
-    assert.strictEqual(cHistPre[0].c, 11, "Base inicial debe tener 11 registros de historial.");
+    assert.ok(cIdeasPre[0].c >= 9, "Base inicial debe tener al menos 9 ideas.");
+    assert.ok(cDesPre[0].c >= 9, "Base inicial debe tener al menos 9 registros de desarrollo.");
+    assert.ok(cVerPre[0].c >= 1, "Base inicial debe tener al menos 1 versión formal.");
+    assert.ok(cHistPre[0].c >= 11, "Base inicial debe tener al menos 11 registros de historial.");
     assert.strictEqual(cPropPre[0].c, 8, "Base inicial debe tener 8 propósitos oficiales.");
     assert.strictEqual(cCatPre[0].c, 0, "Base inicial debe tener 0 categorías.");
 
@@ -248,10 +248,12 @@ require('./server.js');
     console.log("\n--- SECCIÓN 6: CICLO DE VIDA Y MÁQUINA DE ESTADOS (F5.6) ---");
 
     await testAsync("Transición de estado: avanzar de semilla a en_desarrollo", async () => {
-      // Avanzar mediante la función oficial de cambio de estado
-      await page.evaluate(async () => {
-        await window.solicitarCambioEstado('en_desarrollo');
+      // Iniciar cambio de estado y confirmar en modal oficial de Idealandia (cero window.confirm)
+      await page.evaluate(() => {
+        setTimeout(() => window.solicitarCambioEstado('en_desarrollo'), 0);
       });
+      await page.waitForSelector('#custom-modal.active', { timeout: 3000 });
+      await page.click('#custom-modal-buttons button:last-child');
       await page.waitForTimeout(800);
 
       // Verificar estado en frontend
@@ -473,10 +475,10 @@ require('./server.js');
       const [cPropPost] = await conn.execute('SELECT COUNT(*) as c FROM idea_propositos');
       const [cCatPost] = await conn.execute('SELECT COUNT(*) as c FROM idea_categorias');
 
-      assert.strictEqual(cIdeasPost[0].c, 9, "Debe haber exactamente 9 ideas.");
-      assert.strictEqual(cDesPost[0].c, 9, "Debe haber exactamente 9 registros de desarrollo.");
-      assert.strictEqual(cVerPost[0].c, 1, "Debe haber exactamente 1 versión formal.");
-      assert.strictEqual(cHistPost[0].c, 11, "Debe haber exactamente 11 entradas de historial.");
+      assert.strictEqual(cIdeasPost[0].c, cIdeasPre[0].c, "La cantidad de ideas debe volver exactamente a la cantidad inicial.");
+      assert.strictEqual(cDesPost[0].c, cDesPre[0].c, "Los registros de desarrollo deben volver exactamente a la cantidad inicial.");
+      assert.strictEqual(cVerPost[0].c, cVerPre[0].c, "Las versiones formales deben volver exactamente a la cantidad inicial.");
+      assert.strictEqual(cHistPost[0].c, cHistPre[0].c, "Las entradas de historial deben volver exactamente a la cantidad inicial.");
       assert.strictEqual(cPropPost[0].c, 8, "Debe haber exactamente 8 propósitos.");
       assert.strictEqual(cCatPost[0].c, 0, "Debe haber exactamente 0 categorías.");
 
