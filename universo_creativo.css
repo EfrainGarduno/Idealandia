@@ -1,0 +1,1057 @@
+/* =============================================================================
+   UNIVERSO VIVO DE IDEAS (V3: EXPLOSIÓN CREATIVA TOTAL)
+   =============================================================================
+   Concepto: "Aquí las ideas están explotando, conectándose, evolucionando y
+              convirtiéndose en posibilidades."
+   Identidad: Futurista + Creativo + Elegante + Tecnológico + Artístico
+   Arquitectura: 
+   - Capa 0: Fondo artístico de Idealandia
+   - Capa 1: Canvas Fondo (Universo Cósmico, conexiones, palabras flotantes)
+   - Capa 2: Núcleo Central ✦ IDEA ✦
+   - Capa 3: Tarjetas de Motores (Glassmorphism + Borde Energético Animado)
+   - Capa 4: Canvas Frontal (Ondas de Choque, Ráfagas y Flash de Eureka)
+   ============================================================================= */
+
+/* Propiedad CSS moderna para rotación continua del borde energético */
+@property --border-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+}
+
+@keyframes rotateBorderCurrent {
+    0% { --border-angle: 0deg; }
+    100% { --border-angle: 360deg; }
+}
+
+/* 1. Contenedor del Universo Creativo */
+.universo-creativo-wrapper {
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 18%, rgba(108, 64, 247, 0.12) 0%, rgba(243, 244, 246, 0.88) 65%, rgba(255, 255, 255, 0.95) 100%);
+    box-shadow: 0 10px 40px rgba(108, 64, 247, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    transition: all 0.4s ease;
+}
+
+/* Canvas de Fondo (Detrás del Glassmorphism) */
+#universo-vivo-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 20px;
+}
+
+/* Canvas Frontal (Delante de las tarjetas para explosiones y shockwaves sin bloquear clics) */
+#universo-front-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 6;
+    border-radius: 20px;
+}
+
+.universo-creativo-content {
+    position: relative;
+    z-index: 3;
+}
+
+/* 2. Banner Creativo */
+.universo-banner-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(245, 243, 255, 0.82) 50%, rgba(255, 255, 255, 0.82) 100%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(196, 181, 253, 0.6);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(108, 64, 247, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+.universo-banner-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #6c40f7, #059669, #d97706, #0284c7, #e11d48, transparent);
+    animation: bannerLightBeam 5s linear infinite;
+}
+
+@keyframes bannerLightBeam {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(50%); }
+}
+
+.universo-badge-creativo {
+    font-size: 0.82em;
+    background: linear-gradient(135deg, #6c40f7 0%, #8b5cf6 100%);
+    color: #ffffff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 10px rgba(108, 64, 247, 0.35);
+    animation: badgePulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes badgePulse {
+    0% { transform: scale(1); box-shadow: 0 2px 10px rgba(108, 64, 247, 0.3); }
+    100% { transform: scale(1.05); box-shadow: 0 4px 18px rgba(108, 64, 247, 0.55); }
+}
+
+/* 3. NÚCLEO CENTRAL: ✦ IDEA ✦ */
+.universo-nucleo-idea {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 22px;
+    position: relative;
+    padding: 8px 0;
+}
+
+.nucleo-aura-pulse {
+    position: absolute;
+    width: 140px;
+    height: 44px;
+    border-radius: 30px;
+    background: radial-gradient(ellipse at center, rgba(108, 64, 247, 0.35) 0%, rgba(139, 92, 246, 0.15) 50%, transparent 80%);
+    filter: blur(8px);
+    animation: nucleoCosmicPulse 3s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes nucleoCosmicPulse {
+    0% { transform: scale(0.95); opacity: 0.6; }
+    100% { transform: scale(1.2); opacity: 1; }
+}
+
+.nucleo-core-badge {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 243, 255, 0.95) 100%);
+    backdrop-filter: blur(12px);
+    border: 2px solid #8b5cf6;
+    padding: 6px 20px;
+    border-radius: 30px;
+    box-shadow: 0 4px 16px rgba(108, 64, 247, 0.22), 0 0 12px rgba(139, 92, 246, 0.3);
+}
+
+.nucleo-star {
+    color: #f59e0b;
+    font-size: 1.1em;
+    animation: starTwinkle 2s ease-in-out infinite alternate;
+}
+
+@keyframes starTwinkle {
+    0% { transform: scale(0.85); filter: drop-shadow(0 0 2px #f59e0b); }
+    100% { transform: scale(1.25); filter: drop-shadow(0 0 8px #f59e0b); }
+}
+
+.nucleo-label {
+    font-size: 0.92em;
+    font-weight: 800;
+    letter-spacing: 2.5px;
+    color: #1e1b4b;
+    text-transform: uppercase;
+}
+
+.nucleo-subtext {
+    font-size: 0.78em;
+    color: #64748b;
+    margin-top: 5px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    position: relative;
+    z-index: 1;
+}
+
+/* 4. TARJETAS DE LOS 8 MOTORES (GLASSMORPHISM + BORDE ENERGÉTICO ANIMADO) */
+.motor-living-card {
+    position: relative;
+    border-radius: 16px;
+    padding: 3px; /* Espacio claramente visible para el circuito perimetral de luz */
+    cursor: pointer;
+    background: conic-gradient(from var(--border-angle), transparent 0%, transparent 68%, var(--motor-color) 85%, #ffffff 95%, var(--motor-color) 100%);
+    animation: rotateBorderCurrent 5.2s linear infinite, motorBreathingV3 6s ease-in-out infinite;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 0 14px var(--motor-glow, rgba(108, 64, 247, 0.18));
+    will-change: transform, box-shadow;
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 4;
+}
+
+/* Interior de la Tarjeta: Glassmorphism Puro */
+.motor-card-inner {
+    border-radius: 14px;
+    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.74); /* Auténtico Glassmorphism */
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    height: 100%;
+    box-sizing: border-box;
+    transition: background-color 0.3s ease, backdrop-filter 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Respiración orgánica suave en reposo */
+@keyframes motorBreathingV3 {
+    0%, 100% {
+        transform: translateY(0px) scale(1);
+    }
+    50% {
+        transform: translateY(-3.5px) scale(1.012);
+    }
+}
+@keyframes motorBreathingV2 {
+    0%, 100% {
+        transform: translateY(0px) scale(1);
+    }
+    50% {
+        transform: translateY(-3.5px) scale(1.012);
+    }
+}
+
+/* Retardos desfasados entre los 8 motores (0.0s a 4.9s) */
+.motor-stagger-0 { animation-delay: 0.0s, 0.0s; }
+.motor-stagger-1 { animation-delay: 0.0s, 0.7s; }
+.motor-stagger-2 { animation-delay: 0.0s, 1.4s; }
+.motor-stagger-3 { animation-delay: 0.0s, 2.1s; }
+.motor-stagger-4 { animation-delay: 0.0s, 2.8s; }
+.motor-stagger-5 { animation-delay: 0.0s, 3.5s; }
+.motor-stagger-6 { animation-delay: 0.0s, 4.2s; }
+.motor-stagger-7 { animation-delay: 0.0s, 4.9s; }
+
+/* Estado Activo / Seleccionado */
+.motor-living-card.motor-card-active {
+    background: conic-gradient(from var(--border-angle), var(--motor-color) 0%, transparent 45%, var(--motor-color) 80%, #ffffff 93%, var(--motor-color) 100%) !important;
+    animation: rotateBorderCurrent 3.2s linear infinite, motorBreathingV3 6s ease-in-out infinite !important;
+    box-shadow: 0 10px 30px var(--motor-glow, rgba(108, 64, 247, 0.35)), 0 0 18px var(--motor-color) !important;
+    transform: translateY(-3px);
+}
+
+.motor-living-card.motor-card-active .motor-card-inner {
+    background: rgba(255, 255, 255, 0.86) !important;
+}
+
+/* 5. HOVER CONTUNDENTE (Aceleración de Borde + Elevación + Halo) */
+.motor-living-card:hover {
+    transform: translateY(-8px) scale(1.035) !important;
+    animation: rotateBorderCurrent 1.3s linear infinite !important; /* Corriente acelerada perimetral */
+    background: conic-gradient(from var(--border-angle), transparent 0%, transparent 58%, var(--motor-color) 78%, #ffffff 94%, var(--motor-color) 100%) !important;
+    box-shadow: 0 18px 40px var(--motor-glow, rgba(108, 64, 247, 0.38)), 0 0 25px var(--motor-color) !important;
+    z-index: 5;
+}
+
+.motor-living-card:hover .motor-card-inner {
+    background: rgba(255, 255, 255, 0.88) !important;
+}
+
+/* Iconos de los motores */
+.motor-living-card .motor-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--motor-bg, rgba(108, 64, 247, 0.14));
+    color: var(--motor-color, #6c40f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.28s ease,
+                color 0.28s ease,
+                box-shadow 0.32s ease;
+}
+
+.motor-living-card:hover .motor-icon-box {
+    transform: scale(1.24) rotate(6deg);
+    background-color: var(--motor-color) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 18px var(--motor-glow, rgba(108, 64, 247, 0.5));
+}
+
+/* 6. PERSONALIDADES ESPECÍFICAS DE LOS 8 MOTORES */
+
+/* 1. Explorador: Destellos en rotación 360° */
+.motor-card-explorador .motor-card-inner::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(108, 64, 247, 0.25) 10%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+}
+.motor-card-explorador:hover .motor-card-inner::after {
+    opacity: 1;
+    animation: exploradorOrbit 3s linear infinite;
+}
+@keyframes exploradorOrbit {
+    0% { transform: rotate(0deg) scale(0.9); }
+    50% { transform: rotate(180deg) scale(1.15); }
+    100% { transform: rotate(360deg) scale(0.9); }
+}
+
+/* 2. Madurador: Cristalización y florecimiento orgánico */
+@keyframes maduradorBloom {
+    0% { transform: scale(1.18) translateY(0); filter: drop-shadow(0 0 2px #059669); }
+    100% { transform: scale(1.32) translateY(-3px); filter: drop-shadow(0 0 10px #059669); }
+}
+.motor-card-madurador:hover .motor-icon-box {
+    animation: maduradorBloom 1.2s ease-in-out infinite alternate !important;
+}
+
+/* 3. Validador: Onda concéntrica de verificación */
+@keyframes validadorShockwave {
+    0% { transform: scale(0.94); opacity: 0.9; border-width: 3px; }
+    100% { transform: scale(1.06); opacity: 0; border-width: 1px; }
+}
+.motor-card-validador::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    border: 2px solid #d97706;
+    opacity: 0;
+    pointer-events: none;
+}
+.motor-card-validador:hover::before {
+    animation: validadorShockwave 1.3s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+/* 4. Negocio: Impulso ascendente con estela */
+@keyframes negocioAscentV3 {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-5px); }
+}
+.motor-card-negocio:hover {
+    transform: translateY(-10px) scale(1.04) !important;
+}
+.motor-card-negocio:hover .motor-icon-box {
+    animation: negocioAscentV3 0.85s ease-in-out infinite alternate !important;
+}
+
+/* 5. Impacto: Onda expansiva radial */
+@keyframes impactoTsunami {
+    0% { width: 0; height: 0; opacity: 0.85; }
+    100% { width: 340px; height: 340px; opacity: 0; }
+}
+.motor-card-impacto .motor-card-inner::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(22, 163, 74, 0.35) 0%, transparent 70%);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+.motor-card-impacto:hover .motor-card-inner::before {
+    animation: impactoTsunami 1.3s cubic-bezier(0, 0.4, 0.6, 1) infinite;
+}
+
+/* 6. Propósito: Latido cardíaco vivo */
+@keyframes propositoHeartbeatV3 {
+    0% { transform: scale(1.18); filter: drop-shadow(0 0 2px #e11d48); }
+    14% { transform: scale(1.38); filter: drop-shadow(0 0 12px #e11d48); }
+    28% { transform: scale(1.18); filter: drop-shadow(0 0 3px #e11d48); }
+    42% { transform: scale(1.32); filter: drop-shadow(0 0 8px #e11d48); }
+    70% { transform: scale(1.18); filter: drop-shadow(0 0 2px #e11d48); }
+    100% { transform: scale(1.18); filter: drop-shadow(0 0 2px #e11d48); }
+}
+.motor-card-proposito:hover .motor-icon-box {
+    animation: propositoHeartbeatV3 1.1s ease-in-out infinite !important;
+}
+
+/* 7. Conector: Nodos luminosos pulsantes */
+.motor-card-conector::after {
+    content: '';
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #8b5cf6;
+    top: 8px;
+    right: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+.motor-card-conector:hover::after {
+    opacity: 1;
+    box-shadow: 0 0 12px #8b5cf6, 0 0 22px #8b5cf6;
+    animation: conectorPulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes conectorPulse {
+    0% { transform: scale(0.8); opacity: 0.6; }
+    100% { transform: scale(1.6); opacity: 1; }
+}
+
+/* 8. Ejecutor: Impulso direccional hipersónico */
+@keyframes ejecutorThrustV3 {
+    0% { transform: translate(0, 0) scale(1.22) rotate(0deg); }
+    100% { transform: translate(4px, -4px) scale(1.32) rotate(8deg); }
+}
+.motor-card-ejecutor:hover {
+    transform: translate(3px, -9px) scale(1.04) !important;
+}
+.motor-card-ejecutor:hover .motor-icon-box {
+    animation: ejecutorThrustV3 0.7s ease-in-out infinite alternate !important;
+}
+
+/* 7. SECUENCIA DE ACTIVACIÓN (BORDE → CARGA → RECORRIDO → EXPLOSIÓN) */
+.motor-card-charging {
+    padding: 3.5px !important;
+    background: conic-gradient(from var(--border-angle), transparent 0%, transparent 35%, var(--motor-color) 65%, #ffffff 92%, var(--motor-color) 100%) !important;
+    animation: rotateBorderCurrent 0.35s linear infinite !important; /* Corriente a máxima velocidad (1 vuelta en 350ms) */
+    box-shadow: 0 0 35px var(--motor-color), 0 0 65px var(--motor-glow) !important;
+    transform: scale(1.04) !important;
+}
+
+@keyframes motorActivationBlast {
+    0% {
+        transform: scale(0.94);
+        box-shadow: 0 0 0 0 var(--motor-glow, rgba(108, 64, 247, 0.7));
+    }
+    40% {
+        transform: scale(1.06);
+        box-shadow: 0 0 0 28px rgba(108, 64, 247, 0), 0 0 45px var(--motor-color);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 8px 26px var(--motor-glow, rgba(108, 64, 247, 0.25));
+    }
+}
+.motor-card-just-selected {
+    animation: motorActivationBlast 0.65s cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+}
+
+/* Pulso de absorción cósmica del Núcleo IDEA */
+.nucleo-pulse-active {
+    animation: nucleoAbsorbPulse 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+}
+@keyframes nucleoAbsorbPulse {
+    0% { transform: scale(1); filter: brightness(1); }
+    40% { transform: scale(1.08); filter: brightness(1.4) drop-shadow(0 0 16px #f59e0b); }
+    100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* 8. ÁREA DE CONFIGURACIÓN Y EJECUCIÓN */
+#motor-execution-card {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 22px 24px;
+    margin-bottom: 26px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    transition: all 0.4s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* MODO PENSANDO / NÚCLEO ACTIVO (PROCESAMIENTO IA) */
+.motor-execution-processing {
+    border-color: var(--motor-color, #6c40f7) !important;
+    box-shadow: 0 0 40px var(--motor-glow, rgba(108, 64, 247, 0.4)), 0 0 80px rgba(108, 64, 247, 0.15) !important;
+    animation: executionCoreGlow 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes executionCoreGlow {
+    0% { box-shadow: 0 0 15px var(--motor-glow, rgba(108, 64, 247, 0.25)); }
+    100% { box-shadow: 0 0 50px var(--motor-glow, rgba(108, 64, 247, 0.55)), 0 0 80px var(--motor-glow, rgba(108, 64, 247, 0.25)); }
+}
+
+.motor-execution-processing::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 18px;
+    background: conic-gradient(from var(--border-angle), var(--motor-color, #6c40f7), #8b5cf6, #38bdf8, var(--motor-color, #6c40f7));
+    animation: rotateBorderCurrent 1.5s linear infinite;
+    z-index: -1;
+}
+
+/* Botón de Ejecución */
+#btn-ejecutar-motor {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, #6c40f7 0%, #8b5cf6 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 48px;
+    font-family: 'Poppins', sans-serif;
+    letter-spacing: 0.3px;
+    box-shadow: 0 4px 18px rgba(108, 64, 247, 0.35);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.3s ease;
+}
+
+#btn-ejecutar-motor:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 24px rgba(108, 64, 247, 0.5);
+}
+
+#btn-ejecutar-motor:disabled {
+    opacity: 0.88;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 9. DESTELLO DE REVELACIÓN (FLASH DE EUREKA) */
+@keyframes resultRevealFlash {
+    0% {
+        opacity: 0;
+        transform: translateY(24px) scale(0.97);
+        filter: brightness(1.7);
+    }
+    40% {
+        filter: brightness(1.25);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: brightness(1);
+    }
+}
+
+.motor-result-animated {
+    animation: resultRevealFlash 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* =============================================================================
+   11. EL NACIMIENTO DE UNA IDEA — EL FOCO / MOMENTO EUREKA (PRIORIDAD 1)
+   ============================================================================= */
+
+.nacimiento-idea-hero {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 246, 255, 0.95) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.22);
+    border-radius: 16px;
+    padding: 24px 20px;
+    margin-bottom: 22px;
+    box-shadow: 0 4px 20px rgba(108, 64, 247, 0.08);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+}
+
+.foco-particles-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.foco-interactive-stage {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    z-index: 2;
+}
+
+/* Halos concéntricos de expectación y respiración */
+.foco-halo-outer {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, transparent 70%);
+    opacity: 0.35;
+    transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: none;
+}
+
+.foco-halo-inner {
+    position: absolute;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.35) 0%, transparent 75%);
+    opacity: 0.45;
+    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: none;
+}
+
+/* Núcleo del foco */
+.foco-bulb-core {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #94a3b8; /* Estado dormido/apagado inicial */
+    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 3;
+}
+
+.foco-svg {
+    width: 44px;
+    height: 44px;
+    overflow: visible;
+    transition: all 0.4s ease;
+}
+
+.foco-glass-path {
+    stroke: currentColor;
+    transition: stroke 0.4s ease, filter 0.4s ease;
+}
+
+.foco-filament-path {
+    stroke: currentColor;
+    transition: stroke 0.4s ease, filter 0.4s ease;
+}
+
+.foco-center-glow {
+    fill: currentColor;
+    opacity: 0.2;
+    transition: all 0.4s ease;
+}
+
+/* ESTADOS DEL FOCO */
+
+/* 1. Foco Dormido (ambiente expectante, respiración suave) */
+.foco-bulb-core.foco-dormido {
+    color: #94a3b8;
+    animation: focoBreathingDormido 4.5s ease-in-out infinite;
+}
+@keyframes focoBreathingDormido {
+    0%, 100% {
+        transform: scale(0.96);
+        filter: drop-shadow(0 0 4px rgba(148, 163, 184, 0.2));
+    }
+    50% {
+        transform: scale(1.02);
+        filter: drop-shadow(0 0 10px rgba(148, 163, 184, 0.4));
+    }
+}
+
+/* 2. Foco Despertando (pulso acelerado y aumento de luminosidad) */
+.foco-bulb-core.foco-despertando {
+    color: #fbbf24;
+    animation: focoDespertandoPulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes focoDespertandoPulse {
+    0% {
+        transform: scale(1.0);
+        filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.4));
+    }
+    100% {
+        transform: scale(1.09);
+        filter: drop-shadow(0 0 22px rgba(245, 158, 11, 0.75));
+    }
+}
+.foco-bulb-core.foco-despertando ~ .foco-halo-outer {
+    transform: scale(1.35);
+    opacity: 0.75;
+}
+
+/* 3. Momento Eureka (Máxima luminosidad y chispa de revelación) */
+.foco-bulb-core.foco-eureka {
+    color: #ffffff !important;
+    transform: scale(1.18) !important;
+    filter: drop-shadow(0 0 24px #f59e0b) drop-shadow(0 0 40px #fbbf24) brightness(1.7) !important;
+}
+.foco-bulb-core.foco-eureka .foco-filament-path {
+    stroke: #ffffff !important;
+    filter: drop-shadow(0 0 8px #ffffff);
+}
+.foco-bulb-core.foco-eureka .foco-center-glow {
+    opacity: 1 !important;
+    fill: #ffffff !important;
+}
+.foco-bulb-core.foco-eureka ~ .foco-halo-outer {
+    transform: scale(1.75);
+    opacity: 1;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.45) 0%, rgba(251, 191, 36, 0.2) 50%, transparent 75%);
+}
+
+/* Cartel Efímero: ✦ EUREKA ✦ */
+.eureka-moment-badge {
+    position: absolute;
+    bottom: -8px;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    padding: 3px 12px;
+    border-radius: 20px;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.5), 0 0 10px #fbbf24;
+    opacity: 0;
+    transform: translateY(8px) scale(0.85);
+    pointer-events: none;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 4;
+}
+.eureka-moment-badge.badge-eureka-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    animation: eurekaBadgePulse 1.2s ease-in-out forwards;
+}
+@keyframes eurekaBadgePulse {
+    0% { transform: scale(0.8) translateY(6px); opacity: 0; }
+    20% { transform: scale(1.08) translateY(-2px); opacity: 1; }
+    70% { transform: scale(1.0) translateY(0); opacity: 1; }
+    100% { transform: scale(0.95) translateY(4px); opacity: 0; }
+}
+
+/* 4. Foco Encendido (estable, cálido, vivo) */
+.foco-bulb-core.foco-encendido {
+    color: #f59e0b;
+    filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.45));
+    animation: focoEncendidoBreathing 5s ease-in-out infinite;
+}
+@keyframes focoEncendidoBreathing {
+    0%, 100% {
+        transform: scale(1.0);
+        filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.4));
+    }
+    50% {
+        transform: scale(1.03);
+        filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.6));
+    }
+}
+.foco-bulb-core.foco-encendido ~ .foco-halo-outer {
+    transform: scale(1.15);
+    opacity: 0.5;
+}
+
+/* 5. Foco Escribiendo (reacción viva al teclear título o descripción) */
+.foco-bulb-core.foco-escribiendo {
+    color: #fbbf24 !important;
+    transform: scale(1.06) !important;
+    filter: drop-shadow(0 0 20px rgba(251, 191, 36, 0.8)) !important;
+}
+
+/* 6. Foco Nacimiento (💡 → ✦ → ✧ tras crear exitosamente la Idea) */
+.foco-bulb-core.foco-nacimiento {
+    animation: focoBirthFlash 0.85s cubic-bezier(0.2, 0.9, 0.3, 1) forwards !important;
+}
+@keyframes focoBirthFlash {
+    0% { transform: scale(1); filter: brightness(1); }
+    35% { transform: scale(1.28); filter: drop-shadow(0 0 35px #10b981) brightness(2); color: #10b981; }
+    70% { transform: scale(1.12); filter: drop-shadow(0 0 20px #f59e0b); color: #f59e0b; }
+    100% { transform: scale(1); filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.5)); color: #f59e0b; }
+}
+
+.nacimiento-text-group {
+    position: relative;
+    z-index: 2;
+}
+
+#nacimiento-hero-title {
+    margin: 0 0 4px 0;
+    font-size: 1.25em;
+    font-weight: 700;
+    color: #1e1b4b;
+    letter-spacing: -0.2px;
+}
+
+#nacimiento-hero-subtitle {
+    margin: 0 0 8px 0;
+    font-size: 0.88em;
+    color: #64748b;
+    max-width: 440px;
+    line-height: 1.45;
+}
+
+#foco-status-hint {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #8b5cf6;
+    margin: 0;
+    min-height: 18px;
+    transition: color 0.3s ease;
+}
+
+/* Formulario de Creación con Glassmorphism y Borde Dinámico */
+.idea-form.pension-form {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1.5px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.idea-form.pension-form.form-idea-focused {
+    border-color: #8b5cf6;
+    box-shadow: 0 8px 28px rgba(139, 92, 246, 0.16);
+}
+
+/* Botón Crear Idea con Borde Energético */
+#btn-agregar-idea {
+    position: relative;
+    background: linear-gradient(135deg, #6c40f7 0%, #8b5cf6 100%) !important;
+    transition: transform 0.28s ease, box-shadow 0.28s ease !important;
+    overflow: hidden;
+}
+
+#btn-agregar-idea:hover {
+    transform: translateY(-2px) scale(1.015);
+    box-shadow: 0 8px 24px rgba(108, 64, 247, 0.45);
+}
+
+#btn-agregar-idea:active {
+    transform: translateY(0) scale(0.99);
+}
+
+/* =============================================================================
+   12. LISTA DE IDEAS — TARJETAS VIVAS Y LOS 7 ESTADOS VISUALES (PRIORIDAD 2)
+   ============================================================================= */
+
+.idea-card.idea-card-viva {
+    position: relative;
+    border-radius: 14px !important;
+    background: rgba(255, 255, 255, 0.90) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1.5px solid var(--estado-border, #e2e8f0) !important;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.03), 0 0 8px var(--estado-glow, transparent) !important;
+    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 0.28s ease !important;
+    overflow: hidden;
+}
+
+.idea-card.idea-card-viva:hover {
+    transform: translateY(-4px) scale(1.008) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08), 0 0 18px var(--estado-glow, rgba(108, 64, 247, 0.2)) !important;
+    border-color: var(--estado-color, #6c40f7) !important;
+}
+
+/* PERSONALIDAD POR ESTADO DE LA IDEA */
+
+/* 1. 🌱 Semilla (Potencial naciente, respiración verde suave) */
+.idea-card-viva.idea-estado-semilla {
+    --estado-color: #10b981;
+    --estado-border: #a7f3d0;
+    --estado-glow: rgba(16, 185, 129, 0.16);
+}
+.idea-card-viva.idea-estado-semilla .idea-badge-estado {
+    animation: badgeSemillaGlow 3.5s ease-in-out infinite alternate;
+}
+@keyframes badgeSemillaGlow {
+    0% { filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.2)); }
+    100% { filter: drop-shadow(0 0 7px rgba(16, 185, 129, 0.5)); }
+}
+
+/* 2. 🔨 En Desarrollo (Estructura y construcción activa) */
+.idea-card-viva.idea-estado-en_desarrollo {
+    --estado-color: #f59e0b;
+    --estado-border: #fde68a;
+    --estado-glow: rgba(245, 158, 11, 0.18);
+}
+.idea-card-viva.idea-estado-en_desarrollo:hover i.fa-hammer {
+    animation: iconHammerWork 0.6s ease-in-out infinite alternate;
+}
+@keyframes iconHammerWork {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(-16deg); }
+}
+
+/* 3. 🔍 En Validación (Convergencia y pulsos de análisis) */
+.idea-card-viva.idea-estado-en_validacion {
+    --estado-color: #6366f1;
+    --estado-border: #c7d2fe;
+    --estado-glow: rgba(99, 102, 241, 0.20);
+}
+.idea-card-viva.idea-estado-en_validacion .idea-badge-estado {
+    animation: validationPulse 2.8s ease-in-out infinite;
+}
+@keyframes validationPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); box-shadow: 0 0 10px rgba(99, 102, 241, 0.35); }
+}
+
+/* 4. ✦ Lista (Claridad, nitidez y energía cristalina) */
+.idea-card-viva.idea-estado-lista {
+    --estado-color: #06b6d4;
+    --estado-border: #a5f3fc;
+    --estado-glow: rgba(6, 182, 212, 0.20);
+}
+
+/* 5. 🚀 En Acción (Propulsión y avance hacia adelante) */
+.idea-card-viva.idea-estado-en_accion {
+    --estado-color: #3b82f6;
+    --estado-border: #bfdbfe;
+    --estado-glow: rgba(59, 130, 246, 0.22);
+}
+.idea-card-viva.idea-estado-en_accion:hover {
+    transform: translateY(-4px) translateX(3px) scale(1.01) !important;
+}
+
+/* 6. 🌟 Realizada (Culminación, destellos dorados de logro) */
+.idea-card-viva.idea-estado-realizada {
+    --estado-color: #eab308;
+    --estado-border: #fef08a;
+    --estado-glow: rgba(234, 179, 8, 0.28);
+}
+.idea-card-viva.idea-estado-realizada .idea-badge-estado {
+    animation: starTwinkle 2.2s ease-in-out infinite alternate;
+}
+
+/* 7. 📦 Archivada (Calma, sobriedad) */
+.idea-card-viva.idea-estado-archivada {
+    --estado-color: #94a3b8;
+    --estado-border: #e2e8f0;
+    --estado-glow: transparent;
+    opacity: 0.82;
+}
+
+/* Animación de Nacimiento de una Idea (Destello en la tarjeta recién nacida) */
+.idea-card-just-born {
+    animation: ideaCardBirthPulse 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+@keyframes ideaCardBirthPulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8);
+        border-color: #10b981;
+    }
+    40% {
+        transform: scale(1.025);
+        box-shadow: 0 0 0 16px rgba(16, 185, 129, 0), 0 0 25px rgba(16, 185, 129, 0.4);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* =============================================================================
+   13. WORKSPACE Y DESARROLLO DE LA IDEA (PRIORIDAD 3)
+   ============================================================================= */
+
+.desarrollo-evolucion-flash {
+    animation: desarrolloFlashPulse 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes desarrolloFlashPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(108, 64, 247, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 28px rgba(108, 64, 247, 0.3), 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+    100% {
+        box-shadow: none;
+    }
+}
+
+/* =============================================================================
+   14. IDEALITA CONTEXTUAL (PRIORIDAD 4)
+   ============================================================================= */
+
+/* Vórtice de Pensamiento de Idealita */
+.idealita-thinking-vortex {
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 0 24px rgba(139, 92, 246, 0.35) !important;
+    animation: idealitaVortexGlow 1.8s ease-in-out infinite alternate !important;
+}
+@keyframes idealitaVortexGlow {
+    0% { box-shadow: 0 0 12px rgba(139, 92, 246, 0.2); }
+    100% { box-shadow: 0 0 28px rgba(139, 92, 246, 0.45); }
+}
+
+/* Revelación suave y luminosa de mensaje */
+.idealita-message-reveal {
+    animation: messageRevealFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes messageRevealFade {
+    0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+        filter: brightness(1.25);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: brightness(1);
+    }
+}
+
+/* =============================================================================
+   15. ACCESIBILIDAD ACTUALIZADA (PREFERS-REDUCED-MOTION)
+   ============================================================================= */
+@media (prefers-reduced-motion: reduce) {
+    .motor-living-card,
+    .motor-living-card *,
+    .motor-living-card.motor-card-active,
+    .motor-card-just-selected,
+    .motor-card-charging,
+    .motor-execution-processing,
+    .universo-banner-card::before,
+    .universo-badge-creativo,
+    .nucleo-aura-pulse,
+    .nucleo-star,
+    .motor-result-animated,
+    #universo-vivo-canvas,
+    #universo-front-canvas,
+    .foco-bulb-core,
+    .foco-halo-outer,
+    .foco-halo-inner,
+    .eureka-moment-badge,
+    .idea-card-viva,
+    .idea-badge-estado,
+    .idea-card-just-born,
+    .desarrollo-evolucion-flash,
+    .idealita-thinking-vortex,
+    .idealita-message-reveal {
+        animation: none !important;
+        animation-name: none !important;
+        transition: none !important;
+    }
+    .motor-living-card:hover,
+    .idea-card-viva:hover,
+    #btn-agregar-idea:hover {
+        transform: none !important;
+    }
+}

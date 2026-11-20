@@ -4,3 +4,4 @@ visitas.json
 *.tmp*
 test/fixtures/
 *.pdf
+evidencias_v*/
