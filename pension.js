@@ -564,6 +564,159 @@ function validateAndCalculatePensionPeriods(aiData) {
     return calculateAverageSalaryLast250Weeks(periodos);
 }
 
+/**
+ * Calcula la proyección actuarial de pensión Ley 73 con ventana deslizante de 250 semanas (1,750 días)
+ */
+function calculatePensionProjection(params) {
+    const {
+        semanasActuales,
+        salarioPromedioActual,
+        salarioMinimoActual = SALARIO_MINIMO_GENERAL_VIGENTE,
+        salarioMinimoProyectado = SALARIO_MINIMO_GENERAL_VIGENTE,
+        salarioDiarioProyectado,
+        fechaDesde,
+        fechaHasta,
+        edadRetiroActual = 60,
+        edadRetiroProyectada = null,
+        tieneEsposa = false,
+        numeroHijos = 0,
+        tienePadresDependientes = false,
+        estaEnSoledad = false,
+        tieneIncapacidad = false
+    } = params || {};
+
+    // 1. Validaciones
+    const semAct = parseInt(semanasActuales, 10);
+    if (isNaN(semAct) || semAct < 0) {
+        return { success: false, error: 'INVALID_WEEKS', message: 'Las semanas cotizadas actuales deben ser un número mayor o igual a cero.' };
+    }
+
+    const salAct = parseFloat(salarioPromedioActual);
+    if (isNaN(salAct) || salAct <= 0) {
+        return { success: false, error: 'INVALID_CURRENT_SALARY', message: 'El salario promedio actual debe ser mayor a cero.' };
+    }
+
+    const salMinAct = parseFloat(salarioMinimoActual) || SALARIO_MINIMO_GENERAL_VIGENTE;
+    const salMinProj = parseFloat(salarioMinimoProyectado) || salMinAct;
+    if (isNaN(salMinProj) || salMinProj <= 0) {
+        return { success: false, error: 'INVALID_MIN_SALARY', message: 'El salario mínimo estimado debe ser un número mayor a cero.' };
+    }
+
+    const salProj = parseFloat(salarioDiarioProyectado);
+    if (isNaN(salProj) || salProj <= 0) {
+        return { success: false, error: 'INVALID_PROJECTED_SALARY', message: 'El salario de cotización proyectado debe ser un número mayor a cero.' };
+    }
+
+    const isoDesde = parseDateToIso(fechaDesde);
+    const isoHasta = parseDateToIso(fechaHasta);
+    if (!isoDesde || !isoHasta) {
+        return { success: false, error: 'INVALID_DATES', message: 'Por favor ingresa fechas válidas para el periodo de cotización (Desde y Hasta).' };
+    }
+
+    if (isoHasta < isoDesde) {
+        return { success: false, error: 'INVALID_DATE_RANGE', message: 'La fecha "Desde" no puede ser posterior a la fecha "Hasta".' };
+    }
+
+    // 2. Días y semanas del periodo proyectado
+    const diasArray = iterateDays(isoDesde, isoHasta);
+    const diasProyectados = diasArray.length;
+    if (diasProyectados <= 0) {
+        return { success: false, error: 'ZERO_DAYS', message: 'El periodo de cotización proyectado debe contener al menos 1 día.' };
+    }
+
+    const semanasProyectadas = Math.round((diasProyectados / 7) * 100) / 100;
+    const totalSemanasCotizadas = Math.round((semAct + semanasProyectadas) * 100) / 100;
+
+    // 3. Ventana Deslizante de las Últimas 250 semanas (1,750 días de cotización)
+    // No se hace un promedio simple (A + B)/2. Se computa la ventana de 1,750 días.
+    let nuevoSalarioPromedio = 0;
+    let supuestoUtilizado = '';
+
+    if (diasProyectados >= 1750) {
+        // La proyección cubre o supera las 250 semanas completas (1,750 días).
+        nuevoSalarioPromedio = salProj;
+        supuestoUtilizado = `El periodo proyectado cubre ${diasProyectados} días (más de 250 semanas), por lo que las últimas 250 semanas quedan compuestas en un 100% por el nuevo salario proyectado.`;
+    } else {
+        // Días proyectados entran por el frente desplazando a los más antiguos.
+        const diasConservados = 1750 - diasProyectados;
+        const sumaPonderada = (diasProyectados * salProj) + (diasConservados * salAct);
+        nuevoSalarioPromedio = Math.round((sumaPonderada / 1750) * 100) / 100;
+        const semanasConservadas = Math.round((diasConservados / 7) * 100) / 100;
+        supuestoUtilizado = `Se integran ${semanasProyectadas} semanas (${diasProyectados} días) al salario proyectado de $${salProj.toFixed(2)}, desplazando a los días más antiguos y conservando ${semanasConservadas} semanas (${diasConservados} días) al salario promedio actual de $${salAct.toFixed(2)} para completar exactamente 250 semanas (1,750 días).`;
+    }
+
+    // 4. Cálculo de Pensión Actual
+    const dataActual = {
+        salarioMinimo: salMinAct,
+        salarioDiarioPromedio: salAct,
+        semanasCotizadas: semAct,
+        edad: parseInt(edadRetiroActual, 10) || 60,
+        tieneEsposa,
+        numeroHijos,
+        tienePadresDependientes,
+        estaEnSoledad,
+        tieneIncapacidad
+    };
+    const pensionActual = calculateIMSSLey73Pension(dataActual);
+
+    // 5. Cálculo de Pensión Proyectada
+    const edadProy = edadRetiroProyectada !== null && !isNaN(parseInt(edadRetiroProyectada, 10))
+        ? parseInt(edadRetiroProyectada, 10)
+        : dataActual.edad;
+
+    const dataProyectada = {
+        salarioMinimo: salMinProj,
+        salarioDiarioPromedio: nuevoSalarioPromedio,
+        semanasCotizadas: Math.floor(totalSemanasCotizadas), // El IMSS computa semanas enteras para incrementos
+        edad: edadProy,
+        tieneEsposa,
+        numeroHijos,
+        tienePadresDependientes,
+        estaEnSoledad,
+        tieneIncapacidad
+    };
+    const pensionProyectada = calculateIMSSLey73Pension(dataProyectada);
+
+    // 6. Comparación y Métricas de Incremento
+    const diferenciaMensual = Math.round((pensionProyectada.pensionFinalMensual - pensionActual.pensionFinalMensual) * 100) / 100;
+    const porcentajeIncremento = pensionActual.pensionFinalMensual > 0
+        ? Math.round(((pensionProyectada.pensionFinalMensual - pensionActual.pensionFinalMensual) / pensionActual.pensionFinalMensual) * 10000) / 100
+        : 0;
+
+    return {
+        success: true,
+        periodo: {
+            fechaDesde: isoDesde,
+            fechaHasta: isoHasta,
+            diasProyectados,
+            semanasProyectadas
+        },
+        supuestoUtilizado,
+        situacionActual: {
+            semanasCotizadas: semAct,
+            salarioPromedio: salAct,
+            salarioMinimoUtilizado: salMinAct,
+            pensionMensual: pensionActual.pensionFinalMensual,
+            desglose: pensionActual
+        },
+        situacionProyectada: {
+            nuevasSemanasProyectadas: semanasProyectadas,
+            totalSemanasCotizadas: Math.floor(totalSemanasCotizadas),
+            totalSemanasDecimal: totalSemanasCotizadas,
+            nuevoSalarioPromedio,
+            salarioMinimoEstimado: salMinProj,
+            salarioDiarioProyectado: salProj,
+            pensionMensual: pensionProyectada.pensionFinalMensual,
+            desglose: pensionProyectada
+        },
+        comparativa: {
+            diferenciaMensual,
+            porcentajeIncremento,
+            esMejora: diferenciaMensual > 0
+        }
+    };
+}
+
 if (typeof window !== 'undefined') {
     window.SALARIO_MINIMO_GENERAL_VIGENTE = SALARIO_MINIMO_GENERAL_VIGENTE;
     window.SALARIOS_MINIMOS_GENERALES = SALARIOS_MINIMOS_GENERALES;
@@ -571,6 +724,7 @@ if (typeof window !== 'undefined') {
     window.calculateAverageSalaryLast250Weeks = calculateAverageSalaryLast250Weeks;
     window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
     window.validateAndCalculatePensionPeriods = validateAndCalculatePensionPeriods;
+    window.calculatePensionProjection = calculatePensionProjection;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -581,6 +735,7 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateAverageSalaryLast250Weeks,
         extractPeriodsFromIMSSDocumentText,
         validateAndCalculatePensionPeriods,
+        calculatePensionProjection,
         TABLA_GRUPOS_SALARIALES,
         TABLA_EDAD,
         FACTOR_ADICIONAL

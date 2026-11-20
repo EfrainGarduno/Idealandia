@@ -12,7 +12,15 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
 const zlib = require('zlib');
-const { calculateAverageSalaryLast250Weeks, extractPeriodsFromIMSSDocumentText, validateAndCalculatePensionPeriods } = require('./pension');
+const { 
+    calculateAverageSalaryLast250Weeks, 
+    extractPeriodsFromIMSSDocumentText, 
+    validateAndCalculatePensionPeriods,
+    calculatePensionProjection,
+    calculateIMSSLey73Pension,
+    SALARIO_MINIMO_GENERAL_VIGENTE,
+    SALARIOS_MINIMOS_GENERALES
+} = require('./pension');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -132,7 +140,16 @@ const FUNCIONALIDAD_PERMISOS_MAPPING = {
         'ideas.develop',
         'ideas.use_ai'
     ],
-    'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
+    'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete'],
+    'asesoria_pensiones': [
+        'calculadora.basica',
+        'calculadora.intermedia',
+        'calculadora.avanzada',
+        'asesoria_pensiones.read',
+        'asesoria_pensiones.create',
+        'asesoria_pensiones.update',
+        'asesoria_pensiones.delete'
+    ]
 };
 
 // =============================================================================
@@ -457,6 +474,113 @@ async function getUserPermissions(connectionPool, userId) {
 
     return Array.from(permissions);
 }
+
+const requireFunctionality = (funcCode) => {
+    const canonicalCode = normalizeFunctionalityCode(funcCode);
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            const hasAccess = await checkUserFunctionalityAccess(pool, req.userId, canonicalCode);
+            if (!hasAccess) {
+                return res.status(403).json({
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                    code: 'RBAC_ACCESS_DENIED',
+                    funcionalidad: canonicalCode
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error(`Error in requireFunctionality (${canonicalCode}):`, error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
+        }
+    };
+};
+
+const requirePermission = (permCode) => {
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            const hasPermission = await checkUserPermission(pool, req.userId, permCode);
+            if (!hasPermission) {
+                return res.status(403).json({
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                    code: 'RBAC_PERMISSION_DENIED',
+                    permiso: permCode
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error(`Error in requirePermission (${permCode}):`, error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
+        }
+    };
+};
+
+const requireAnyPermission = (permCodes) => {
+    const codes = Array.isArray(permCodes) ? permCodes : [permCodes];
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            let hasAccess = false;
+            for (const code of codes) {
+                if (await checkUserPermission(pool, req.userId, code)) {
+                    hasAccess = true;
+                    break;
+                }
+            }
+
+            if (!hasAccess) {
+                return res.status(403).json({
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                    code: 'RBAC_PERMISSION_DENIED'
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error('Error in requireAnyPermission:', error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
+        }
+    };
+};
 
 async function assignDefaultUserRole(connOrPool, userId) {
     if (!userId) {
@@ -841,7 +965,7 @@ Responde ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
     return null;
 }
 
-app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
+app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
     try {
         const { pdfBase64, fileName } = req.body || {};
         if (!pdfBase64 || typeof pdfBase64 !== 'string') {
@@ -949,6 +1073,86 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             error: 'SERVER_ERROR',
             message: 'Ocurrió un error al procesar el documento. Por favor intenta de nuevo o ingresa el salario manualmente.'
         });
+    }
+});
+
+app.get('/api/pension/salario-minimo-vigente', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.status(200).json({
+            success: true,
+            salarioMinimo: SALARIO_MINIMO_GENERAL_VIGENTE,
+            anio: 2026,
+            historico: SALARIOS_MINIMOS_GENERALES
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/salario-minimo-vigente:', err);
+        res.status(500).json({ error: 'Error al consultar el salario mínimo vigente.' });
+    }
+});
+
+app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        const {
+            salarioMinimo,
+            salarioDiarioPromedio,
+            semanasCotizadas,
+            edad,
+            tieneEsposa,
+            numeroHijos,
+            tienePadresDependientes,
+            estaEnSoledad,
+            tieneIncapacidad
+        } = req.body || {};
+
+        const salMin = parseFloat(salarioMinimo);
+        const salProm = parseFloat(salarioDiarioPromedio);
+        const sem = parseInt(semanasCotizadas, 10);
+        const ed = parseInt(edad, 10);
+
+        if (isNaN(salMin) || isNaN(salProm) || isNaN(sem) || isNaN(ed)) {
+            return res.status(400).json({
+                error: 'INVALID_DATA',
+                message: 'Por favor ingresa todos los campos numéricos de datos generales correctamente.'
+            });
+        }
+
+        const data = {
+            salarioMinimo: salMin,
+            salarioDiarioPromedio: salProm,
+            semanasCotizadas: sem,
+            edad: ed,
+            tieneEsposa: Boolean(tieneEsposa),
+            numeroHijos: parseInt(numeroHijos, 10) || 0,
+            tienePadresDependientes: Boolean(tienePadresDependientes),
+            estaEnSoledad: Boolean(estaEnSoledad),
+            tieneIncapacidad: Boolean(tieneIncapacidad)
+        };
+
+        const result = calculateIMSSLey73Pension(data);
+        res.status(200).json({
+            success: true,
+            resultado: result
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/calcular:', err);
+        res.status(500).json({ error: 'Error al calcular la pensión.' });
+    }
+});
+
+app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']), async (req, res) => {
+    try {
+        const projectionResult = calculatePensionProjection(req.body);
+        if (!projectionResult.success) {
+            return res.status(400).json({
+                error: projectionResult.error,
+                message: projectionResult.message
+            });
+        }
+        res.status(200).json(projectionResult);
+    } catch (err) {
+        console.error('Error in /api/pension/proyectar:', err);
+        res.status(500).json({ error: 'Error al procesar la proyección de pensión.' });
     }
 });
 
@@ -2275,73 +2479,6 @@ app.post('/api/logout', (req, res) => {
     });
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
-
-const requireFunctionality = (funcCode) => {
-    const canonicalCode = normalizeFunctionalityCode(funcCode);
-    return async (req, res, next) => {
-        try {
-            if (!req.userId) {
-                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
-                if (!token) {
-                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
-                }
-                const decoded = await verifyToken(token, pool);
-                req.userId = decoded.id;
-                req.user = decoded;
-            }
-
-            const hasAccess = await checkUserFunctionalityAccess(pool, req.userId, canonicalCode);
-            if (!hasAccess) {
-                return res.status(403).json({
-                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
-                    code: 'RBAC_ACCESS_DENIED',
-                    funcionalidad: canonicalCode
-                });
-            }
-
-            next();
-        } catch (error) {
-            console.error(`Error in requireFunctionality (${canonicalCode}):`, error);
-            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
-                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
-            }
-            return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
-        }
-    };
-};
-
-const requirePermission = (permCode) => {
-    return async (req, res, next) => {
-        try {
-            if (!req.userId) {
-                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
-                if (!token) {
-                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
-                }
-                const decoded = await verifyToken(token, pool);
-                req.userId = decoded.id;
-                req.user = decoded;
-            }
-
-            const hasPermission = await checkUserPermission(pool, req.userId, permCode);
-            if (!hasPermission) {
-                return res.status(403).json({
-                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
-                    code: 'RBAC_PERMISSION_DENIED',
-                    permiso: permCode
-                });
-            }
-
-            next();
-        } catch (error) {
-            console.error(`Error in requirePermission (${permCode}):`, error);
-            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
-                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
-            }
-            return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
-        }
-    };
-};
 
 // requireAdmin: validates entry to the 'admin' functionality (Level 2)
 const requireAdmin = requireFunctionality('administracion');
