@@ -584,7 +584,52 @@
                     </button>
                 </div>
                 <h2>Asesoría en Pensiones</h2>
-                <p>Conoce nuestros servicios.</p>
+                <p>Herramientas especializadas para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.</p>
+
+                <!-- Panel Informativo: Las 3 Modalidades y lo que incluye cada una -->
+                <div class="pension-modalidades-info-banner" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin-bottom: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <div style="font-weight: 700; color: #1e293b; font-size: 1.05em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-layer-group" style="color: #2563eb;"></i> Modalidades de la Calculadora de Pensiones
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                        <!-- Básica -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #64748b; border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <strong style="color: #0f172a; font-size: 0.98em;">1. Calculadora Básica</strong>
+                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; color: #475569; font-weight: 600;">Básica</span>
+                            </div>
+                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Realiza los cálculos básicos para estimar tu pensión.</p>
+                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
+                                <strong style="color: #1e293b;">Incluye:</strong> Captura manual de semanas cotizadas, salario promedio diario y edad de retiro para estimar la pensión bajo el Régimen Ley 73 con asignaciones familiares y ayuda asistencial.
+                            </div>
+                        </div>
+
+                        <!-- Intermedia -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #2563eb; border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <strong style="color: #0f172a; font-size: 0.98em;">2. Calculadora Intermedia</strong>
+                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1d4ed8; font-weight: 600;">Intermedia</span>
+                            </div>
+                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Incluye los cálculos básicos y herramientas adicionales para una estimación más precisa.</p>
+                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
+                                <strong style="color: #1e293b;">Incluye:</strong> Todo lo de Básica + Obtención automática del salario mínimo general vigente, carga inteligente y procesamiento de tu reporte PDF del IMSS (semanas y salario promedio últimas 250 semanas) y tabla de verificación de periodos reconocidos.
+                            </div>
+                        </div>
+
+                        <!-- Avanzada -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #d97706; border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <strong style="color: #0f172a; font-size: 0.98em;">3. Calculadora Avanzada</strong>
+                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #fef3c7; color: #b45309; font-weight: 600;">Avanzada</span>
+                            </div>
+                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Incluye todas las herramientas y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.</p>
+                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
+                                <strong style="color: #1e293b;">Incluye:</strong> Todo lo de Básica e Intermedia + Simulador de Proyecciones Actuariales con ventana deslizante de 1,750 días (250 semanas), modelado de escenarios a futuro con nuevo salario de cotización (Modalidad 40), cálculo dinámico de semanas y comparativa lado a lado Situación Actual vs Situación Proyectada con transferencia directa de valores.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="servicio-item" id="btn-estimacion">
                     <h3>Estimación de Cálculo de Pensión Régimen ley 73</h3>
                 </div>
@@ -594,35 +639,8 @@
                     <div style="margin-bottom: 12px;">
                         <span style="font-size: 0.95em; color: #495057; font-weight: 600;">Selecciona la modalidad de tu calculadora:</span>
                     </div>
-                    <div class="pension-modalidades-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
-                        
-                        <!-- Tarjeta Básica -->
-                        <div id="card-modalidad-basica" class="modalidad-card" data-modalidad="basica" style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; cursor: pointer; transition: all 0.2s ease; background: #fff;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                <h4 style="margin: 0; color: #1e293b; font-size: 1.05em; font-weight: 700;">Calculadora Básica</h4>
-                                <span class="modalidad-badge" style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; color: #475569; font-weight: 600;">Básica</span>
-                            </div>
-                            <p style="margin: 0; font-size: 0.88em; color: #64748b; line-height: 1.4;">Realiza los cálculos básicos para estimar tu pensión.</p>
-                        </div>
-
-                        <!-- Tarjeta Intermedia -->
-                        <div id="card-modalidad-intermedia" class="modalidad-card" data-modalidad="intermedia" style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; cursor: pointer; transition: all 0.2s ease; background: #fff;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                <h4 style="margin: 0; color: #1e293b; font-size: 1.05em; font-weight: 700;">Calculadora Intermedia</h4>
-                                <span class="modalidad-badge" style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1d4ed8; font-weight: 600;">Intermedia</span>
-                            </div>
-                            <p style="margin: 0; font-size: 0.88em; color: #64748b; line-height: 1.4;">Incluye los cálculos básicos y herramientas adicionales para obtener una estimación más precisa de tu pensión.</p>
-                        </div>
-
-                        <!-- Tarjeta Avanzada -->
-                        <div id="card-modalidad-avanzada" class="modalidad-card" data-modalidad="avanzada" style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; cursor: pointer; transition: all 0.2s ease; background: #fff;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                                <h4 style="margin: 0; color: #1e293b; font-size: 1.05em; font-weight: 700;">Calculadora Avanzada</h4>
-                                <span class="modalidad-badge" style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #fef3c7; color: #b45309; font-weight: 600;">Avanzada</span>
-                            </div>
-                            <p style="margin: 0; font-size: 0.88em; color: #64748b; line-height: 1.4;">Incluye todas las herramientas de la Calculadora Básica e Intermedia y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.</p>
-                        </div>
-
+                    <div id="pension-modalidades-grid" class="pension-modalidades-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
+                        <!-- Las tarjetas de modalidades se renderizan estrictamente por RBAC dinámico en JavaScript -->
                     </div>
                 </div>
 
@@ -2527,6 +2545,26 @@
                     key: 'asesoria-pensiones',
                     nombre: 'Asesoría de Pensiones',
                     descripcion: 'Obtén herramientas y recursos especializados para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.',
+                    modalidadesInfo: [
+                        {
+                            nombre: 'Calculadora Básica',
+                            badge: 'Básica',
+                            desc: 'Realiza los cálculos básicos para estimar tu pensión.',
+                            incluye: 'Captura manual de semanas cotizadas, salario promedio diario y edad de retiro para estimar tu pensión bajo Ley 73 con asignaciones familiares.'
+                        },
+                        {
+                            nombre: 'Calculadora Intermedia',
+                            badge: 'Intermedia',
+                            desc: 'Incluye los cálculos básicos y herramientas adicionales para una estimación más precisa.',
+                            incluye: 'Salario mínimo general vigente automático, carga y lectura inteligente de reporte PDF del IMSS (semanas y salario promedio de las últimas 250 semanas) y tabla desglosada de periodos cotizados.'
+                        },
+                        {
+                            nombre: 'Calculadora Avanzada',
+                            badge: 'Avanzada',
+                            desc: 'Incluye todas las herramientas de la Básica e Intermedia y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.',
+                            incluye: 'Todo lo de Básica e Intermedia + Simulador de Proyecciones Actuariales con ventana deslizante de 1,750 días (250 semanas), modelado de escenarios futuros (Modalidad 40), cálculo dinámico de semanas y comparativa lado a lado Antes vs Después con transferencia de valores.'
+                        }
+                    ],
                     icon: 'fa-calculator',
                     target: 'asesoria-pensiones'
                 },
@@ -2635,6 +2673,23 @@
                         </div>
                         <div class="servicio-card-body">
                             <p class="servicio-card-desc">${escapeHTML(serv.descripcion)}</p>
+                            ${(serv.modalidadesInfo && Array.isArray(serv.modalidadesInfo)) ? `
+                                <div class="servicio-modalidades-list" style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="font-weight: 700; font-size: 0.88em; color: #1e293b; margin-bottom: 2px;">
+                                        <i class="fas fa-layer-group" style="color: #007bff;"></i> Modalidades de la Calculadora:
+                                    </div>
+                                    ${serv.modalidadesInfo.map(m => `
+                                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid ${m.badge === 'Básica' ? '#64748b' : (m.badge === 'Intermedia' ? '#2563eb' : '#d97706')}; border-radius: 6px; padding: 8px 10px; font-size: 0.82em;">
+                                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+                                                <strong style="color: #0f172a; font-size: 0.95em;">${escapeHTML(m.nombre)}</strong>
+                                                <span style="font-size: 0.75em; padding: 1px 6px; border-radius: 8px; font-weight: 600; background: ${m.badge === 'Básica' ? '#e2e8f0' : (m.badge === 'Intermedia' ? '#dbeafe' : '#fef3c7')}; color: ${m.badge === 'Básica' ? '#475569' : (m.badge === 'Intermedia' ? '#1d4ed8' : '#b45309')};">${escapeHTML(m.badge)}</span>
+                                            </div>
+                                            <div style="color: #475569; margin-bottom: 3px; font-style: italic;">${escapeHTML(m.desc)}</div>
+                                            <div style="color: #334155; line-height: 1.35;"><strong>Incluye:</strong> ${escapeHTML(m.incluye)}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="servicio-card-status ${isAuth ? 'status-disponible' : 'status-restringido'}">
                             ${isAuth 
@@ -2841,6 +2896,8 @@
                     } else {
                         window.currentUser = null;
                         window.ideasCatalogos = null;
+                        window.userPensionPermisos = null;
+                        window.pensionCapacidades = null;
                         if (typeof clearIdealitaUserContext === 'function') clearIdealitaUserContext();
                         if (typeof syncPensionModalidades === 'function') {
                             syncPensionModalidades().catch(() => {});
@@ -2889,6 +2946,8 @@
                         // Limpiar de inmediato el estado en memoria y temporizadores RBAC
                         window.currentUser = null;
                         window.userAdminPermissions = null;
+                        window.userPensionPermisos = null;
+                        window.pensionCapacidades = null;
                         ['admin-usuarios-tbody', 'admin-roles-tbody', 'admin-permisos-tbody',
                          'admin-funcionalidades-tbody', 'admin-menus-tbody', 'admin-accesos-tbody',
                          'admin-asociados-tbody'].forEach(id => {
@@ -3190,7 +3249,7 @@
             async function syncPensionModalidades(overridePerms = null) {
                 if (overridePerms) {
                     window.userPensionPermisos = new Set(overridePerms);
-                } else if (!window.userPensionPermisos) {
+                } else {
                     try {
                         const res = await fetch('/api/me/permisos', { cache: 'no-store' });
                         if (res.ok) {
@@ -3218,14 +3277,19 @@
                 const canIntermedia = hasIntermedia || hasAvanzada;
                 const canAvanzada = hasAvanzada;
 
+                window.pensionCapacidades = {
+                    basica: canBasica,
+                    intermedia: canIntermedia,
+                    avanzada: canAvanzada
+                };
+
                 const selectorContainer = document.getElementById('pension-modalidades-selector');
                 const unauthMsg = document.getElementById('pension-unauthorized-message');
                 const formEstimacionElem = document.getElementById('form-estimacion');
-                const cardBasica = document.getElementById('card-modalidad-basica');
-                const cardIntermedia = document.getElementById('card-modalidad-intermedia');
-                const cardAvanzada = document.getElementById('card-modalidad-avanzada');
+                const gridContainer = document.getElementById('pension-modalidades-grid');
 
                 if (!canBasica && !canIntermedia && !canAvanzada) {
+                    if (gridContainer) gridContainer.innerHTML = '';
                     if (selectorContainer) selectorContainer.style.display = 'none';
                     if (formEstimacionElem) formEstimacionElem.style.display = 'none';
                     if (unauthMsg) unauthMsg.style.display = 'block';
@@ -3236,9 +3300,60 @@
                 if (selectorContainer) selectorContainer.style.display = 'block';
                 if (formEstimacionElem) formEstimacionElem.style.display = 'block';
 
-                if (cardBasica) cardBasica.style.display = canBasica ? 'block' : 'none';
-                if (cardIntermedia) cardIntermedia.style.display = canIntermedia ? 'block' : 'none';
-                if (cardAvanzada) cardAvanzada.style.display = canAvanzada ? 'block' : 'none';
+                // RENDERIZADO DINÁMICO ESTRICTO POR RBAC (Cero tarjetas no autorizadas en el DOM)
+                if (gridContainer) {
+                    gridContainer.innerHTML = '';
+
+                    const configs = [
+                        {
+                            id: 'basica',
+                            autorizado: canBasica,
+                            titulo: 'Calculadora Básica',
+                            badge: 'Básica',
+                            badgeBg: '#e2e8f0',
+                            badgeColor: '#475569',
+                            desc: 'Realiza los cálculos básicos para estimar tu pensión.'
+                        },
+                        {
+                            id: 'intermedia',
+                            autorizado: canIntermedia,
+                            titulo: 'Calculadora Intermedia',
+                            badge: 'Intermedia',
+                            badgeBg: '#dbeafe',
+                            badgeColor: '#1d4ed8',
+                            desc: 'Incluye los cálculos básicos y herramientas adicionales para obtener una estimación más precisa de tu pensión.'
+                        },
+                        {
+                            id: 'avanzada',
+                            autorizado: canAvanzada,
+                            titulo: 'Calculadora Avanzada',
+                            badge: 'Avanzada',
+                            badgeBg: '#fef3c7',
+                            badgeColor: '#b45309',
+                            desc: 'Incluye todas las herramientas de la Calculadora Básica e Intermedia y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.'
+                        }
+                    ];
+
+                    configs.forEach(cfg => {
+                        if (!cfg.autorizado) return; // Si no tiene capacidad, no existe en el DOM
+                        const cardDiv = document.createElement('div');
+                        cardDiv.id = `card-modalidad-${cfg.id}`;
+                        cardDiv.className = 'modalidad-card';
+                        cardDiv.dataset.modalidad = cfg.id;
+                        cardDiv.style.cssText = 'border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; cursor: pointer; transition: all 0.2s ease; background: #fff;';
+                        cardDiv.innerHTML = `
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <h4 style="margin: 0; color: #1e293b; font-size: 1.05em; font-weight: 700;">${cfg.titulo}</h4>
+                                <span class="modalidad-badge" style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: ${cfg.badgeBg}; color: ${cfg.badgeColor}; font-weight: 600;">${cfg.badge}</span>
+                            </div>
+                            <p style="margin: 0; font-size: 0.88em; color: #64748b; line-height: 1.4;">${cfg.desc}</p>
+                        `;
+                        cardDiv.addEventListener('click', () => {
+                            activarModalidadCalculadora(cfg.id);
+                        });
+                        gridContainer.appendChild(cardDiv);
+                    });
+                }
 
                 // Determinar modalidad activa permitida
                 let targetMod = currentModalidadPension;
@@ -3260,6 +3375,31 @@
             window.syncPensionModalidades = syncPensionModalidades;
 
             function activarModalidadCalculadora(modalidad) {
+                // Validación de seguridad RBAC en tiempo de ejecución
+                const caps = window.pensionCapacidades || {
+                    basica: true,
+                    intermedia: true,
+                    avanzada: true
+                };
+
+                if (modalidad === 'avanzada' && !caps.avanzada) {
+                    console.warn('Intento no autorizado de activar Calculadora Avanzada.');
+                    modalidad = caps.intermedia ? 'intermedia' : (caps.basica ? 'basica' : null);
+                } else if (modalidad === 'intermedia' && !caps.intermedia) {
+                    console.warn('Intento no autorizado de activar Calculadora Intermedia.');
+                    modalidad = caps.basica ? 'basica' : null;
+                } else if (modalidad === 'basica' && !caps.basica) {
+                    modalidad = null;
+                }
+
+                if (!modalidad) {
+                    const formEstimacionElem = document.getElementById('form-estimacion');
+                    if (formEstimacionElem) formEstimacionElem.style.display = 'none';
+                    const unauthMsg = document.getElementById('pension-unauthorized-message');
+                    if (unauthMsg) unauthMsg.style.display = 'block';
+                    return false;
+                }
+
                 currentModalidadPension = modalidad;
                 const modalidades = ['basica', 'intermedia', 'avanzada'];
                 modalidades.forEach(m => {
@@ -3302,18 +3442,9 @@
                     if (btnProyeccionElem) btnProyeccionElem.style.display = 'inline-flex';
                     fetchSalarioMinimoVigente();
                 }
+                return true;
             }
             window.activarModalidadCalculadora = activarModalidadCalculadora;
-
-            // Escuchadores de selección de modalidad
-            ['basica', 'intermedia', 'avanzada'].forEach(m => {
-                const card = document.getElementById(`card-modalidad-${m}`);
-                if (card) {
-                    card.addEventListener('click', () => {
-                        activarModalidadCalculadora(m);
-                    });
-                }
-            });
 
             // Toggle para el detalle de periodos interpretados
             const btnTogglePeriodos = document.getElementById('btn-toggle-detalle-periodos');
@@ -4500,6 +4631,8 @@
                         }
 
                         // Switch view to home or chat, and update UI
+                        window.userPensionPermisos = null;
+                        window.pensionCapacidades = null;
                         await checkAuthStatus();
                         const inicioLink = document.querySelector('a[data-section="inicio"]');
                         if (inicioLink) inicioLink.click();
