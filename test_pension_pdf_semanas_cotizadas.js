@@ -136,14 +136,19 @@ async function runTests() {
     // PRUEBA 8: Rechazo de documentos inválidos en endpoint
     // -------------------------------------------------------------
     console.log('8. Rechazo de documentos inválidos en endpoint...');
+    const jwt = require('jsonwebtoken');
+    const authToken = jwt.sign({ id: 2, usuario: 'Efrain', jwt_version: 1 }, process.env.AUTH_SECRET, { expiresIn: '1h' });
+
     const resCorrupt = await request(app)
         .post('/api/pension/calcular-salario-pdf')
+        .set('Authorization', 'Bearer ' + authToken)
         .send({ pdfBase64: 'data:application/pdf;base64,' + Buffer.from('NO_PDF').toString('base64'), fileName: 'corrupto.pdf' });
     assert.strictEqual(resCorrupt.status, 400);
     assert.strictEqual(resCorrupt.body.error, 'INVALID_PDF');
 
     const resEmpty = await request(app)
         .post('/api/pension/calcular-salario-pdf')
+        .set('Authorization', 'Bearer ' + authToken)
         .send({});
     assert.strictEqual(resEmpty.status, 400);
     assert.strictEqual(resEmpty.body.error, 'INVALID_REQUEST');
@@ -207,6 +212,7 @@ async function runTests() {
     console.log('11. Enviando PDF A (Reporte 2026) a /api/pension/calcular-salario-pdf...');
     const resA = await request(app)
         .post('/api/pension/calcular-salario-pdf')
+        .set('Authorization', 'Bearer ' + authToken)
         .send({ pdfBase64: 'data:application/pdf;base64,' + bufA.toString('base64'), fileName: 'pdfA.pdf' });
 
     assert.strictEqual(resA.status, 200, 'PDF A debe responder 200 OK');
@@ -224,6 +230,7 @@ async function runTests() {
     console.log('12. Enviando PDF B (Reporte 2022) a /api/pension/calcular-salario-pdf...');
     const resB = await request(app)
         .post('/api/pension/calcular-salario-pdf')
+        .set('Authorization', 'Bearer ' + authToken)
         .send({ pdfBase64: 'data:application/pdf;base64,' + bufB.toString('base64'), fileName: 'pdfB.pdf' });
 
     assert.strictEqual(resB.status, 200, 'PDF B debe responder 200 OK');

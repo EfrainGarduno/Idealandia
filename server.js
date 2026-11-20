@@ -329,6 +329,34 @@ async function ensureAccesoPermisosTable(connOrPool) {
     }
 }
 
+let usuarioPeriodosImssTableReady = false;
+async function ensureUsuarioPeriodosImssTable(connOrPool) {
+    if (usuarioPeriodosImssTableReady) return;
+    const runner = connOrPool || pool;
+    try {
+        if (runner && typeof runner.query === 'function') {
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS usuario_periodos_imss (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    usuario_id BIGINT UNSIGNED NOT NULL,
+                    patron VARCHAR(255) NULL,
+                    fecha_desde DATE NOT NULL,
+                    fecha_hasta DATE NOT NULL,
+                    salario DECIMAL(12, 2) NOT NULL,
+                    dias INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_usuario_periodos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+                    INDEX idx_usuario_fechas (usuario_id, fecha_hasta DESC, fecha_desde DESC)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            `);
+            usuarioPeriodosImssTableReady = true;
+        }
+    } catch (err) {
+        console.warn('Note: usuario_periodos_imss table check/creation:', err.message);
+    }
+}
+
 pool.getConnection()
     .then(async (connection) => {
         console.log("Connected to MySQL database.");
@@ -338,6 +366,7 @@ pool.getConnection()
                 connection.query(`SET time_zone = '${safeTz}'`, () => {});
             }
             await ensureAccesoPermisosTable(connection);
+            await ensureUsuarioPeriodosImssTable(connection);
         } catch (e) {}
         connection.release();
     })
@@ -1037,6 +1066,45 @@ app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora
             });
         }
 
+        // 6. Persistencia transaccional del historial estructurado en usuario_periodos_imss
+        // Cada nueva carga del archivo reemplaza completamente el historial anterior del usuario
+        let historialGuardado = false;
+        let periodosGuardadosCount = 0;
+        if (req.userId && validation.periodos && validation.periodos.length > 0) {
+            let conn = null;
+            try {
+                conn = await pool.getConnection();
+                await conn.beginTransaction();
+                await conn.query("DELETE FROM usuario_periodos_imss WHERE usuario_id = ?", [req.userId]);
+
+                for (const p of validation.periodos) {
+                    const fDesde = p.fechaInicio || p.fecha_inicio;
+                    const fHasta = p.fechaFin || p.fecha_fin;
+                    const sal = parseFloat(p.salarioDiario || p.salario_diario || p.salario);
+                    const dias = parseInt(p.dias || p.diasUtilizados, 10) || 1;
+                    const patron = String(p.patron || p.empresa || "PATRÓN REGISTRADO").substring(0, 255);
+
+                    if (fDesde && fHasta && !isNaN(sal) && sal > 0) {
+                        await conn.query(
+                            "INSERT INTO usuario_periodos_imss (usuario_id, patron, fecha_desde, fecha_hasta, salario, dias) VALUES (?, ?, ?, ?, ?, ?)",
+                            [req.userId, patron, fDesde, fHasta, sal, dias]
+                        );
+                        periodosGuardadosCount++;
+                    }
+                }
+
+                await conn.commit();
+                historialGuardado = true;
+            } catch (dbErr) {
+                if (conn) {
+                    try { await conn.rollback(); } catch (rbErr) {}
+                }
+                console.error("Error al persistir historial IMSS del usuario:", dbErr.message);
+            } finally {
+                if (conn) conn.release();
+            }
+        }
+
         let esReporteResumen = false;
         try {
             const rawTextSample = extractedText ? extractedText.toLowerCase() : extractTextFromPdfBuffer(pdfBuffer).toLowerCase();
@@ -1063,6 +1131,8 @@ app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora
             nombreAsegurado: nombreAsegurado || null,
             periodos: validation.periodos,
             periodosUtilizados: validation.periodos,
+            historialGuardado,
+            periodosGuardados: periodosGuardadosCount,
             esReporteResumen,
             message: 'Se identificaron las últimas 250 semanas cotizadas con éxito mediante Gemini API.'
         });
@@ -1073,6 +1143,24 @@ app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora
             error: 'SERVER_ERROR',
             message: 'Ocurrió un error al procesar el documento. Por favor intenta de nuevo o ingresa el salario manualmente.'
         });
+    }
+});
+
+app.get('/api/pension/historial-imss', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            "SELECT id, patron, DATE_FORMAT(fecha_desde, '%Y-%m-%d') as fechaDesde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') as fechaHasta, salario, dias FROM usuario_periodos_imss WHERE usuario_id = ? ORDER BY fecha_hasta DESC, fecha_desde DESC",
+            [req.userId]
+        );
+        res.status(200).json({
+            success: true,
+            count: rows.length,
+            tieneHistorial: rows.length > 0,
+            periodos: rows
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/historial-imss:', err);
+        res.status(500).json({ error: 'Error al consultar el historial IMSS del usuario.' });
     }
 });
 
@@ -1142,7 +1230,26 @@ app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'c
 
 app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']), async (req, res) => {
     try {
-        const projectionResult = calculatePensionProjection(req.body);
+        let periodosHistoricos = null;
+        if (req.userId) {
+            try {
+                const [rows] = await pool.query(
+                    "SELECT id, patron, DATE_FORMAT(fecha_desde, '%Y-%m-%d') as fechaDesde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') as fechaHasta, salario, dias FROM usuario_periodos_imss WHERE usuario_id = ? ORDER BY fecha_hasta DESC, fecha_desde DESC",
+                    [req.userId]
+                );
+                if (rows && rows.length > 0) {
+                    periodosHistoricos = rows;
+                }
+            } catch (queryErr) {
+                console.warn('Advertencia al consultar historial para proyección:', queryErr.message);
+            }
+        }
+
+        const projectionResult = calculatePensionProjection({
+            ...req.body,
+            periodosHistoricos
+        });
+
         if (!projectionResult.success) {
             return res.status(400).json({
                 error: projectionResult.error,

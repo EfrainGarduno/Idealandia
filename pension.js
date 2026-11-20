@@ -565,7 +565,10 @@ function validateAndCalculatePensionPeriods(aiData) {
 }
 
 /**
- * Calcula la proyección actuarial de pensión Ley 73 con ventana deslizante de 250 semanas (1,750 días)
+ * Calcula la proyección actuarial de pensión Ley 73 con ventana deslizante de 250 semanas (1,750 días).
+ * Si se proporciona periodosHistoricos (del usuario autenticado en BD), realiza un cálculo
+ * cronológico exacto sobre la línea de tiempo real con validación estricta de traslapes.
+ * Si no se proporciona, opera en modo de respaldo/estimado a partir del salario promedio actual.
  */
 function calculatePensionProjection(params) {
     const {
@@ -582,10 +585,11 @@ function calculatePensionProjection(params) {
         numeroHijos = 0,
         tienePadresDependientes = false,
         estaEnSoledad = false,
-        tieneIncapacidad = false
+        tieneIncapacidad = false,
+        periodosHistoricos = null
     } = params || {};
 
-    // 1. Validaciones
+    // 1. Validaciones generales
     const semAct = parseInt(semanasActuales, 10);
     if (isNaN(semAct) || semAct < 0) {
         return { success: false, error: 'INVALID_WEEKS', message: 'Las semanas cotizadas actuales deben ser un número mayor o igual a cero.' };
@@ -627,22 +631,111 @@ function calculatePensionProjection(params) {
     const semanasProyectadas = Math.round((diasProyectados / 7) * 100) / 100;
     const totalSemanasCotizadas = Math.round((semAct + semanasProyectadas) * 100) / 100;
 
-    // 3. Ventana Deslizante de las Últimas 250 semanas (1,750 días de cotización)
-    // No se hace un promedio simple (A + B)/2. Se computa la ventana de 1,750 días.
     let nuevoSalarioPromedio = 0;
     let supuestoUtilizado = '';
+    let modoCalculo = 'ESTIMADO_SIN_HISTORIAL';
+    let esCalculoEstimado = true;
+    let diasHistoricosEnVentana = 0;
+    let diasProyectadosEnVentana = 0;
 
-    if (diasProyectados >= 1750) {
-        // La proyección cubre o supera las 250 semanas completas (1,750 días).
-        nuevoSalarioPromedio = salProj;
-        supuestoUtilizado = `El periodo proyectado cubre ${diasProyectados} días (más de 250 semanas), por lo que las últimas 250 semanas quedan compuestas en un 100% por el nuevo salario proyectado.`;
+    // 3. Validación y Cálculo con Historial Estructurado si está disponible
+    const tieneHistorialValido = Array.isArray(periodosHistoricos) && periodosHistoricos.length > 0;
+
+    if (tieneHistorialValido) {
+        // A) Validar coherencia temporal y traslapes con periodos históricos
+        let maxHistHasta = null;
+        for (let i = 0; i < periodosHistoricos.length; i++) {
+            const h = periodosHistoricos[i];
+            const hDesde = parseDateToIso(h.fechaDesde || h.fecha_desde);
+            const hHasta = parseDateToIso(h.fechaHasta || h.fecha_hasta);
+
+            if (hHasta && (!maxHistHasta || hHasta > maxHistHasta)) {
+                maxHistHasta = hHasta;
+            }
+
+            // Detección estricta de traslapes: [isoDesde, isoHasta] intersecta [hDesde, hHasta]
+            if (hDesde && hHasta) {
+                if (isoDesde <= hHasta && isoHasta >= hDesde) {
+                    return {
+                        success: false,
+                        error: 'OVERLAPPING_PERIOD',
+                        message: `El periodo proyectado (${isoDesde} a ${isoHasta}) se traslapa con un periodo histórico ya registrado en el expediente del IMSS (${hDesde} a ${hHasta}). La proyección debe iniciar posterior a tus cotizaciones registradas.`
+                    };
+                }
+            }
+        }
+
+        // Validación de coherencia cronológica: no proyectar en el pasado del expediente
+        if (maxHistHasta && isoHasta < maxHistHasta) {
+            return {
+                success: false,
+                error: 'INVALID_CHRONOLOGY',
+                message: `La fecha final proyectada (${isoHasta}) no puede ser anterior al último registro del expediente del IMSS (${maxHistHasta}).`
+            };
+        }
+
+        // B) Construir mapa diario cronológico unificado
+        const dayMap = {};
+        for (const h of periodosHistoricos) {
+            const hDesde = parseDateToIso(h.fechaDesde || h.fecha_desde);
+            const hHasta = parseDateToIso(h.fechaHasta || h.fecha_hasta);
+            const hSal = parseFloat(h.salario || h.salarioDiario || h.salario_diario);
+            if (hDesde && hHasta && !isNaN(hSal) && hSal > 0) {
+                const days = iterateDays(hDesde, hHasta);
+                for (const d of days) {
+                    dayMap[d] = hSal;
+                }
+            }
+        }
+
+        // Integrar días proyectados
+        for (const d of diasArray) {
+            dayMap[d] = salProj;
+        }
+
+        // C) Ventana deslizante de las últimas 250 semanas (1,750 días) hacia atrás
+        const allDaysSortedDesc = Object.keys(dayMap).sort((a, b) => b.localeCompare(a));
+        const windowDays = allDaysSortedDesc.slice(0, 1750);
+
+        if (windowDays.length === 0) {
+            return {
+                success: false,
+                error: 'EMPTY_TIMELINE',
+                message: 'No fue posible construir la línea de tiempo de cotizaciones.'
+            };
+        }
+
+        const weightedSum = windowDays.reduce((acc, d) => acc + dayMap[d], 0);
+        nuevoSalarioPromedio = Math.round((weightedSum / windowDays.length) * 100) / 100;
+
+        diasProyectadosEnVentana = windowDays.filter(d => d >= isoDesde && d <= isoHasta).length;
+        diasHistoricosEnVentana = windowDays.length - diasProyectadosEnVentana;
+        const semProjVentana = Math.round((diasProyectadosEnVentana / 7) * 100) / 100;
+        const semHistVentana = Math.round((diasHistoricosEnVentana / 7) * 100) / 100;
+
+        modoCalculo = 'CRONOLOGICO_EXACTO_HISTORIAL';
+        esCalculoEstimado = false;
+        supuestoUtilizado = `Cálculo cronológico exacto con base en historial del IMSS: Las últimas 250 semanas (${windowDays.length} días) integran ${semProjVentana} semanas proyectadas a $${salProj.toFixed(2)} y ${semHistVentana} semanas históricas de cotización, desplazando a las cotizaciones anteriores.`;
+
     } else {
-        // Días proyectados entran por el frente desplazando a los más antiguos.
-        const diasConservados = 1750 - diasProyectados;
-        const sumaPonderada = (diasProyectados * salProj) + (diasConservados * salAct);
-        nuevoSalarioPromedio = Math.round((sumaPonderada / 1750) * 100) / 100;
-        const semanasConservadas = Math.round((diasConservados / 7) * 100) / 100;
-        supuestoUtilizado = `Se integran ${semanasProyectadas} semanas (${diasProyectados} días) al salario proyectado de $${salProj.toFixed(2)}, desplazando a los días más antiguos y conservando ${semanasConservadas} semanas (${diasConservados} días) al salario promedio actual de $${salAct.toFixed(2)} para completar exactamente 250 semanas (1,750 días).`;
+        // Fallback: Ventana deslizante agregada sin historial registrado
+        modoCalculo = 'ESTIMADO_SIN_HISTORIAL';
+        esCalculoEstimado = true;
+
+        if (diasProyectados >= 1750) {
+            nuevoSalarioPromedio = salProj;
+            diasProyectadosEnVentana = 1750;
+            diasHistoricosEnVentana = 0;
+            supuestoUtilizado = `Cálculo estimado: El periodo proyectado cubre ${diasProyectados} días (más de 250 semanas), sustituyendo el 100% de la ventana de cotización por el nuevo salario proyectado.`;
+        } else {
+            const diasConservados = 1750 - diasProyectados;
+            const sumaPonderada = (diasProyectados * salProj) + (diasConservados * salAct);
+            nuevoSalarioPromedio = Math.round((sumaPonderada / 1750) * 100) / 100;
+            diasProyectadosEnVentana = diasProyectados;
+            diasHistoricosEnVentana = diasConservados;
+            const semanasConservadas = Math.round((diasConservados / 7) * 100) / 100;
+            supuestoUtilizado = `Cálculo estimado: Se integran ${semanasProyectadas} semanas (${diasProyectados} días) al salario proyectado de $${salProj.toFixed(2)}, desplazando a los días más antiguos y conservando ${semanasConservadas} semanas (${diasConservados} días) al salario promedio actual de $${salAct.toFixed(2)} para completar 250 semanas (1,750 días).`;
+        }
     }
 
     // 4. Cálculo de Pensión Actual
@@ -685,6 +778,8 @@ function calculatePensionProjection(params) {
 
     return {
         success: true,
+        modoCalculo,
+        esCalculoEstimado,
         periodo: {
             fechaDesde: isoDesde,
             fechaHasta: isoHasta,
@@ -692,6 +787,11 @@ function calculatePensionProjection(params) {
             semanasProyectadas
         },
         supuestoUtilizado,
+        detallesVentana: {
+            diasProyectadosEnVentana,
+            diasHistoricosEnVentana,
+            totalDiasVentana: diasProyectadosEnVentana + diasHistoricosEnVentana
+        },
         situacionActual: {
             semanasCotizadas: semAct,
             salarioPromedio: salAct,
