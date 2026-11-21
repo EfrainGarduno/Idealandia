@@ -584,10 +584,71 @@
                     </button>
                 </div>
                 <h2>Asesoría en Pensiones</h2>
-                <p>Conoce nuestros servicios.</p>
+                <p>Herramientas especializadas para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.</p>
+
+                <!-- Panel Informativo: Las 3 Modalidades y lo que incluye cada una -->
+                <div class="pension-modalidades-info-banner" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin-bottom: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <div style="font-weight: 700; color: #1e293b; font-size: 1.05em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-layer-group" style="color: #2563eb;"></i> Modalidades de la Calculadora de Pensiones
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                        <!-- Básica -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #64748b; border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <strong style="color: #0f172a; font-size: 0.98em;">1. Calculadora Básica</strong>
+                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; color: #475569; font-weight: 600;">Básica</span>
+                            </div>
+                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Realiza los cálculos básicos para estimar tu pensión.</p>
+                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
+                                <strong style="color: #1e293b;">Incluye:</strong> Captura manual de semanas cotizadas, salario promedio diario y edad de retiro para estimar la pensión bajo el Régimen Ley 73 con asignaciones familiares y ayuda asistencial.
+                            </div>
+                        </div>
+
+                        <!-- Intermedia -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #2563eb; border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <strong style="color: #0f172a; font-size: 0.98em;">2. Calculadora Intermedia</strong>
+                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1d4ed8; font-weight: 600;">Intermedia</span>
+                            </div>
+                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Incluye los cálculos básicos y herramientas adicionales para una estimación más precisa.</p>
+                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
+                                <strong style="color: #1e293b;">Incluye:</strong> Todo lo de Básica + Obtención automática del salario mínimo general vigente, carga inteligente y procesamiento de tu reporte PDF del IMSS (semanas y salario promedio últimas 250 semanas) y tabla de verificación de periodos reconocidos.
+                            </div>
+                        </div>
+
+                        <!-- Avanzada -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #d97706; border-radius: 8px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <strong style="color: #0f172a; font-size: 0.98em;">3. Calculadora Avanzada</strong>
+                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #fef3c7; color: #b45309; font-weight: 600;">Avanzada</span>
+                            </div>
+                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Incluye todas las herramientas y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.</p>
+                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
+                                <strong style="color: #1e293b;">Incluye:</strong> Todo lo de Básica e Intermedia + Simulador de Proyecciones Actuariales con ventana deslizante de 1,750 días (250 semanas), modelado de escenarios a futuro con nuevo salario de cotización (Modalidad 40), cálculo dinámico de semanas y comparativa lado a lado Situación Actual vs Situación Proyectada con transferencia directa de valores.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="servicio-item" id="btn-estimacion">
                     <h3>Estimación de Cálculo de Pensión Régimen ley 73</h3>
                 </div>
+
+                <!-- Selector de Modalidades (Básica, Intermedia, Avanzada) -->
+                <div id="pension-modalidades-selector" class="pension-modalidades-container" style="display: none; margin-bottom: 25px;">
+                    <div style="margin-bottom: 12px;">
+                        <span style="font-size: 0.95em; color: #495057; font-weight: 600;">Selecciona la modalidad de tu calculadora:</span>
+                    </div>
+                    <div id="pension-modalidades-grid" class="pension-modalidades-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
+                        <!-- Las tarjetas de modalidades se renderizan estrictamente por RBAC dinámico en JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Mensaje cuando el usuario no tiene ninguna modalidad permitida -->
+                <div id="pension-unauthorized-message" style="display: none; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-left: 4px solid #ffc107; padding: 14px 18px; border-radius: 6px; margin-bottom: 20px;">
+                    <strong><i class="fas fa-lock"></i> Acceso restringido:</strong> Acceso no autorizado o vencido para esta funcionalidad.
+                </div>
+
                 <div id="form-estimacion" style="display: none;" class="pension-form">
                 <fieldset>
                     <legend>Datos generales</legend>
@@ -636,6 +697,28 @@
                             </div>
                         </div>
                         <div id="pdf-upload-status" style="margin-top: 10px; display: none;"></div>
+                        <!-- Panel de Verificación de Datos Interpretados del IMSS -->
+                        <div id="pension-verificacion-documento" style="display: none; margin-top: 12px; background: #ffffff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                                <span style="font-size: 0.9em; font-weight: 700; color: #1e40af;"><i class="fas fa-list-check"></i> Verificación de datos interpretados del IMSS:</span>
+                                <button type="button" id="btn-toggle-detalle-periodos" style="background: none; border: none; color: #2563eb; font-size: 0.85em; font-weight: 600; cursor: pointer; text-decoration: underline;">Ver detalle de periodos ▼</button>
+                            </div>
+                            <div id="pension-resumen-interpretacion" style="font-size: 0.88em; color: #334155; line-height: 1.45;"></div>
+                            <div id="pension-tabla-periodos-container" style="display: none; margin-top: 10px; max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.82em; text-align: left;">
+                                    <thead style="background: #f1f5f9; position: sticky; top: 0;">
+                                        <tr>
+                                            <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1;">Patrón / Empresa</th>
+                                            <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1;">Periodo</th>
+                                            <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1;">Días</th>
+                                            <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1;">Semanas</th>
+                                            <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1;">SBC Diario</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pension-tabla-periodos-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="semanas-cotizadas">Semanas cotizadas:</label>
@@ -681,13 +764,111 @@
                         </select>
                     </div>
                 </fieldset>
-                <div style="margin-top: 15px;">
+                <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                     <button id="btn-calcular-pension">Calcular Pension</button>
+                    <!-- Botón Hacer Proyección (solo visible en modalidad Avanzada) -->
+                    <button type="button" id="btn-abrir-proyeccion" style="display: none; background: #2563eb; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-chart-line"></i> Hacer proyección
+                    </button>
                     <button type="button" id="btn-limpiar-formulario">Limpiar formulario</button>
                 </div>
 
                 <div id="resultado-pension" style="display: none; margin-top: 20px; padding: 15px; border: 1px solid #ccc; background-color: #f9f9f9; border-radius: 5px;">
                     <!-- Results will be injected here -->
+                </div>
+            </div>
+
+            <!-- MODAL: Hacer proyección de pensión (Superpuesta) -->
+            <div id="modal-proyeccion-pension" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 9999; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                <div class="modal-proyeccion-dialog" style="background: #ffffff; width: 100%; max-width: 760px; max-height: 90vh; overflow-y: auto; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); padding: 24px; position: relative; font-family: 'Poppins', sans-serif; box-sizing: border-box;">
+                    <!-- Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 18px;">
+                        <h3 style="margin: 0; color: #1e293b; font-size: 1.25em; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-chart-line" style="color: #2563eb;"></i> Proyección de pensión
+                        </h3>
+                        <button type="button" id="btn-cerrar-modal-proyeccion" style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: #64748b; line-height: 1;" title="Cerrar ventana">&times;</button>
+                    </div>
+
+                    <!-- Formulario de Proyección -->
+                    <form id="form-proyeccion-pension" onsubmit="return false;">
+                        <!-- Datos actuales -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 0.9em; color: #334155; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">
+                                <i class="fas fa-user-clock" style="color: #64748b;"></i> Datos actuales (Base de Cálculo)
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                                <div>
+                                    <label style="font-size: 0.85em; color: #475569; display: block; margin-bottom: 4px; font-weight: 500;">Semanas cotizadas actuales:</label>
+                                    <input type="number" id="proy-semanas-actuales" readonly style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #e2e8f0; font-weight: 600; color: #1e293b; box-sizing: border-box;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.85em; color: #475569; display: block; margin-bottom: 4px; font-weight: 500;">Salario Promedio actual:</label>
+                                    <input type="number" step="0.01" id="proy-salario-promedio-actual" readonly style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #e2e8f0; font-weight: 600; color: #1e293b; box-sizing: border-box;">
+                                </div>
+                            </div>
+                            <div style="font-size: 0.8em; color: #64748b; margin-top: 6px;">
+                                <em>Corresponde al promedio actual de las últimas 250 semanas.</em>
+                            </div>
+                        </div>
+
+                        <!-- Datos proyectados -->
+                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 0.9em; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">
+                                <i class="fas fa-calendar-plus" style="color: #2563eb;"></i> Datos proyectados del escenario
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                                <div>
+                                    <label for="proy-salario-diario-nuevo" style="font-size: 0.85em; color: #1e3a8a; font-weight: 600; display: block; margin-bottom: 4px;">Salario diario de cotización proyectado (SBC): <span style="color:red;">*</span></label>
+                                    <input type="number" step="0.01" min="1" id="proy-salario-diario-nuevo" placeholder="Ej. 1500.00 o tope Modalidad 40" required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+                                </div>
+                                <div>
+                                    <label for="proy-salario-minimo-estimado" style="font-size: 0.85em; color: #1e3a8a; font-weight: 600; display: block; margin-bottom: 4px;">Salario Mínimo General estimado al terminar la proyección: <span style="color:red;">*</span></label>
+                                    <input type="number" step="0.01" min="1" id="proy-salario-minimo-estimado" value="315.04" required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+                                </div>
+                            </div>
+
+                            <!-- Periodo de cotización -->
+                            <div style="margin-top: 10px; margin-bottom: 10px;">
+                                <span style="font-size: 0.85em; color: #1e3a8a; font-weight: 600; display: block; margin-bottom: 6px;">Periodo de cotización:</span>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                                    <div>
+                                        <label for="proy-fecha-desde" style="font-size: 0.82em; color: #475569; display: block; margin-bottom: 2px;">Cotización desde: <span style="color:red;">*</span></label>
+                                        <input type="date" id="proy-fecha-desde" required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box;">
+                                    </div>
+                                    <div>
+                                        <label for="proy-fecha-hasta" style="font-size: 0.82em; color: #475569; display: block; margin-bottom: 2px;">Hasta: <span style="color:red;">*</span></label>
+                                        <input type="date" id="proy-fecha-hasta" required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Semanas proyectadas dinámicas -->
+                            <div id="proy-semanas-badge-container" style="background: #dbeafe; padding: 10px 14px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                                <span style="font-size: 0.9em; color: #1e40af; font-weight: 600;">
+                                    <i class="fas fa-calculator"></i> Semanas cotizadas proyectadas: <span id="proy-semanas-display" style="font-size: 1.15em; font-weight: 700; color: #1d4ed8;">0</span>
+                                </span>
+                                <span id="proy-dias-display" style="font-size: 0.82em; color: #3b82f6;">(0 días naturales en el periodo)</span>
+                            </div>
+                        </div>
+
+                        <!-- Botón Proyectar -->
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
+                            <button type="button" id="btn-ejecutar-proyeccion" style="background: #2563eb; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 15px;">
+                                <i class="fas fa-play"></i> Proyectar
+                            </button>
+                            <button type="button" id="btn-cancelar-modal-proyeccion" class="btn btn-secondary" style="padding: 10px 18px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #475569;">
+                                Cerrar
+                            </button>
+                        </div>
+
+                        <!-- Mensajes de validación / error -->
+                        <div id="proy-validation-message" style="display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 0.9em;"></div>
+
+                        <!-- Contenedor de Resultado de Proyección (Antes vs Después) -->
+                        <div id="resultado-proyeccion-container" style="display: none; border-top: 2px solid #e2e8f0; padding-top: 18px;">
+                            <!-- Renderizado dinámico de la comparativa -->
+                        </div>
+                    </form>
                 </div>
             </div>
             </div> <!-- /#servicios-pension-view -->
@@ -2364,6 +2545,26 @@
                     key: 'asesoria-pensiones',
                     nombre: 'Asesoría de Pensiones',
                     descripcion: 'Obtén herramientas y recursos especializados para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.',
+                    modalidadesInfo: [
+                        {
+                            nombre: 'Calculadora Básica',
+                            badge: 'Básica',
+                            desc: 'Realiza los cálculos básicos para estimar tu pensión.',
+                            incluye: 'Captura manual de semanas cotizadas, salario promedio diario y edad de retiro para estimar tu pensión bajo Ley 73 con asignaciones familiares.'
+                        },
+                        {
+                            nombre: 'Calculadora Intermedia',
+                            badge: 'Intermedia',
+                            desc: 'Incluye los cálculos básicos y herramientas adicionales para una estimación más precisa.',
+                            incluye: 'Salario mínimo general vigente automático, carga y lectura inteligente de reporte PDF del IMSS (semanas y salario promedio de las últimas 250 semanas) y tabla desglosada de periodos cotizados.'
+                        },
+                        {
+                            nombre: 'Calculadora Avanzada',
+                            badge: 'Avanzada',
+                            desc: 'Incluye todas las herramientas de la Básica e Intermedia y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.',
+                            incluye: 'Todo lo de Básica e Intermedia + Simulador de Proyecciones Actuariales con ventana deslizante de 1,750 días (250 semanas), modelado de escenarios futuros (Modalidad 40), cálculo dinámico de semanas y comparativa lado a lado Antes vs Después con transferencia de valores.'
+                        }
+                    ],
                     icon: 'fa-calculator',
                     target: 'asesoria-pensiones'
                 },
@@ -2472,6 +2673,23 @@
                         </div>
                         <div class="servicio-card-body">
                             <p class="servicio-card-desc">${escapeHTML(serv.descripcion)}</p>
+                            ${(serv.modalidadesInfo && Array.isArray(serv.modalidadesInfo)) ? `
+                                <div class="servicio-modalidades-list" style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="font-weight: 700; font-size: 0.88em; color: #1e293b; margin-bottom: 2px;">
+                                        <i class="fas fa-layer-group" style="color: #007bff;"></i> Modalidades de la Calculadora:
+                                    </div>
+                                    ${serv.modalidadesInfo.map(m => `
+                                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid ${m.badge === 'Básica' ? '#64748b' : (m.badge === 'Intermedia' ? '#2563eb' : '#d97706')}; border-radius: 6px; padding: 8px 10px; font-size: 0.82em;">
+                                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+                                                <strong style="color: #0f172a; font-size: 0.95em;">${escapeHTML(m.nombre)}</strong>
+                                                <span style="font-size: 0.75em; padding: 1px 6px; border-radius: 8px; font-weight: 600; background: ${m.badge === 'Básica' ? '#e2e8f0' : (m.badge === 'Intermedia' ? '#dbeafe' : '#fef3c7')}; color: ${m.badge === 'Básica' ? '#475569' : (m.badge === 'Intermedia' ? '#1d4ed8' : '#b45309')};">${escapeHTML(m.badge)}</span>
+                                            </div>
+                                            <div style="color: #475569; margin-bottom: 3px; font-style: italic;">${escapeHTML(m.desc)}</div>
+                                            <div style="color: #334155; line-height: 1.35;"><strong>Incluye:</strong> ${escapeHTML(m.incluye)}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="servicio-card-status ${isAuth ? 'status-disponible' : 'status-restringido'}">
                             ${isAuth 
@@ -2512,6 +2730,7 @@
                     if (pensionView) pensionView.style.display = 'block';
                     const formEstimacionLocal = document.getElementById('form-estimacion');
                     if (formEstimacionLocal) formEstimacionLocal.style.display = 'block';
+                    if (typeof syncPensionModalidades === 'function') syncPensionModalidades();
                 } else if (target === 'ideas') {
                     sections.forEach(s => s.style.display = (s.id === 'ideas') ? 'flex' : 'none');
                     if (typeof fetchAndDisplayIdeas === 'function') fetchAndDisplayIdeas();
@@ -2671,10 +2890,18 @@
                         if (typeof refreshIdeasContext === 'function') {
                             refreshIdeasContext(false).catch(() => {});
                         }
+                        if (typeof syncPensionModalidades === 'function') {
+                            syncPensionModalidades().catch(() => {});
+                        }
                     } else {
                         window.currentUser = null;
                         window.ideasCatalogos = null;
+                        window.userPensionPermisos = null;
+                        window.pensionCapacidades = null;
                         if (typeof clearIdealitaUserContext === 'function') clearIdealitaUserContext();
+                        if (typeof syncPensionModalidades === 'function') {
+                            syncPensionModalidades().catch(() => {});
+                        }
                         document.getElementById('auth-container-guest').style.display = 'flex';
                         document.getElementById('auth-container-user').style.display = 'none';
                         document.getElementById('user-greeting').textContent = '';
@@ -2719,6 +2946,8 @@
                         // Limpiar de inmediato el estado en memoria y temporizadores RBAC
                         window.currentUser = null;
                         window.userAdminPermissions = null;
+                        window.userPensionPermisos = null;
+                        window.pensionCapacidades = null;
                         ['admin-usuarios-tbody', 'admin-roles-tbody', 'admin-permisos-tbody',
                          'admin-funcionalidades-tbody', 'admin-menus-tbody', 'admin-accesos-tbody',
                          'admin-asociados-tbody'].forEach(id => {
@@ -2934,6 +3163,7 @@
                              if (formEstimacionLocal) {
                                  formEstimacionLocal.style.display = 'block';
                              }
+                             if (typeof syncPensionModalidades === 'function') syncPensionModalidades();
                          } else if (submenuId === 'ideas-innovadoras' || submenuId === 'ideas') {
                              sections.forEach(section => {
                                  if (section.id === 'ideas') {
@@ -2974,6 +3204,17 @@
             const btnEstimacion = document.getElementById('btn-estimacion');
             const formEstimacion = document.getElementById('form-estimacion');
             const btnCalcularPension = document.getElementById('btn-calcular-pension');
+            const btnAbrirProyeccion = document.getElementById('btn-abrir-proyeccion');
+            const modalProyeccionPension = document.getElementById('modal-proyeccion-pension');
+            const btnCerrarModalProy = document.getElementById('btn-cerrar-modal-proyeccion');
+            const btnCancelarModalProy = document.getElementById('btn-cancelar-modal-proyeccion');
+            const btnEjecutarProyeccion = document.getElementById('btn-ejecutar-proyeccion');
+            const proyFechaDesdeInput = document.getElementById('proy-fecha-desde');
+            const proyFechaHastaInput = document.getElementById('proy-fecha-hasta');
+
+            let userPensionPermisos = new Set();
+            let currentModalidadPension = 'basica';
+            window.ultimoDocumentoIMSS = null;
 
             const salarioMinimoInput = document.getElementById('salario-minimo');
             const defaultSalarioMinimo = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
@@ -2981,10 +3222,628 @@
                 salarioMinimoInput.value = defaultSalarioMinimo;
             }
 
+            // Recuperación dinámica del Salario Mínimo General Vigente
+            async function fetchSalarioMinimoVigente() {
+                try {
+                    const res = await fetch('/api/pension/salario-minimo-vigente', { cache: 'no-store' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && typeof data.salarioMinimo === 'number') {
+                            if (salarioMinimoInput) {
+                                salarioMinimoInput.value = data.salarioMinimo;
+                            }
+                            return data.salarioMinimo;
+                        }
+                    }
+                } catch (e) {
+                    // Fallback a valor centralizado
+                }
+                const fallback = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
+                if (salarioMinimoInput && !salarioMinimoInput.value) {
+                    salarioMinimoInput.value = fallback;
+                }
+                return fallback;
+            }
+
+            // Sincronización de Modalidades basada en el modelo RBAC Dinámico
+            async function syncPensionModalidades(overridePerms = null) {
+                if (overridePerms) {
+                    window.userPensionPermisos = new Set(overridePerms);
+                } else {
+                    try {
+                        const res = await fetch('/api/me/permisos', { cache: 'no-store' });
+                        if (res.ok) {
+                            const data = await res.json();
+                            const permsList = Array.isArray(data.permisos) ? data.permisos : [];
+                            window.userPensionPermisos = new Set(permsList);
+                        } else {
+                            window.userPensionPermisos = new Set();
+                        }
+                    } catch (e) {
+                        window.userPensionPermisos = new Set();
+                    }
+                }
+
+                // Capacidades funcionales acumulativas:
+                // calculadora.basica -> Básica
+                // calculadora.intermedia -> Básica + Intermedia
+                // calculadora.avanzada -> Básica + Intermedia + Avanzada
+                const perms = window.userPensionPermisos || new Set();
+                const hasBasica = perms.has('calculadora.basica');
+                const hasIntermedia = perms.has('calculadora.intermedia');
+                const hasAvanzada = perms.has('calculadora.avanzada');
+
+                const canBasica = hasBasica || hasIntermedia || hasAvanzada;
+                const canIntermedia = hasIntermedia || hasAvanzada;
+                const canAvanzada = hasAvanzada;
+
+                window.pensionCapacidades = {
+                    basica: canBasica,
+                    intermedia: canIntermedia,
+                    avanzada: canAvanzada
+                };
+
+                const selectorContainer = document.getElementById('pension-modalidades-selector');
+                const unauthMsg = document.getElementById('pension-unauthorized-message');
+                const formEstimacionElem = document.getElementById('form-estimacion');
+                const gridContainer = document.getElementById('pension-modalidades-grid');
+
+                if (!canBasica && !canIntermedia && !canAvanzada) {
+                    if (gridContainer) gridContainer.innerHTML = '';
+                    if (selectorContainer) selectorContainer.style.display = 'none';
+                    if (formEstimacionElem) formEstimacionElem.style.display = 'none';
+                    if (unauthMsg) unauthMsg.style.display = 'block';
+                    return false;
+                }
+
+                if (unauthMsg) unauthMsg.style.display = 'none';
+                if (selectorContainer) selectorContainer.style.display = 'block';
+                if (formEstimacionElem) formEstimacionElem.style.display = 'block';
+
+                // RENDERIZADO DINÁMICO ESTRICTO POR RBAC (Cero tarjetas no autorizadas en el DOM)
+                if (gridContainer) {
+                    gridContainer.innerHTML = '';
+
+                    const configs = [
+                        {
+                            id: 'basica',
+                            autorizado: canBasica,
+                            titulo: 'Calculadora Básica',
+                            badge: 'Básica',
+                            badgeBg: '#e2e8f0',
+                            badgeColor: '#475569',
+                            desc: 'Realiza los cálculos básicos para estimar tu pensión.'
+                        },
+                        {
+                            id: 'intermedia',
+                            autorizado: canIntermedia,
+                            titulo: 'Calculadora Intermedia',
+                            badge: 'Intermedia',
+                            badgeBg: '#dbeafe',
+                            badgeColor: '#1d4ed8',
+                            desc: 'Incluye los cálculos básicos y herramientas adicionales para obtener una estimación más precisa de tu pensión.'
+                        },
+                        {
+                            id: 'avanzada',
+                            autorizado: canAvanzada,
+                            titulo: 'Calculadora Avanzada',
+                            badge: 'Avanzada',
+                            badgeBg: '#fef3c7',
+                            badgeColor: '#b45309',
+                            desc: 'Incluye todas las herramientas de la Calculadora Básica e Intermedia y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.'
+                        }
+                    ];
+
+                    configs.forEach(cfg => {
+                        if (!cfg.autorizado) return; // Si no tiene capacidad, no existe en el DOM
+                        const cardDiv = document.createElement('div');
+                        cardDiv.id = `card-modalidad-${cfg.id}`;
+                        cardDiv.className = 'modalidad-card';
+                        cardDiv.dataset.modalidad = cfg.id;
+                        cardDiv.style.cssText = 'border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; cursor: pointer; transition: all 0.2s ease; background: #fff;';
+                        cardDiv.innerHTML = `
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <h4 style="margin: 0; color: #1e293b; font-size: 1.05em; font-weight: 700;">${cfg.titulo}</h4>
+                                <span class="modalidad-badge" style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: ${cfg.badgeBg}; color: ${cfg.badgeColor}; font-weight: 600;">${cfg.badge}</span>
+                            </div>
+                            <p style="margin: 0; font-size: 0.88em; color: #64748b; line-height: 1.4;">${cfg.desc}</p>
+                        `;
+                        cardDiv.addEventListener('click', () => {
+                            activarModalidadCalculadora(cfg.id);
+                        });
+                        gridContainer.appendChild(cardDiv);
+                    });
+                }
+
+                // Determinar modalidad activa permitida
+                let targetMod = currentModalidadPension;
+                if (targetMod === 'avanzada' && !canAvanzada) {
+                    targetMod = canIntermedia ? 'intermedia' : (canBasica ? 'basica' : null);
+                } else if (targetMod === 'intermedia' && !canIntermedia) {
+                    targetMod = canBasica ? 'basica' : (canAvanzada ? 'avanzada' : null);
+                } else if (targetMod === 'basica' && !canBasica) {
+                    targetMod = canIntermedia ? 'intermedia' : (canAvanzada ? 'avanzada' : null);
+                }
+
+                if (!targetMod) {
+                    targetMod = canAvanzada ? 'avanzada' : (canIntermedia ? 'intermedia' : 'basica');
+                }
+
+                activarModalidadCalculadora(targetMod);
+                return true;
+            }
+            window.syncPensionModalidades = syncPensionModalidades;
+
+            function activarModalidadCalculadora(modalidad) {
+                // Validación de seguridad RBAC en tiempo de ejecución
+                const caps = window.pensionCapacidades || {
+                    basica: true,
+                    intermedia: true,
+                    avanzada: true
+                };
+
+                if (modalidad === 'avanzada' && !caps.avanzada) {
+                    console.warn('Intento no autorizado de activar Calculadora Avanzada.');
+                    modalidad = caps.intermedia ? 'intermedia' : (caps.basica ? 'basica' : null);
+                } else if (modalidad === 'intermedia' && !caps.intermedia) {
+                    console.warn('Intento no autorizado de activar Calculadora Intermedia.');
+                    modalidad = caps.basica ? 'basica' : null;
+                } else if (modalidad === 'basica' && !caps.basica) {
+                    modalidad = null;
+                }
+
+                if (!modalidad) {
+                    const formEstimacionElem = document.getElementById('form-estimacion');
+                    if (formEstimacionElem) formEstimacionElem.style.display = 'none';
+                    const unauthMsg = document.getElementById('pension-unauthorized-message');
+                    if (unauthMsg) unauthMsg.style.display = 'block';
+                    return false;
+                }
+
+                currentModalidadPension = modalidad;
+                const modalidades = ['basica', 'intermedia', 'avanzada'];
+                modalidades.forEach(m => {
+                    const card = document.getElementById(`card-modalidad-${m}`);
+                    if (!card) return;
+                    if (m === modalidad) {
+                        card.style.borderColor = '#2563eb';
+                        card.style.backgroundColor = '#eff6ff';
+                        card.style.boxShadow = '0 4px 14px rgba(37,99,235,0.15)';
+                    } else {
+                        card.style.borderColor = '#e0e0e0';
+                        card.style.backgroundColor = '#ffffff';
+                        card.style.boxShadow = 'none';
+                    }
+                });
+
+                const formEstimacionElem = document.getElementById('form-estimacion');
+                if (formEstimacionElem) formEstimacionElem.style.display = 'block';
+
+                const pdfContainer = document.getElementById('pdf-semanas-container');
+                const verificacionContainer = document.getElementById('pension-verificacion-documento');
+                const btnProyeccionElem = document.getElementById('btn-abrir-proyeccion');
+
+                if (modalidad === 'basica') {
+                    if (pdfContainer) pdfContainer.style.display = 'none';
+                    if (verificacionContainer) verificacionContainer.style.display = 'none';
+                    if (btnProyeccionElem) btnProyeccionElem.style.display = 'none';
+                } else if (modalidad === 'intermedia') {
+                    if (pdfContainer) pdfContainer.style.display = 'block';
+                    if (verificacionContainer) {
+                        verificacionContainer.style.display = window.ultimoDocumentoIMSS ? 'block' : 'none';
+                    }
+                    if (btnProyeccionElem) btnProyeccionElem.style.display = 'none';
+                    fetchSalarioMinimoVigente();
+                } else if (modalidad === 'avanzada') {
+                    if (pdfContainer) pdfContainer.style.display = 'block';
+                    if (verificacionContainer) {
+                        verificacionContainer.style.display = window.ultimoDocumentoIMSS ? 'block' : 'none';
+                    }
+                    if (btnProyeccionElem) btnProyeccionElem.style.display = 'inline-flex';
+                    fetchSalarioMinimoVigente();
+                }
+                return true;
+            }
+            window.activarModalidadCalculadora = activarModalidadCalculadora;
+
+            // Toggle para el detalle de periodos interpretados
+            const btnTogglePeriodos = document.getElementById('btn-toggle-detalle-periodos');
+            const tablaPeriodosContainer = document.getElementById('pension-tabla-periodos-container');
+            if (btnTogglePeriodos && tablaPeriodosContainer) {
+                btnTogglePeriodos.addEventListener('click', () => {
+                    const isVisible = tablaPeriodosContainer.style.display === 'block';
+                    tablaPeriodosContainer.style.display = isVisible ? 'none' : 'block';
+                    btnTogglePeriodos.textContent = isVisible ? 'Ver detalle de periodos ▼' : 'Ocultar detalle de periodos ▲';
+                });
+            }
+
+            // Lógica de la Ventana Modal de Proyección de Pensión
+            function abrirModalProyeccion() {
+                if (!modalProyeccionPension) return;
+                const semInput = document.getElementById('semanas-cotizadas');
+                const salInput = document.getElementById('salario-promedio');
+                const salMinInput = document.getElementById('salario-minimo');
+
+                const proySemAct = document.getElementById('proy-semanas-actuales');
+                const proySalAct = document.getElementById('proy-salario-promedio-actual');
+                const proySalMinEst = document.getElementById('proy-salario-minimo-estimado');
+                const proySalNuevo = document.getElementById('proy-salario-diario-nuevo');
+
+                const semVal = semInput ? parseInt(semInput.value, 10) || 0 : 0;
+                const salVal = salInput ? parseFloat(salInput.value) || 0 : 0;
+                const salMinVal = salMinInput ? parseFloat(salMinInput.value) || defaultSalarioMinimo : defaultSalarioMinimo;
+
+                if (proySemAct) proySemAct.value = semVal;
+                if (proySalAct) proySalAct.value = salVal.toFixed(2);
+                if (proySalMinEst && !proySalMinEst.value) proySalMinEst.value = salMinVal.toFixed(2);
+                if (proySalNuevo && !proySalNuevo.value && salVal > 0) {
+                    proySalNuevo.value = salVal.toFixed(2);
+                }
+
+                // Precargar fechas por defecto si están vacías (desde hoy hasta 1 año después)
+                if (proyFechaDesdeInput && !proyFechaDesdeInput.value) {
+                    const hoy = new Date();
+                    proyFechaDesdeInput.value = hoy.toISOString().slice(0, 10);
+                }
+                if (proyFechaHastaInput && !proyFechaHastaInput.value) {
+                    const hoy = new Date();
+                    hoy.setFullYear(hoy.getFullYear() + 1);
+                    proyFechaHastaInput.value = hoy.toISOString().slice(0, 10);
+                }
+
+                recalcularSemanasProyectadasModal();
+
+                const resultadoContainer = document.getElementById('resultado-proyeccion-container');
+                if (resultadoContainer) {
+                    resultadoContainer.style.display = 'none';
+                    resultadoContainer.innerHTML = '';
+                }
+                const msgVal = document.getElementById('proy-validation-message');
+                if (msgVal) msgVal.style.display = 'none';
+
+                modalProyeccionPension.style.display = 'flex';
+            }
+
+            function cerrarModalProyeccion() {
+                if (modalProyeccionPension) {
+                    modalProyeccionPension.style.display = 'none';
+                }
+            }
+
+            function recalcularSemanasProyectadasModal() {
+                const desdeVal = proyFechaDesdeInput ? proyFechaDesdeInput.value : '';
+                const hastaVal = proyFechaHastaInput ? proyFechaHastaInput.value : '';
+                const spanSemanas = document.getElementById('proy-semanas-display');
+                const spanDias = document.getElementById('proy-dias-display');
+                const msgVal = document.getElementById('proy-validation-message');
+
+                if (!desdeVal || !hastaVal) {
+                    if (spanSemanas) spanSemanas.textContent = '0';
+                    if (spanDias) spanDias.textContent = '(0 días naturales en el periodo)';
+                    return 0;
+                }
+
+                if (hastaVal < desdeVal) {
+                    if (spanSemanas) spanSemanas.textContent = '0';
+                    if (spanDias) spanDias.textContent = '(Fechas no válidas)';
+                    if (msgVal) {
+                        msgVal.style.display = 'block';
+                        msgVal.style.background = '#fef2f2';
+                        msgVal.style.color = '#991b1b';
+                        msgVal.style.border = '1px solid #fecaca';
+                        msgVal.textContent = 'La fecha "Desde" no puede ser posterior a la fecha "Hasta".';
+                    }
+                    return 0;
+                }
+
+                if (msgVal) msgVal.style.display = 'none';
+
+                const d1 = new Date(desdeVal + 'T12:00:00Z');
+                const d2 = new Date(hastaVal + 'T12:00:00Z');
+                const diffTime = d2.getTime() - d1.getTime();
+                const dias = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
+                const semanas = Math.round((dias / 7) * 100) / 100;
+
+                if (spanSemanas) spanSemanas.textContent = semanas;
+                if (spanDias) spanDias.textContent = `(${dias} días naturales en el periodo)`;
+                return semanas;
+            }
+
+            if (proyFechaDesdeInput) proyFechaDesdeInput.addEventListener('change', recalcularSemanasProyectadasModal);
+            if (proyFechaHastaInput) proyFechaHastaInput.addEventListener('change', recalcularSemanasProyectadasModal);
+
+            if (btnAbrirProyeccion) btnAbrirProyeccion.addEventListener('click', abrirModalProyeccion);
+            if (btnCerrarModalProy) btnCerrarModalProy.addEventListener('click', cerrarModalProyeccion);
+            if (btnCancelarModalProy) btnCancelarModalProy.addEventListener('click', cerrarModalProyeccion);
+
+            // Cierre con Escape y click fuera
+            if (modalProyeccionPension) {
+                modalProyeccionPension.addEventListener('click', (e) => {
+                    if (e.target === modalProyeccionPension) cerrarModalProyeccion();
+                });
+            }
+
+            // Ejecución de Proyección
+            if (btnEjecutarProyeccion) {
+                btnEjecutarProyeccion.addEventListener('click', async () => {
+                    const msgVal = document.getElementById('proy-validation-message');
+                    const resultadoContainer = document.getElementById('resultado-proyeccion-container');
+
+                    const semAct = parseInt(document.getElementById('proy-semanas-actuales').value, 10) || 0;
+                    const salAct = parseFloat(document.getElementById('proy-salario-promedio-actual').value) || 0;
+                    const salProj = parseFloat(document.getElementById('proy-salario-diario-nuevo').value) || 0;
+                    const salMinProj = parseFloat(document.getElementById('proy-salario-minimo-estimado').value) || defaultSalarioMinimo;
+                    const fechaDesde = proyFechaDesdeInput ? proyFechaDesdeInput.value : '';
+                    const fechaHasta = proyFechaHastaInput ? proyFechaHastaInput.value : '';
+
+                    if (!fechaDesde || !fechaHasta) {
+                        if (msgVal) {
+                            msgVal.style.display = 'block';
+                            msgVal.style.background = '#fef2f2';
+                            msgVal.style.color = '#991b1b';
+                            msgVal.style.border = '1px solid #fecaca';
+                            msgVal.textContent = 'Por favor selecciona las fechas "Desde" y "Hasta" del periodo.';
+                        }
+                        return;
+                    }
+
+                    if (fechaHasta < fechaDesde) {
+                        if (msgVal) {
+                            msgVal.style.display = 'block';
+                            msgVal.style.background = '#fef2f2';
+                            msgVal.style.color = '#991b1b';
+                            msgVal.style.border = '1px solid #fecaca';
+                            msgVal.textContent = 'La fecha "Desde" no puede ser posterior a la fecha "Hasta".';
+                        }
+                        return;
+                    }
+
+                    if (salProj <= 0 || isNaN(salProj)) {
+                        if (msgVal) {
+                            msgVal.style.display = 'block';
+                            msgVal.style.background = '#fef2f2';
+                            msgVal.style.color = '#991b1b';
+                            msgVal.style.border = '1px solid #fecaca';
+                            msgVal.textContent = 'Por favor ingresa un salario diario proyectado válido mayor a cero.';
+                        }
+                        return;
+                    }
+
+                    if (salMinProj <= 0 || isNaN(salMinProj)) {
+                        if (msgVal) {
+                            msgVal.style.display = 'block';
+                            msgVal.style.background = '#fef2f2';
+                            msgVal.style.color = '#991b1b';
+                            msgVal.style.border = '1px solid #fecaca';
+                            msgVal.textContent = 'Por favor ingresa un salario mínimo estimado válido mayor a cero.';
+                        }
+                        return;
+                    }
+
+                    if (msgVal) msgVal.style.display = 'none';
+
+                    const edadVal = parseInt(document.getElementById('edad-jubilacion').value, 10) || 60;
+                    const tieneEsposa = document.getElementById('tiene-esposa').value === 'si';
+                    const numeroHijos = parseInt(document.getElementById('numero-hijos').value, 10) || 0;
+                    const tienePadres = document.getElementById('tiene-padres').value === 'si';
+                    const estaSoledad = document.getElementById('esta-soledad').value === 'si';
+                    const tieneIncapacidad = document.getElementById('tiene-incapacidad').value === 'si';
+
+                    const fechaNacimientoDoc = (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.fechaNacimiento)
+                        || (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.curp && typeof extractBirthDateFromCurp === 'function' && extractBirthDateFromCurp(window.ultimoDocumentoIMSS.curp))
+                        || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pension_fecha_nacimiento'))
+                        || null;
+                    const curpDoc = (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.curp)
+                        || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pension_curp'))
+                        || null;
+
+                    const params = {
+                        semanasActuales: semAct,
+                        salarioPromedioActual: salAct > 0 ? salAct : salProj,
+                        salarioMinimoActual: parseFloat(salarioMinimoInput.value) || defaultSalarioMinimo,
+                        salarioMinimoProyectado: salMinProj,
+                        salarioDiarioProyectado: salProj,
+                        fechaDesde,
+                        fechaHasta,
+                        edadRetiroActual: edadVal,
+                        tieneEsposa,
+                        numeroHijos,
+                        tienePadresDependientes: tienePadres,
+                        estaEnSoledad: estaSoledad,
+                        tieneIncapacidad,
+                        fechaNacimiento: fechaNacimientoDoc,
+                        curp: curpDoc
+                    };
+
+                    let resData = null;
+                    try {
+                        // Intento de proyección con protección en backend
+                        const apiRes = await fetch('/api/pension/proyectar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(params)
+                        });
+                        if (apiRes.ok) {
+                            resData = await apiRes.json();
+                        } else if (apiRes.status === 403) {
+                            if (msgVal) {
+                                msgVal.style.display = 'block';
+                                msgVal.style.background = '#fef2f2';
+                                msgVal.style.color = '#991b1b';
+                                msgVal.style.border = '1px solid #fecaca';
+                                msgVal.textContent = 'Acceso no autorizado o vencido para esta funcionalidad.';
+                            }
+                            return;
+                        } else {
+                            try {
+                                const errJson = await apiRes.json();
+                                if (msgVal && errJson && errJson.message) {
+                                    msgVal.style.display = 'block';
+                                    msgVal.style.background = '#fef2f2';
+                                    msgVal.style.color = '#991b1b';
+                                    msgVal.style.border = '1px solid #fecaca';
+                                    msgVal.textContent = errJson.message;
+                                    return;
+                                }
+                            } catch(e) {}
+                        }
+                    } catch (netErr) {}
+
+                    // Fallback a motor actuarial local en pension.js si no hay red
+                    if (!resData && typeof window.calculatePensionProjection === 'function') {
+                        resData = window.calculatePensionProjection(params);
+                    }
+
+                    if (!resData || !resData.success) {
+                        if (msgVal) {
+                            msgVal.style.display = 'block';
+                            msgVal.style.background = '#fef2f2';
+                            msgVal.style.color = '#991b1b';
+                            msgVal.style.border = '1px solid #fecaca';
+                            msgVal.textContent = (resData && resData.message) || 'No fue posible calcular la proyección.';
+                        }
+                        return;
+                    }
+
+                    // Renderizar Comparativa Antes vs Después
+                    const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+                    const act = resData.situacionActual;
+                    const proy = resData.situacionProyectada;
+                    const comp = resData.comparativa;
+
+                    resultadoContainer.style.display = 'block';
+                    resultadoContainer.innerHTML = `
+                        <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 1.1em; font-weight: 700; text-align: center;">
+                            Comparativa de Escenarios: Antes vs Después
+                        </h4>
+                        <div style="text-align: center; margin-bottom: 14px;">
+                            ${resData.modoCalculo === 'CRONOLOGICO_EXACTO_HISTORIAL' 
+                                ? '<span style="display: inline-flex; align-items: center; gap: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.8em; font-weight: 700; padding: 4px 12px; border-radius: 12px;"><i class="fas fa-database"></i> Proyección Cronológica Exacta con Historial IMSS</span>'
+                                : '<span style="display: inline-flex; align-items: center; gap: 6px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 0.8em; font-weight: 700; padding: 4px 12px; border-radius: 12px;"><i class="fas fa-calculator"></i> Proyección Estimada (Sube tu reporte en Intermedia para cálculo exacto)</span>'
+                            }
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 18px;">
+                            <!-- Columna Situación Actual -->
+                            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #94a3b8; padding-bottom: 6px; margin-bottom: 10px;">
+                                    <h5 style="margin: 0; font-size: 0.95em; color: #334155; text-transform: uppercase;">Situación actual</h5>
+                                    <span style="font-size: 0.75em; background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 10px; font-weight: 600;">Antes</span>
+                                </div>
+                                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.88em; line-height: 1.7; color: #334155;">
+                                    <li><strong>Semanas cotizadas:</strong> ${act.semanasCotizadas}</li>
+                                    <li><strong>Salario promedio actual:</strong> ${formatter.format(act.salarioPromedio)}</li>
+                                    <li><strong>Salario mínimo utilizado:</strong> ${formatter.format(act.salarioMinimoUtilizado)}</li>
+                                    <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 1.05em; color: #1e293b;">
+                                        <strong>Pensión mensual estimada:</strong><br>
+                                        <span style="font-size: 1.25em; font-weight: 700; color: #0284c7;">${formatter.format(act.pensionMensual)}</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Columna Situación Proyectada -->
+                            <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 14px; position: relative;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6; padding-bottom: 6px; margin-bottom: 10px;">
+                                    <h5 style="margin: 0; font-size: 0.95em; color: #1e40af; text-transform: uppercase;">Situación proyectada</h5>
+                                    <span style="font-size: 0.75em; background: #2563eb; color: #fff; padding: 2px 8px; border-radius: 10px; font-weight: 600;">Después</span>
+                                </div>
+                                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.88em; line-height: 1.7; color: #1e3a8a;">
+                                    <li><strong>Nuevas semanas proyectadas:</strong> +${proy.nuevasSemanasProyectadas}</li>
+                                    <li><strong>Total semanas cotizadas:</strong> <strong>${proy.totalSemanasCotizadas}</strong></li>
+                                    <li><strong>Nuevo salario promedio (250 sem):</strong> <strong>${formatter.format(proy.nuevoSalarioPromedio)}</strong></li>
+                                    <li><strong>Salario mínimo estimado:</strong> ${formatter.format(proy.salarioMinimoEstimado)}</li>
+                                    <li><strong>Edad al término:</strong> <strong>${(typeof proy.edadCronologica === 'number' ? proy.edadCronologica : proy.edadProyectada)} años</strong></li>
+                                    <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #93c5fd; font-size: 1.05em; color: #1e3a8a;">
+                                        <strong>Pensión mensual proyectada:</strong><br>
+                                        <span style="font-size: 1.3em; font-weight: 800; color: #16a34a;">${formatter.format(proy.pensionMensual)}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Resumen del Impacto y Supuesto -->
+                        <div style="background: ${comp.esMejora ? '#dcfce7' : '#f1f5f9'}; border: 1px solid ${comp.esMejora ? '#86efac' : '#cbd5e1'}; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <span style="font-size: 0.9em; font-weight: 700; color: ${comp.esMejora ? '#15803d' : '#475569'};">
+                                    <i class="fas ${comp.esMejora ? 'fa-arrow-trend-up' : 'fa-info-circle'}"></i> 
+                                    Incremento estimado: ${comp.diferenciaMensual >= 0 ? '+' : ''}${formatter.format(comp.diferenciaMensual)} / mes (${comp.porcentajeIncremento}%)
+                                </span>
+                            </div>
+                            <button type="button" id="btn-aplicar-valores-calculadora" style="background: #16a34a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.88em; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-check"></i> Aplicar valores a la calculadora
+                            </button>
+                        </div>
+
+                        <div style="font-size: 0.82em; color: #64748b; line-height: 1.45; background: #fff; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 6px;">
+                            <strong>Supuesto del cálculo:</strong> ${resData.supuestoUtilizado}
+                        </div>
+                    `;
+
+                    // Acción para transferir valores calculados al formulario principal
+                    const btnAplicar = document.getElementById('btn-aplicar-valores-calculadora');
+                    if (btnAplicar) {
+                        btnAplicar.addEventListener('click', () => {
+                            const semInputPrincipal = document.getElementById('semanas-cotizadas');
+                            const salInputPrincipal = document.getElementById('salario-promedio');
+                            const salMinInputPrincipal = document.getElementById('salario-minimo');
+                            const edadInputPrincipal = document.getElementById('edad-jubilacion');
+
+                            if (semInputPrincipal) {
+                                semInputPrincipal.value = proy.totalSemanasCotizadas;
+                                semInputPrincipal.dispatchEvent(new Event('input', { bubbles: true }));
+                                semInputPrincipal.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            if (salInputPrincipal) {
+                                salInputPrincipal.value = proy.nuevoSalarioPromedio;
+                                salInputPrincipal.dispatchEvent(new Event('input', { bubbles: true }));
+                                salInputPrincipal.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            if (salMinInputPrincipal && proy.salarioMinimoEstimado) {
+                                salMinInputPrincipal.value = proy.salarioMinimoEstimado;
+                                salMinInputPrincipal.dispatchEvent(new Event('input', { bubbles: true }));
+                                salMinInputPrincipal.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
+                            // Calcular y transferir la edad exacta al solicitar la pensión a partir de la fecha final de proyección
+                            const fechaFinProy = (proyFechaHastaInput && proyFechaHastaInput.value)
+                                || (resData && resData.periodo && resData.periodo.fechaHasta)
+                                || '';
+
+                            const fechaNac = (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.fechaNacimiento)
+                                || (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.curp && typeof extractBirthDateFromCurp === 'function' && extractBirthDateFromCurp(window.ultimoDocumentoIMSS.curp))
+                                || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pension_fecha_nacimiento'))
+                                || (proy && (proy.fechaNacimiento || (proy.edadPensionariaInfo && proy.edadPensionariaInfo.fechaNacimiento)))
+                                || null;
+
+                            let nuevaEdad = null;
+                            if (fechaNac && fechaFinProy && typeof calcularEdadExacta === 'function') {
+                                nuevaEdad = calcularEdadExacta(fechaNac, fechaFinProy);
+                            } else if (proy && typeof proy.edadCronologica === 'number') {
+                                nuevaEdad = proy.edadCronologica;
+                            } else if (proy && typeof proy.edadProyectada === 'number') {
+                                nuevaEdad = proy.edadProyectada;
+                            }
+
+                            if (edadInputPrincipal && nuevaEdad !== null && !isNaN(nuevaEdad)) {
+                                edadInputPrincipal.value = nuevaEdad;
+                                edadInputPrincipal.dispatchEvent(new Event('input', { bubbles: true }));
+                                edadInputPrincipal.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
+                            cerrarModalProyeccion();
+                            if (typeof showModal === 'function') {
+                                showModal('✦ Valores proyectados transferidos exitosamente a la calculadora principal.');
+                            }
+                        });
+                    }
+                });
+            }
+
             if(btnEstimacion && formEstimacion) {
                 btnEstimacion.addEventListener('click', () => {
                     if (formEstimacion.style.display === 'none') {
                         formEstimacion.style.display = 'block';
+                        syncPensionModalidades();
                         if (salarioMinimoInput && !salarioMinimoInput.value) {
                             salarioMinimoInput.value = defaultSalarioMinimo;
                         }
@@ -3243,10 +4102,21 @@
                         const tiempoFinal = formatTiempo(segundosTranscurridos);
 
                         if (response.ok && data && typeof data.salarioDiarioPromedio === 'number') {
-                            if (salarioPromedioInput) {
-                                salarioPromedioInput.value = data.salarioDiarioPromedio;
-                                salarioPromedioInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                salarioPromedioInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            window.ultimoDocumentoIMSS = data;
+                            if (data.fechaNacimiento) {
+                                try { sessionStorage.setItem('pension_fecha_nacimiento', data.fechaNacimiento); } catch(e) {}
+                            }
+                            if (data.curp) {
+                                try { sessionStorage.setItem('pension_curp', data.curp); } catch(e) {}
+                            }
+
+                            // Poblar datos de verificación interpretados del IMSS
+                            const verificacionContainer = document.getElementById('pension-verificacion-documento');
+                            const resumenInterpretacion = document.getElementById('pension-resumen-interpretacion');
+                            const tbodyPeriodos = document.getElementById('pension-tabla-periodos-tbody');
+
+                            if (verificacionContainer && (currentModalidadPension === 'intermedia' || currentModalidadPension === 'avanzada')) {
+                                verificacionContainer.style.display = 'block';
                             }
 
                             const semanasCotizadasInput = document.getElementById('semanas-cotizadas');
@@ -3254,13 +4124,46 @@
                                 ? data.totalSemanasCotizadas
                                 : ((typeof data.totalSemanasDocumento === 'number' && data.totalSemanasDocumento > 0) ? data.totalSemanasDocumento : null);
 
+                            const formattedSalary = data.salarioDiarioPromedioFormateado || ('$' + Number(data.salarioDiarioPromedio).toFixed(2));
+
+                            if (resumenInterpretacion) {
+                                resumenInterpretacion.innerHTML = `
+                                    <div style="margin-bottom: 3px;"><strong>Asegurado interpretado:</strong> ${data.nombreAsegurado || 'Asegurado IMSS'}</div>
+                                    <div style="margin-bottom: 3px;"><strong>Total semanas cotizadas obtenidas:</strong> <strong>${semanasExtraidas || 'N/A'} semanas</strong></div>
+                                    <div><strong>Salario promedio calculado (últimas 250 semanas):</strong> <strong style="color: #15803d; font-size: 1.05em;">${formattedSalary}</strong></div>
+                                    <div style="font-size: 0.82em; color: #64748b; margin-top: 4px;">Información obtenida automáticamente del documento para tu revisión. Puedes verificar los datos interpretados a continuación.</div>
+                                `;
+                            }
+
+                            if (tbodyPeriodos && Array.isArray(data.periodos)) {
+                                tbodyPeriodos.innerHTML = data.periodos.map(p => {
+                                    const salarioP = typeof p.salarioDiario === 'number' ? ('$' + p.salarioDiario.toFixed(2)) : (p.salarioDiario || 'N/A');
+                                    const diasP = p.diasUtilizados || p.dias || 'N/A';
+                                    const semanasP = p.semanasUtilizadas || p.semanas || (typeof diasP === 'number' ? (Math.round((diasP / 7) * 100) / 100) : 'N/A');
+                                    const fechaRango = `${p.fechaInicio || p.fecha_inicio || ''} al ${p.fechaFin || p.fecha_fin || ''}`;
+                                    return `
+                                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                                            <td style="padding: 6px 8px; color: #1e293b;">${p.patron || 'Patrón IMSS'}</td>
+                                            <td style="padding: 6px 8px; color: #475569; white-space: nowrap;">${fechaRango}</td>
+                                            <td style="padding: 6px 8px; color: #475569;">${diasP}</td>
+                                            <td style="padding: 6px 8px; color: #475569;">${semanasP}</td>
+                                            <td style="padding: 6px 8px; color: #16a34a; font-weight: 600;">${salarioP}</td>
+                                        </tr>
+                                    `;
+                                }).join('');
+                            }
+
+                            if (salarioPromedioInput) {
+                                salarioPromedioInput.value = data.salarioDiarioPromedio;
+                                salarioPromedioInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                salarioPromedioInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
                             if (semanasCotizadasInput && semanasExtraidas) {
                                 semanasCotizadasInput.value = semanasExtraidas;
                                 semanasCotizadasInput.dispatchEvent(new Event('input', { bubbles: true }));
                                 semanasCotizadasInput.dispatchEvent(new Event('change', { bubbles: true }));
                             }
-
-                            const formattedSalary = data.salarioDiarioPromedioFormateado || ('$' + Number(data.salarioDiarioPromedio).toFixed(2));
                             const periodosInfo = data.periodosUtilizados && data.periodosUtilizados.length
                                 ? '<div style=\"font-size: 0.85em; color: #285b2a; margin-top: 3px;\">Se consideraron <strong>' + (data.semanasConsideradas || 250) + '</strong> semanas de cotización en <strong>' + data.periodosUtilizados.length + '</strong> periodo(s).</div>'
                                 : '';
@@ -3320,9 +4223,11 @@
                                 });
                             }
                         } else {
-                            const errorMsg = data && data.message
-                                ? data.message
-                                : 'No se pudo interpretar el archivo PDF o calcular las últimas 250 semanas.';
+                            const errorMsg = (response && response.status === 403)
+                                ? 'Acceso no autorizado o vencido para esta funcionalidad.'
+                                : (data && (data.message || data.error)
+                                    ? (data.message || data.error)
+                                    : 'No se pudo interpretar el archivo PDF o calcular las últimas 250 semanas.');
 
                             pdfUploadStatus.innerHTML = '<div style=\"background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;\">' +
                                 '<div style=\"display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;\">' +
@@ -3788,6 +4693,8 @@
                         }
 
                         // Switch view to home or chat, and update UI
+                        window.userPensionPermisos = null;
+                        window.pensionCapacidades = null;
                         await checkAuthStatus();
                         const inicioLink = document.querySelector('a[data-section="inicio"]');
                         if (inicioLink) inicioLink.click();
