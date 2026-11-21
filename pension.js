@@ -597,8 +597,8 @@ function reconstructDeterministicPeriods(rawPeriods) {
     const normalized = [];
     for (const p of rawPeriods) {
         const patron = String(p.patron || p.empresa || 'PATRÓN REGISTRADO').trim();
-        const fDesde = parseDateToIso(p.fechaInicio || p.fecha_inicio || p.fechaDesde || p.fecha_desde);
-        const fHasta = parseDateToIso(p.fechaFin || p.fecha_fin || p.fechaHasta || p.fecha_hasta);
+        const fDesde = parseDateToIso(p.fechaInicio || p.fecha_inicio || p.fechaDesde || p.fecha_desde || p.fecha);
+        const fHasta = parseDateToIso(p.fechaFin || p.fecha_fin || p.fechaHasta || p.fecha_hasta || p.fecha);
         const rawSalStr = String(p.salarioDiario !== undefined ? p.salarioDiario : (p.salario_diario !== undefined ? p.salario_diario : (p.salario !== undefined ? p.salario : (p.sbc !== undefined ? p.sbc : '')))).replace(/,/g, '').trim();
         const sal = parseFloat(rawSalStr);
         const tipo = String(p.tipo || p.tipoMovimiento || '').toUpperCase();
@@ -628,22 +628,41 @@ function reconstructDeterministicPeriods(rawPeriods) {
     const reconstructed = [];
 
     for (const [_, group] of patronMap.entries()) {
-        const items = [...group.items].sort((a, b) => a.fechaDesde.localeCompare(b.fechaDesde) || a.fechaHasta.localeCompare(b.fechaHasta));
+        const items = [...group.items].sort((a, b) => {
+            if (a.fechaDesde !== b.fechaDesde) return a.fechaDesde.localeCompare(b.fechaDesde);
+            if (a.tipo.includes('BAJA') && !b.tipo.includes('BAJA')) return 1;
+            if (!a.tipo.includes('BAJA') && b.tipo.includes('BAJA')) return -1;
+            return a.fechaHasta.localeCompare(b.fechaHasta);
+        });
 
         let curPeriod = null;
 
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
+            const isBaja = item.tipo.includes('BAJA');
 
             if (!curPeriod) {
-                curPeriod = {
-                    patron: group.patron,
-                    fechaDesde: item.fechaDesde,
-                    fechaHasta: item.fechaHasta,
-                    salario: item.salario
-                };
+                if (isBaja) {
+                    reconstructed.push({
+                        patron: group.patron,
+                        fechaInicio: item.fechaDesde,
+                        fechaFin: item.fechaDesde,
+                        fechaDesde: item.fechaDesde,
+                        fechaHasta: item.fechaDesde,
+                        salarioDiario: item.salario,
+                        salario: item.salario,
+                        dias: 1
+                    });
+                } else {
+                    curPeriod = {
+                        patron: group.patron,
+                        fechaDesde: item.fechaDesde,
+                        fechaHasta: item.fechaHasta,
+                        salario: item.salario
+                    };
+                }
             } else {
-                if (item.tipo === 'BAJA') {
+                if (isBaja) {
                     curPeriod.fechaHasta = item.fechaDesde;
                     curPeriod.salario = item.salario || curPeriod.salario;
                     const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
@@ -658,25 +677,6 @@ function reconstructDeterministicPeriods(rawPeriods) {
                         dias
                     });
                     curPeriod = null;
-                } else if ((item.tipo === 'REINGRESO' || item.tipo === 'ALTA') && curPeriod.fechaHasta < addDaysToIso(item.fechaDesde, -1)) {
-                    // Reingreso o alta tras un periodo de inactividad con el mismo patrón
-                    const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
-                    reconstructed.push({
-                        patron: curPeriod.patron,
-                        fechaInicio: curPeriod.fechaDesde,
-                        fechaFin: curPeriod.fechaHasta,
-                        fechaDesde: curPeriod.fechaDesde,
-                        fechaHasta: curPeriod.fechaHasta,
-                        salarioDiario: curPeriod.salario,
-                        salario: curPeriod.salario,
-                        dias
-                    });
-                    curPeriod = {
-                        patron: group.patron,
-                        fechaDesde: item.fechaDesde,
-                        fechaHasta: item.fechaHasta,
-                        salario: item.salario
-                    };
                 } else if (item.salario === curPeriod.salario) {
                     if (item.fechaHasta > curPeriod.fechaHasta) {
                         curPeriod.fechaHasta = item.fechaHasta;
@@ -685,17 +685,18 @@ function reconstructDeterministicPeriods(rawPeriods) {
                     const prevDay = addDaysToIso(item.fechaDesde, -1);
                     curPeriod.fechaHasta = prevDay;
                     const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
-                    reconstructed.push({
-                        patron: curPeriod.patron,
-                        fechaInicio: curPeriod.fechaDesde,
-                        fechaFin: curPeriod.fechaHasta,
-                        fechaDesde: curPeriod.fechaDesde,
-                        fechaHasta: curPeriod.fechaHasta,
-                        salarioDiario: curPeriod.salario,
-                        salario: curPeriod.salario,
-                        dias
-                    });
-
+                    if (dias > 0) {
+                        reconstructed.push({
+                            patron: curPeriod.patron,
+                            fechaInicio: curPeriod.fechaDesde,
+                            fechaFin: curPeriod.fechaHasta,
+                            fechaDesde: curPeriod.fechaDesde,
+                            fechaHasta: curPeriod.fechaHasta,
+                            salarioDiario: curPeriod.salario,
+                            salario: curPeriod.salario,
+                            dias
+                        });
+                    }
                     curPeriod = {
                         patron: group.patron,
                         fechaDesde: item.fechaDesde,
@@ -708,16 +709,18 @@ function reconstructDeterministicPeriods(rawPeriods) {
 
         if (curPeriod) {
             const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
-            reconstructed.push({
-                patron: curPeriod.patron,
-                fechaInicio: curPeriod.fechaDesde,
-                fechaFin: curPeriod.fechaHasta,
-                fechaDesde: curPeriod.fechaDesde,
-                fechaHasta: curPeriod.fechaHasta,
-                salarioDiario: curPeriod.salario,
-                salario: curPeriod.salario,
-                dias
-            });
+            if (dias > 0) {
+                reconstructed.push({
+                    patron: curPeriod.patron,
+                    fechaInicio: curPeriod.fechaDesde,
+                    fechaFin: curPeriod.fechaHasta,
+                    fechaDesde: curPeriod.fechaDesde,
+                    fechaHasta: curPeriod.fechaHasta,
+                    salarioDiario: curPeriod.salario,
+                    salario: curPeriod.salario,
+                    dias
+                });
+            }
         }
     }
 
@@ -726,8 +729,72 @@ function reconstructDeterministicPeriods(rawPeriods) {
     return reconstructed;
 }
 
+/**
+ * Extrae movimientos atómicos del texto plano estructurado de un PDF digital del IMSS.
+ */
+function extractMovementsFromIMSSDocumentText(text) {
+    if (!text || typeof text !== 'string') return [];
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const rawMovements = [];
+    let currentPatron = '';
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (/nombre\s+del\s+patr[oó]n/i.test(line)) {
+            if (i + 1 < lines.length) {
+                currentPatron = lines[i + 1];
+            }
+        }
+
+        const dateMatch = line.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+        if (dateMatch) {
+            const isoDate = `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
+            let tipo = null;
+            let sal = null;
+            for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
+                const nextL = lines[j];
+                if (!tipo && (nextL.includes('BAJA') || nextL.includes('REINGRESO') || nextL.includes('MODIFICACION') || nextL.includes('ALTA'))) {
+                    tipo = nextL;
+                }
+                if (sal === null && nextL.includes('$')) {
+                    const sm = nextL.match(/[$]?\s*([0-9]+(?:\.[0-9]+)?)/);
+                    if (sm) {
+                        sal = parseFloat(sm[1]);
+                    }
+                }
+                if (tipo && sal !== null) break;
+            }
+            if (tipo && sal !== null) {
+                rawMovements.push({
+                    patron: currentPatron || 'CONTINUACION VOLUNTARIA EN EL REGIMEN OBLIGATORIO',
+                    fecha: isoDate,
+                    fechaInicio: isoDate,
+                    fechaFin: isoDate,
+                    fechaDesde: isoDate,
+                    fechaHasta: isoDate,
+                    tipo,
+                    salarioDiario: sal,
+                    salario: sal
+                });
+            }
+        }
+    }
+    return rawMovements;
+}
+
 function extractPeriodsFromIMSSDocumentText(text) {
     if (!text || typeof text !== 'string') return null;
+
+    // 1. Intento primario: extracción de movimientos atómicos del formato oficial del IMSS
+    const movements = extractMovementsFromIMSSDocumentText(text);
+    if (movements && movements.length > 0) {
+        const reconstructed = reconstructDeterministicPeriods(movements);
+        if (reconstructed && reconstructed.length > 0) {
+            return reconstructed;
+        }
+    }
+
+    // 2. Fallback: extracción de líneas con pares de fechas
     const periods = [];
     const lines = text.split(/\r?\n/);
 
@@ -1109,6 +1176,7 @@ if (typeof window !== 'undefined') {
     window.calculateIMSSLey73Pension = calculateIMSSLey73Pension;
     window.calculateAverageSalaryLast250Weeks = calculateAverageSalaryLast250Weeks;
     window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
+    window.extractMovementsFromIMSSDocumentText = extractMovementsFromIMSSDocumentText;
     window.validateAndCalculatePensionPeriods = validateAndCalculatePensionPeriods;
     window.calculatePensionProjection = calculatePensionProjection;
     window.extractBirthDateFromCurp = extractBirthDateFromCurp;
@@ -1116,6 +1184,8 @@ if (typeof window !== 'undefined') {
     window.calcularEdadPensionaria = calcularEdadPensionaria;
     window.reconstructDeterministicPeriods = reconstructDeterministicPeriods;
     window.calculateInclusiveDays = calculateInclusiveDays;
+    window.parseDateToIso = parseDateToIso;
+    window.addDaysToIso = addDaysToIso;
     window.TABLA_PORCENTAJES_LEY73 = TABLA_EDAD;
 }
 
@@ -1126,6 +1196,7 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateIMSSLey73Pension,
         calculateAverageSalaryLast250Weeks,
         extractPeriodsFromIMSSDocumentText,
+        extractMovementsFromIMSSDocumentText,
         validateAndCalculatePensionPeriods,
         calculatePensionProjection,
         extractBirthDateFromCurp,
@@ -1133,6 +1204,8 @@ if (typeof module !== 'undefined' && module.exports) {
         calcularEdadPensionaria,
         reconstructDeterministicPeriods,
         calculateInclusiveDays,
+        parseDateToIso,
+        addDaysToIso,
         TABLA_GRUPOS_SALARIALES,
         TABLA_EDAD,
         TABLA_PORCENTAJES_LEY73: TABLA_EDAD,

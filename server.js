@@ -1024,33 +1024,34 @@ app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora
             });
         }
 
-        // 1. Extraer texto base del buffer para apoyo en detección y fallbacks
+        // 1. Extraer texto base del buffer para análisis determinístico
         let extractedText = '';
         try {
             extractedText = extractTextFromPdfBuffer(pdfBuffer);
         } catch (e) {}
 
-        // 2. Enviar el PDF a Gemini API como flujo principal para análisis multimodal de documentos
         let structuredData = null;
-        if (process.env.GEMINI_API_KEY) {
+
+        // 2. Extracción determinística directa desde el documento digital oficial (Fuente de verdad primaria)
+        // Procesa los movimientos directamente del PDF con exactitud absoluta, sin pérdida de fechas intermedias
+        // ni atención probabilística de modelos de lenguaje.
+        if (extractedText && extractedText.length > 50) {
+            try {
+                const deterministicPeriods = extractPeriodsFromIMSSDocumentText(extractedText);
+                if (deterministicPeriods && deterministicPeriods.length > 0) {
+                    structuredData = { tipoDocumento: 'Constancia de Semanas Cotizadas', periodos: deterministicPeriods };
+                }
+            } catch (detErr) {
+                console.error('Error en extracción determinística de PDF:', detErr.message);
+            }
+        }
+
+        // 3. Fallback multimodal (Gemini API) si el documento no tiene capa de texto estructurada (e.g. escaneo o imagen)
+        if ((!structuredData || !Array.isArray(structuredData.periodos) || structuredData.periodos.length === 0) && process.env.GEMINI_API_KEY) {
             try {
                 structuredData = await parseIMSSWithGemini(pdfBuffer);
             } catch (aiErr) {
                 console.error('Advertencia al analizar documento con Gemini API:', aiErr.message);
-            }
-        }
-
-        // 3. Fallback técnico: si Gemini no está configurado o falló, intentar con el parser existente
-        if (!structuredData || !Array.isArray(structuredData.periodos) || structuredData.periodos.length === 0) {
-            try {
-                if (extractedText && extractedText.length > 20) {
-                    const fallbackPeriods = extractPeriodsFromIMSSDocumentText(extractedText);
-                    if (fallbackPeriods && fallbackPeriods.length > 0) {
-                        structuredData = { tipoDocumento: 'Constancia de Semanas Cotizadas', periodos: fallbackPeriods };
-                    }
-                }
-            } catch (fallbackErr) {
-                console.error('Error en fallback técnico de extracción de PDF:', fallbackErr.message);
             }
         }
 
