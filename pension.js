@@ -467,6 +467,246 @@ function parseDateToIso(str) {
     return null;
 }
 
+function addDaysToIso(isoStr, numDays) {
+    const [y, m, d] = isoStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + numDays, 12, 0, 0));
+    return dt.toISOString().slice(0, 10);
+}
+
+function calculateInclusiveDays(isoDesde, isoHasta) {
+    const [y1, m1, d1] = isoDesde.split('-').map(Number);
+    const [y2, m2, d2] = isoHasta.split('-').map(Number);
+    const utc1 = Date.UTC(y1, m1 - 1, d1, 12, 0, 0);
+    const utc2 = Date.UTC(y2, m2 - 1, d2, 12, 0, 0);
+    return Math.round((utc2 - utc1) / 86400000) + 1;
+}
+
+/**
+ * Extrae la fecha de nacimiento (YYYY-MM-DD) a partir del CURP oficial de 18 caracteres.
+ * Aplica regla de siglo RENAPO y contexto de asegurados Ley 73.
+ */
+function extractBirthDateFromCurp(curp) {
+    if (!curp || typeof curp !== 'string') return null;
+    const match = curp.trim().toUpperCase().match(/^[A-Z]{4}(\d{2})(\d{2})(\d{2})[HM][A-Z]{5}[A-Z0-9]\d$/);
+    if (!match) return null;
+    const yy = parseInt(match[1], 10);
+    const mm = match[2];
+    const dd = match[3];
+    // Regla de siglo oficial RENAPO para CURP: Si el año de nacimiento de dos dígitos es > 30 (o según el dígito verificador), pertenece a 1900s, si es <= 30 a 2000s
+    // Para asegurados del régimen Ley 73 (cotizaciones previas a julio 1997), nacieron en el siglo XX (1900s)
+    const fullYear = yy >= 20 ? 1900 + yy : 2000 + yy;
+    return `${fullYear}-${mm}-${dd}`;
+}
+
+/**
+ * Calcula el umbral legal de cumpleaños + 6 meses + 1 día para avanzar de escalón de edad en Ley 73.
+ */
+function calcularUmbralMas6Meses1Dia(fechaCumple) {
+    const [y, m, d] = fechaCumple.split('-').map(Number);
+    let targetYear = y;
+    let targetMonth = m + 6;
+    if (targetMonth > 12) {
+        targetYear += Math.floor((targetMonth - 1) / 12);
+        targetMonth = ((targetMonth - 1) % 12) + 1;
+    }
+    const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+    const clampedDay = Math.min(d, daysInTargetMonth);
+    const dt = new Date(Date.UTC(targetYear, targetMonth - 1, clampedDay, 12, 0, 0));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Evalúa determinísticamente la edad pensionaria resultante y el porcentaje aplicable según la Ley 73.
+ * Aplica la regla general de Cumpleaños + 6 meses + 1 día para todas las edades de 60 a 65:
+ * 60 -> 61 (75% -> 80%), 61 -> 62 (80% -> 85%), 62 -> 63 (85% -> 90%),
+ * 63 -> 64 (90% -> 95%), 64 -> 65 (95% -> 100%).
+ */
+function calcularEdadPensionaria(fechaNacimientoStr, fechaBajaStr) {
+    const fNac = parseDateToIso(fechaNacimientoStr);
+    const fBaja = parseDateToIso(fechaBajaStr);
+    if (!fNac || !fBaja) return null;
+
+    const [yNac, mNac, dNac] = fNac.split('-').map(Number);
+    const [yBaja, mBaja, dBaja] = fBaja.split('-').map(Number);
+
+    let edadCalendario = yBaja - yNac;
+    if (mBaja < mNac || (mBaja === mNac && dBaja < dNac)) {
+        edadCalendario--;
+    }
+
+    if (edadCalendario < 60) {
+        return {
+            fechaNacimiento: fNac,
+            fechaBaja: fBaja,
+            edadCalendario,
+            edadPensionaria: edadCalendario,
+            porcentajeLey73: 0,
+            aplicaFraccion6Meses1Dia: false,
+            umbralSiguienteEdad: null
+        };
+    }
+
+    if (edadCalendario >= 65) {
+        return {
+            fechaNacimiento: fNac,
+            fechaBaja: fBaja,
+            edadCalendario,
+            edadPensionaria: 65,
+            porcentajeLey73: 1.00,
+            aplicaFraccion6Meses1Dia: false,
+            umbralSiguienteEdad: null
+        };
+    }
+
+    const anioCumple = yNac + edadCalendario;
+    const fechaCumple = `${anioCumple}-${String(mNac).padStart(2, '0')}-${String(dNac).padStart(2, '0')}`;
+    const umbral = calcularUmbralMas6Meses1Dia(fechaCumple);
+
+    let edadPensionaria = edadCalendario;
+    let aplicaFraccion = false;
+    if (fBaja >= umbral) {
+        edadPensionaria = Math.min(edadCalendario + 1, 65);
+        aplicaFraccion = true;
+    }
+
+    return {
+        fechaNacimiento: fNac,
+        fechaBaja: fBaja,
+        fechaCumple,
+        umbralSiguienteEdad: umbral,
+        edadCalendario,
+        edadPensionaria,
+        porcentajeLey73: TABLA_EDAD[edadPensionaria] || 0.75,
+        aplicaFraccion6Meses1Dia: aplicaFraccion
+    };
+}
+
+/**
+ * Máquina de Estados determinística para la reconstrucción de vigencias salariales:
+ * 1. Procesa cada sección patronal de forma independiente en orden cronológico.
+ * 2. Inicio de vigencia en fecha del movimiento.
+ * 3. Movimientos consecutivos del mismo patrón con mismo salario se consolidan sin corte artificial.
+ * 4. Cambio efectivo de salario corta el periodo anterior en (F_siguiente - 1 día natural).
+ * 5. Baja concluye exactamente en la fecha de baja (inclusive).
+ * 6. Cómputo exacto de días naturales: (F_hasta - F_desde) + 1.
+ */
+function reconstructDeterministicPeriods(rawPeriods) {
+    if (!Array.isArray(rawPeriods) || rawPeriods.length === 0) return [];
+
+    const normalized = [];
+    for (const p of rawPeriods) {
+        const patron = String(p.patron || p.empresa || 'PATRÓN REGISTRADO').trim();
+        const fDesde = parseDateToIso(p.fechaInicio || p.fecha_inicio || p.fechaDesde || p.fecha_desde);
+        const fHasta = parseDateToIso(p.fechaFin || p.fecha_fin || p.fechaHasta || p.fecha_hasta);
+        const rawSalStr = String(p.salarioDiario !== undefined ? p.salarioDiario : (p.salario_diario !== undefined ? p.salario_diario : (p.salario !== undefined ? p.salario : (p.sbc !== undefined ? p.sbc : '')))).replace(/,/g, '').trim();
+        const sal = parseFloat(rawSalStr);
+        const tipo = String(p.tipo || p.tipoMovimiento || '').toUpperCase();
+
+        if (fDesde && !isNaN(sal) && sal > 0) {
+            normalized.push({
+                patron,
+                fechaDesde: fDesde,
+                fechaHasta: fHasta || fDesde,
+                salario: Math.round(sal * 100) / 100,
+                tipo
+            });
+        }
+    }
+
+    if (normalized.length === 0) return [];
+
+    const patronMap = new Map();
+    for (const item of normalized) {
+        const key = item.patron.toUpperCase();
+        if (!patronMap.has(key)) {
+            patronMap.set(key, { patron: item.patron, items: [] });
+        }
+        patronMap.get(key).items.push(item);
+    }
+
+    const reconstructed = [];
+
+    for (const [_, group] of patronMap.entries()) {
+        const items = [...group.items].sort((a, b) => a.fechaDesde.localeCompare(b.fechaDesde) || a.fechaHasta.localeCompare(b.fechaHasta));
+
+        let curPeriod = null;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+
+            if (!curPeriod) {
+                curPeriod = {
+                    patron: group.patron,
+                    fechaDesde: item.fechaDesde,
+                    fechaHasta: item.fechaHasta,
+                    salario: item.salario
+                };
+            } else {
+                if (item.tipo === 'BAJA') {
+                    curPeriod.fechaHasta = item.fechaDesde;
+                    curPeriod.salario = item.salario || curPeriod.salario;
+                    const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
+                    reconstructed.push({
+                        patron: curPeriod.patron,
+                        fechaInicio: curPeriod.fechaDesde,
+                        fechaFin: curPeriod.fechaHasta,
+                        fechaDesde: curPeriod.fechaDesde,
+                        fechaHasta: curPeriod.fechaHasta,
+                        salarioDiario: curPeriod.salario,
+                        salario: curPeriod.salario,
+                        dias
+                    });
+                    curPeriod = null;
+                } else if (item.salario === curPeriod.salario) {
+                    if (item.fechaHasta > curPeriod.fechaHasta) {
+                        curPeriod.fechaHasta = item.fechaHasta;
+                    }
+                } else {
+                    const prevDay = addDaysToIso(item.fechaDesde, -1);
+                    curPeriod.fechaHasta = curPeriod.fechaHasta && curPeriod.fechaHasta < prevDay ? curPeriod.fechaHasta : prevDay;
+                    const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
+                    reconstructed.push({
+                        patron: curPeriod.patron,
+                        fechaInicio: curPeriod.fechaDesde,
+                        fechaFin: curPeriod.fechaHasta,
+                        fechaDesde: curPeriod.fechaDesde,
+                        fechaHasta: curPeriod.fechaHasta,
+                        salarioDiario: curPeriod.salario,
+                        salario: curPeriod.salario,
+                        dias
+                    });
+
+                    curPeriod = {
+                        patron: group.patron,
+                        fechaDesde: item.fechaDesde,
+                        fechaHasta: item.fechaHasta,
+                        salario: item.salario
+                    };
+                }
+            }
+        }
+
+        if (curPeriod) {
+            const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
+            reconstructed.push({
+                patron: curPeriod.patron,
+                fechaInicio: curPeriod.fechaDesde,
+                fechaFin: curPeriod.fechaHasta,
+                fechaDesde: curPeriod.fechaDesde,
+                fechaHasta: curPeriod.fechaHasta,
+                salarioDiario: curPeriod.salario,
+                salario: curPeriod.salario,
+                dias
+            });
+        }
+    }
+
+    reconstructed.sort((a, b) => b.fechaHasta.localeCompare(a.fechaHasta) || b.fechaDesde.localeCompare(a.fechaDesde));
+
+    return reconstructed;
+}
+
 function extractPeriodsFromIMSSDocumentText(text) {
     if (!text || typeof text !== 'string') return null;
     const periods = [];
@@ -556,12 +796,22 @@ function validateAndCalculatePensionPeriods(aiData) {
         return { success: false, error: 'INVALID_AI_RESPONSE', message: 'La respuesta no contiene una estructura de datos válida.' };
     }
 
-    const periodos = aiData.periodos;
-    if (!Array.isArray(periodos) || periodos.length === 0) {
+    const rawPeriodos = aiData.periodos;
+    if (!Array.isArray(rawPeriodos) || rawPeriodos.length === 0) {
         return { success: false, error: 'NO_PERIODS', message: 'No se identificaron periodos de cotización en el documento.' };
     }
 
-    return calculateAverageSalaryLast250Weeks(periodos);
+    // Unificación de la fuente de verdad: Reconstrucción determinística de vigencias (Máquina de Estados)
+    const periodosReconstruidos = reconstructDeterministicPeriods(rawPeriodos);
+    const periodosParaCalculo = (periodosReconstruidos && periodosReconstruidos.length > 0)
+        ? periodosReconstruidos
+        : rawPeriodos;
+
+    const result = calculateAverageSalaryLast250Weeks(periodosParaCalculo);
+    if (result && result.success) {
+        result.periodosReconstruidos = periodosReconstruidos;
+    }
+    return result;
 }
 
 /**
@@ -581,6 +831,8 @@ function calculatePensionProjection(params) {
         fechaHasta,
         edadRetiroActual = 60,
         edadRetiroProyectada = null,
+        fechaNacimiento = null,
+        curp = null,
         tieneEsposa = false,
         numeroHijos = 0,
         tienePadresDependientes = false,
@@ -753,9 +1005,22 @@ function calculatePensionProjection(params) {
     const pensionActual = calculateIMSSLey73Pension(dataActual);
 
     // 5. Cálculo de Pensión Proyectada
-    const edadProy = edadRetiroProyectada !== null && !isNaN(parseInt(edadRetiroProyectada, 10))
+    let birthDate = fechaNacimiento ? parseDateToIso(fechaNacimiento) : null;
+    if (!birthDate && curp) {
+        birthDate = extractBirthDateFromCurp(curp);
+    }
+
+    let edadProy = edadRetiroProyectada !== null && !isNaN(parseInt(edadRetiroProyectada, 10))
         ? parseInt(edadRetiroProyectada, 10)
         : dataActual.edad;
+
+    let edadPensionariaInfo = null;
+    if (birthDate && isoHasta) {
+        edadPensionariaInfo = calcularEdadPensionaria(birthDate, isoHasta);
+        if (edadPensionariaInfo && edadPensionariaInfo.edadPensionaria) {
+            edadProy = edadPensionariaInfo.edadPensionaria;
+        }
+    }
 
     const dataProyectada = {
         salarioMinimo: salMinProj,
@@ -806,6 +1071,8 @@ function calculatePensionProjection(params) {
             nuevoSalarioPromedio,
             salarioMinimoEstimado: salMinProj,
             salarioDiarioProyectado: salProj,
+            edadProyectada: edadProy,
+            edadPensionariaInfo,
             pensionMensual: pensionProyectada.pensionFinalMensual,
             desglose: pensionProyectada
         },
@@ -825,6 +1092,12 @@ if (typeof window !== 'undefined') {
     window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
     window.validateAndCalculatePensionPeriods = validateAndCalculatePensionPeriods;
     window.calculatePensionProjection = calculatePensionProjection;
+    window.extractBirthDateFromCurp = extractBirthDateFromCurp;
+    window.calcularUmbralMas6Meses1Dia = calcularUmbralMas6Meses1Dia;
+    window.calcularEdadPensionaria = calcularEdadPensionaria;
+    window.reconstructDeterministicPeriods = reconstructDeterministicPeriods;
+    window.calculateInclusiveDays = calculateInclusiveDays;
+    window.TABLA_PORCENTAJES_LEY73 = TABLA_EDAD;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -836,8 +1109,14 @@ if (typeof module !== 'undefined' && module.exports) {
         extractPeriodsFromIMSSDocumentText,
         validateAndCalculatePensionPeriods,
         calculatePensionProjection,
+        extractBirthDateFromCurp,
+        calcularUmbralMas6Meses1Dia,
+        calcularEdadPensionaria,
+        reconstructDeterministicPeriods,
+        calculateInclusiveDays,
         TABLA_GRUPOS_SALARIALES,
         TABLA_EDAD,
+        TABLA_PORCENTAJES_LEY73: TABLA_EDAD,
         FACTOR_ADICIONAL
     };
 }

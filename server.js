@@ -18,6 +18,9 @@ const {
     validateAndCalculatePensionPeriods,
     calculatePensionProjection,
     calculateIMSSLey73Pension,
+    extractBirthDateFromCurp,
+    calcularEdadPensionaria,
+    reconstructDeterministicPeriods,
     SALARIO_MINIMO_GENERAL_VIGENTE,
     SALARIOS_MINIMOS_GENERALES
 } = require('./pension');
@@ -881,7 +884,14 @@ function extractAseguradoInfo(extractedText) {
         }
     }
 
-    return { nombreAsegurado, totalSemanasCotizadas };
+    // 3. Extraer CURP oficial del asegurado
+    let curp = null;
+    const curpMatch = extractedText.match(/\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d\b/i);
+    if (curpMatch) {
+        curp = curpMatch[0].toUpperCase();
+    }
+
+    return { nombreAsegurado, totalSemanasCotizadas, curp };
 }
 
 function extractTotalSemanasFromIMSSDocument(extractedText) {
@@ -1051,10 +1061,12 @@ app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora
             });
         }
 
-        // 4. Determinación directa de metadatos del asegurado (semanas y nombre) desde el PDF
+        // 4. Determinación directa de metadatos del asegurado (semanas, nombre y CURP) desde el PDF
         const infoAsegurado = extractAseguradoInfo(extractedText);
         const totalSemanasExtraidas = infoAsegurado.totalSemanasCotizadas;
         const nombreAsegurado = infoAsegurado.nombreAsegurado;
+        const curpAsegurado = infoAsegurado.curp;
+        const fechaNacimientoAsegurado = curpAsegurado ? extractBirthDateFromCurp(curpAsegurado) : null;
 
         // 5. Validación matemática estricta y cálculo ponderado en el backend por días (1,750 días)
         const validation = validateAndCalculatePensionPeriods(structuredData);
@@ -1066,21 +1078,34 @@ app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora
             });
         }
 
+        // Evaluar edad pensionaria actual si se cuenta con CURP y fecha de corte
+        let edadPensionariaActual = null;
+        const periodosFuente = (validation.periodosReconstruidos && validation.periodosReconstruidos.length > 0)
+            ? validation.periodosReconstruidos
+            : validation.periodos;
+
+        if (fechaNacimientoAsegurado && periodosFuente && periodosFuente.length > 0) {
+            const ultimaFechaCotizacion = periodosFuente[0].fechaHasta || periodosFuente[0].fechaFin;
+            if (ultimaFechaCotizacion) {
+                edadPensionariaActual = calcularEdadPensionaria(fechaNacimientoAsegurado, ultimaFechaCotizacion);
+            }
+        }
+
         // 6. Persistencia transaccional del historial estructurado en usuario_periodos_imss
         // Cada nueva carga del archivo reemplaza completamente el historial anterior del usuario
         let historialGuardado = false;
         let periodosGuardadosCount = 0;
-        if (req.userId && validation.periodos && validation.periodos.length > 0) {
+        if (req.userId && periodosFuente && periodosFuente.length > 0) {
             let conn = null;
             try {
                 conn = await pool.getConnection();
                 await conn.beginTransaction();
                 await conn.query("DELETE FROM usuario_periodos_imss WHERE usuario_id = ?", [req.userId]);
 
-                for (const p of validation.periodos) {
-                    const fDesde = p.fechaInicio || p.fecha_inicio;
-                    const fHasta = p.fechaFin || p.fecha_fin;
-                    const sal = parseFloat(p.salarioDiario || p.salario_diario || p.salario);
+                for (const p of periodosFuente) {
+                    const fDesde = p.fechaDesde || p.fechaInicio || p.fecha_desde || p.fecha_inicio;
+                    const fHasta = p.fechaHasta || p.fechaFin || p.fecha_hasta || p.fecha_fin;
+                    const sal = parseFloat(p.salario || p.salarioDiario || p.salario_diario);
                     const dias = parseInt(p.dias || p.diasUtilizados, 10) || 1;
                     const patron = String(p.patron || p.empresa || "PATRÓN REGISTRADO").substring(0, 255);
 
@@ -1129,8 +1154,12 @@ app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora
             totalSemanasCotizadas: totalSemanasExtraidas,
             totalSemanasDocumento: totalSemanasExtraidas || validation.semanasTotales,
             nombreAsegurado: nombreAsegurado || null,
+            curp: curpAsegurado || null,
+            fechaNacimiento: fechaNacimientoAsegurado || null,
+            edadPensionaria: edadPensionariaActual,
             periodos: validation.periodos,
             periodosUtilizados: validation.periodos,
+            periodosReconstruidos: periodosFuente,
             historialGuardado,
             periodosGuardados: periodosGuardadosCount,
             esReporteResumen,
@@ -1152,11 +1181,15 @@ app.get('/api/pension/historial-imss', requireAnyPermission(['calculadora.interm
             "SELECT id, patron, DATE_FORMAT(fecha_desde, '%Y-%m-%d') as fechaDesde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') as fechaHasta, salario, dias FROM usuario_periodos_imss WHERE usuario_id = ? ORDER BY fecha_hasta DESC, fecha_desde DESC",
             [req.userId]
         );
+        const formattedRows = rows.map(r => ({
+            ...r,
+            salario: parseFloat(r.salario)
+        }));
         res.status(200).json({
             success: true,
-            count: rows.length,
-            tieneHistorial: rows.length > 0,
-            periodos: rows
+            count: formattedRows.length,
+            tieneHistorial: formattedRows.length > 0,
+            periodos: formattedRows
         });
     } catch (err) {
         console.error('Error in /api/pension/historial-imss:', err);
@@ -1231,6 +1264,8 @@ app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'c
 app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']), async (req, res) => {
     try {
         let periodosHistoricos = null;
+        let fechaNacimiento = req.body.fechaNacimiento || null;
+
         if (req.userId) {
             try {
                 const [rows] = await pool.query(
@@ -1243,10 +1278,23 @@ app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']
             } catch (queryErr) {
                 console.warn('Advertencia al consultar historial para proyección:', queryErr.message);
             }
+
+            if (!fechaNacimiento) {
+                try {
+                    const [userRows] = await pool.query(
+                        "SELECT fecha_nacimiento FROM usuarios WHERE id = ?",
+                        [req.userId]
+                    );
+                    if (userRows && userRows[0] && userRows[0].fecha_nacimiento) {
+                        fechaNacimiento = userRows[0].fecha_nacimiento;
+                    }
+                } catch (uErr) {}
+            }
         }
 
         const projectionResult = calculatePensionProjection({
             ...req.body,
+            fechaNacimiento,
             periodosHistoricos
         });
 
