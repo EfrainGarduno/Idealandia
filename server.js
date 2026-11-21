@@ -21,6 +21,8 @@ const {
     extractBirthDateFromCurp,
     calcularEdadPensionaria,
     reconstructDeterministicPeriods,
+    determinarUltimoPeriodoCronologico,
+    validarSalarioProyectadoVsUltimoPeriodo,
     SALARIO_MINIMO_GENERAL_VIGENTE,
     SALARIOS_MINIMOS_GENERALES
 } = require('./pension');
@@ -1187,15 +1189,41 @@ app.get('/api/pension/historial-imss', requireAnyPermission(['calculadora.interm
             ...r,
             salario: parseFloat(r.salario)
         }));
+        const ultimoPeriodo = determinarUltimoPeriodoCronologico(formattedRows);
         res.status(200).json({
             success: true,
             count: formattedRows.length,
             tieneHistorial: formattedRows.length > 0,
+            ultimoPeriodo: ultimoPeriodo,
+            ultimoSalario: ultimoPeriodo ? ultimoPeriodo.salario : null,
             periodos: formattedRows
         });
     } catch (err) {
         console.error('Error in /api/pension/historial-imss:', err);
         res.status(500).json({ error: 'Error al consultar el historial IMSS del usuario.' });
+    }
+});
+
+app.get('/api/pension/ultimo-salario-vigente', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            "SELECT id, patron, DATE_FORMAT(fecha_desde, '%Y-%m-%d') as fechaDesde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') as fechaHasta, salario, dias FROM usuario_periodos_imss WHERE usuario_id = ? ORDER BY fecha_hasta DESC, fecha_desde DESC",
+            [req.userId]
+        );
+        const formattedRows = rows.map(r => ({
+            ...r,
+            salario: parseFloat(r.salario)
+        }));
+        const ultimoPeriodo = determinarUltimoPeriodoCronologico(formattedRows);
+        res.status(200).json({
+            success: true,
+            tieneHistorial: Boolean(ultimoPeriodo),
+            ultimoPeriodo: ultimoPeriodo,
+            ultimoSalario: ultimoPeriodo ? ultimoPeriodo.salario : null
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/ultimo-salario-vigente:', err);
+        res.status(500).json({ error: 'Error al consultar el último salario vigente del usuario.' });
     }
 });
 
@@ -1306,6 +1334,15 @@ app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']
                 message: projectionResult.message
             });
         }
+
+        if (periodosHistoricos && periodosHistoricos.length > 0) {
+            const ultimoPeriodo = determinarUltimoPeriodoCronologico(periodosHistoricos);
+            if (ultimoPeriodo) {
+                projectionResult.ultimoPeriodo = ultimoPeriodo;
+                projectionResult.ultimoSalario = ultimoPeriodo.salario;
+            }
+        }
+
         res.status(200).json(projectionResult);
     } catch (err) {
         console.error('Error in /api/pension/proyectar:', err);

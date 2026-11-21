@@ -587,44 +587,117 @@
                 <p>Herramientas especializadas para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.</p>
 
                 <!-- Panel Informativo: Las 3 Modalidades y lo que incluye cada una -->
-                <div class="pension-modalidades-info-banner" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin-bottom: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                    <div style="font-weight: 700; color: #1e293b; font-size: 1.05em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-layer-group" style="color: #2563eb;"></i> Modalidades de la Calculadora de Pensiones
+                <div class="pension-modalidades-info-banner" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 22px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <div style="font-weight: 700; color: #1e293b; font-size: 1.08em; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <span style="display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-layer-group" style="color: #2563eb; font-size: 1.1em;"></i> Modalidades de la Calculadora de Pensiones Ley 73
+                        </span>
+                        <span style="font-size: 0.8em; font-weight: 500; color: #64748b; background: #f1f5f9; padding: 3px 10px; border-radius: 12px;">
+                            Elige la opción que mejor se adapte a tu expediente
+                        </span>
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
                         <!-- Básica -->
-                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #64748b; border-radius: 8px; padding: 14px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <strong style="color: #0f172a; font-size: 0.98em;">1. Calculadora Básica</strong>
-                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; color: #475569; font-weight: 600;">Básica</span>
-                            </div>
-                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Realiza los cálculos básicos para estimar tu pensión.</p>
-                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
-                                <strong style="color: #1e293b;">Incluye:</strong> Captura manual de semanas cotizadas, salario promedio diario y edad de retiro para estimar la pensión bajo el Régimen Ley 73 con asignaciones familiares y ayuda asistencial.
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 4px solid #64748b; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <strong style="color: #0f172a; font-size: 1.02em; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-calculator" style="color: #64748b;"></i> 1. Calculadora Básica
+                                    </strong>
+                                    <span style="font-size: 0.75em; padding: 2px 10px; border-radius: 12px; background: #e2e8f0; color: #475569; font-weight: 700;">Básica</span>
+                                </div>
+                                <p style="margin: 0 0 10px 0; font-size: 0.85em; color: #64748b; font-style: italic; line-height: 1.35;">
+                                    Estimación ágil y directa con datos capturados manualmente.
+                                </p>
+                                <div style="font-size: 0.82em; color: #1e293b; font-weight: 600; margin-bottom: 6px;">
+                                    Características incluidas:
+                                </div>
+                                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.82em; color: #334155; line-height: 1.5; display: flex; flex-direction: column; gap: 5px;">
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #10b981; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Captura manual de semanas, salario diario promedio y edad de retiro.</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #10b981; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Cálculo oficial de cuantía básica e incrementos anuales Ley 73.</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #10b981; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Asignaciones familiares (esposa, hijos, padres) y ayuda asistencial.</span>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
 
                         <!-- Intermedia -->
-                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #2563eb; border-radius: 8px; padding: 14px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <strong style="color: #0f172a; font-size: 0.98em;">2. Calculadora Intermedia</strong>
-                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1d4ed8; font-weight: 600;">Intermedia</span>
-                            </div>
-                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Incluye los cálculos básicos y herramientas adicionales para una estimación más precisa.</p>
-                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
-                                <strong style="color: #1e293b;">Incluye:</strong> Todo lo de Básica + Obtención automática del salario mínimo general vigente, carga inteligente y procesamiento de tu reporte PDF del IMSS (semanas y salario promedio últimas 250 semanas) y tabla de verificación de periodos reconocidos.
+                        <div style="background: #f8fafc; border: 1px solid #bfdbfe; border-top: 4px solid #2563eb; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <strong style="color: #0f172a; font-size: 1.02em; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-file-invoice" style="color: #2563eb;"></i> 2. Calculadora Intermedia
+                                    </strong>
+                                    <span style="font-size: 0.75em; padding: 2px 10px; border-radius: 12px; background: #dbeafe; color: #1d4ed8; font-weight: 700;">Intermedia</span>
+                                </div>
+                                <p style="margin: 0 0 10px 0; font-size: 0.85em; color: #1e40af; font-style: italic; line-height: 1.35;">
+                                    Cálculo inteligente asistido por tu reporte oficial del IMSS.
+                                </p>
+                                <div style="font-size: 0.82em; color: #1e293b; font-weight: 600; margin-bottom: 6px;">
+                                    Todo lo de Básica, más:
+                                </div>
+                                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.82em; color: #334155; line-height: 1.5; display: flex; flex-direction: column; gap: 5px;">
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #2563eb; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Procesamiento automático de tu reporte de Semanas Cotizadas (PDF).</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #2563eb; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Cálculo exacto del salario promedio de las últimas 250 semanas.</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #2563eb; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Salario Mínimo General vigente actualizado automáticamente.</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #2563eb; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Tabla de verificación y desglose de periodos reconocidos.</span>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
 
                         <!-- Avanzada -->
-                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid #d97706; border-radius: 8px; padding: 14px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <strong style="color: #0f172a; font-size: 0.98em;">3. Calculadora Avanzada</strong>
-                                <span style="font-size: 0.75em; padding: 2px 8px; border-radius: 10px; background: #fef3c7; color: #b45309; font-weight: 600;">Avanzada</span>
-                            </div>
-                            <p style="margin: 0 0 6px 0; font-size: 0.86em; color: #64748b; font-style: italic;">Incluye todas las herramientas y permite realizar proyecciones para analizar escenarios y buscar una mejor pensión.</p>
-                            <div style="font-size: 0.82em; color: #334155; line-height: 1.45;">
-                                <strong style="color: #1e293b;">Incluye:</strong> Todo lo de Básica e Intermedia + Simulador de Proyecciones Actuariales con ventana deslizante de 1,750 días (250 semanas), modelado de escenarios a futuro con nuevo salario de cotización (Modalidad 40), cálculo dinámico de semanas y comparativa lado a lado Situación Actual vs Situación Proyectada con transferencia directa de valores.
+                        <div style="background: #f8fafc; border: 1px solid #fde68a; border-top: 4px solid #d97706; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <strong style="color: #0f172a; font-size: 1.02em; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-chart-line" style="color: #d97706;"></i> 3. Calculadora Avanzada
+                                    </strong>
+                                    <span style="font-size: 0.75em; padding: 2px 10px; border-radius: 12px; background: #fef3c7; color: #b45309; font-weight: 700;">Avanzada</span>
+                                </div>
+                                <p style="margin: 0 0 10px 0; font-size: 0.85em; color: #92400e; font-style: italic; line-height: 1.35;">
+                                    Simulador actuarial completo para maximizar y planificar tu pensión.
+                                </p>
+                                <div style="font-size: 0.82em; color: #1e293b; font-weight: 600; margin-bottom: 6px;">
+                                    Todo lo de Básica e Intermedia, más:
+                                </div>
+                                <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.82em; color: #334155; line-height: 1.5; display: flex; flex-direction: column; gap: 5px;">
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #d97706; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Simulador de proyecciones con ventana deslizante de 1,750 días (250 semanas).</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #d97706; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Modelado de escenarios futuros (Modalidad 40) con nuevo salario proyectado.</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #d97706; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Comparativa lado a lado: <em>Situación Actual vs. Situación Proyectada</em>.</span>
+                                    </li>
+                                    <li style="display: flex; align-items: flex-start; gap: 6px;">
+                                        <i class="fas fa-check-circle" style="color: #d97706; margin-top: 3px; font-size: 0.9em;"></i>
+                                        <span>Transferencia directa de semanas, nuevo salario y edad a la calculadora.</span>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -869,6 +942,36 @@
                             <!-- Renderizado dinámico de la comparativa -->
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- MODAL: Advertencia Salario Proyectado Menor (Regla de Negocio) -->
+            <div id="modal-advertencia-salario-proyectado" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(4px); z-index: 10001; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
+                <div class="modal-advertencia-dialog" style="background: #ffffff; width: 100%; max-width: 530px; border-radius: 14px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35); padding: 26px; position: relative; font-family: 'Poppins', sans-serif; box-sizing: border-box; border-top: 5px solid #f59e0b;">
+                    <div style="display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px;">
+                        <div style="background: #fef3c7; color: #d97706; width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.35em; flex-shrink: 0;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin: 0 0 8px 0; color: #1e293b; font-size: 1.18em; font-weight: 700;">
+                                Advertencia sobre salario proyectado
+                            </h3>
+                            <p id="advertencia-salario-mensaje" style="margin: 0; font-size: 0.9em; color: #334155; line-height: 1.55;">
+                                El salario diario proyectado es menor que tu último salario diario registrado. Esto puede disminuir tu salario promedio de las últimas 250 semanas y, por lo tanto, reducir la pensión proyectada.
+                            </p>
+                        </div>
+                    </div>
+                    <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; font-size: 0.88em; color: #92400e; font-weight: 600; text-align: center;">
+                        ¿Deseas continuar con este salario?
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap;">
+                        <button type="button" id="btn-cancelar-advertencia-salario" class="btn btn-secondary" style="padding: 10px 22px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #475569; font-weight: 600; font-size: 0.92em; min-width: 105px;">
+                            Cancelar
+                        </button>
+                        <button type="button" id="btn-continuar-advertencia-salario" class="btn btn-primary" style="padding: 10px 24px; border-radius: 6px; cursor: pointer; border: none; background: #2563eb; color: #fff; font-weight: 600; font-size: 0.92em; min-width: 105px;">
+                            Continuar
+                        </button>
+                    </div>
                 </div>
             </div>
             </div> <!-- /#servicios-pension-view -->
@@ -3215,6 +3318,100 @@
             let userPensionPermisos = new Set();
             let currentModalidadPension = 'basica';
             window.ultimoDocumentoIMSS = null;
+            window.pensionHistorialUsuario = [];
+            window.pensionUltimoPeriodo = null;
+            window.pensionUltimoSalario = null;
+            let salarioProyectadoAnterior = '';
+            let salarioProyectadoConfirmado = null;
+            let pendingOnContinuarSalario = null;
+            let pendingOnCancelarSalario = null;
+
+            async function cargarHistorialImssUsuario() {
+                try {
+                    const res = await fetch('/api/pension/historial-imss', { cache: 'no-store' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.success) {
+                            window.pensionHistorialUsuario = data.periodos || [];
+                            window.pensionUltimoPeriodo = data.ultimoPeriodo || null;
+                            window.pensionUltimoSalario = (typeof data.ultimoSalario === 'number') ? data.ultimoSalario : null;
+                            return data;
+                        }
+                    }
+                } catch (e) {}
+
+                // Fallback: Si no se obtuvo de la BD pero existe documento interpretado en la sesión
+                if (window.ultimoDocumentoIMSS && typeof window.determinarUltimoPeriodoCronologico === 'function') {
+                    const pers = window.ultimoDocumentoIMSS.periodosReconstruidos || window.ultimoDocumentoIMSS.periodos;
+                    if (Array.isArray(pers) && pers.length > 0) {
+                        const ult = window.determinarUltimoPeriodoCronologico(pers);
+                        if (ult) {
+                            window.pensionUltimoPeriodo = ult;
+                            window.pensionUltimoSalario = ult.salario;
+                        }
+                    }
+                }
+                return null;
+            }
+            window.cargarHistorialImssUsuario = cargarHistorialImssUsuario;
+
+            function mostrarAdvertenciaSalarioProyectado({ salarioProyectado, ultimoSalario, onContinuar, onCancelar }) {
+                const modalAdv = document.getElementById('modal-advertencia-salario-proyectado');
+                const msgElem = document.getElementById('advertencia-salario-mensaje');
+                if (!modalAdv) {
+                    if (onContinuar) onContinuar();
+                    return;
+                }
+
+                const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+                const salProjFmt = formatter.format(salarioProyectado);
+                const ultimoSalFmt = formatter.format(ultimoSalario);
+
+                if (msgElem) {
+                    msgElem.innerHTML = `⚠️ <strong>Advertencia:</strong> El salario diario proyectado (<strong>${salProjFmt}</strong>) es menor que tu último salario diario registrado (<strong>${ultimoSalFmt}</strong>). Esto puede disminuir tu salario promedio de las últimas 250 semanas y, por lo tanto, reducir la pensión proyectada.`;
+                }
+
+                pendingOnContinuarSalario = onContinuar;
+                pendingOnCancelarSalario = onCancelar;
+
+                modalAdv.style.display = 'flex';
+            }
+            window.mostrarAdvertenciaSalarioProyectado = mostrarAdvertenciaSalarioProyectado;
+
+            function cerrarAdvertenciaSalarioProyectado() {
+                const modalAdv = document.getElementById('modal-advertencia-salario-proyectado');
+                if (modalAdv) {
+                    modalAdv.style.display = 'none';
+                }
+            }
+            window.cerrarAdvertenciaSalarioProyectado = cerrarAdvertenciaSalarioProyectado;
+
+            const btnCancelarAdvSalario = document.getElementById('btn-cancelar-advertencia-salario');
+            const btnContinuarAdvSalario = document.getElementById('btn-continuar-advertencia-salario');
+
+            if (btnCancelarAdvSalario) {
+                btnCancelarAdvSalario.addEventListener('click', () => {
+                    cerrarAdvertenciaSalarioProyectado();
+                    if (typeof pendingOnCancelarSalario === 'function') {
+                        const cb = pendingOnCancelarSalario;
+                        pendingOnCancelarSalario = null;
+                        pendingOnContinuarSalario = null;
+                        cb();
+                    }
+                });
+            }
+
+            if (btnContinuarAdvSalario) {
+                btnContinuarAdvSalario.addEventListener('click', () => {
+                    cerrarAdvertenciaSalarioProyectado();
+                    if (typeof pendingOnContinuarSalario === 'function') {
+                        const cb = pendingOnContinuarSalario;
+                        pendingOnCancelarSalario = null;
+                        pendingOnContinuarSalario = null;
+                        cb();
+                    }
+                });
+            }
 
             const salarioMinimoInput = document.getElementById('salario-minimo');
             const defaultSalarioMinimo = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
@@ -3480,6 +3677,14 @@
                     proySalNuevo.value = salVal.toFixed(2);
                 }
 
+                if (proySalNuevo) {
+                    salarioProyectadoAnterior = proySalNuevo.value;
+                }
+                salarioProyectadoConfirmado = null;
+
+                // Cargar historial IMSS del usuario para tener siempre el último salario registrado
+                cargarHistorialImssUsuario();
+
                 // Precargar fechas por defecto si están vacías (desde hoy hasta 1 año después)
                 if (proyFechaDesdeInput && !proyFechaDesdeInput.value) {
                     const hoy = new Date();
@@ -3552,6 +3757,16 @@
             if (proyFechaDesdeInput) proyFechaDesdeInput.addEventListener('change', recalcularSemanasProyectadasModal);
             if (proyFechaHastaInput) proyFechaHastaInput.addEventListener('change', recalcularSemanasProyectadasModal);
 
+            const proySalNuevoInput = document.getElementById('proy-salario-diario-nuevo');
+            if (proySalNuevoInput) {
+                proySalNuevoInput.addEventListener('input', () => {
+                    const currentVal = parseFloat(proySalNuevoInput.value);
+                    if (salarioProyectadoConfirmado !== null && currentVal !== salarioProyectadoConfirmado) {
+                        salarioProyectadoConfirmado = null;
+                    }
+                });
+            }
+
             if (btnAbrirProyeccion) btnAbrirProyeccion.addEventListener('click', abrirModalProyeccion);
             if (btnCerrarModalProy) btnCerrarModalProy.addEventListener('click', cerrarModalProyeccion);
             if (btnCancelarModalProy) btnCancelarModalProy.addEventListener('click', cerrarModalProyeccion);
@@ -3621,6 +3836,54 @@
                     }
 
                     if (msgVal) msgVal.style.display = 'none';
+
+                    // 1. Obtener último salario registrado cronológicamente en usuario_periodos_imss
+                    let ultimoSalarioRegistrado = null;
+                    if (window.pensionUltimoSalario !== undefined && window.pensionUltimoSalario !== null) {
+                        ultimoSalarioRegistrado = window.pensionUltimoSalario;
+                    } else if (window.pensionUltimoPeriodo && typeof window.pensionUltimoPeriodo.salario === 'number') {
+                        ultimoSalarioRegistrado = window.pensionUltimoPeriodo.salario;
+                    } else if (window.ultimoDocumentoIMSS && typeof window.determinarUltimoPeriodoCronologico === 'function') {
+                        const pers = window.ultimoDocumentoIMSS.periodosReconstruidos || window.ultimoDocumentoIMSS.periodos;
+                        const ult = window.determinarUltimoPeriodoCronologico(pers);
+                        if (ult && ult.salario) {
+                            ultimoSalarioRegistrado = ult.salario;
+                        }
+                    }
+
+                    // 2. Validación de regla de negocio: salario proyectado vs último salario vigente registrado
+                    const valFn = typeof window.validarSalarioProyectadoVsUltimoPeriodo === 'function'
+                        ? window.validarSalarioProyectadoVsUltimoPeriodo
+                        : (typeof validarSalarioProyectadoVsUltimoPeriodo === 'function' ? validarSalarioProyectadoVsUltimoPeriodo : null);
+
+                    const validacionSalario = valFn
+                        ? valFn({ salarioProyectado: salProj, ultimoSalarioRegistrado })
+                        : { valido: true, requiereAdvertencia: false };
+
+                    if (validacionSalario.requiereAdvertencia && salarioProyectadoConfirmado !== salProj) {
+                        mostrarAdvertenciaSalarioProyectado({
+                            salarioProyectado: salProj,
+                            ultimoSalario: validacionSalario.ultimoSalarioRegistrado,
+                            onContinuar: () => {
+                                salarioProyectadoConfirmado = salProj;
+                                salarioProyectadoAnterior = proySalNuevoInput ? proySalNuevoInput.value : String(salProj);
+                                ejecutarProcesoProyeccion();
+                            },
+                            onCancelar: () => {
+                                if (proySalNuevoInput) {
+                                    proySalNuevoInput.value = salarioProyectadoAnterior || '';
+                                    proySalNuevoInput.focus();
+                                }
+                            }
+                        });
+                        return;
+                    }
+
+                    if (proySalNuevoInput) {
+                        salarioProyectadoAnterior = proySalNuevoInput.value;
+                    }
+
+                    async function ejecutarProcesoProyeccion() {
 
                     const edadVal = parseInt(document.getElementById('edad-jubilacion').value, 10) || 60;
                     const tieneEsposa = document.getElementById('tiene-esposa').value === 'si';
@@ -3836,6 +4099,9 @@
                             }
                         });
                     }
+                    } // Cierre de ejecutarProcesoProyeccion
+
+                    await ejecutarProcesoProyeccion();
                 });
             }
 
@@ -4108,6 +4374,9 @@
                             }
                             if (data.curp) {
                                 try { sessionStorage.setItem('pension_curp', data.curp); } catch(e) {}
+                            }
+                            if (typeof cargarHistorialImssUsuario === 'function') {
+                                cargarHistorialImssUsuario();
                             }
 
                             // Poblar datos de verificación interpretados del IMSS
