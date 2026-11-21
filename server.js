@@ -12,7 +12,18 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
 const zlib = require('zlib');
-const { calculateAverageSalaryLast250Weeks, extractPeriodsFromIMSSDocumentText, validateAndCalculatePensionPeriods } = require('./pension');
+const { 
+    calculateAverageSalaryLast250Weeks, 
+    extractPeriodsFromIMSSDocumentText, 
+    validateAndCalculatePensionPeriods,
+    calculatePensionProjection,
+    calculateIMSSLey73Pension,
+    extractBirthDateFromCurp,
+    calcularEdadPensionaria,
+    reconstructDeterministicPeriods,
+    SALARIO_MINIMO_GENERAL_VIGENTE,
+    SALARIOS_MINIMOS_GENERALES
+} = require('./pension');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -132,7 +143,16 @@ const FUNCIONALIDAD_PERMISOS_MAPPING = {
         'ideas.develop',
         'ideas.use_ai'
     ],
-    'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete']
+    'creaciones': ['creaciones.read', 'creaciones.create', 'creaciones.update', 'creaciones.delete'],
+    'asesoria_pensiones': [
+        'calculadora.basica',
+        'calculadora.intermedia',
+        'calculadora.avanzada',
+        'asesoria_pensiones.read',
+        'asesoria_pensiones.create',
+        'asesoria_pensiones.update',
+        'asesoria_pensiones.delete'
+    ]
 };
 
 // =============================================================================
@@ -271,6 +291,7 @@ const pool = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     timezone: DB_TIMEZONE,
+    dateStrings: true,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -312,6 +333,34 @@ async function ensureAccesoPermisosTable(connOrPool) {
     }
 }
 
+let usuarioPeriodosImssTableReady = false;
+async function ensureUsuarioPeriodosImssTable(connOrPool) {
+    if (usuarioPeriodosImssTableReady) return;
+    const runner = connOrPool || pool;
+    try {
+        if (runner && typeof runner.query === 'function') {
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS usuario_periodos_imss (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    usuario_id BIGINT UNSIGNED NOT NULL,
+                    patron VARCHAR(255) NULL,
+                    fecha_desde DATE NOT NULL,
+                    fecha_hasta DATE NOT NULL,
+                    salario DECIMAL(12, 2) NOT NULL,
+                    dias INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_usuario_periodos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+                    INDEX idx_usuario_fechas (usuario_id, fecha_hasta DESC, fecha_desde DESC)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            `);
+            usuarioPeriodosImssTableReady = true;
+        }
+    } catch (err) {
+        console.warn('Note: usuario_periodos_imss table check/creation:', err.message);
+    }
+}
+
 pool.getConnection()
     .then(async (connection) => {
         console.log("Connected to MySQL database.");
@@ -321,6 +370,7 @@ pool.getConnection()
                 connection.query(`SET time_zone = '${safeTz}'`, () => {});
             }
             await ensureAccesoPermisosTable(connection);
+            await ensureUsuarioPeriodosImssTable(connection);
         } catch (e) {}
         connection.release();
     })
@@ -457,6 +507,113 @@ async function getUserPermissions(connectionPool, userId) {
 
     return Array.from(permissions);
 }
+
+const requireFunctionality = (funcCode) => {
+    const canonicalCode = normalizeFunctionalityCode(funcCode);
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            const hasAccess = await checkUserFunctionalityAccess(pool, req.userId, canonicalCode);
+            if (!hasAccess) {
+                return res.status(403).json({
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                    code: 'RBAC_ACCESS_DENIED',
+                    funcionalidad: canonicalCode
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error(`Error in requireFunctionality (${canonicalCode}):`, error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
+        }
+    };
+};
+
+const requirePermission = (permCode) => {
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            const hasPermission = await checkUserPermission(pool, req.userId, permCode);
+            if (!hasPermission) {
+                return res.status(403).json({
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                    code: 'RBAC_PERMISSION_DENIED',
+                    permiso: permCode
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error(`Error in requirePermission (${permCode}):`, error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
+        }
+    };
+};
+
+const requireAnyPermission = (permCodes) => {
+    const codes = Array.isArray(permCodes) ? permCodes : [permCodes];
+    return async (req, res, next) => {
+        try {
+            if (!req.userId) {
+                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+                if (!token) {
+                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+                }
+                const decoded = await verifyToken(token, pool);
+                req.userId = decoded.id;
+                req.user = decoded;
+            }
+
+            let hasAccess = false;
+            for (const code of codes) {
+                if (await checkUserPermission(pool, req.userId, code)) {
+                    hasAccess = true;
+                    break;
+                }
+            }
+
+            if (!hasAccess) {
+                return res.status(403).json({
+                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                    code: 'RBAC_PERMISSION_DENIED'
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error('Error in requireAnyPermission:', error);
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+            }
+            return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
+        }
+    };
+};
 
 async function assignDefaultUserRole(connOrPool, userId) {
     if (!userId) {
@@ -728,7 +885,14 @@ function extractAseguradoInfo(extractedText) {
         }
     }
 
-    return { nombreAsegurado, totalSemanasCotizadas };
+    // 3. Extraer CURP oficial del asegurado
+    let curp = null;
+    const curpMatch = extractedText.match(/\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d\b/i);
+    if (curpMatch) {
+        curp = curpMatch[0].toUpperCase();
+    }
+
+    return { nombreAsegurado, totalSemanasCotizadas, curp };
 }
 
 function extractTotalSemanasFromIMSSDocument(extractedText) {
@@ -748,10 +912,10 @@ Tu objetivo es extraer de manera estructurada y fiel los periodos o tramos de co
 Reglas de extracción:
 1. Revisa minuciosamente la tabla de historial laboral del documento en orden cronológico inverso (del movimiento más reciente hacia atrás).
 2. Para la fecha de corte más reciente, toma la fecha de fin o baja del último movimiento registrado en el documento (o la fecha de emisión del reporte si está activo). No uses la fecha de hoy.
-3. Para cada periodo o tramo salarial registrado en el historial:
+3. Para cada periodo o tramo salarial continuo registrado en el historial:
    - "patron": Nombre de la empresa, razón social o modalidad registrada (ej. "Continuación Voluntaria en el Régimen Obligatorio" o nombre del patrón).
-   - "fechaInicio": Fecha de inicio o alta del movimiento (formato YYYY-MM-DD).
-   - "fechaFin": Fecha de fin o baja del movimiento (formato YYYY-MM-DD).
+   - "fechaInicio": Fecha de inicio o alta en que comenzó a pagarse ese salario específico (formato YYYY-MM-DD). REGLA CRÍTICA: En el IMSS, un mismo salario suele repetirse en múltiples renglones bimestrales de "MODIFICACION DE SALARIO". La fechaInicio DEBE ser la fecha del movimiento MÁS ANTIGUO en que comenzó a pagarse ese salario continuo, NO un movimiento bimestral intermedio.
+   - "fechaFin": Fecha en que concluyó la vigencia de ese salario (el día anterior al cambio al siguiente salario, o la fecha de baja del movimiento si concluyó la relación laboral).
    - "dias": Días naturales cotizados en ese tramo.
    - "salarioDiario": Salario Base de Cotización (SBC) diario registrado en pesos (numérico decimal sin comas ni símbolos).
 4. Extrae ÚNICAMENTE los datos reales presentes en el documento adjunto. No inventes periodos, empresas, fechas ni salarios que no aparezcan en el documento.
@@ -841,7 +1005,7 @@ Responde ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
     return null;
 }
 
-app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
+app.post('/api/pension/calcular-salario-pdf', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
     try {
         const { pdfBase64, fileName } = req.body || {};
         if (!pdfBase64 || typeof pdfBase64 !== 'string') {
@@ -861,33 +1025,34 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             });
         }
 
-        // 1. Extraer texto base del buffer para apoyo en detección y fallbacks
+        // 1. Extraer texto base del buffer para análisis determinístico
         let extractedText = '';
         try {
             extractedText = extractTextFromPdfBuffer(pdfBuffer);
         } catch (e) {}
 
-        // 2. Enviar el PDF a Gemini API como flujo principal para análisis multimodal de documentos
         let structuredData = null;
-        if (process.env.GEMINI_API_KEY) {
+
+        // 2. Extracción determinística directa desde el documento digital oficial (Fuente de verdad primaria)
+        // Procesa los movimientos directamente del PDF con exactitud absoluta, sin pérdida de fechas intermedias
+        // ni atención probabilística de modelos de lenguaje.
+        if (extractedText && extractedText.length > 50) {
+            try {
+                const deterministicPeriods = extractPeriodsFromIMSSDocumentText(extractedText);
+                if (deterministicPeriods && deterministicPeriods.length > 0) {
+                    structuredData = { tipoDocumento: 'Constancia de Semanas Cotizadas', periodos: deterministicPeriods };
+                }
+            } catch (detErr) {
+                console.error('Error en extracción determinística de PDF:', detErr.message);
+            }
+        }
+
+        // 3. Fallback multimodal (Gemini API) si el documento no tiene capa de texto estructurada (e.g. escaneo o imagen)
+        if ((!structuredData || !Array.isArray(structuredData.periodos) || structuredData.periodos.length === 0) && process.env.GEMINI_API_KEY) {
             try {
                 structuredData = await parseIMSSWithGemini(pdfBuffer);
             } catch (aiErr) {
                 console.error('Advertencia al analizar documento con Gemini API:', aiErr.message);
-            }
-        }
-
-        // 3. Fallback técnico: si Gemini no está configurado o falló, intentar con el parser existente
-        if (!structuredData || !Array.isArray(structuredData.periodos) || structuredData.periodos.length === 0) {
-            try {
-                if (extractedText && extractedText.length > 20) {
-                    const fallbackPeriods = extractPeriodsFromIMSSDocumentText(extractedText);
-                    if (fallbackPeriods && fallbackPeriods.length > 0) {
-                        structuredData = { tipoDocumento: 'Constancia de Semanas Cotizadas', periodos: fallbackPeriods };
-                    }
-                }
-            } catch (fallbackErr) {
-                console.error('Error en fallback técnico de extracción de PDF:', fallbackErr.message);
             }
         }
 
@@ -898,10 +1063,12 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             });
         }
 
-        // 4. Determinación directa de metadatos del asegurado (semanas y nombre) desde el PDF
+        // 4. Determinación directa de metadatos del asegurado (semanas, nombre y CURP) desde el PDF
         const infoAsegurado = extractAseguradoInfo(extractedText);
         const totalSemanasExtraidas = infoAsegurado.totalSemanasCotizadas;
         const nombreAsegurado = infoAsegurado.nombreAsegurado;
+        const curpAsegurado = infoAsegurado.curp;
+        const fechaNacimientoAsegurado = curpAsegurado ? extractBirthDateFromCurp(curpAsegurado) : null;
 
         // 5. Validación matemática estricta y cálculo ponderado en el backend por días (1,750 días)
         const validation = validateAndCalculatePensionPeriods(structuredData);
@@ -911,6 +1078,58 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
                 message: validation.message,
                 sumaDias: validation.sumaDias
             });
+        }
+
+        // Evaluar edad pensionaria actual si se cuenta con CURP y fecha de corte
+        let edadPensionariaActual = null;
+        const periodosFuente = (validation.periodosReconstruidos && validation.periodosReconstruidos.length > 0)
+            ? validation.periodosReconstruidos
+            : validation.periodos;
+
+        if (fechaNacimientoAsegurado && periodosFuente && periodosFuente.length > 0) {
+            const ultimaFechaCotizacion = periodosFuente[0].fechaHasta || periodosFuente[0].fechaFin;
+            if (ultimaFechaCotizacion) {
+                edadPensionariaActual = calcularEdadPensionaria(fechaNacimientoAsegurado, ultimaFechaCotizacion);
+            }
+        }
+
+        // 6. Persistencia transaccional del historial estructurado en usuario_periodos_imss
+        // Cada nueva carga del archivo reemplaza completamente el historial anterior del usuario
+        let historialGuardado = false;
+        let periodosGuardadosCount = 0;
+        if (req.userId && periodosFuente && periodosFuente.length > 0) {
+            let conn = null;
+            try {
+                conn = await pool.getConnection();
+                await conn.beginTransaction();
+                await conn.query("DELETE FROM usuario_periodos_imss WHERE usuario_id = ?", [req.userId]);
+
+                for (const p of periodosFuente) {
+                    const fDesde = p.fechaDesde || p.fechaInicio || p.fecha_desde || p.fecha_inicio;
+                    const fHasta = p.fechaHasta || p.fechaFin || p.fecha_hasta || p.fecha_fin;
+                    const sal = parseFloat(p.salario || p.salarioDiario || p.salario_diario);
+                    const dias = parseInt(p.dias || p.diasUtilizados, 10) || 1;
+                    const patron = String(p.patron || p.empresa || "PATRÓN REGISTRADO").substring(0, 255);
+
+                    if (fDesde && fHasta && !isNaN(sal) && sal > 0) {
+                        await conn.query(
+                            "INSERT INTO usuario_periodos_imss (usuario_id, patron, fecha_desde, fecha_hasta, salario, dias) VALUES (?, ?, ?, ?, ?, ?)",
+                            [req.userId, patron, fDesde, fHasta, sal, dias]
+                        );
+                        periodosGuardadosCount++;
+                    }
+                }
+
+                await conn.commit();
+                historialGuardado = true;
+            } catch (dbErr) {
+                if (conn) {
+                    try { await conn.rollback(); } catch (rbErr) {}
+                }
+                console.error("Error al persistir historial IMSS del usuario:", dbErr.message);
+            } finally {
+                if (conn) conn.release();
+            }
         }
 
         let esReporteResumen = false;
@@ -937,8 +1156,14 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             totalSemanasCotizadas: totalSemanasExtraidas,
             totalSemanasDocumento: totalSemanasExtraidas || validation.semanasTotales,
             nombreAsegurado: nombreAsegurado || null,
+            curp: curpAsegurado || null,
+            fechaNacimiento: fechaNacimientoAsegurado || null,
+            edadPensionaria: edadPensionariaActual,
             periodos: validation.periodos,
             periodosUtilizados: validation.periodos,
+            periodosReconstruidos: periodosFuente,
+            historialGuardado,
+            periodosGuardados: periodosGuardadosCount,
             esReporteResumen,
             message: 'Se identificaron las últimas 250 semanas cotizadas con éxito mediante Gemini API.'
         });
@@ -949,6 +1174,142 @@ app.post('/api/pension/calcular-salario-pdf', async (req, res) => {
             error: 'SERVER_ERROR',
             message: 'Ocurrió un error al procesar el documento. Por favor intenta de nuevo o ingresa el salario manualmente.'
         });
+    }
+});
+
+app.get('/api/pension/historial-imss', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            "SELECT id, patron, DATE_FORMAT(fecha_desde, '%Y-%m-%d') as fechaDesde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') as fechaHasta, salario, dias FROM usuario_periodos_imss WHERE usuario_id = ? ORDER BY fecha_hasta DESC, fecha_desde DESC",
+            [req.userId]
+        );
+        const formattedRows = rows.map(r => ({
+            ...r,
+            salario: parseFloat(r.salario)
+        }));
+        res.status(200).json({
+            success: true,
+            count: formattedRows.length,
+            tieneHistorial: formattedRows.length > 0,
+            periodos: formattedRows
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/historial-imss:', err);
+        res.status(500).json({ error: 'Error al consultar el historial IMSS del usuario.' });
+    }
+});
+
+app.get('/api/pension/salario-minimo-vigente', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.status(200).json({
+            success: true,
+            salarioMinimo: SALARIO_MINIMO_GENERAL_VIGENTE,
+            anio: 2026,
+            historico: SALARIOS_MINIMOS_GENERALES
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/salario-minimo-vigente:', err);
+        res.status(500).json({ error: 'Error al consultar el salario mínimo vigente.' });
+    }
+});
+
+app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        const {
+            salarioMinimo,
+            salarioDiarioPromedio,
+            semanasCotizadas,
+            edad,
+            tieneEsposa,
+            numeroHijos,
+            tienePadresDependientes,
+            estaEnSoledad,
+            tieneIncapacidad
+        } = req.body || {};
+
+        const salMin = parseFloat(salarioMinimo);
+        const salProm = parseFloat(salarioDiarioPromedio);
+        const sem = parseInt(semanasCotizadas, 10);
+        const ed = parseInt(edad, 10);
+
+        if (isNaN(salMin) || isNaN(salProm) || isNaN(sem) || isNaN(ed)) {
+            return res.status(400).json({
+                error: 'INVALID_DATA',
+                message: 'Por favor ingresa todos los campos numéricos de datos generales correctamente.'
+            });
+        }
+
+        const data = {
+            salarioMinimo: salMin,
+            salarioDiarioPromedio: salProm,
+            semanasCotizadas: sem,
+            edad: ed,
+            tieneEsposa: Boolean(tieneEsposa),
+            numeroHijos: parseInt(numeroHijos, 10) || 0,
+            tienePadresDependientes: Boolean(tienePadresDependientes),
+            estaEnSoledad: Boolean(estaEnSoledad),
+            tieneIncapacidad: Boolean(tieneIncapacidad)
+        };
+
+        const result = calculateIMSSLey73Pension(data);
+        res.status(200).json({
+            success: true,
+            resultado: result
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/calcular:', err);
+        res.status(500).json({ error: 'Error al calcular la pensión.' });
+    }
+});
+
+app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']), async (req, res) => {
+    try {
+        let periodosHistoricos = null;
+        let fechaNacimiento = req.body.fechaNacimiento || null;
+
+        if (req.userId) {
+            try {
+                const [rows] = await pool.query(
+                    "SELECT id, patron, DATE_FORMAT(fecha_desde, '%Y-%m-%d') as fechaDesde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') as fechaHasta, salario, dias FROM usuario_periodos_imss WHERE usuario_id = ? ORDER BY fecha_hasta DESC, fecha_desde DESC",
+                    [req.userId]
+                );
+                if (rows && rows.length > 0) {
+                    periodosHistoricos = rows;
+                }
+            } catch (queryErr) {
+                console.warn('Advertencia al consultar historial para proyección:', queryErr.message);
+            }
+
+            if (!fechaNacimiento) {
+                try {
+                    const [userRows] = await pool.query(
+                        "SELECT fecha_nacimiento FROM usuarios WHERE id = ?",
+                        [req.userId]
+                    );
+                    if (userRows && userRows[0] && userRows[0].fecha_nacimiento) {
+                        fechaNacimiento = userRows[0].fecha_nacimiento;
+                    }
+                } catch (uErr) {}
+            }
+        }
+
+        const projectionResult = calculatePensionProjection({
+            ...req.body,
+            fechaNacimiento,
+            periodosHistoricos
+        });
+
+        if (!projectionResult.success) {
+            return res.status(400).json({
+                error: projectionResult.error,
+                message: projectionResult.message
+            });
+        }
+        res.status(200).json(projectionResult);
+    } catch (err) {
+        console.error('Error in /api/pension/proyectar:', err);
+        res.status(500).json({ error: 'Error al procesar la proyección de pensión.' });
     }
 });
 
@@ -2275,73 +2636,6 @@ app.post('/api/logout', (req, res) => {
     });
     res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
 });
-
-const requireFunctionality = (funcCode) => {
-    const canonicalCode = normalizeFunctionalityCode(funcCode);
-    return async (req, res, next) => {
-        try {
-            if (!req.userId) {
-                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
-                if (!token) {
-                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
-                }
-                const decoded = await verifyToken(token, pool);
-                req.userId = decoded.id;
-                req.user = decoded;
-            }
-
-            const hasAccess = await checkUserFunctionalityAccess(pool, req.userId, canonicalCode);
-            if (!hasAccess) {
-                return res.status(403).json({
-                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
-                    code: 'RBAC_ACCESS_DENIED',
-                    funcionalidad: canonicalCode
-                });
-            }
-
-            next();
-        } catch (error) {
-            console.error(`Error in requireFunctionality (${canonicalCode}):`, error);
-            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
-                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
-            }
-            return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
-        }
-    };
-};
-
-const requirePermission = (permCode) => {
-    return async (req, res, next) => {
-        try {
-            if (!req.userId) {
-                const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
-                if (!token) {
-                    return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
-                }
-                const decoded = await verifyToken(token, pool);
-                req.userId = decoded.id;
-                req.user = decoded;
-            }
-
-            const hasPermission = await checkUserPermission(pool, req.userId, permCode);
-            if (!hasPermission) {
-                return res.status(403).json({
-                    error: 'Acceso no autorizado o vencido para esta funcionalidad.',
-                    code: 'RBAC_PERMISSION_DENIED',
-                    permiso: permCode
-                });
-            }
-
-            next();
-        } catch (error) {
-            console.error(`Error in requirePermission (${permCode}):`, error);
-            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
-                return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
-            }
-            return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
-        }
-    };
-};
 
 // requireAdmin: validates entry to the 'admin' functionality (Level 2)
 const requireAdmin = requireFunctionality('administracion');
