@@ -3629,6 +3629,14 @@
                     const estaSoledad = document.getElementById('esta-soledad').value === 'si';
                     const tieneIncapacidad = document.getElementById('tiene-incapacidad').value === 'si';
 
+                    const fechaNacimientoDoc = (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.fechaNacimiento)
+                        || (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.curp && typeof extractBirthDateFromCurp === 'function' && extractBirthDateFromCurp(window.ultimoDocumentoIMSS.curp))
+                        || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pension_fecha_nacimiento'))
+                        || null;
+                    const curpDoc = (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.curp)
+                        || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pension_curp'))
+                        || null;
+
                     const params = {
                         semanasActuales: semAct,
                         salarioPromedioActual: salAct > 0 ? salAct : salProj,
@@ -3642,7 +3650,9 @@
                         numeroHijos,
                         tienePadresDependientes: tienePadres,
                         estaEnSoledad: estaSoledad,
-                        tieneIncapacidad
+                        tieneIncapacidad,
+                        fechaNacimiento: fechaNacimientoDoc,
+                        curp: curpDoc
                     };
 
                     let resData = null;
@@ -3742,6 +3752,7 @@
                                     <li><strong>Total semanas cotizadas:</strong> <strong>${proy.totalSemanasCotizadas}</strong></li>
                                     <li><strong>Nuevo salario promedio (250 sem):</strong> <strong>${formatter.format(proy.nuevoSalarioPromedio)}</strong></li>
                                     <li><strong>Salario mínimo estimado:</strong> ${formatter.format(proy.salarioMinimoEstimado)}</li>
+                                    <li><strong>Edad al término:</strong> <strong>${(typeof proy.edadCronologica === 'number' ? proy.edadCronologica : proy.edadProyectada)} años</strong></li>
                                     <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #93c5fd; font-size: 1.05em; color: #1e3a8a;">
                                         <strong>Pensión mensual proyectada:</strong><br>
                                         <span style="font-size: 1.3em; font-weight: 800; color: #16a34a;">${formatter.format(proy.pensionMensual)}</span>
@@ -3775,6 +3786,7 @@
                             const semInputPrincipal = document.getElementById('semanas-cotizadas');
                             const salInputPrincipal = document.getElementById('salario-promedio');
                             const salMinInputPrincipal = document.getElementById('salario-minimo');
+                            const edadInputPrincipal = document.getElementById('edad-jubilacion');
 
                             if (semInputPrincipal) {
                                 semInputPrincipal.value = proy.totalSemanasCotizadas;
@@ -3790,6 +3802,32 @@
                                 salMinInputPrincipal.value = proy.salarioMinimoEstimado;
                                 salMinInputPrincipal.dispatchEvent(new Event('input', { bubbles: true }));
                                 salMinInputPrincipal.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
+                            // Calcular y transferir la edad exacta al solicitar la pensión a partir de la fecha final de proyección
+                            const fechaFinProy = (proyFechaHastaInput && proyFechaHastaInput.value)
+                                || (resData && resData.periodo && resData.periodo.fechaHasta)
+                                || '';
+
+                            const fechaNac = (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.fechaNacimiento)
+                                || (window.ultimoDocumentoIMSS && window.ultimoDocumentoIMSS.curp && typeof extractBirthDateFromCurp === 'function' && extractBirthDateFromCurp(window.ultimoDocumentoIMSS.curp))
+                                || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pension_fecha_nacimiento'))
+                                || (proy && (proy.fechaNacimiento || (proy.edadPensionariaInfo && proy.edadPensionariaInfo.fechaNacimiento)))
+                                || null;
+
+                            let nuevaEdad = null;
+                            if (fechaNac && fechaFinProy && typeof calcularEdadExacta === 'function') {
+                                nuevaEdad = calcularEdadExacta(fechaNac, fechaFinProy);
+                            } else if (proy && typeof proy.edadCronologica === 'number') {
+                                nuevaEdad = proy.edadCronologica;
+                            } else if (proy && typeof proy.edadProyectada === 'number') {
+                                nuevaEdad = proy.edadProyectada;
+                            }
+
+                            if (edadInputPrincipal && nuevaEdad !== null && !isNaN(nuevaEdad)) {
+                                edadInputPrincipal.value = nuevaEdad;
+                                edadInputPrincipal.dispatchEvent(new Event('input', { bubbles: true }));
+                                edadInputPrincipal.dispatchEvent(new Event('change', { bubbles: true }));
                             }
 
                             cerrarModalProyeccion();
@@ -4065,6 +4103,12 @@
 
                         if (response.ok && data && typeof data.salarioDiarioPromedio === 'number') {
                             window.ultimoDocumentoIMSS = data;
+                            if (data.fechaNacimiento) {
+                                try { sessionStorage.setItem('pension_fecha_nacimiento', data.fechaNacimiento); } catch(e) {}
+                            }
+                            if (data.curp) {
+                                try { sessionStorage.setItem('pension_curp', data.curp); } catch(e) {}
+                            }
 
                             // Poblar datos de verificación interpretados del IMSS
                             const verificacionContainer = document.getElementById('pension-verificacion-documento');

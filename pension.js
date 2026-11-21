@@ -517,6 +517,30 @@ function calcularUmbralMas6Meses1Dia(fechaCumple) {
 }
 
 /**
+ * Calcula la edad cronológica exacta a una fecha determinada basada en la fecha de nacimiento.
+ * Regla fundamental: edad = año_final - año_nacimiento, restando 1 si en la fecha final aún no se cumple el cumpleaños de ese año.
+ * NO utiliza división simple entre 365 días.
+ *
+ * @param {string} fechaNacimientoStr - Fecha de nacimiento en formato YYYY-MM-DD o DD/MM/YYYY
+ * @param {string} fechaFinalStr - Fecha de corte o final de proyección en formato YYYY-MM-DD o DD/MM/YYYY
+ * @returns {number|null} Edad en años cumplidos o null si las fechas no son válidas
+ */
+function calcularEdadExacta(fechaNacimientoStr, fechaFinalStr) {
+    const fNac = parseDateToIso(fechaNacimientoStr);
+    const fFin = parseDateToIso(fechaFinalStr);
+    if (!fNac || !fFin) return null;
+
+    const [yNac, mNac, dNac] = fNac.split('-').map(Number);
+    const [yFin, mFin, dFin] = fFin.split('-').map(Number);
+
+    let edad = yFin - yNac;
+    if (mFin < mNac || (mFin === mNac && dFin < dNac)) {
+        edad--;
+    }
+    return edad;
+}
+
+/**
  * Evalúa determinísticamente la edad pensionaria resultante y el porcentaje aplicable según la Ley 73.
  * Aplica la regla general de Cumpleaños + 6 meses + 1 día para todas las edades de 60 a 65:
  * 60 -> 61 (75% -> 80%), 61 -> 62 (80% -> 85%), 62 -> 63 (85% -> 90%),
@@ -528,12 +552,7 @@ function calcularEdadPensionaria(fechaNacimientoStr, fechaBajaStr) {
     if (!fNac || !fBaja) return null;
 
     const [yNac, mNac, dNac] = fNac.split('-').map(Number);
-    const [yBaja, mBaja, dBaja] = fBaja.split('-').map(Number);
-
-    let edadCalendario = yBaja - yNac;
-    if (mBaja < mNac || (mBaja === mNac && dBaja < dNac)) {
-        edadCalendario--;
-    }
+    let edadCalendario = calcularEdadExacta(fNac, fBaja);
 
     if (edadCalendario < 60) {
         return {
@@ -1101,7 +1120,9 @@ function calculatePensionProjection(params) {
         : dataActual.edad;
 
     let edadPensionariaInfo = null;
+    let edadCronologica = null;
     if (birthDate && isoHasta) {
+        edadCronologica = calcularEdadExacta(birthDate, isoHasta);
         edadPensionariaInfo = calcularEdadPensionaria(birthDate, isoHasta);
         if (edadPensionariaInfo && edadPensionariaInfo.edadPensionaria) {
             edadProy = edadPensionariaInfo.edadPensionaria;
@@ -1158,6 +1179,8 @@ function calculatePensionProjection(params) {
             salarioMinimoEstimado: salMinProj,
             salarioDiarioProyectado: salProj,
             edadProyectada: edadProy,
+            edadCronologica: edadCronologica !== null ? edadCronologica : edadProy,
+            fechaNacimiento: birthDate,
             edadPensionariaInfo,
             pensionMensual: pensionProyectada.pensionFinalMensual,
             desglose: pensionProyectada
@@ -1182,6 +1205,7 @@ if (typeof window !== 'undefined') {
     window.extractBirthDateFromCurp = extractBirthDateFromCurp;
     window.calcularUmbralMas6Meses1Dia = calcularUmbralMas6Meses1Dia;
     window.calcularEdadPensionaria = calcularEdadPensionaria;
+    window.calcularEdadExacta = calcularEdadExacta;
     window.reconstructDeterministicPeriods = reconstructDeterministicPeriods;
     window.calculateInclusiveDays = calculateInclusiveDays;
     window.parseDateToIso = parseDateToIso;
@@ -1202,6 +1226,7 @@ if (typeof module !== 'undefined' && module.exports) {
         extractBirthDateFromCurp,
         calcularUmbralMas6Meses1Dia,
         calcularEdadPensionaria,
+        calcularEdadExacta,
         reconstructDeterministicPeriods,
         calculateInclusiveDays,
         parseDateToIso,
