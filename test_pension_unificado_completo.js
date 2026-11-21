@@ -122,6 +122,48 @@ async function runUnifiedPensionSuite() {
     assert.strictEqual(resTraslapePatrones.length, 2);
     pass('B.6: Concurrencia de patrones reconstruye vigencias separadas por razón social sin mezclar');
 
+    // Caso B.7: Historial completo de movimientos atómicos bimestrales del IMSS (Edenred 19 movimientos)
+    const movimientosAtomicosEdenred = [
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2024-04-04', fechaFin: '2024-04-04', tipo: 'BAJA', salarioDiario: 2714.25 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2024-03-01', fechaFin: '2024-03-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2714.25 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2024-02-01', fechaFin: '2024-02-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2714.25 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2024-01-01', fechaFin: '2024-01-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2593.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2023-11-01', fechaFin: '2023-11-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2593.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2023-09-01', fechaFin: '2023-09-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2593.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2023-07-01', fechaFin: '2023-07-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2593.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2023-05-01', fechaFin: '2023-05-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2593.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2023-03-01', fechaFin: '2023-03-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2593.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2023-02-01', fechaFin: '2023-02-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2593.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2022-11-01', fechaFin: '2022-11-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2405.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2022-09-01', fechaFin: '2022-09-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2405.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2022-07-01', fechaFin: '2022-07-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2405.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2022-05-01', fechaFin: '2022-05-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2405.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2022-03-01', fechaFin: '2022-03-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2405.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2022-02-01', fechaFin: '2022-02-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2405.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2022-01-01', fechaFin: '2022-01-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2240.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2021-11-01', fechaFin: '2021-11-01', tipo: 'MODIFICACION DE SALARIO', salarioDiario: 2240.50 },
+        { patron: 'SERVICIOS EDENRED', fechaInicio: '2021-10-20', fechaFin: '2021-10-20', tipo: 'REINGRESO', salarioDiario: 2240.50 }
+    ];
+    const resEdenredAtomico = reconstructDeterministicPeriods(movimientosAtomicosEdenred);
+    assert.strictEqual(resEdenredAtomico.length, 4, '19 movimientos atómicos deben consolidar exactamente en 4 vigencias');
+    assert.strictEqual(resEdenredAtomico[0].fechaDesde, '2024-02-01');
+    assert.strictEqual(resEdenredAtomico[0].fechaHasta, '2024-04-04');
+    assert.strictEqual(resEdenredAtomico[0].dias, 64);
+    assert.strictEqual(resEdenredAtomico[0].salario, 2714.25);
+    assert.strictEqual(resEdenredAtomico[1].fechaDesde, '2023-02-01');
+    assert.strictEqual(resEdenredAtomico[1].fechaHasta, '2024-01-31');
+    assert.strictEqual(resEdenredAtomico[1].dias, 365);
+    assert.strictEqual(resEdenredAtomico[1].salario, 2593.50);
+    assert.strictEqual(resEdenredAtomico[2].fechaDesde, '2022-02-01');
+    assert.strictEqual(resEdenredAtomico[2].fechaHasta, '2023-01-31');
+    assert.strictEqual(resEdenredAtomico[2].dias, 365);
+    assert.strictEqual(resEdenredAtomico[2].salario, 2405.50);
+    assert.strictEqual(resEdenredAtomico[3].fechaDesde, '2021-10-20');
+    assert.strictEqual(resEdenredAtomico[3].fechaHasta, '2022-01-31');
+    assert.strictEqual(resEdenredAtomico[3].dias, 104);
+    assert.strictEqual(resEdenredAtomico[3].salario, 2240.50);
+    pass('B.7: Reconstrucción determinística de 19 movimientos atómicos con modificaciones bimestrales: 01/02/2022 preservado a 365 días @ $2,405.50');
+
     // =========================================================================
     // GRUPO C: CÓMPUTO DE DÍAS NATURALES Y BISIESTOS
     // =========================================================================

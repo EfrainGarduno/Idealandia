@@ -658,13 +658,32 @@ function reconstructDeterministicPeriods(rawPeriods) {
                         dias
                     });
                     curPeriod = null;
+                } else if ((item.tipo === 'REINGRESO' || item.tipo === 'ALTA') && curPeriod.fechaHasta < addDaysToIso(item.fechaDesde, -1)) {
+                    // Reingreso o alta tras un periodo de inactividad con el mismo patrón
+                    const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
+                    reconstructed.push({
+                        patron: curPeriod.patron,
+                        fechaInicio: curPeriod.fechaDesde,
+                        fechaFin: curPeriod.fechaHasta,
+                        fechaDesde: curPeriod.fechaDesde,
+                        fechaHasta: curPeriod.fechaHasta,
+                        salarioDiario: curPeriod.salario,
+                        salario: curPeriod.salario,
+                        dias
+                    });
+                    curPeriod = {
+                        patron: group.patron,
+                        fechaDesde: item.fechaDesde,
+                        fechaHasta: item.fechaHasta,
+                        salario: item.salario
+                    };
                 } else if (item.salario === curPeriod.salario) {
                     if (item.fechaHasta > curPeriod.fechaHasta) {
                         curPeriod.fechaHasta = item.fechaHasta;
                     }
                 } else {
                     const prevDay = addDaysToIso(item.fechaDesde, -1);
-                    curPeriod.fechaHasta = curPeriod.fechaHasta && curPeriod.fechaHasta < prevDay ? curPeriod.fechaHasta : prevDay;
+                    curPeriod.fechaHasta = prevDay;
                     const dias = calculateInclusiveDays(curPeriod.fechaDesde, curPeriod.fechaHasta);
                     reconstructed.push({
                         patron: curPeriod.patron,

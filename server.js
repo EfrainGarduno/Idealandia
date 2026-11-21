@@ -911,10 +911,10 @@ Tu objetivo es extraer de manera estructurada y fiel los periodos o tramos de co
 Reglas de extracción:
 1. Revisa minuciosamente la tabla de historial laboral del documento en orden cronológico inverso (del movimiento más reciente hacia atrás).
 2. Para la fecha de corte más reciente, toma la fecha de fin o baja del último movimiento registrado en el documento (o la fecha de emisión del reporte si está activo). No uses la fecha de hoy.
-3. Para cada periodo o tramo salarial registrado en el historial:
+3. Para cada periodo o tramo salarial continuo registrado en el historial:
    - "patron": Nombre de la empresa, razón social o modalidad registrada (ej. "Continuación Voluntaria en el Régimen Obligatorio" o nombre del patrón).
-   - "fechaInicio": Fecha de inicio o alta del movimiento (formato YYYY-MM-DD).
-   - "fechaFin": Fecha de fin o baja del movimiento (formato YYYY-MM-DD).
+   - "fechaInicio": Fecha de inicio o alta en que comenzó a pagarse ese salario específico (formato YYYY-MM-DD). REGLA CRÍTICA: En el IMSS, un mismo salario suele repetirse en múltiples renglones bimestrales de "MODIFICACION DE SALARIO". La fechaInicio DEBE ser la fecha del movimiento MÁS ANTIGUO en que comenzó a pagarse ese salario continuo, NO un movimiento bimestral intermedio.
+   - "fechaFin": Fecha en que concluyó la vigencia de ese salario (el día anterior al cambio al siguiente salario, o la fecha de baja del movimiento si concluyó la relación laboral).
    - "dias": Días naturales cotizados en ese tramo.
    - "salarioDiario": Salario Base de Cotización (SBC) diario registrado en pesos (numérico decimal sin comas ni símbolos).
 4. Extrae ÚNICAMENTE los datos reales presentes en el documento adjunto. No inventes periodos, empresas, fechas ni salarios que no aparezcan en el documento.
