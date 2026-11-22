@@ -2688,3 +2688,65 @@ th.sortable-th.sort-desc .sort-indicator {
     }
 }
 
+/* Simulador de Inversiones - Controles por fila y resaltado de simulación personalizada */
+.sim-row-input {
+    width: 100%;
+    min-width: 60px;
+    padding: 3px 5px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-align: right;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #1e293b;
+    box-sizing: border-box;
+    transition: all 0.15s ease-in-out;
+}
+
+.sim-row-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    background: #ffffff;
+}
+
+.sim-input-tasa {
+    max-width: 75px;
+    color: #0f172a;
+}
+
+.sim-input-inv1,
+.sim-input-inv2 {
+    max-width: 90px;
+    background: #fffbeb;
+}
+
+.sim-input-meses {
+    max-width: 55px;
+    text-align: center;
+}
+
+.fila-simulacion-modificada {
+    background-color: #fff7ed !important;
+    border-left: 4px solid #f97316 !important;
+}
+
+.fila-simulacion-modificada td {
+    background-color: inherit !important;
+}
+
+.badge-sim-modificada {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #ea580c;
+    background: #ffedd5;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    margin-top: 3px;
+}
+
+

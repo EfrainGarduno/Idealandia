@@ -11,6 +11,11 @@
     let institucionesSeleccionadas = new Set();
     let fechaConsultaActual = new Date().toISOString().slice(0, 10);
 
+    // Estado reactivo en memoria para simulación personalizada por fila (NO PERSISTE EN BD)
+    const valoresOriginalesPorInst = new Map(); // id -> { tasa, inv1, inv2, meses }
+    const valoresPersonalizadosPorInst = new Map(); // id -> { tasa, inv1, inv2, meses, isModified }
+    const resultadosCalculadosPorInst = new Map(); // id -> { total_mensual, total_periodo, rend1, rend2 }
+
     /**
      * Formatea un número como moneda mexicana ($1,234.56).
      */
@@ -67,6 +72,11 @@
 
             // Por defecto, todas las instituciones quedan seleccionadas
             institucionesSeleccionadas = new Set(catalogoInstituciones.map(i => i.id));
+
+            // Limpiar personalizaciones al cargar catálogo nuevo
+            valoresPersonalizadosPorInst.clear();
+            valoresOriginalesPorInst.clear();
+            resultadosCalculadosPorInst.clear();
 
             renderizarTablaSimulador();
         } catch (error) {
@@ -134,11 +144,13 @@
             const id = parseInt(chk.dataset.instId, 10);
             chk.checked = institucionesSeleccionadas.has(id);
         });
-        recalcularSimulacion();
+        actualizarEstiloFilasSeleccionadas();
     }
 
     /**
-     * Renderiza la tabla completa del simulador conservando la estructura de la imagen de referencia.
+     * Renderiza la tabla completa del simulador con columnas editables y reactivas.
+     * Nomenclatura aprobada:
+     * Sel | Institución | Tipo | Condiciones | Inversión Base | Tasa % | Inversión 1 | Inversión 2 | Meses | Rend1 | Rend2 | Total mensual | Total periodo
      */
     function renderizarTablaSimulador() {
         const tbody = document.getElementById('simulador-tbody');
@@ -182,8 +194,62 @@
 
             const isChecked = institucionesSeleccionadas.has(inst.id);
 
-            // Calcular simulación para esta fila
+            // Simulación base con parámetros globales
             const sim = tieneEsquema ? window.MotorFinanciero.simularInversion(capitalGlobal, mesesGlobal, tramos) : null;
+
+            // Guardar valores originales de referencia para detectar si el usuario los modifica
+            const origTasa = sim ? sim.tasa_base : 0;
+            const origInv1 = sim ? sim.inversion_base : capitalGlobal;
+            const origInv2 = sim ? sim.inversion_2 : 0;
+            const origMeses = mesesGlobal;
+
+            valoresOriginalesPorInst.set(inst.id, {
+                tasa: origTasa,
+                inv1: origInv1,
+                inv2: origInv2,
+                meses: origMeses
+            });
+
+            // Verificar si la fila ya contaba con personalización previa
+            const custom = valoresPersonalizadosPorInst.get(inst.id);
+            const isModified = !!(custom && custom.isModified);
+
+            const curTasa = isModified ? custom.tasa : origTasa;
+            const curInv1 = isModified ? custom.inv1 : origInv1;
+            const curInv2 = isModified ? custom.inv2 : origInv2;
+            const curMeses = isModified ? custom.meses : origMeses;
+
+            // Rendimientos calculados
+            const rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
+            const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
+            const rend2 = (curInv2 * (tasa2 / 100) / 12) * curMeses;
+
+            let rendExtraMensual = 0;
+            let rendExtraPeriodo = 0;
+            if (tramos.length >= 3 && sim && Array.isArray(sim.tramos)) {
+                for (let k = 2; k < sim.tramos.length; k++) {
+                    rendExtraMensual += sim.tramos[k].rendimiento_mensual;
+                    rendExtraPeriodo += (sim.tramos[k].rendimiento_mensual * curMeses);
+                }
+            }
+
+            const totalMensual = (curInv1 * (curTasa / 100) / 12) + (curInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
+            const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
+
+            resultadosCalculadosPorInst.set(inst.id, {
+                total_mensual: totalMensual,
+                total_periodo: totalPeriodo,
+                rend1: rend1,
+                rend2: rend2
+            });
+
+            if (isModified) {
+                tr.classList.add('fila-simulacion-modificada');
+                tr.title = 'Esta institución fue modificada manualmente por el usuario para esta simulación';
+            }
+
+            // Inversión Base muestra lo que anteriormente era Monto 2 (límite del primer tramo en BD, e.g. $25k para NU)
+            const valorInversionBaseCondicion = (sim && sim.monto_2 !== null) ? formatMoney(sim.monto_2) : '—';
 
             // HTML de fila principal
             tr.innerHTML = `
@@ -191,7 +257,12 @@
                     <input type="checkbox" class="simulador-check-inst" data-inst-id="${inst.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
                 <td style="font-weight: 700; color: #1e293b;">
-                    ${inst.nombre}
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>${inst.nombre}</span>
+                        <span class="badge-sim-modificada" id="sim-badge-${inst.id}" style="${isModified ? '' : 'display: none;'}" title="Valores personalizados para esta simulación">
+                            <i class="fas fa-user-edit"></i> Editado
+                        </span>
+                    </div>
                     ${tramos.length >= 3 ? `<button type="button" class="btn-toggle-tramos" data-inst-id="${inst.id}" style="display: block; margin-top: 4px; font-size: 0.72rem; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; color: #2563eb; cursor: pointer;"><i class="fas fa-layer-group"></i> Ver ${tramos.length} tramos</button>` : ''}
                 </td>
                 <td style="text-align: center;">
@@ -202,41 +273,41 @@
                 <td style="font-size: 0.85rem; color: #475569;">
                     ${inst.condiciones_resumen || (tieneEsquema ? inst.esquema.nombre_esquema : 'Sin condiciones activas')}
                 </td>
-                <!-- Inversión Base (Fondo amarillo como en diseño de referencia) -->
-                <td class="sim-cell-input-highlight" style="background: #fffbeb; font-weight: 600; text-align: right;">
-                    <span class="sim-val-inv-base">${sim ? formatMoney(sim.inversion_base) : '—'}</span>
+                <!-- Inversión Base (Muestra lo que antes era Monto 2: límite base de condición de la institución) -->
+                <td style="font-weight: 600; text-align: right; color: #334155;">
+                    <span class="sim-val-inv-base">${valorInversionBaseCondicion}</span>
                 </td>
-                <!-- Tasa % -->
-                <td style="text-align: right; font-weight: 700; color: #0f172a;">
-                    <span class="sim-val-tasa">${sim ? formatPercent(sim.tasa_base) : '—'}</span>
+                <!-- Tasa % (Editable por fila) -->
+                <td style="text-align: right;">
+                    <input type="number" step="0.01" min="0" max="100" class="sim-row-input sim-input-tasa" data-inst-id="${inst.id}" value="${curTasa.toFixed(2)}">
                 </td>
-                <!-- Monto 2 (Monto a partir del cual cambia la tasa) -->
-                <td style="text-align: right; color: #64748b;">
-                    <span class="sim-val-monto2">${(sim && sim.monto_2 !== null) ? formatMoney(sim.monto_2) : '—'}</span>
+                <!-- Inversión 1 (En lo que era Monto 2 va la inversión base y es editable) -->
+                <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
+                    <input type="number" step="100" min="0" class="sim-row-input sim-input-inv1" data-inst-id="${inst.id}" value="${curInv1.toFixed(2)}">
                 </td>
-                <!-- Inversión 2 (Calculada automáticamente por el sistema con fondo amarillo) -->
-                <td class="sim-cell-input-highlight" style="background: #fffbeb; font-weight: 600; text-align: right;">
-                    <span class="sim-val-inv2">${sim ? formatMoney(sim.inversion_2) : '—'}</span>
+                <!-- Inversión 2 (Editable por fila) -->
+                <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
+                    <input type="number" step="100" min="0" class="sim-row-input sim-input-inv2" data-inst-id="${inst.id}" value="${curInv2.toFixed(2)}">
                 </td>
-                <!-- Meses -->
-                <td style="text-align: center; font-weight: 600;">
-                    <span class="sim-val-meses">${mesesGlobal}</span>
+                <!-- Meses (Editable por fila) -->
+                <td style="text-align: center;">
+                    <input type="number" step="1" min="1" max="120" class="sim-row-input sim-input-meses" data-inst-id="${inst.id}" value="${curMeses}">
                 </td>
                 <!-- Rend1 -->
                 <td style="text-align: right; color: #047857; font-weight: 600;">
-                    <span class="sim-val-rend1">${sim ? formatMoney(sim.rend1) : '—'}</span>
+                    <span class="sim-val-rend1">${formatMoney(rend1)}</span>
                 </td>
                 <!-- Rend2 -->
                 <td style="text-align: right; color: #047857; font-weight: 600;">
-                    <span class="sim-val-rend2">${sim ? formatMoney(sim.rend2) : '—'}</span>
+                    <span class="sim-val-rend2">${formatMoney(rend2)}</span>
                 </td>
                 <!-- Total mensual -->
                 <td style="text-align: right; font-weight: 700; color: #1e3a8a; background: #f0fdf4;">
-                    <span class="sim-val-total-mensual">${sim ? formatMoney(sim.total_mensual) : '—'}</span>
+                    <span class="sim-val-total-mensual">${formatMoney(totalMensual)}</span>
                 </td>
                 <!-- Total periodo -->
                 <td style="text-align: right; font-weight: 800; color: #166534; background: #dcfce7;">
-                    <span class="sim-val-total-periodo">${sim ? formatMoney(sim.total_periodo) : '—'}</span>
+                    <span class="sim-val-total-periodo">${formatMoney(totalPeriodo)}</span>
                 </td>
             `;
 
@@ -276,6 +347,16 @@
             }
         });
 
+        // Configurar listener para inputs editables por fila (reactivo en tiempo real)
+        tbody.querySelectorAll('.sim-row-input').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const tr = e.target.closest('tr');
+                if (!tr) return;
+                const instId = parseInt(tr.dataset.instId, 10);
+                recalcularFila(instId, tr);
+            });
+        });
+
         // Configurar listener para checkboxes de selección
         document.querySelectorAll('.simulador-check-inst').forEach(chk => {
             chk.addEventListener('change', (e) => {
@@ -307,6 +388,101 @@
         actualizarEstiloFilasSeleccionadas();
     }
 
+    /**
+     * Recalcula reactivamente una sola fila cuando el usuario edita Tasa %, Inversión 1, Inversión 2 o Meses.
+     * Mantiene los valores de la BD intactos y resalta la fila si los valores difieren de los originales.
+     */
+    function recalcularFila(instId, tr) {
+        const inst = catalogoInstituciones.find(i => i.id === instId);
+        if (!inst) return;
+        const tramos = (inst.esquema && Array.isArray(inst.esquema.tramos)) ? inst.esquema.tramos : [];
+
+        const inputTasa = tr.querySelector('.sim-input-tasa');
+        const inputInv1 = tr.querySelector('.sim-input-inv1');
+        const inputInv2 = tr.querySelector('.sim-input-inv2');
+        const inputMeses = tr.querySelector('.sim-input-meses');
+
+        const curTasa = parseFloat(inputTasa ? inputTasa.value : 0) || 0;
+        const curInv1 = parseFloat(inputInv1 ? inputInv1.value : 0) || 0;
+        const curInv2 = parseFloat(inputInv2 ? inputInv2.value : 0) || 0;
+        const curMeses = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+
+        const orig = valoresOriginalesPorInst.get(instId) || { tasa: 0, inv1: 0, inv2: 0, meses: 1 };
+
+        // Comparar contra valores originales (tolerancia numérica a centavos)
+        const isModified = (
+            Math.abs(curTasa - orig.tasa) > 0.001 ||
+            Math.abs(curInv1 - orig.inv1) > 0.001 ||
+            Math.abs(curInv2 - orig.inv2) > 0.001 ||
+            Math.abs(curMeses - orig.meses) > 0.001
+        );
+
+        const badge = tr.querySelector(`#sim-badge-${instId}`);
+
+        if (isModified) {
+            tr.classList.add('fila-simulacion-modificada');
+            tr.title = 'Esta institución fue modificada manualmente por el usuario para esta simulación';
+            if (badge) badge.style.display = 'inline-flex';
+            valoresPersonalizadosPorInst.set(instId, {
+                tasa: curTasa,
+                inv1: curInv1,
+                inv2: curInv2,
+                meses: curMeses,
+                isModified: true
+            });
+        } else {
+            tr.classList.remove('fila-simulacion-modificada');
+            tr.title = '';
+            if (badge) badge.style.display = 'none';
+            valoresPersonalizadosPorInst.delete(instId);
+        }
+
+        // Fórmulas de rendimiento reactivas:
+        // Rend1 = Inversión 1 * (Tasa 1 / 100 / 12) * Meses
+        const rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
+
+        // Rend2 = Inversión 2 * (Tasa 2 / 100 / 12) * Meses
+        const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
+        const rend2 = (curInv2 * (tasa2 / 100) / 12) * curMeses;
+
+        // Rendimiento de tramos adicionales (si existen tramos >= 3)
+        let rendExtraMensual = 0;
+        let rendExtraPeriodo = 0;
+        if (tramos.length >= 3) {
+            const inputInversion = document.getElementById('simulador-inversion-global');
+            const cap = parseFloat(inputInversion ? inputInversion.value : 0) || 0;
+            const simTemp = window.MotorFinanciero.simularInversion(cap, curMeses, tramos);
+            if (simTemp && Array.isArray(simTemp.tramos)) {
+                for (let k = 2; k < simTemp.tramos.length; k++) {
+                    rendExtraMensual += simTemp.tramos[k].rendimiento_mensual;
+                    rendExtraPeriodo += (simTemp.tramos[k].rendimiento_mensual * curMeses);
+                }
+            }
+        }
+
+        const totalMensual = (curInv1 * (curTasa / 100) / 12) + (curInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
+        const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
+
+        const elRend1 = tr.querySelector('.sim-val-rend1');
+        const elRend2 = tr.querySelector('.sim-val-rend2');
+        const elTotM = tr.querySelector('.sim-val-total-mensual');
+        const elTotP = tr.querySelector('.sim-val-total-periodo');
+
+        if (elRend1) elRend1.textContent = formatMoney(rend1);
+        if (elRend2) elRend2.textContent = formatMoney(rend2);
+        if (elTotM) elTotM.textContent = formatMoney(totalMensual);
+        if (elTotP) elTotP.textContent = formatMoney(totalPeriodo);
+
+        resultadosCalculadosPorInst.set(instId, {
+            total_mensual: totalMensual,
+            total_periodo: totalPeriodo,
+            rend1: rend1,
+            rend2: rend2
+        });
+
+        actualizarResumenComparativo();
+    }
+
     function renderizarSubTramosHtml(sim) {
         if (!sim || !Array.isArray(sim.tramos)) return '<tr><td colspan="6">Sin datos</td></tr>';
         return sim.tramos.map(t => `
@@ -323,6 +499,8 @@
 
     /**
      * Recalcula reactivamente los rendimientos de todas las filas según los inputs globales.
+     * Si una fila no está modificada por el usuario, actualiza sus inputs y resultados.
+     * Si una fila está modificada, mantiene sus valores personalizados y recalcula su estado.
      */
     function recalcularSimulacion() {
         const inputInversion = document.getElementById('simulador-inversion-global');
@@ -339,30 +517,61 @@
 
             const sim = window.MotorFinanciero.simularInversion(capitalGlobal, mesesGlobal, tramos);
 
+            const newOrigTasa = sim ? sim.tasa_base : 0;
+            const newOrigInv1 = sim ? sim.inversion_base : capitalGlobal;
+            const newOrigInv2 = sim ? sim.inversion_2 : 0;
+            const newOrigMeses = mesesGlobal;
+
+            valoresOriginalesPorInst.set(inst.id, {
+                tasa: newOrigTasa,
+                inv1: newOrigInv1,
+                inv2: newOrigInv2,
+                meses: newOrigMeses
+            });
+
+            // Actualizar Inversión Base (límite base de condición en BD, antes Monto 2)
             const elInvBase = tr.querySelector('.sim-val-inv-base');
-            const elTasa = tr.querySelector('.sim-val-tasa');
-            const elMonto2 = tr.querySelector('.sim-val-monto2');
-            const elInv2 = tr.querySelector('.sim-val-inv2');
-            const elMeses = tr.querySelector('.sim-val-meses');
-            const elRend1 = tr.querySelector('.sim-val-rend1');
-            const elRend2 = tr.querySelector('.sim-val-rend2');
-            const elTotalMensual = tr.querySelector('.sim-val-total-mensual');
-            const elTotalPeriodo = tr.querySelector('.sim-val-total-periodo');
+            if (elInvBase) {
+                elInvBase.textContent = (sim && sim.monto_2 !== null) ? formatMoney(sim.monto_2) : '—';
+            }
 
-            if (elInvBase) elInvBase.textContent = formatMoney(sim.inversion_base);
-            if (elTasa) elTasa.textContent = formatPercent(sim.tasa_base);
-            if (elMonto2) elMonto2.textContent = sim.monto_2 !== null ? formatMoney(sim.monto_2) : '—';
-            if (elInv2) elInv2.textContent = formatMoney(sim.inversion_2);
-            if (elMeses) elMeses.textContent = mesesGlobal;
-            if (elRend1) elRend1.textContent = formatMoney(sim.rend1);
-            if (elRend2) elRend2.textContent = formatMoney(sim.rend2);
-            if (elTotalMensual) elTotalMensual.textContent = formatMoney(sim.total_mensual);
-            if (elTotalPeriodo) elTotalPeriodo.textContent = formatMoney(sim.total_periodo);
+            const isPersonalizado = valoresPersonalizadosPorInst.has(inst.id);
 
-            // Actualizar subfila de N tramos si existe
-            const subrowTbody = document.getElementById(`sim-subrow-tbody-${inst.id}`);
-            if (subrowTbody) {
-                subrowTbody.innerHTML = renderizarSubTramosHtml(sim);
+            if (!isPersonalizado) {
+                const inputTasa = tr.querySelector('.sim-input-tasa');
+                const inputInv1 = tr.querySelector('.sim-input-inv1');
+                const inputInv2 = tr.querySelector('.sim-input-inv2');
+                const inputMeses = tr.querySelector('.sim-input-meses');
+
+                if (inputTasa) inputTasa.value = newOrigTasa.toFixed(2);
+                if (inputInv1) inputInv1.value = newOrigInv1.toFixed(2);
+                if (inputInv2) inputInv2.value = newOrigInv2.toFixed(2);
+                if (inputMeses) inputMeses.value = newOrigMeses;
+
+                const elRend1 = tr.querySelector('.sim-val-rend1');
+                const elRend2 = tr.querySelector('.sim-val-rend2');
+                const elTotalMensual = tr.querySelector('.sim-val-total-mensual');
+                const elTotalPeriodo = tr.querySelector('.sim-val-total-periodo');
+
+                if (elRend1) elRend1.textContent = formatMoney(sim.rend1);
+                if (elRend2) elRend2.textContent = formatMoney(sim.rend2);
+                if (elTotalMensual) elTotalMensual.textContent = formatMoney(sim.total_mensual);
+                if (elTotalPeriodo) elTotalPeriodo.textContent = formatMoney(sim.total_periodo);
+
+                resultadosCalculadosPorInst.set(inst.id, {
+                    total_mensual: sim.total_mensual,
+                    total_periodo: sim.total_periodo,
+                    rend1: sim.rend1,
+                    rend2: sim.rend2
+                });
+
+                // Actualizar subfila de N tramos si existe
+                const subrowTbody = document.getElementById(`sim-subrow-tbody-${inst.id}`);
+                if (subrowTbody) {
+                    subrowTbody.innerHTML = renderizarSubTramosHtml(sim);
+                }
+            } else {
+                recalcularFila(inst.id, tr);
             }
         });
 
@@ -398,38 +607,38 @@
             return;
         }
 
-        const inputInversion = document.getElementById('simulador-inversion-global');
-        const inputMeses = document.getElementById('simulador-meses-global');
-        const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 0) || 0;
-        const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
-
-        // Encontrar la mejor opción de rendimiento del periodo
+        // Encontrar la mejor opción de rendimiento del periodo entre las seleccionadas
         let mejorInst = null;
-        let mejorRend = -1;
+        let mejorPeriodo = -1;
+        let mejorMensual = -1;
 
         seleccionadas.forEach(inst => {
-            const tramos = (inst.esquema && Array.isArray(inst.esquema.tramos)) ? inst.esquema.tramos : [];
-            if (tramos.length > 0) {
-                const sim = window.MotorFinanciero.simularInversion(capitalGlobal, mesesGlobal, tramos);
-                if (sim.total_periodo > mejorRend) {
-                    mejorRend = sim.total_periodo;
-                    mejorInst = { inst, sim };
-                }
+            const res = resultadosCalculadosPorInst.get(inst.id);
+            if (res && res.total_periodo > mejorPeriodo) {
+                mejorPeriodo = res.total_periodo;
+                mejorMensual = res.total_mensual;
+                mejorInst = inst;
             }
         });
 
         if (mejorInst) {
+            const tr = document.getElementById(`sim-row-${mejorInst.id}`);
+            const curMeses = tr ? (parseInt(tr.querySelector('.sim-input-meses')?.value, 10) || 1) : 1;
+            const curInv1 = tr ? (parseFloat(tr.querySelector('.sim-input-inv1')?.value) || 0) : 0;
+            const curInv2 = tr ? (parseFloat(tr.querySelector('.sim-input-inv2')?.value) || 0) : 0;
+            const capitalMostrado = curInv1 + curInv2;
+
             resumenBox.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <span style="font-weight: 700; color: #047857;"><i class="fas fa-trophy"></i> Mayor Rendimiento entre seleccionadas:</span>
-                        <strong style="color: #0f172a; margin-left: 6px;">${mejorInst.inst.nombre}</strong>
-                        <span style="color: #64748b; margin-left: 8px;">(${formatMoney(capitalGlobal)} a ${mesesGlobal} ${mesesGlobal === 1 ? 'mes' : 'meses'})</span>
+                        <strong style="color: #0f172a; margin-left: 6px;">${mejorInst.nombre}</strong>
+                        <span style="color: #64748b; margin-left: 8px;">(${formatMoney(capitalMostrado)} a ${curMeses} ${curMeses === 1 ? 'mes' : 'meses'})</span>
                     </div>
                     <div>
                         <span style="font-weight: 600; color: #334155;">Ganancia Periodo:</span>
-                        <strong style="color: #166534; font-size: 1.1em; margin-left: 6px;">${formatMoney(mejorInst.sim.total_periodo)}</strong>
-                        <span style="color: #64748b; margin-left: 10px;">(${formatMoney(mejorInst.sim.total_mensual)}/mes)</span>
+                        <strong style="color: #166534; font-size: 1.1em; margin-left: 6px;">${formatMoney(mejorPeriodo)}</strong>
+                        <span style="color: #64748b; margin-left: 10px;">(${formatMoney(mejorMensual)}/mes)</span>
                     </div>
                 </div>
             `;
@@ -440,4 +649,8 @@
     window.inicializarSimuladorFinanciero = inicializarSimuladorFinanciero;
     window.cargarCatalogoSimulador = cargarCatalogoSimulador;
     window.recalcularSimulacion = recalcularSimulacion;
+    window.recalcularFila = recalcularFila;
+    window.valoresPersonalizadosPorInst = valoresPersonalizadosPorInst;
+    window.valoresOriginalesPorInst = valoresOriginalesPorInst;
+    window.resultadosCalculadosPorInst = resultadosCalculadosPorInst;
 }());
