@@ -62,6 +62,27 @@ describe('Finanzas & Simulador API Tests', function () {
                 { expiresIn: '1h' }
             );
         }
+
+        // Asegurar que las 8 instituciones base estén activas para las pruebas
+        await conn.query('UPDATE instituciones_financieras SET activo = 1 WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8)');
+
+        // Limpiar esquemas temporales de prueba y restaurar el esquema base de NU (2026)
+        await conn.query("DELETE FROM institucion_tramos_tasas WHERE esquema_id IN (SELECT id FROM institucion_esquemas_tasas WHERE institucion_id = 1 AND (fecha_inicio_vigencia > '2026-01-01' OR nombre_esquema LIKE '%Futura%'))");
+        await conn.query("DELETE FROM institucion_esquemas_tasas WHERE institucion_id = 1 AND (fecha_inicio_vigencia > '2026-01-01' OR nombre_esquema LIKE '%Futura%')");
+
+        // Restaurar esquema 1 de NU a estado base
+        const [esqNU] = await conn.query("SELECT id FROM institucion_esquemas_tasas WHERE institucion_id = 1 AND fecha_inicio_vigencia = '2026-01-01' LIMIT 1");
+        if (esqNU.length > 0) {
+            await conn.query("UPDATE institucion_esquemas_tasas SET fecha_fin_vigencia = NULL, nombre_esquema = 'Vigente 2026', activo = 1 WHERE id = ?", [esqNU[0].id]);
+            await conn.query("DELETE FROM institucion_tramos_tasas WHERE esquema_id = ?", [esqNU[0].id]);
+            await conn.query(
+                `INSERT INTO institucion_tramos_tasas (esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo) VALUES
+                 (?, 1, 0.00, 25000.00, 13.0000, 'Saldo hasta $25,000'),
+                 (?, 2, 25000.00, NULL, 6.5000, 'Excedente a partir de $25,000')`,
+                [esqNU[0].id, esqNU[0].id]
+            );
+            await conn.query("UPDATE instituciones_financieras SET condiciones_resumen = 'Hasta $25,000 al 13%, excedente al 6.5%' WHERE id = 1");
+        }
     });
 
     after(async function () {

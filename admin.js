@@ -3356,6 +3356,7 @@ function initAdminBlocks() {
     const modalInst = document.getElementById('modal-finanzas-institucion');
     const btnCerrarModalInst = document.getElementById('btn-cerrar-modal-finanzas-inst');
     const btnCancelarModalInst = document.getElementById('btn-cancelar-modal-finanzas-inst');
+    const btnInstAgregarTramo = document.getElementById('btn-inst-agregar-tramo');
     const formInst = document.getElementById('form-finanzas-institucion');
 
     const cerrarModalInst = () => {
@@ -3363,6 +3364,11 @@ function initAdminBlocks() {
     };
     if (btnCerrarModalInst) btnCerrarModalInst.onclick = cerrarModalInst;
     if (btnCancelarModalInst) btnCancelarModalInst.onclick = cerrarModalInst;
+
+    if (btnInstAgregarTramo && !btnInstAgregarTramo.dataset.configured) {
+        btnInstAgregarTramo.dataset.configured = 'true';
+        btnInstAgregarTramo.addEventListener('click', () => agregarFilaTramoInstForm());
+    }
 
     if (formInst && !formInst.dataset.configured) {
         formInst.dataset.configured = 'true';
@@ -3448,16 +3454,16 @@ async function loadFinanzasInstituciones() {
                 <td>${inst.orden_visual}</td>
                 <td style="font-size: 0.85rem;">${vigenciaTexto}</td>
                 <td>
-                    <span style="padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; background: ${inst.activo ? '#dcfce7' : '#fee2e2'}; color: ${inst.activo ? '#166534' : '#991b1b'};">
-                        ${inst.activo ? 'Activo' : 'Inactivo'}
+                    <span style="padding: 3px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; background: ${inst.activo ? '#dcfce7' : '#fee2e2'}; color: ${inst.activo ? '#166534' : '#991b1b'}; display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="fas ${inst.activo ? 'fa-check' : 'fa-ban'}" style="font-weight: 900;"></i> ${inst.activo ? 'Activo' : 'Inactivo'}
                     </span>
                 </td>
                 <td style="white-space: nowrap;">
-                    <button type="button" class="btn btn-secondary btn-sm btn-edit-inst" data-id="${inst.id}" style="padding: 3px 8px; font-size: 0.8rem;" title="Editar institución">
-                        <i class="fas fa-edit"></i>
+                    <button type="button" class="btn btn-secondary btn-sm btn-edit-inst" data-id="${inst.id}" style="padding: 4px 10px; font-size: 0.82rem;" title="Editar institución y condiciones">
+                        <i class="fas fa-edit"></i> Editar
                     </button>
-                    <button type="button" class="btn btn-sm btn-toggle-inst" data-id="${inst.id}" data-activo="${inst.activo}" style="padding: 3px 8px; font-size: 0.8rem; background: ${inst.activo ? '#fed7aa' : '#bbf7d0'}; color: ${inst.activo ? '#9a3412' : '#166534'}; border: none; border-radius: 4px; margin-left: 4px;" title="${inst.activo ? 'Desactivar institución' : 'Activar institución'}">
-                        <i class="fas ${inst.activo ? 'fa-ban' : 'fa-check'}"></i>
+                    <button type="button" class="btn btn-sm btn-toggle-inst" data-id="${inst.id}" data-activo="${inst.activo}" style="padding: 4px 10px; font-size: 0.82rem; font-weight: 600; background: ${inst.activo ? '#fee2e2' : '#dcfce7'}; color: ${inst.activo ? '#991b1b' : '#166534'}; border: 1px solid ${inst.activo ? '#fca5a5' : '#86efac'}; border-radius: 6px; margin-left: 6px; cursor: pointer;" title="${inst.activo ? 'Desactivar institución' : 'Activar institución'}">
+                        <i class="fas ${inst.activo ? 'fa-ban' : 'fa-check'}"></i> ${inst.activo ? 'Desactivar' : 'Activar'}
                     </button>
                 </td>
             `;
@@ -3603,7 +3609,7 @@ function renderizarEsquemasContainer(filtroId = 'todas') {
                                 <button type="button" class="btn btn-secondary btn-sm btn-edit-esq" data-esq-id="${esq.id}" data-inst-id="${inst.id}" style="font-size: 0.78rem; padding: 3px 8px;">
                                     <i class="fas fa-edit"></i> Editar Tramos
                                 </button>
-                                <button type="button" class="btn btn-sm btn-toggle-esq" data-esq-id="${esq.id}" data-activo="${esq.activo}" style="font-size: 0.78rem; padding: 3px 8px; background: ${esq.activo ? '#fed7aa' : '#bbf7d0'}; color: ${esq.activo ? '#9a3412' : '#166534'}; border: none; border-radius: 4px;">
+                                <button type="button" class="btn btn-sm btn-toggle-esq" data-esq-id="${esq.id}" data-activo="${esq.activo}" style="font-size: 0.78rem; padding: 3px 8px; font-weight: 600; background: ${esq.activo ? '#fee2e2' : '#dcfce7'}; color: ${esq.activo ? '#991b1b' : '#166534'}; border: 1px solid ${esq.activo ? '#fca5a5' : '#86efac'}; border-radius: 4px; cursor: pointer;">
                                     <i class="fas ${esq.activo ? 'fa-ban' : 'fa-check'}"></i> ${esq.activo ? 'Desactivar' : 'Activar'}
                                 </button>
                             </div>
@@ -3680,12 +3686,29 @@ function abrirModalNuevaInstitucion() {
     const modal = document.getElementById('modal-finanzas-institucion');
     const form = document.getElementById('form-finanzas-institucion');
     const titulo = document.getElementById('modal-finanzas-inst-titulo');
+    const tbody = document.getElementById('finanzas-inst-tramos-tbody');
+    const wrapperNuevaVigencia = document.getElementById('finanzas-inst-nueva-vigencia-wrapper');
+
     if (!modal || !form) return;
 
     form.reset();
     document.getElementById('finanzas-inst-id').value = '';
+    document.getElementById('finanzas-inst-esquema-id').value = '';
     document.getElementById('finanzas-inst-activo').checked = true;
-    if (titulo) titulo.textContent = 'Nueva Institución Financiera';
+    document.getElementById('finanzas-inst-esq-activo').checked = true;
+    document.getElementById('finanzas-inst-esq-nombre').value = 'Vigente 2026';
+    document.getElementById('finanzas-inst-esq-fecha-inicio').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('finanzas-inst-esq-fecha-fin').value = '';
+
+    if (wrapperNuevaVigencia) wrapperNuevaVigencia.style.display = 'none';
+    if (titulo) titulo.textContent = 'Nueva Institución Financiera y Condiciones';
+
+    if (tbody) {
+        tbody.innerHTML = '';
+        agregarFilaTramoInstForm({ numero_tramo: 1, limite_inferior: 0.00, limite_superior: null, tasa_anual: 10.0, descripcion_tramo: 'Saldo total' });
+    }
+
+    recalcularResumenCondicionesInstModal();
     modal.style.display = 'flex';
 }
 
@@ -3693,30 +3716,232 @@ function abrirModalEditarInstitucion(inst) {
     const modal = document.getElementById('modal-finanzas-institucion');
     const form = document.getElementById('form-finanzas-institucion');
     const titulo = document.getElementById('modal-finanzas-inst-titulo');
+    const tbody = document.getElementById('finanzas-inst-tramos-tbody');
+    const chkNuevaVigencia = document.getElementById('finanzas-inst-nueva-vigencia-chk');
+    const wrapperNuevaVigencia = document.getElementById('finanzas-inst-nueva-vigencia-wrapper');
+
     if (!modal || !form || !inst) return;
 
+    form.reset();
     document.getElementById('finanzas-inst-id').value = inst.id;
     document.getElementById('finanzas-inst-nombre').value = inst.nombre || '';
     document.getElementById('finanzas-inst-tipo').value = inst.tipo || 'B';
-    document.getElementById('finanzas-inst-condiciones').value = inst.condiciones_resumen || '';
     document.getElementById('finanzas-inst-desc').value = inst.descripcion || '';
     document.getElementById('finanzas-inst-orden').value = inst.orden_visual || 0;
     document.getElementById('finanzas-inst-activo').checked = inst.activo == 1;
 
     if (titulo) titulo.textContent = `Editar Institución: ${inst.nombre}`;
+
+    // Buscar esquema activo o más reciente
+    const hoy = new Date().toISOString().slice(0, 10);
+    const esquemas = inst.esquemas || [];
+    const esqActivo = esquemas.find(e => e.activo === 1 && (!e.fecha_fin_vigencia || e.fecha_fin_vigencia >= hoy)) || esquemas[0];
+
+    if (esqActivo) {
+        document.getElementById('finanzas-inst-esquema-id').value = esqActivo.id;
+        document.getElementById('finanzas-inst-esq-nombre').value = esqActivo.nombre_esquema || 'Vigente 2026';
+        document.getElementById('finanzas-inst-esq-fecha-inicio').value = esqActivo.fecha_inicio_vigencia || '';
+        document.getElementById('finanzas-inst-esq-fecha-fin').value = esqActivo.fecha_fin_vigencia || '';
+        document.getElementById('finanzas-inst-esq-activo').checked = esqActivo.activo == 1;
+
+        if (chkNuevaVigencia) chkNuevaVigencia.checked = false;
+        if (wrapperNuevaVigencia) wrapperNuevaVigencia.style.display = 'block';
+
+        if (tbody) {
+            tbody.innerHTML = '';
+            const tramos = esqActivo.tramos || [];
+            if (tramos.length === 0) {
+                agregarFilaTramoInstForm({ numero_tramo: 1, limite_inferior: 0.00, limite_superior: null, tasa_anual: 10.0, descripcion_tramo: '' });
+            } else {
+                tramos.forEach(t => agregarFilaTramoInstForm(t));
+            }
+        }
+    } else {
+        document.getElementById('finanzas-inst-esquema-id').value = '';
+        document.getElementById('finanzas-inst-esq-nombre').value = 'Vigente 2026';
+        document.getElementById('finanzas-inst-esq-fecha-inicio').value = hoy;
+        document.getElementById('finanzas-inst-esq-fecha-fin').value = '';
+        document.getElementById('finanzas-inst-esq-activo').checked = true;
+
+        if (chkNuevaVigencia) chkNuevaVigencia.checked = false;
+        if (wrapperNuevaVigencia) wrapperNuevaVigencia.style.display = 'none';
+
+        if (tbody) {
+            tbody.innerHTML = '';
+            agregarFilaTramoInstForm({ numero_tramo: 1, limite_inferior: 0.00, limite_superior: null, tasa_anual: 10.0, descripcion_tramo: 'Saldo total' });
+        }
+    }
+
+    recalcularResumenCondicionesInstModal();
     modal.style.display = 'flex';
+}
+
+function agregarFilaTramoInstForm(tramoData = null) {
+    const tbody = document.getElementById('finanzas-inst-tramos-tbody');
+    if (!tbody) return;
+
+    const filasActuales = tbody.querySelectorAll('tr').length;
+    const numTramo = filasActuales + 1;
+
+    let infSugerido = 0;
+    if (filasActuales > 0 && !tramoData) {
+        const ultimaFila = tbody.querySelectorAll('tr')[filasActuales - 1];
+        const supAnteriorInput = ultimaFila.querySelector('.tramo-sup-input');
+        if (supAnteriorInput && supAnteriorInput.value) {
+            infSugerido = parseFloat(supAnteriorInput.value) || 0;
+        }
+    }
+
+    const inf = tramoData ? tramoData.limite_inferior : infSugerido;
+    const sup = tramoData && tramoData.limite_superior !== null && tramoData.limite_superior !== undefined ? tramoData.limite_superior : '';
+    const tasa = tramoData ? tramoData.tasa_anual : 10.00;
+    const desc = tramoData ? (tramoData.descripcion_tramo || '') : '';
+
+    const tr = document.createElement('tr');
+    tr.className = 'tramo-row-inst-form';
+    tr.innerHTML = `
+        <td style="font-weight: 700; text-align: center;" class="tramo-num-col">${numTramo}</td>
+        <td>
+            <input type="number" step="0.01" class="form-control tramo-inf-input" value="${inf}" required style="padding: 4px 6px; font-size: 0.85rem; width: 100%;">
+        </td>
+        <td>
+            <input type="number" step="0.01" class="form-control tramo-sup-input" value="${sup}" placeholder="Sin tope (+∞)" style="padding: 4px 6px; font-size: 0.85rem; width: 100%;">
+        </td>
+        <td>
+            <input type="number" step="0.01" min="0" max="100" class="form-control tramo-tasa-input" value="${tasa}" required style="padding: 4px 6px; font-size: 0.85rem; width: 100%;">
+        </td>
+        <td>
+            <input type="text" class="form-control tramo-desc-input" value="${escapeHTML(desc)}" placeholder="Descripción opcional..." style="padding: 4px 6px; font-size: 0.85rem; width: 100%;">
+        </td>
+        <td style="text-align: center;">
+            <button type="button" class="btn btn-secondary btn-sm btn-delete-tramo-inst-row" style="padding: 2px 6px; font-size: 0.75rem; color: #ef4444;" title="Quitar tramo">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+
+    // Eventos input para actualizar en vivo el resumen de condiciones
+    tr.querySelectorAll('input').forEach(inp => {
+        inp.addEventListener('input', () => recalcularResumenCondicionesInstModal());
+    });
+
+    // Quitar tramo
+    tr.querySelector('.btn-delete-tramo-inst-row').addEventListener('click', () => {
+        if (tbody.querySelectorAll('tr').length <= 1) {
+            if (window.showModal) window.showModal('Debe existir al menos un tramo de tasa.');
+            return;
+        }
+        tr.remove();
+        tbody.querySelectorAll('tr').forEach((row, idx) => {
+            const numCol = row.querySelector('.tramo-num-col');
+            if (numCol) numCol.textContent = idx + 1;
+        });
+        recalcularResumenCondicionesInstModal();
+    });
+
+    recalcularResumenCondicionesInstModal();
+}
+
+function recalcularResumenCondicionesInstModal() {
+    const tbody = document.getElementById('finanzas-inst-tramos-tbody');
+    const previewDiv = document.getElementById('finanzas-inst-condiciones-preview');
+    const hiddenInput = document.getElementById('finanzas-inst-condiciones');
+    if (!tbody || !previewDiv) return;
+
+    const filas = tbody.querySelectorAll('tr');
+    const tramos = [];
+    filas.forEach((row, idx) => {
+        const inf = parseFloat(row.querySelector('.tramo-inf-input').value) || 0;
+        const supVal = row.querySelector('.tramo-sup-input').value;
+        const sup = (supVal !== '' && supVal !== null && !isNaN(parseFloat(supVal))) ? parseFloat(supVal) : null;
+        const tasa = parseFloat(row.querySelector('.tramo-tasa-input').value) || 0;
+        const desc = row.querySelector('.tramo-desc-input').value.trim();
+        tramos.push({
+            numero_tramo: idx + 1,
+            limite_inferior: inf,
+            limite_superior: sup,
+            tasa_anual: tasa,
+            descripcion_tramo: desc
+        });
+    });
+
+    const resumen = (window.MotorFinanciero && typeof window.MotorFinanciero.generarResumenCondiciones === 'function')
+        ? window.MotorFinanciero.generarResumenCondiciones(tramos)
+        : (tramos.length > 0 ? `Tasa anual ${tramos[0].tasa_anual}%` : 'Sin condiciones');
+
+    previewDiv.textContent = resumen;
+    if (hiddenInput) hiddenInput.value = resumen;
 }
 
 async function guardarInstitucionForm() {
     const id = document.getElementById('finanzas-inst-id').value;
     const nombre = document.getElementById('finanzas-inst-nombre').value.trim();
     const tipo = document.getElementById('finanzas-inst-tipo').value;
-    const condiciones_resumen = document.getElementById('finanzas-inst-condiciones').value.trim();
     const descripcion = document.getElementById('finanzas-inst-desc').value.trim();
     const orden_visual = parseInt(document.getElementById('finanzas-inst-orden').value, 10) || 0;
     const activo = document.getElementById('finanzas-inst-activo').checked ? 1 : 0;
 
-    const payload = { nombre, tipo, condiciones_resumen, descripcion, orden_visual, activo };
+    // Datos del esquema
+    const esquemaId = document.getElementById('finanzas-inst-esquema-id').value;
+    const nombre_esquema = document.getElementById('finanzas-inst-esq-nombre').value.trim() || 'Vigente 2026';
+    const fecha_inicio_vigencia = document.getElementById('finanzas-inst-esq-fecha-inicio').value;
+    const fecha_fin_vigencia = document.getElementById('finanzas-inst-esq-fecha-fin').value || null;
+    const esqActivo = document.getElementById('finanzas-inst-esq-activo').checked ? 1 : 0;
+    const chkNuevaVigencia = document.getElementById('finanzas-inst-nueva-vigencia-chk');
+    const nueva_vigencia = chkNuevaVigencia ? chkNuevaVigencia.checked : false;
+
+    // Extraer tramos
+    const tbody = document.getElementById('finanzas-inst-tramos-tbody');
+    const filas = tbody ? tbody.querySelectorAll('tr') : [];
+    const tramos = [];
+
+    filas.forEach((row, idx) => {
+        const inf = parseFloat(row.querySelector('.tramo-inf-input').value);
+        const supRaw = row.querySelector('.tramo-sup-input').value;
+        const sup = (supRaw !== '' && supRaw !== null && !isNaN(parseFloat(supRaw))) ? parseFloat(supRaw) : null;
+        const tasa = parseFloat(row.querySelector('.tramo-tasa-input').value);
+        const desc = row.querySelector('.tramo-desc-input').value.trim();
+
+        tramos.push({
+            numero_tramo: idx + 1,
+            limite_inferior: inf,
+            limite_superior: sup,
+            tasa_anual: tasa,
+            descripcion_tramo: desc
+        });
+    });
+
+    // Validar tramos con el motor
+    const val = window.MotorFinanciero.validarTramos(tramos);
+    if (!val.valido) {
+        if (window.showModal) window.showModal(val.error);
+        else alert(val.error);
+        return;
+    }
+
+    const condiciones_resumen = window.MotorFinanciero.generarResumenCondiciones(tramos);
+
+    const payload = {
+        nombre,
+        tipo,
+        descripcion,
+        condiciones_resumen,
+        orden_visual,
+        activo,
+        esquema: {
+            id: esquemaId ? parseInt(esquemaId, 10) : null,
+            nombre_esquema,
+            fecha_inicio_vigencia,
+            fecha_fin_vigencia,
+            activo: esqActivo,
+            nueva_vigencia,
+            cerrar_anterior: true,
+            tramos
+        }
+    };
+
     const url = id ? `/api/admin/finanzas/instituciones/${id}` : '/api/admin/finanzas/instituciones';
     const method = id ? 'PUT' : 'POST';
 
@@ -3730,8 +3955,11 @@ async function guardarInstitucionForm() {
         const data = await res.json();
         if (res.ok) {
             document.getElementById('modal-finanzas-institucion').style.display = 'none';
-            if (window.showModal) window.showModal(data.message || 'Institución guardada correctamente.');
+            if (window.showModal) window.showModal(data.message || 'Institución y condiciones guardadas correctamente.');
             await loadFinanzasInstituciones();
+            if (window.SimuladorFinanciero && typeof window.SimuladorFinanciero.cargarDatosSimulador === 'function') {
+                window.SimuladorFinanciero.cargarDatosSimulador();
+            }
         } else {
             handleAdminError(res, data, 'Error al guardar la institución.');
         }
@@ -3750,7 +3978,12 @@ async function toggleEstatusInstitucion(id, nuevoEstatus) {
         });
         const data = await res.json();
         if (res.ok) {
+            const inst = finanzasInstitucionesCache.find(i => i.id === id);
+            if (inst) inst.activo = nuevoEstatus;
             await loadFinanzasInstituciones();
+            if (window.SimuladorFinanciero && typeof window.SimuladorFinanciero.cargarDatosSimulador === 'function') {
+                window.SimuladorFinanciero.cargarDatosSimulador();
+            }
         } else {
             handleAdminError(res, data, 'Error al cambiar estatus de la institución.');
         }

@@ -193,9 +193,49 @@
         return { valido: true, error: null };
     }
 
+    /**
+     * Genera automáticamente el resumen textual de condiciones a partir de los tramos configurados.
+     * 
+     * @param {Array<Object>} tramos Lista de tramos de tasa
+     * @returns {string} Texto resumen representativo (ej. "Hasta $25,000 al 13%, excedente al 6.5%")
+     */
+    function generarResumenCondiciones(tramos) {
+        if (!Array.isArray(tramos) || tramos.length === 0) {
+            return 'Sin condiciones';
+        }
+
+        const formatTasa = (tasa) => {
+            const num = parseFloat(tasa) || 0;
+            return num % 1 === 0 ? `${num.toFixed(0)}%` : `${num.toFixed(2).replace(/0$/, '')}%`;
+        };
+
+        const formatMonto = (monto) => {
+            return `$${Number(monto).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        };
+
+        if (tramos.length === 1) {
+            return `Tasa fija ${formatTasa(tramos[0].tasa_anual)}`;
+        }
+
+        if (tramos.length === 2) {
+            const t1 = tramos[0];
+            const t2 = tramos[1];
+            return `Hasta ${formatMonto(t1.limite_superior)} al ${formatTasa(t1.tasa_anual)}, excedente al ${formatTasa(t2.tasa_anual)}`;
+        }
+
+        const partes = [];
+        partes.push(`Hasta ${formatMonto(tramos[0].limite_superior)} al ${formatTasa(tramos[0].tasa_anual)}`);
+        for (let i = 1; i < tramos.length - 1; i++) {
+            partes.push(`${formatMonto(tramos[i].limite_inferior)}-${formatMonto(tramos[i].limite_superior)} al ${formatTasa(tramos[i].tasa_anual)}`);
+        }
+        partes.push(`excedente al ${formatTasa(tramos[tramos.length - 1].tasa_anual)}`);
+        return partes.join(', ');
+    }
+
     return {
         distribuirInversionEnTramos,
         simularInversion,
-        validarTramos
+        validarTramos,
+        generarResumenCondiciones
     };
 }));

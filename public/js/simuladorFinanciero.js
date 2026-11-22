@@ -199,7 +199,7 @@
                         ${tInfo.label}
                     </span>
                 </td>
-                <td style="font-size: 0.85rem; color: #475569; max-width: 220px;">
+                <td style="font-size: 0.85rem; color: #475569;">
                     ${inst.condiciones_resumen || (tieneEsquema ? inst.esquema.nombre_esquema : 'Sin condiciones activas')}
                 </td>
                 <!-- Inversión Base (Fondo amarillo como en diseño de referencia) -->

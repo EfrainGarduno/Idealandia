@@ -127,4 +127,29 @@ console.log('--- Iniciando Pruebas Unitarias del Motor Financiero ---');
     console.log('✓ Validaciones de tramos probadas exitosamente.');
 }
 
+// Resumen de condiciones dinámicas a partir de tramos reales
+{
+    const tramosNU = [
+        { numero_tramo: 1, limite_inferior: 0, limite_superior: 25000, tasa_anual: 13.0 },
+        { numero_tramo: 2, limite_inferior: 25000, limite_superior: null, tasa_anual: 6.5 }
+    ];
+    const resNU = MotorFinanciero.generarResumenCondiciones(tramosNU);
+    assert.strictEqual(resNU, 'Hasta $25,000 al 13%, excedente al 6.5%');
+
+    const tramosOpenbank = [
+        { numero_tramo: 1, limite_inferior: 0, limite_superior: 30000, tasa_anual: 13.0 },
+        { numero_tramo: 2, limite_inferior: 30000, limite_superior: 100000, tasa_anual: 7.0 },
+        { numero_tramo: 3, limite_inferior: 100000, limite_superior: null, tasa_anual: 6.5 }
+    ];
+    const resOpen = MotorFinanciero.generarResumenCondiciones(tramosOpenbank);
+    assert.strictEqual(resOpen, 'Hasta $30,000 al 13%, $30,000-$100,000 al 7%, excedente al 6.5%');
+
+    const tramosMifel = [
+        { numero_tramo: 1, limite_inferior: 0, limite_superior: null, tasa_anual: 11.5 }
+    ];
+    const resMifel = MotorFinanciero.generarResumenCondiciones(tramosMifel);
+    assert.strictEqual(resMifel, 'Tasa fija 11.5%');
+    console.log('✓ Resumen dinámico de condiciones generado automáticamente con éxito.');
+}
+
 console.log('\n>>> TODOS LOS CASOS MATEMÁTICOS DEL MOTOR FINANCIERO PASARON CON ÉXITO <<<\n');
