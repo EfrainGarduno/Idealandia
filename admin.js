@@ -3370,6 +3370,12 @@ function initAdminBlocks() {
         btnInstAgregarTramo.addEventListener('click', () => agregarFilaTramoInstForm());
     }
 
+    const btnInstAgregarRestriccion = document.getElementById('btn-inst-agregar-restriccion');
+    if (btnInstAgregarRestriccion && !btnInstAgregarRestriccion.dataset.configured) {
+        btnInstAgregarRestriccion.dataset.configured = 'true';
+        btnInstAgregarRestriccion.addEventListener('click', () => agregarFilaRestriccionInstForm());
+    }
+
     if (formInst && !formInst.dataset.configured) {
         formInst.dataset.configured = 'true';
         formInst.addEventListener('submit', async (e) => {
@@ -3682,6 +3688,8 @@ function renderizarEsquemasContainer(filtroId = 'todas') {
     });
 }
 
+let restriccionesBorradasCache = [];
+
 function abrirModalNuevaInstitucion() {
     const modal = document.getElementById('modal-finanzas-institucion');
     const form = document.getElementById('form-finanzas-institucion');
@@ -3692,6 +3700,7 @@ function abrirModalNuevaInstitucion() {
     if (!modal || !form) return;
 
     form.reset();
+    restriccionesBorradasCache = [];
     document.getElementById('finanzas-inst-id').value = '';
     document.getElementById('finanzas-inst-esquema-id').value = '';
     document.getElementById('finanzas-inst-activo').checked = true;
@@ -3708,6 +3717,9 @@ function abrirModalNuevaInstitucion() {
         agregarFilaTramoInstForm({ numero_tramo: 1, limite_inferior: 0.00, limite_superior: null, tasa_anual: 10.0, descripcion_tramo: 'Saldo total' });
     }
 
+    const tbodyRest = document.getElementById('finanzas-inst-restricciones-tbody');
+    if (tbodyRest) tbodyRest.innerHTML = '';
+
     recalcularResumenCondicionesInstModal();
     modal.style.display = 'flex';
 }
@@ -3723,6 +3735,7 @@ function abrirModalEditarInstitucion(inst) {
     if (!modal || !form || !inst) return;
 
     form.reset();
+    restriccionesBorradasCache = [];
     document.getElementById('finanzas-inst-id').value = inst.id;
     document.getElementById('finanzas-inst-nombre').value = inst.nombre || '';
     document.getElementById('finanzas-inst-tipo').value = inst.tipo || 'B';
@@ -3771,6 +3784,74 @@ function abrirModalEditarInstitucion(inst) {
             agregarFilaTramoInstForm({ numero_tramo: 1, limite_inferior: 0.00, limite_superior: null, tasa_anual: 10.0, descripcion_tramo: 'Saldo total' });
         }
     }
+
+    // Cargar restricciones en el modal
+    const tbodyRest = document.getElementById('finanzas-inst-restricciones-tbody');
+    if (tbodyRest) {
+        tbodyRest.innerHTML = '';
+        const restricciones = inst.restricciones || [];
+        restricciones.forEach(r => agregarFilaRestriccionInstForm(r));
+    }
+
+    recalcularResumenCondicionesInstModal();
+    modal.style.display = 'flex';
+}
+
+function agregarFilaRestriccionInstForm(restData = null) {
+    const tbody = document.getElementById('finanzas-inst-restricciones-tbody');
+    if (!tbody) return;
+
+    const filasActuales = tbody.querySelectorAll('tr.restriccion-row-inst-form').length;
+    const numOrden = restData && restData.orden ? restData.orden : (filasActuales + 1);
+    const desc = restData ? (restData.descripcion || '') : '';
+    const activo = restData ? (restData.activo == 1) : true;
+    const restId = restData ? restData.id : '';
+
+    const tr = document.createElement('tr');
+    tr.className = 'restriccion-row-inst-form';
+    if (restId) tr.dataset.restriccionId = restId;
+
+    tr.innerHTML = `
+        <td style="text-align: center;">
+            <input type="number" class="form-control restriccion-orden-input" value="${numOrden}" min="1" style="padding: 4px 6px; font-size: 0.85rem; width: 45px; text-align: center;">
+        </td>
+        <td>
+            <input type="text" class="form-control restriccion-desc-input" value="${escapeHTML(desc)}" placeholder="Ej. Requiere al menos una compra al mes..." required style="padding: 4px 6px; font-size: 0.85rem; width: 100%;">
+        </td>
+        <td style="text-align: center;">
+            <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.85rem; margin: 0;">
+                <input type="checkbox" class="restriccion-activo-input" ${activo ? 'checked' : ''} style="width: 16px; height: 16px;">
+                <span>${activo ? 'Activa' : 'Inactiva'}</span>
+            </label>
+        </td>
+        <td style="text-align: center;">
+            <button type="button" class="btn btn-secondary btn-sm btn-delete-restriccion-row" style="padding: 2px 6px; font-size: 0.75rem; color: #ef4444;" title="Quitar restricción">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+
+    const chkActivo = tr.querySelector('.restriccion-activo-input');
+    const spanEstado = tr.querySelector('td:nth-child(3) span');
+    if (chkActivo && spanEstado) {
+        chkActivo.addEventListener('change', (e) => {
+            spanEstado.textContent = e.target.checked ? 'Activa' : 'Inactiva';
+        });
+    }
+
+    tr.querySelector('.btn-delete-restriccion-row').addEventListener('click', () => {
+        if (restId) {
+            restriccionesBorradasCache.push(restId);
+        }
+        tr.remove();
+        tbody.querySelectorAll('tr.restriccion-row-inst-form').forEach((row, idx) => {
+            const ordInput = row.querySelector('.restriccion-orden-input');
+            if (ordInput) ordInput.value = idx + 1;
+        });
+    });
+}
 
     recalcularResumenCondicionesInstModal();
     modal.style.display = 'flex';
@@ -3923,6 +4004,36 @@ async function guardarInstitucionForm() {
 
     const condiciones_resumen = window.MotorFinanciero.generarResumenCondiciones(tramos);
 
+    // Extraer restricciones dinámicas
+    const tbodyRest = document.getElementById('finanzas-inst-restricciones-tbody');
+    const filasRest = tbodyRest ? tbodyRest.querySelectorAll('tr.restriccion-row-inst-form') : [];
+    const restricciones = [];
+
+    filasRest.forEach((row, idx) => {
+        const restId = row.dataset.restriccionId ? parseInt(row.dataset.restriccionId, 10) : null;
+        const descInput = row.querySelector('.restriccion-desc-input');
+        const desc = descInput ? descInput.value.trim() : '';
+        const ordInput = row.querySelector('.restriccion-orden-input');
+        const orden = ordInput ? (parseInt(ordInput.value, 10) || (idx + 1)) : (idx + 1);
+        const actInput = row.querySelector('.restriccion-activo-input');
+        const activoRest = actInput ? (actInput.checked ? 1 : 0) : 1;
+
+        if (desc) {
+            restricciones.push({
+                id: restId,
+                descripcion: desc,
+                orden: orden,
+                activo: activoRest
+            });
+        }
+    });
+
+    if (Array.isArray(restriccionesBorradasCache)) {
+        restriccionesBorradasCache.forEach(delId => {
+            restricciones.push({ id: delId, _deleted: true });
+        });
+    }
+
     const payload = {
         nombre,
         tipo,
@@ -3930,6 +4041,7 @@ async function guardarInstitucionForm() {
         condiciones_resumen,
         orden_visual,
         activo,
+        restricciones,
         esquema: {
             id: esquemaId ? parseInt(esquemaId, 10) : null,
             nombre_esquema,

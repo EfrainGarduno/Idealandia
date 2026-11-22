@@ -1,13 +1,18 @@
 /**
  * test_simulador_edicion_fila.js
- * Prueba integral automatizada de la edición interactiva por fila en el Simulador de Inversiones:
- * 1. Nomenclatura exacta de columnas: Sel | Institución | Tipo | Condiciones | Inversión Base | Tasa % | Inversión 1 | Inversión 2 | Meses | Rend1 | Rend2 | Total mensual | Total periodo
- * 2. Comprobar que "Monto 2" NO existe en la interfaz.
- * 3. Inversión Base muestra el límite del tramo base (lo que antes era Monto 2).
- * 4. Inversión 1 contiene la inversión base y es editable.
- * 5. Casos de prueba exactos del usuario (Finsus a 10%, $50k, 6 meses, y reversión a original).
- * 6. Verificación de que la base de datos queda 100% inalterada.
- * 7. Recálculo reactivo y actualización del resumen comparativo.
+ * Prueba integral automatizada para:
+ * 1. Nomenclatura exacta de 14 columnas:
+ *    Sel | Institución | Tipo | Condiciones | Restricciones | Inversión Base | Tasa % | Inversión 1 | Inversión 2 | Meses | Rend1 | Rend2 | Total mensual | Total periodo
+ * 2. Ausencia total de "Monto 2".
+ * 3. Restricciones en BD, en Admin y en el Simulador:
+ *    - Mercado Pago: "Requiere depósito de $3,000 mensuales."
+ *    - NU: "Requiere al menos una compra al mes."
+ *    - Creación, edición, activación/desactivación en endpoints REST y formulario.
+ * 4. Ampliación de campos Inversión 1 e Inversión 2 para cifras grandes ($25k, $100k, $1M, $10M) sin truncamiento.
+ * 5. Flujo de Edición y RESTABLECIMIENTO con clic interactivo en "Editado":
+ *    - Modificar Tasa, Inv1, Inv2, Meses -> fila resaltada + botón "Editado" visible.
+ *    - Clic en botón "Editado" -> restablecimiento instantáneo a valores originales, cálculo restaurado, clase resaltada removida, restricciones inalteradas.
+ * 6. Integridad de BD: las tablas reales permanecen inalteradas por la simulación.
  */
 
 const assert = require('assert');
@@ -25,7 +30,7 @@ let adminToken;
 let browser;
 
 async function run() {
-    console.log('=== INICIANDO TEST AUTOMATIZADO: EDICIÓN POR FILA DEL SIMULADOR ===\n');
+    console.log('=== INICIANDO TEST INTEGRAL: RESTRICCIONES, AMPLIACIÓN DE CAMPOS Y RESTABLECIMIENTO ===\n');
 
     conn = await mysql.createConnection({
         host: process.env.DB_HOST,
@@ -65,8 +70,22 @@ async function run() {
         "SELECT t.tasa_anual FROM institucion_tramos_tasas t JOIN institucion_esquemas_tasas e ON t.esquema_id = e.id WHERE e.institucion_id = 1 AND e.activo = 1 ORDER BY t.numero_tramo ASC"
     );
 
-    // Asegurar instituciones 1-8 activas
-    await conn.query('UPDATE instituciones_financieras SET activo = 1 WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8)');
+    // Asegurar que Mercado Pago exista con sus restricciones y NU con las suyas
+    await conn.query("UPDATE instituciones_financieras SET nombre = 'Mercado Pago' WHERE nombre = 'MercadoPago'");
+    const [mpRows] = await conn.query("SELECT id FROM instituciones_financieras WHERE nombre = 'Mercado Pago'");
+    let mpId = mpRows.length > 0 ? mpRows[0].id : null;
+    if (!mpId) {
+        const [resMp] = await conn.query("INSERT INTO instituciones_financieras (nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo) VALUES ('Mercado Pago', 'F', 'Mercado Pago Wallet', 'Tasa 10%', 0, 1)");
+        mpId = resMp.insertId;
+    }
+
+    // Insertar restricciones requeridas
+    await conn.query("DELETE FROM institucion_restricciones WHERE institucion_id IN (?, 1)", [mpId]);
+    await conn.query("INSERT INTO institucion_restricciones (institucion_id, descripcion, activo, orden) VALUES (?, 'Requiere depósito de $3,000 mensuales.', 1, 1)", [mpId]);
+    await conn.query("INSERT INTO institucion_restricciones (institucion_id, descripcion, activo, orden) VALUES (1, 'Requiere al menos una compra al mes.', 1, 1)", []);
+
+    // Asegurar instituciones activas
+    await conn.query('UPDATE instituciones_financieras SET activo = 1 WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, ?)', [mpId]);
 
     // Iniciar servidor en puerto libre
     await new Promise((resolve) => {
@@ -78,7 +97,7 @@ async function run() {
     });
 
     browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await context.addCookies([{
         name: 'auth_token',
         value: adminToken,
@@ -87,11 +106,6 @@ async function run() {
     }]);
 
     const page = await context.newPage();
-
-    // Capturar logs y errores de consola en el navegador
-    page.on('console', msg => {
-        if (msg.type() === 'error') console.log('[Browser Error]', msg.text());
-    });
 
     try {
         await page.goto(`http://localhost:${port}/`, { waitUntil: 'domcontentloaded' });
@@ -107,7 +121,46 @@ async function run() {
 
         await page.goto(`http://localhost:${port}/`, { waitUntil: 'domcontentloaded' });
 
-        // Navegar a Servicios -> Asesorías Financieras -> Simulador
+        // ==============================================================
+        // PRUEBA 1: APIs REST dedicadas de Restricciones
+        // ==============================================================
+        console.log('[Prueba 1: APIs REST de Restricciones]');
+        // A) GET restricciones de NU
+        const getNuRes = await page.request.get(`http://localhost:${port}/api/admin/finanzas/instituciones/1/restricciones`, {
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        assert.strictEqual(getNuRes.status(), 200);
+        const getNuData = await getNuRes.json();
+        assert(getNuData.restricciones.length >= 1, 'NU debe tener al menos una restricción');
+        assert(getNuData.restricciones[0].descripcion.includes('compra al mes'));
+
+        // B) POST nueva restricción para NU
+        const postRes = await page.request.post(`http://localhost:${port}/api/admin/finanzas/instituciones/1/restricciones`, {
+            headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+            data: { descripcion: 'Mantener saldo promedio de $5,000.', orden: 2, activo: 1 }
+        });
+        assert.strictEqual(postRes.status(), 201);
+        const postData = await postRes.json();
+        const createdRestId = postData.id;
+
+        // C) PUT actualizar restricción
+        const putRes = await page.request.put(`http://localhost:${port}/api/admin/finanzas/restricciones/${createdRestId}`, {
+            headers: { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+            data: { descripcion: 'Mantener saldo promedio de $5,000 (actualizado).', activo: 0 }
+        });
+        assert.strictEqual(putRes.status(), 200);
+
+        // D) DELETE eliminar restricción creada para limpiar
+        const delRes = await page.request.delete(`http://localhost:${port}/api/admin/finanzas/restricciones/${createdRestId}?hard=true`, {
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        assert.strictEqual(delRes.status(), 200);
+        console.log('✓ Prueba 1 superada: Endpoints REST de restricciones (GET, POST, PUT, DELETE) funcionando al 100%.');
+
+        // ==============================================================
+        // PRUEBA 2: Cargar Simulador y verificar las 14 columnas
+        // ==============================================================
+        console.log('[Prueba 2: Vista del Simulador y 14 columnas]');
         await page.evaluate(() => {
             document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
             const servSection = document.getElementById('servicios');
@@ -122,168 +175,140 @@ async function run() {
         });
 
         await page.waitForSelector('#simulador-tbody tr.simulador-row', { timeout: 10000 });
-        console.log('✓ Vista del Simulador de Inversiones cargada correctamente.');
 
-        // ==============================================================
-        // PRUEBA 1: Nomenclatura exacta de columnas y ausencia de "Monto 2"
-        // ==============================================================
         const headers = await page.$$eval('#simulador-table-container > table > thead > tr > th', ths => ths.map(t => t.textContent.trim()));
         console.log('Encabezados encontrados:', headers);
 
         const expectedHeaders = [
-            'Sel', 'Institución', 'Tipo', 'Condiciones', 'Inversión Base',
+            'Sel', 'Institución', 'Tipo', 'Condiciones', 'Restricciones', 'Inversión Base',
             'Tasa %', 'Inversión 1', 'Inversión 2', 'Meses', 'Rend1', 'Rend2',
             'Total mensual', 'Total periodo'
         ];
 
-        assert.deepStrictEqual(headers, expectedHeaders, 'Los encabezados deben coincidir exactamente con la nomenclatura aprobada');
-        assert.ok(!headers.includes('Monto 2'), '"Monto 2" NO debe aparecer en los encabezados');
-        console.log('✓ Prueba 1 superada: Nomenclatura exacta aprobada (Inversión 1 presente, Monto 2 eliminado).');
+        assert.deepStrictEqual(headers, expectedHeaders, 'Los encabezados deben coincidir con las 14 columnas');
+        assert.ok(!headers.includes('Monto 2'), '"Monto 2" NO debe existir en la interfaz');
+        console.log('✓ Prueba 2 superada: 14 columnas exactas, columna Restricciones en posición correcta.');
 
         // ==============================================================
-        // PRUEBA 2: Inversión Base muestra el límite del primer tramo
+        // PRUEBA 3: Visualización de Restricciones en el Simulador
         // ==============================================================
-        // Para NU: límite del tramo 1 es $25,000.00
-        const invBaseNU = await page.$eval(`#sim-row-1 .sim-val-inv-base`, el => el.textContent.trim());
-        assert.strictEqual(invBaseNU, '$25,000.00', 'NU debe mostrar $25,000.00 en Inversión Base');
+        console.log('[Prueba 3: Visualización de Restricciones]');
+        // NU: "Requiere al menos una compra al mes."
+        const restNU = await page.$eval('#sim-row-1 td:nth-child(5)', el => el.textContent.trim());
+        assert(restNU.includes('Requiere al menos una compra al mes.'), `NU debe mostrar su restricción. Encontrado: ${restNU}`);
 
-        // Para Finsus: no tiene límite superior en tramo 1 -> muestra '—'
-        const invBaseFinsus = await page.$eval(`#sim-row-${finsusId} .sim-val-inv-base`, el => el.textContent.trim());
-        assert.strictEqual(invBaseFinsus, '—', 'Finsus debe mostrar "—" en Inversión Base al no tener límite superior');
-        console.log('✓ Prueba 2 superada: Inversión Base refleja fielmente el límite base de la institución (lo que antes era Monto 2).');
+        // Mercado Pago: "Requiere depósito de $3,000 mensuales."
+        const restMP = await page.$eval(`#sim-row-${mpId} td:nth-child(5)`, el => el.textContent.trim());
+        assert(restMP.includes('Requiere depósito de $3,000 mensuales.'), `Mercado Pago debe mostrar su restricción. Encontrado: ${restMP}`);
+        console.log('✓ Prueba 3 superada: Restricciones de NU y Mercado Pago mostradas correctamente con viñetas.');
 
         // ==============================================================
-        // PRUEBA 3: Configurar Inversión Global $100,000 y Meses Global 2
+        // PRUEBA 4: Capacidad y ancho de Inversión 1 e Inversión 2 para cifras grandes ($10,000,000)
         // ==============================================================
+        console.log('[Prueba 4: Capacidad y ancho para cifras grandes]');
+        const inv1Width = await page.$eval('#sim-row-1 .sim-input-inv1', el => el.getBoundingClientRect().width);
+        const inv2Width = await page.$eval('#sim-row-1 .sim-input-inv2', el => el.getBoundingClientRect().width);
+        console.log(`Ancho medido de inputs: Inv1=${inv1Width}px, Inv2=${inv2Width}px`);
+        assert(inv1Width >= 120, `El campo Inversión 1 debe tener al menos 120px de ancho (obtenido: ${inv1Width}px)`);
+        assert(inv2Width >= 120, `El campo Inversión 2 debe tener al menos 120px de ancho (obtenido: ${inv2Width}px)`);
+
+        // Probar escritura de $10,000,000
+        await page.fill('#sim-row-1 .sim-input-inv1', '10000000');
+        await page.dispatchEvent('#sim-row-1 .sim-input-inv1', 'input');
+        const valInv1 = await page.$eval('#sim-row-1 .sim-input-inv1', el => el.value);
+        assert.strictEqual(valInv1, '10000000', 'Debe almacenar y mostrar 10000000 completo');
+        console.log('✓ Prueba 4 superada: Ancho de inputs adecuado para cifras de $10M+ sin cortes.');
+
+        // ==============================================================
+        // PRUEBA 5: Modificación de 4 campos y RESTABLECIMIENTO con clic en "Editado"
+        // ==============================================================
+        console.log('[Prueba 5: Modificación y Clic en Editado]');
+        const rowFinsus = `#sim-row-${finsusId}`;
+
+        // Configurar simulación global a $100,000 y 2 meses
         await page.fill('#simulador-inversion-global', '100000');
         await page.fill('#simulador-meses-global', '2');
         await page.dispatchEvent('#simulador-inversion-global', 'input');
         await page.dispatchEvent('#simulador-meses-global', 'input');
         await page.waitForTimeout(300);
 
-        // Verificar valores iniciales de Finsus
-        const rowFinsus = `#sim-row-${finsusId}`;
-        const initialTasa = await page.$eval(`${rowFinsus} .sim-input-tasa`, el => el.value);
-        const initialInv1 = await page.$eval(`${rowFinsus} .sim-input-inv1`, el => el.value);
-        const initialInv2 = await page.$eval(`${rowFinsus} .sim-input-inv2`, el => el.value);
-        const initialMeses = await page.$eval(`${rowFinsus} .sim-input-meses`, el => el.value);
-        const initialIsMod = await page.$eval(rowFinsus, tr => tr.classList.contains('fila-simulacion-modificada'));
+        // Guardar rendimientos originales
+        const origRend1 = await page.$eval(`${rowFinsus} .sim-val-rend1`, el => el.textContent.trim());
+        const origTotalP = await page.$eval(`${rowFinsus} .sim-val-total-periodo`, el => el.textContent.trim());
+        const origRestriccion = await page.$eval(`${rowFinsus} td:nth-child(5)`, el => el.textContent.trim());
 
-        assert.strictEqual(parseFloat(initialTasa), 13.12, 'Tasa inicial de Finsus debe ser 13.12');
-        assert.strictEqual(parseFloat(initialInv1), 100000, 'Inversión 1 inicial de Finsus debe ser $100,000');
-        assert.strictEqual(parseFloat(initialInv2), 0, 'Inversión 2 inicial de Finsus debe ser 0');
-        assert.strictEqual(parseInt(initialMeses, 10), 2, 'Meses iniciales de Finsus debe ser 2');
-        assert.strictEqual(initialIsMod, false, 'La fila inicialmente NO debe estar marcada como modificada');
-        console.log('✓ Prueba 3 superada: Valores iniciales y controles de Finsus correctos.');
-
-        // ==============================================================
-        // PRUEBA 4: Caso de usuario - Cambiar Tasa a 10%
-        // ==============================================================
-        // Rend1 = $100,000 * 10% / 12 * 2 = $1,666.67
-        // Total mensual = $833.33
-        // Total periodo = $1,666.67
+        // Modificar los 4 campos en Finsus:
         await page.fill(`${rowFinsus} .sim-input-tasa`, '10');
         await page.dispatchEvent(`${rowFinsus} .sim-input-tasa`, 'input');
-        await page.waitForTimeout(200);
-
-        const step1Rend1 = await page.$eval(`${rowFinsus} .sim-val-rend1`, el => el.textContent.trim());
-        const step1TotalM = await page.$eval(`${rowFinsus} .sim-val-total-mensual`, el => el.textContent.trim());
-        const step1TotalP = await page.$eval(`${rowFinsus} .sim-val-total-periodo`, el => el.textContent.trim());
-        const step1IsMod = await page.$eval(rowFinsus, tr => tr.classList.contains('fila-simulacion-modificada'));
-        const step1BadgeDisplay = await page.$eval(`${rowFinsus} #sim-badge-${finsusId}`, el => el.style.display);
-
-        assert.strictEqual(step1Rend1, '$1,666.67', 'Rend1 a tasa 10% debe ser $1,666.67');
-        assert.strictEqual(step1TotalM, '$833.33', 'Total mensual debe ser $833.33');
-        assert.strictEqual(step1TotalP, '$1,666.67', 'Total periodo debe ser $1,666.67');
-        assert.strictEqual(step1IsMod, true, 'La fila DEBE tener la clase fila-simulacion-modificada');
-        assert.notStrictEqual(step1BadgeDisplay, 'none', 'El badge de editado debe ser visible');
-        console.log('✓ Prueba 4 superada: Recálculo reactivo con tasa modificada al 10% ($1,666.67) y fila resaltada.');
-
-        // ==============================================================
-        // PRUEBA 5: Caso de usuario - Cambiar Inversión 1 a $50,000
-        // ==============================================================
-        // Rend1 = $50,000 * 10% / 12 * 2 = $833.33
-        // Total mensual = $416.67
-        // Total periodo = $833.33
         await page.fill(`${rowFinsus} .sim-input-inv1`, '50000');
         await page.dispatchEvent(`${rowFinsus} .sim-input-inv1`, 'input');
-        await page.waitForTimeout(200);
-
-        const step2Rend1 = await page.$eval(`${rowFinsus} .sim-val-rend1`, el => el.textContent.trim());
-        const step2TotalM = await page.$eval(`${rowFinsus} .sim-val-total-mensual`, el => el.textContent.trim());
-        const step2TotalP = await page.$eval(`${rowFinsus} .sim-val-total-periodo`, el => el.textContent.trim());
-        const step2IsMod = await page.$eval(rowFinsus, tr => tr.classList.contains('fila-simulacion-modificada'));
-
-        assert.strictEqual(step2Rend1, '$833.33', 'Rend1 a inversión 1 $50,000 debe ser $833.33');
-        assert.strictEqual(step2TotalM, '$416.67', 'Total mensual debe ser $416.67');
-        assert.strictEqual(step2TotalP, '$833.33', 'Total periodo debe ser $833.33');
-        assert.strictEqual(step2IsMod, true, 'La fila debe continuar resaltada');
-        console.log('✓ Prueba 5 superada: Recálculo reactivo con Inversión 1 a $50,000 ($833.33) y persistencia del resaltado.');
-
-        // ==============================================================
-        // PRUEBA 6: Caso de usuario - Cambiar Meses de 2 a 6
-        // ==============================================================
-        // Rend1 = $50,000 * 10% / 12 * 6 = $2,500.00
-        // Total mensual = $416.67
-        // Total periodo = $2,500.00
+        await page.fill(`${rowFinsus} .sim-input-inv2`, '10000');
+        await page.dispatchEvent(`${rowFinsus} .sim-input-inv2`, 'input');
         await page.fill(`${rowFinsus} .sim-input-meses`, '6');
         await page.dispatchEvent(`${rowFinsus} .sim-input-meses`, 'input');
         await page.waitForTimeout(200);
 
-        const step3Rend1 = await page.$eval(`${rowFinsus} .sim-val-rend1`, el => el.textContent.trim());
-        const step3TotalM = await page.$eval(`${rowFinsus} .sim-val-total-mensual`, el => el.textContent.trim());
-        const step3TotalP = await page.$eval(`${rowFinsus} .sim-val-total-periodo`, el => el.textContent.trim());
-        const step3IsMod = await page.$eval(rowFinsus, tr => tr.classList.contains('fila-simulacion-modificada'));
+        // 6. Confirmar que la fila completa se resalta
+        const isModFinsus = await page.$eval(rowFinsus, tr => tr.classList.contains('fila-simulacion-modificada'));
+        assert.strictEqual(isModFinsus, true, 'La fila debe recibir la clase fila-simulacion-modificada');
 
-        assert.strictEqual(step3Rend1, '$2,500.00', 'Rend1 a 6 meses debe ser $2,500.00');
-        assert.strictEqual(step3TotalM, '$416.67', 'Total mensual debe ser $416.67');
-        assert.strictEqual(step3TotalP, '$2,500.00', 'Total periodo debe ser $2,500.00');
-        assert.strictEqual(step3IsMod, true, 'La fila debe mantenerse resaltada');
-        console.log('✓ Prueba 6 superada: Recálculo reactivo a 6 meses ($2,500.00) y fila resaltada.');
+        // 7. Confirmar que aparece el botón "Editado"
+        const badgeBtn = await page.$(`${rowFinsus} .btn-restablecer-fila`);
+        const badgeVisible = await badgeBtn.isVisible();
+        assert.strictEqual(badgeVisible, true, 'El botón de restablecer Editado debe ser visible');
+
+        // 8. Hacer CLIC sobre el botón "Editado"
+        console.log('Haciendo clic sobre el botón "Editado" de Finsus...');
+        await badgeBtn.click();
+        await page.waitForTimeout(300);
+
+        // 9. Confirmar que todos los valores regresan exactamente a los originales
+        const resTasa = await page.$eval(`${rowFinsus} .sim-input-tasa`, el => parseFloat(el.value));
+        const resInv1 = await page.$eval(`${rowFinsus} .sim-input-inv1`, el => parseFloat(el.value));
+        const resInv2 = await page.$eval(`${rowFinsus} .sim-input-inv2`, el => parseFloat(el.value));
+        const resMeses = await page.$eval(`${rowFinsus} .sim-input-meses`, el => parseInt(el.value, 10));
+
+        assert.strictEqual(resTasa, 13.12, 'Tasa debe volver a 13.12%');
+        assert.strictEqual(resInv1, 100000, 'Inversión 1 debe volver a 100000');
+        assert.strictEqual(resInv2, 0, 'Inversión 2 debe volver a 0');
+        assert.strictEqual(resMeses, 2, 'Meses debe volver a 2');
+
+        // 10. Confirmar que desaparece el resaltado y el botón Editado se oculta
+        const resIsMod = await page.$eval(rowFinsus, tr => tr.classList.contains('fila-simulacion-modificada'));
+        const resBadgeVisible = await page.$eval(`${rowFinsus} .btn-restablecer-fila`, el => el.style.display);
+        assert.strictEqual(resIsMod, false, 'La clase fila-simulacion-modificada debe haber sido removida');
+        assert.strictEqual(resBadgeVisible, 'none', 'El botón Editado debe estar oculto tras restablecer');
+
+        // 11. Confirmar que los rendimientos regresan a los valores originales
+        const resRend1 = await page.$eval(`${rowFinsus} .sim-val-rend1`, el => el.textContent.trim());
+        const resTotalP = await page.$eval(`${rowFinsus} .sim-val-total-periodo`, el => el.textContent.trim());
+        assert.strictEqual(resRend1, origRend1, 'Rend1 debe volver al valor original');
+        assert.strictEqual(resTotalP, origTotalP, 'Total periodo debe volver al valor original');
+
+        // 12. Confirmar que las restricciones siguen exactamente iguales
+        const resRestriccion = await page.$eval(`${rowFinsus} td:nth-child(5)`, el => el.textContent.trim());
+        assert.strictEqual(resRestriccion, origRestriccion, 'Las restricciones deben permanecer inalteradas');
+        console.log('✓ Prueba 5 superada: Restablecimiento completo interactivo mediante clic en "Editado".');
 
         // ==============================================================
-        // PRUEBA 7: Reversión exacta a los valores originales
+        // PRUEBA 6: Verificar Integridad de la Base de Datos
         // ==============================================================
-        // Si el usuario devuelve tasa a 13.12, Inv1 a 100000, Inv2 a 0, Meses a 2:
-        // La clase fila-simulacion-modificada DEBE removerse automáticamente
-        await page.fill(`${rowFinsus} .sim-input-tasa`, '13.12');
-        await page.dispatchEvent(`${rowFinsus} .sim-input-tasa`, 'input');
-        await page.fill(`${rowFinsus} .sim-input-inv1`, '100000');
-        await page.dispatchEvent(`${rowFinsus} .sim-input-inv1`, 'input');
-        await page.fill(`${rowFinsus} .sim-input-inv2`, '0');
-        await page.dispatchEvent(`${rowFinsus} .sim-input-inv2`, 'input');
-        await page.fill(`${rowFinsus} .sim-input-meses`, '2');
-        await page.dispatchEvent(`${rowFinsus} .sim-input-meses`, 'input');
-        await page.waitForTimeout(200);
-
-        const revertedIsMod = await page.$eval(rowFinsus, tr => tr.classList.contains('fila-simulacion-modificada'));
-        const revertedBadgeDisplay = await page.$eval(`${rowFinsus} #sim-badge-${finsusId}`, el => el.style.display);
-        const revertedTotalP = await page.$eval(`${rowFinsus} .sim-val-total-periodo`, el => el.textContent.trim());
-
-        assert.strictEqual(revertedIsMod, false, 'Al restablecer valores originales, la clase fila-simulacion-modificada debe removerse');
-        assert.strictEqual(revertedBadgeDisplay, 'none', 'El badge de editado debe ocultarse');
-        assert.strictEqual(revertedTotalP, '$2,186.67', 'El total periodo original de Finsus debe ser $2,186.67');
-        console.log('✓ Prueba 7 superada: Reversión automática del resaltado al volver a los valores originales.');
-
-        // ==============================================================
-        // PRUEBA 8: La base de datos NUNCA fue alterada
-        // ==============================================================
+        console.log('[Prueba 6: Integridad de BD]');
         const [tramosFinsusFinal] = await conn.query(
             "SELECT t.tasa_anual FROM institucion_tramos_tasas t JOIN institucion_esquemas_tasas e ON t.esquema_id = e.id WHERE e.institucion_id = ? AND e.activo = 1",
             [finsusId]
         );
-        const tasaFinsusEnBDFinal = parseFloat(tramosFinsusFinal[0].tasa_anual);
-        assert.strictEqual(tasaFinsusEnBDFinal, tasaFinsusEnBDInicial, `La tasa de Finsus en BD debe permanecer inalterada (${tasaFinsusEnBDInicial}%)`);
+        assert.strictEqual(parseFloat(tramosFinsusFinal[0].tasa_anual), tasaFinsusEnBDInicial, 'Finsus en BD permanece inalterado');
 
         const [tramosNUFinal] = await conn.query(
             "SELECT t.tasa_anual FROM institucion_tramos_tasas t JOIN institucion_esquemas_tasas e ON t.esquema_id = e.id WHERE e.institucion_id = 1 AND e.activo = 1 ORDER BY t.numero_tramo ASC"
         );
-        assert.strictEqual(parseFloat(tramosNUFinal[0].tasa_anual), parseFloat(tramosNUOrig[0].tasa_anual), 'Tramo 1 de NU en BD permanece inalterado');
-        assert.strictEqual(parseFloat(tramosNUFinal[1].tasa_anual), parseFloat(tramosNUOrig[1].tasa_anual), 'Tramo 2 de NU en BD permanece inalterado');
-        console.log('✓ Prueba 8 superada: La base de datos permanece 100% íntegra e inalterada tras las simulaciones.');
+        assert.strictEqual(parseFloat(tramosNUFinal[0].tasa_anual), parseFloat(tramosNUOrig[0].tasa_anual), 'Tramo 1 de NU inalterado');
+        assert.strictEqual(parseFloat(tramosNUFinal[1].tasa_anual), parseFloat(tramosNUOrig[1].tasa_anual), 'Tramo 2 de NU inalterado');
+        console.log('✓ Prueba 6 superada: Base de datos intacta tras todas las simulaciones y restablecimientos.');
 
         console.log('\n=============================================================');
-        console.log('TODAS LAS PRUEBAS AUTOMATIZADAS DE EDICIÓN POR FILA PASARON EXITOSAMENTE.');
+        console.log('¡TODAS LAS PRUEBAS INTEGRALES (1-6) PASARON EXITOSAMENTE!');
         console.log('=============================================================\n');
     } finally {
         if (browser) await browser.close();

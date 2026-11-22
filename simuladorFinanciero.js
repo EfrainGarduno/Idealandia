@@ -17,6 +17,22 @@
     const resultadosCalculadosPorInst = new Map(); // id -> { total_mensual, total_periodo, rend1, rend2 }
 
     /**
+     * Escapa caracteres especiales HTML para renderizado seguro.
+     */
+    function escapeHTML(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>'"]/g,
+            tag => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#39;',
+                '"': '&quot;'
+            }[tag] || tag)
+        );
+    }
+
+    /**
      * Formatea un número como moneda mexicana ($1,234.56).
      */
     function formatMoney(amount) {
@@ -36,6 +52,26 @@
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }) + '%';
+    }
+
+    /**
+     * Renderiza las restricciones de forma compacta y legible en varias líneas.
+     */
+    function renderizarRestriccionesHtml(restricciones) {
+        const activas = Array.isArray(restricciones)
+            ? restricciones.filter(r => r && r.activo !== 0 && r.activo !== false)
+            : [];
+
+        if (activas.length === 0) {
+            return '<span style="color: #94a3b8; font-style: italic; font-size: 0.82rem;">Ninguna</span>';
+        }
+
+        return `<div class="sim-cell-restricciones">` + activas.map(r => `
+            <div class="sim-restriccion-item">
+                <span class="sim-restriccion-bullet">•</span>
+                <span>${escapeHTML(r.descripcion)}</span>
+            </div>
+        `).join('') + `</div>`;
     }
 
     /**
@@ -149,8 +185,8 @@
 
     /**
      * Renderiza la tabla completa del simulador con columnas editables y reactivas.
-     * Nomenclatura aprobada:
-     * Sel | Institución | Tipo | Condiciones | Inversión Base | Tasa % | Inversión 1 | Inversión 2 | Meses | Rend1 | Rend2 | Total mensual | Total periodo
+     * Nomenclatura aprobada (14 columnas):
+     * Sel | Institución | Tipo | Condiciones | Restricciones | Inversión Base | Tasa % | Inversión 1 | Inversión 2 | Meses | Rend1 | Rend2 | Total mensual | Total periodo
      */
     function renderizarTablaSimulador() {
         const tbody = document.getElementById('simulador-tbody');
@@ -161,7 +197,7 @@
         if (catalogoInstituciones.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="13" style="text-align: center; padding: 20px; color: #64748b;">
+                    <td colspan="14" style="text-align: center; padding: 20px; color: #64748b;">
                         No hay instituciones financieras configuradas o vigentes para la fecha seleccionada.
                     </td>
                 </tr>
@@ -248,7 +284,7 @@
                 tr.title = 'Esta institución fue modificada manualmente por el usuario para esta simulación';
             }
 
-            // Inversión Base muestra lo que anteriormente era Monto 2 (límite del primer tramo en BD, e.g. $25k para NU)
+            // Inversión Base muestra el límite base de condición de la institución (lo que antes era Monto 2)
             const valorInversionBaseCondicion = (sim && sim.monto_2 !== null) ? formatMoney(sim.monto_2) : '—';
 
             // HTML de fila principal
@@ -257,11 +293,11 @@
                     <input type="checkbox" class="simulador-check-inst" data-inst-id="${inst.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
                 <td style="font-weight: 700; color: #1e293b;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                         <span>${inst.nombre}</span>
-                        <span class="badge-sim-modificada" id="sim-badge-${inst.id}" style="${isModified ? '' : 'display: none;'}" title="Valores personalizados para esta simulación">
-                            <i class="fas fa-user-edit"></i> Editado
-                        </span>
+                        <button type="button" class="badge-sim-modificada btn-restablecer-fila" id="sim-badge-${inst.id}" data-inst-id="${inst.id}" style="${isModified ? 'display: inline-flex;' : 'display: none;'}" title="Hacer clic para restablecer los valores originales de la institución">
+                            <i class="fas fa-undo-alt" style="font-size: 0.7rem;"></i> <span>Editado</span>
+                        </button>
                     </div>
                     ${tramos.length >= 3 ? `<button type="button" class="btn-toggle-tramos" data-inst-id="${inst.id}" style="display: block; margin-top: 4px; font-size: 0.72rem; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; color: #2563eb; cursor: pointer;"><i class="fas fa-layer-group"></i> Ver ${tramos.length} tramos</button>` : ''}
                 </td>
@@ -270,10 +306,15 @@
                         ${tInfo.label}
                     </span>
                 </td>
+                <!-- Condiciones financieras de tasa -->
                 <td style="font-size: 0.85rem; color: #475569;">
                     ${inst.condiciones_resumen || (tieneEsquema ? inst.esquema.nombre_esquema : 'Sin condiciones activas')}
                 </td>
-                <!-- Inversión Base (Muestra lo que antes era Monto 2: límite base de condición de la institución) -->
+                <!-- Restricciones (Requisitos independientes para el cliente) -->
+                <td>
+                    ${renderizarRestriccionesHtml(inst.restricciones)}
+                </td>
+                <!-- Inversión Base (Límite base de condición de la institución) -->
                 <td style="font-weight: 600; text-align: right; color: #334155;">
                     <span class="sim-val-inv-base">${valorInversionBaseCondicion}</span>
                 </td>
@@ -281,11 +322,11 @@
                 <td style="text-align: right;">
                     <input type="number" step="0.01" min="0" max="100" class="sim-row-input sim-input-tasa" data-inst-id="${inst.id}" value="${curTasa.toFixed(2)}">
                 </td>
-                <!-- Inversión 1 (En lo que era Monto 2 va la inversión base y es editable) -->
+                <!-- Inversión 1 (En lo que era Monto 2 va la inversión base y es editable, ampliado para hasta $10M+) -->
                 <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
                     <input type="number" step="100" min="0" class="sim-row-input sim-input-inv1" data-inst-id="${inst.id}" value="${curInv1.toFixed(2)}">
                 </td>
-                <!-- Inversión 2 (Editable por fila) -->
+                <!-- Inversión 2 (Editable por fila, ampliado para hasta $10M+) -->
                 <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
                     <input type="number" step="100" min="0" class="sim-row-input sim-input-inv2" data-inst-id="${inst.id}" value="${curInv2.toFixed(2)}">
                 </td>
@@ -320,7 +361,7 @@
                 subTr.className = 'simulador-subrow';
                 subTr.style.display = 'none';
                 subTr.innerHTML = `
-                    <td colspan="13" style="background: #f8fafc; padding: 12px 20px; border-left: 4px solid #2563eb;">
+                    <td colspan="14" style="background: #f8fafc; padding: 12px 20px; border-left: 4px solid #2563eb;">
                         <div style="font-weight: 700; color: #1e293b; margin-bottom: 8px; font-size: 0.9rem;">
                             <i class="fas fa-layer-group" style="color: #2563eb;"></i> Desglose Detallado de Tramos (${inst.nombre})
                         </div>
@@ -357,6 +398,16 @@
             });
         });
 
+        // Configurar listener para botón interactivo de restablecer fila
+        tbody.querySelectorAll('.btn-restablecer-fila').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const instId = parseInt(e.currentTarget.dataset.instId, 10);
+                restablecerFilaOriginal(instId);
+            });
+        });
+
         // Configurar listener para checkboxes de selección
         document.querySelectorAll('.simulador-check-inst').forEach(chk => {
             chk.addEventListener('change', (e) => {
@@ -386,6 +437,35 @@
         });
 
         actualizarEstiloFilasSeleccionadas();
+    }
+
+    /**
+     * Restablece una fila modificada a sus valores originales y recalcula de inmediato.
+     * Acción 100% en memoria para la simulación: no toca la base de datos ni tasas de la institución.
+     */
+    function restablecerFilaOriginal(instId) {
+        const tr = document.getElementById(`sim-row-${instId}`);
+        if (!tr) return;
+
+        const orig = valoresOriginalesPorInst.get(instId);
+        if (!orig) return;
+
+        // Restaurar valores en los inputs
+        const inputTasa = tr.querySelector('.sim-input-tasa');
+        const inputInv1 = tr.querySelector('.sim-input-inv1');
+        const inputInv2 = tr.querySelector('.sim-input-inv2');
+        const inputMeses = tr.querySelector('.sim-input-meses');
+
+        if (inputTasa) inputTasa.value = orig.tasa.toFixed(2);
+        if (inputInv1) inputInv1.value = orig.inv1.toFixed(2);
+        if (inputInv2) inputInv2.value = orig.inv2.toFixed(2);
+        if (inputMeses) inputMeses.value = orig.meses;
+
+        // Eliminar personalización
+        valoresPersonalizadosPorInst.delete(instId);
+
+        // Recalcular y remover resaltados visuales
+        recalcularFila(instId, tr);
     }
 
     /**
@@ -650,6 +730,7 @@
     window.cargarCatalogoSimulador = cargarCatalogoSimulador;
     window.recalcularSimulacion = recalcularSimulacion;
     window.recalcularFila = recalcularFila;
+    window.restablecerFilaOriginal = restablecerFilaOriginal;
     window.valoresPersonalizadosPorInst = valoresPersonalizadosPorInst;
     window.valoresOriginalesPorInst = valoresOriginalesPorInst;
     window.resultadosCalculadosPorInst = resultadosCalculadosPorInst;

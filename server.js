@@ -371,6 +371,33 @@ async function ensureUsuarioPeriodosImssTable(connOrPool) {
     }
 }
 
+let institucionRestriccionesTableReady = false;
+async function ensureInstitucionRestriccionesTable(connOrPool) {
+    if (institucionRestriccionesTableReady) return;
+    const runner = connOrPool || pool;
+    try {
+        if (runner && typeof runner.query === 'function') {
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS institucion_restricciones (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    institucion_id INT UNSIGNED NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    activo TINYINT(1) NOT NULL DEFAULT 1,
+                    orden INT NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_restricciones_institucion FOREIGN KEY (institucion_id) 
+                        REFERENCES instituciones_financieras(id) ON DELETE CASCADE,
+                    INDEX idx_restricciones_inst_activo (institucion_id, activo, orden)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            `);
+            institucionRestriccionesTableReady = true;
+        }
+    } catch (err) {
+        console.warn('Note: institucion_restricciones table check/creation:', err.message);
+    }
+}
+
 pool.getConnection()
     .then(async (connection) => {
         console.log("Connected to MySQL database.");
@@ -381,6 +408,7 @@ pool.getConnection()
             }
             await ensureAccesoPermisosTable(connection);
             await ensureUsuarioPeriodosImssTable(connection);
+            await ensureInstitucionRestriccionesTable(connection);
         } catch (e) {}
         connection.release();
     })
@@ -4394,6 +4422,15 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
                 };
             }
 
+            // Consultar restricciones activas de la institución para el simulador
+            const [restricciones] = await pool.query(
+                `SELECT id, institucion_id, descripcion, orden, activo
+                 FROM institucion_restricciones
+                 WHERE institucion_id = ? AND activo = 1
+                 ORDER BY orden ASC, id ASC`,
+                [inst.id]
+            );
+
             resultado.push({
                 id: inst.id,
                 nombre: inst.nombre,
@@ -4401,7 +4438,8 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
                 descripcion: inst.descripcion,
                 condiciones_resumen: autoResumen || inst.condiciones_resumen,
                 orden_visual: inst.orden_visual,
-                esquema: esquema
+                esquema: esquema,
+                restricciones: restricciones
             });
         }
 
@@ -4417,7 +4455,7 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
 });
 
 // 2. APIs Administrativas (Protegidas por RBAC)
-// Listar instituciones completas con todos sus esquemas y tramos
+// Listar instituciones completas con todos sus esquemas, tramos y restricciones
 app.get('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
     try {
         const [instituciones] = await pool.query(
@@ -4462,10 +4500,20 @@ app.get('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requ
                 ? MotorFinanciero.generarResumenCondiciones(esqActivo.tramos)
                 : null;
 
+            // Consultar restricciones de la institución para la administración
+            const [restricciones] = await pool.query(
+                `SELECT id, institucion_id, descripcion, orden, activo, created_at, updated_at
+                 FROM institucion_restricciones
+                 WHERE institucion_id = ?
+                 ORDER BY orden ASC, id ASC`,
+                [inst.id]
+            );
+
             resultado.push({
                 ...inst,
                 condiciones_resumen: autoResumen || inst.condiciones_resumen,
-                esquemas: esquemasConTramos
+                esquemas: esquemasConTramos,
+                restricciones: restricciones
             });
         }
 
@@ -4531,6 +4579,19 @@ app.post('/api/admin/finanzas/instituciones', requireFunctionality('admin'), req
                      VALUES (?, ?, ?, ?, ?, ?)`,
                     [nuevoEsqId, i + 1, inf, sup, tasa, t.descripcion_tramo || null]
                 );
+            }
+        }
+
+        // Restricciones iniciales si fueron enviadas
+        if (Array.isArray(req.body.restricciones)) {
+            for (const r of req.body.restricciones) {
+                if (r && r.descripcion && typeof r.descripcion === 'string' && r.descripcion.trim()) {
+                    await connection.query(
+                        `INSERT INTO institucion_restricciones (institucion_id, descripcion, orden, activo)
+                         VALUES (?, ?, ?, ?)`,
+                        [nuevaInstId, r.descripcion.trim(), parseInt(r.orden, 10) || 1, (r.activo === 0 || r.activo === false) ? 0 : 1]
+                    );
+                }
             }
         }
 
@@ -4673,8 +4734,33 @@ app.put('/api/admin/finanzas/instituciones/:id', requireFunctionality('admin'), 
             [updateNombre, updateTipo, updateDesc, updateCond, updateOrden, updateActivo, id]
         );
 
+        // Sincronización de restricciones asociadas si fueron enviadas
+        if (Array.isArray(req.body.restricciones)) {
+            for (const r of req.body.restricciones) {
+                if (r._deleted && r.id) {
+                    await connection.query('DELETE FROM institucion_restricciones WHERE id = ? AND institucion_id = ?', [r.id, id]);
+                } else if (r.id) {
+                    const desc = typeof r.descripcion === 'string' ? r.descripcion.trim() : '';
+                    if (desc) {
+                        await connection.query(
+                            `UPDATE institucion_restricciones 
+                             SET descripcion = ?, orden = ?, activo = ? 
+                             WHERE id = ? AND institucion_id = ?`,
+                            [desc, parseInt(r.orden, 10) || 1, (r.activo === 0 || r.activo === false) ? 0 : 1, r.id, id]
+                        );
+                    }
+                } else if (r.descripcion && typeof r.descripcion === 'string' && r.descripcion.trim()) {
+                    await connection.query(
+                        `INSERT INTO institucion_restricciones (institucion_id, descripcion, orden, activo) 
+                         VALUES (?, ?, ?, ?)`,
+                        [id, r.descripcion.trim(), parseInt(r.orden, 10) || 1, (r.activo === 0 || r.activo === false) ? 0 : 1]
+                    );
+                }
+            }
+        }
+
         await connection.commit();
-        res.json({ success: true, message: 'Institución y configuración de tasas actualizadas correctamente.' });
+        res.json({ success: true, message: 'Institución, tasas y restricciones actualizadas correctamente.' });
     } catch (error) {
         if (connection) {
             try { await connection.rollback(); } catch (_) {}
@@ -4701,6 +4787,119 @@ app.delete('/api/admin/finanzas/instituciones/:id', requireFunctionality('admin'
     } catch (error) {
         console.error('Error in DELETE /api/admin/finanzas/instituciones/:id:', error);
         res.status(500).json({ error: 'Error al desactivar la institución financiera.' });
+    }
+});
+
+// ==========================================
+// ENDPOINTS REST DEDICADOS PARA RESTRICCIONES
+// ==========================================
+
+// Listar restricciones de una institución
+app.get('/api/admin/finanzas/instituciones/:id/restricciones', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
+    try {
+        const instId = parseInt(req.params.id, 10);
+        if (isNaN(instId) || instId <= 0) {
+            return res.status(400).json({ error: 'ID de institución inválido.' });
+        }
+        const [rows] = await pool.query(
+            `SELECT id, institucion_id, descripcion, activo, orden, created_at, updated_at
+             FROM institucion_restricciones
+             WHERE institucion_id = ?
+             ORDER BY orden ASC, id ASC`,
+            [instId]
+        );
+        res.json({ success: true, restricciones: rows });
+    } catch (err) {
+        console.error('Error in GET /api/admin/finanzas/instituciones/:id/restricciones:', err);
+        res.status(500).json({ error: 'Error al consultar las restricciones.' });
+    }
+});
+
+// Crear restricción para una institución
+app.post('/api/admin/finanzas/instituciones/:id/restricciones', requireFunctionality('admin'), requirePermission('finanzas.create'), async (req, res) => {
+    try {
+        const instId = parseInt(req.params.id, 10);
+        const { descripcion, orden, activo } = req.body;
+        if (isNaN(instId) || instId <= 0) {
+            return res.status(400).json({ error: 'ID de institución inválido.' });
+        }
+        if (!descripcion || typeof descripcion !== 'string' || !descripcion.trim()) {
+            return res.status(400).json({ error: 'La descripción de la restricción es obligatoria.' });
+        }
+
+        const ord = parseInt(orden, 10) || 1;
+        const act = (activo === 0 || activo === false) ? 0 : 1;
+
+        const [result] = await pool.query(
+            `INSERT INTO institucion_restricciones (institucion_id, descripcion, activo, orden)
+             VALUES (?, ?, ?, ?)`,
+            [instId, descripcion.trim(), act, ord]
+        );
+
+        res.status(201).json({
+            success: true,
+            id: result.insertId,
+            message: 'Restricción creada exitosamente.'
+        });
+    } catch (err) {
+        console.error('Error in POST /api/admin/finanzas/instituciones/:id/restricciones:', err);
+        res.status(500).json({ error: 'Error al registrar la restricción.' });
+    }
+});
+
+// Actualizar restricción
+app.put('/api/admin/finanzas/restricciones/:id', requireFunctionality('admin'), requirePermission('finanzas.update'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de restricción inválido.' });
+        }
+        const { descripcion, orden, activo } = req.body;
+
+        const [existing] = await pool.query('SELECT * FROM institucion_restricciones WHERE id = ?', [id]);
+        if (existing.length === 0) {
+            return res.status(404).json({ error: 'Restricción no encontrada.' });
+        }
+        const cur = existing[0];
+
+        const newDesc = descripcion !== undefined ? descripcion.trim() : cur.descripcion;
+        if (!newDesc) {
+            return res.status(400).json({ error: 'La descripción no puede estar vacía.' });
+        }
+        const newOrd = orden !== undefined ? (parseInt(orden, 10) || 1) : cur.orden;
+        const newAct = activo !== undefined ? (activo ? 1 : 0) : cur.activo;
+
+        await pool.query(
+            `UPDATE institucion_restricciones
+             SET descripcion = ?, orden = ?, activo = ?
+             WHERE id = ?`,
+            [newDesc, newOrd, newAct, id]
+        );
+
+        res.json({ success: true, message: 'Restricción actualizada exitosamente.' });
+    } catch (err) {
+        console.error('Error in PUT /api/admin/finanzas/restricciones/:id:', err);
+        res.status(500).json({ error: 'Error al actualizar la restricción.' });
+    }
+});
+
+// Eliminar / Desactivar restricción
+app.delete('/api/admin/finanzas/restricciones/:id', requireFunctionality('admin'), requirePermission('finanzas.delete'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de restricción inválido.' });
+        }
+        const hard = req.query.hard === 'true';
+        if (hard) {
+            await pool.query('DELETE FROM institucion_restricciones WHERE id = ?', [id]);
+        } else {
+            await pool.query('UPDATE institucion_restricciones SET activo = 0 WHERE id = ?', [id]);
+        }
+        res.json({ success: true, message: 'Restricción eliminada/desactivada exitosamente.' });
+    } catch (err) {
+        console.error('Error in DELETE /api/admin/finanzas/restricciones/:id:', err);
+        res.status(500).json({ error: 'Error al eliminar la restricción.' });
     }
 });
 

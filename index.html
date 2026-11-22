@@ -1061,17 +1061,18 @@
 
                 <!-- Tabla Responsiva del Simulador -->
                 <div id="simulador-table-container" class="table-responsive" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.04); overflow-x: auto;">
-                    <table class="admin-table simulador-table" style="width: 100%; border-collapse: collapse; min-width: 980px;">
+                    <table class="admin-table simulador-table" style="width: 100%; border-collapse: collapse; min-width: 1280px;">
                         <thead>
                             <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left;">
                                 <th style="width: 35px; text-align: center;">Sel</th>
-                                <th style="min-width: 95px;">Institución</th>
+                                <th style="min-width: 100px;">Institución</th>
                                 <th style="width: 45px; text-align: center;">Tipo</th>
                                 <th style="min-width: 130px;">Condiciones</th>
-                                <th style="min-width: 90px; text-align: right;">Inversión Base</th>
+                                <th style="min-width: 150px;">Restricciones</th>
+                                <th style="min-width: 95px; text-align: right;">Inversión Base</th>
                                 <th style="width: 75px; text-align: right;">Tasa %</th>
-                                <th style="min-width: 90px; text-align: right; background: #fef3c7;">Inversión 1</th>
-                                <th style="min-width: 90px; text-align: right; background: #fef3c7;">Inversión 2</th>
+                                <th style="min-width: 140px; text-align: right; background: #fef3c7;">Inversión 1</th>
+                                <th style="min-width: 140px; text-align: right; background: #fef3c7;">Inversión 2</th>
                                 <th style="width: 60px; text-align: center;">Meses</th>
                                 <th style="min-width: 75px; text-align: right;">Rend1</th>
                                 <th style="min-width: 75px; text-align: right;">Rend2</th>
@@ -1705,6 +1706,36 @@
                         <small style="color: #64748b; font-size: 0.76rem; display: block; margin-top: 6px; margin-bottom: 14px;">
                             * El Tramo 1 debe iniciar en 0.00. Dejar el Límite Sup del último tramo en blanco para indicar sin tope (+∞).
                         </small>
+                    </div>
+
+                    <!-- Sección 3: Restricciones de la Institución (Requisitos / Acciones para el cliente) -->
+                    <div style="border-top: 2px solid #e2e8f0; padding-top: 16px; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                            <h4 style="margin: 0; color: #0f172a; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-exclamation-circle" style="color: #ea580c;"></i> Restricciones de la Institución
+                            </h4>
+                            <button type="button" id="btn-inst-agregar-restriccion" class="btn btn-secondary btn-sm" style="font-size: 0.82rem; padding: 4px 10px;">
+                                <i class="fas fa-plus"></i> Agregar Restricción
+                            </button>
+                        </div>
+                        <p style="color: #64748b; font-size: 0.8rem; margin: 0 0 10px 0;">
+                            Requisitos o acciones que el cliente debe cumplir (ej. "Requiere depósito de $3,000 mensuales", "Requiere al menos una compra al mes"). Son independientes de las condiciones de tasa.
+                        </p>
+                        <div class="table-responsive">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;" class="admin-table">
+                                <thead>
+                                    <tr style="background: #f1f5f9;">
+                                        <th style="width: 45px; text-align: center;">#</th>
+                                        <th>Descripción de la Restricción</th>
+                                        <th style="width: 90px; text-align: center;">Activo</th>
+                                        <th style="width: 50px; text-align: center;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="finanzas-inst-restricciones-tbody">
+                                    <!-- Filas de restricciones dinámicas -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #eee; padding-top: 14px;">

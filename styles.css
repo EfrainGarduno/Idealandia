@@ -2718,8 +2718,11 @@ th.sortable-th.sort-desc .sort-indicator {
 
 .sim-input-inv1,
 .sim-input-inv2 {
-    max-width: 90px;
+    width: 100%;
+    min-width: 125px;
+    max-width: 140px;
     background: #fffbeb;
+    font-weight: 700;
 }
 
 .sim-input-meses {
@@ -2739,14 +2742,59 @@ th.sortable-th.sort-desc .sort-indicator {
 .badge-sim-modificada {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     font-size: 0.72rem;
-    font-weight: 600;
-    color: #ea580c;
+    font-weight: 700;
+    color: #c2410c;
     background: #ffedd5;
-    padding: 1px 6px;
+    border: 1px solid #fed7aa;
+    padding: 2px 8px;
     border-radius: 9999px;
     margin-top: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    text-decoration: none;
+    line-height: 1.2;
+    user-select: none;
 }
+
+.badge-sim-modificada:hover {
+    background: #ea580c;
+    color: #ffffff;
+    border-color: #ea580c;
+    box-shadow: 0 1px 4px rgba(234, 88, 12, 0.35);
+    transform: scale(1.04);
+}
+
+.badge-sim-modificada:active {
+    transform: scale(0.97);
+}
+
+.sim-cell-restricciones {
+    font-size: 0.8rem;
+    color: #475569;
+    max-width: 220px;
+    line-height: 1.35;
+}
+
+.sim-restriccion-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.sim-restriccion-item:last-child {
+    margin-bottom: 0;
+}
+
+.sim-restriccion-bullet {
+    color: #ea580c;
+    font-weight: 700;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
 
 
