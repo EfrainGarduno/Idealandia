@@ -106,22 +106,42 @@ async function run() {
 
     await page.waitForTimeout(600);
 
+    // Verificar encabezados de la tabla de instituciones (exactamente 6 columnas sin ID ni Estatus)
+    const encabezados = await page.$$eval('#admin-finanzas-instituciones thead th', ths => ths.map(t => t.textContent.trim()));
+    console.log('Encabezados en Instituciones Financieras:', encabezados);
+    assert.deepStrictEqual(encabezados, ['Institución', 'Tipo', 'Condición Resumen', 'Orden', 'Vigencia Actual', 'Acciones'], 'Las columnas deben ser exactamente 6');
+
     // Verificar tabla de instituciones
     const filasInst = await page.locator('#admin-finanzas-instituciones-tbody tr').count();
     console.log(`Instituciones cargadas en tabla: ${filasInst}`);
     assert(filasInst >= 8, 'Deben mostrarse al menos 8 instituciones');
 
-    // Verificar indicador de Activo (✓) y botón de Desactivar (⛔)
-    const primerBadge = await page.locator('#admin-finanzas-instituciones-tbody tr:first-child td:nth-child(7)').textContent();
-    assert(primerBadge.includes('Activo'), 'Debe decir Activo');
+    // Verificar botón Editar y control compacto Activo/Inactivo (patrón Gestión de Menús)
+    const primerFilaAcciones = page.locator('#admin-finanzas-instituciones-tbody tr:first-child .admin-actions-cell');
+    const tieneBtnEdit = await primerFilaAcciones.locator('.btn-edit-inst, .admin-action-btn--edit').count();
+    assert.strictEqual(tieneBtnEdit, 1, 'Debe incluir botón Editar en columna Acciones');
 
-    const tieneIconoCheck = await page.locator('#admin-finanzas-instituciones-tbody tr:first-child td:nth-child(7) i.fa-check').count();
-    assert.strictEqual(tieneIconoCheck, 1, 'Debe mostrar palomita/check ✓ para institución activa');
+    const toggleBtn = primerFilaAcciones.locator('.btn-toggle-inst');
+    const esActivoInicial = await toggleBtn.getAttribute('class');
+    assert(esActivoInicial.includes('admin-action-btn--toggle-active'), 'El botón debe tener la clase toggle-active para institución activa');
 
-    const btnToggle = page.locator('#admin-finanzas-instituciones-tbody tr:first-child .btn-toggle-inst');
-    const textoBtnToggle = await btnToggle.textContent();
-    assert(textoBtnToggle.includes('Desactivar'), 'El botón para institución activa debe ofrecer la acción de desactivar');
-    console.log('✓ Indicador Activo (✓) y botón opuesto (Desactivar) validados correctamente.');
+    const tieneIconoToggleOn = await toggleBtn.locator('i.fa-toggle-on').count();
+    assert.strictEqual(tieneIconoToggleOn, 1, 'Debe mostrar icono toggle-on para institución activa');
+
+    // Probar clic en toggle para desactivar y verificar reactividad
+    await toggleBtn.click();
+    await page.waitForTimeout(400);
+
+    const esInactivoDespues = await page.locator('#admin-finanzas-instituciones-tbody tr:first-child .btn-toggle-inst').getAttribute('class');
+    assert(esInactivoDespues.includes('admin-action-btn--toggle-inactive'), 'Debe cambiar a toggle-inactive al hacer clic');
+
+    // Volver a activar
+    await page.locator('#admin-finanzas-instituciones-tbody tr:first-child .btn-toggle-inst').click();
+    await page.waitForTimeout(400);
+
+    const esActivoRestaurado = await page.locator('#admin-finanzas-instituciones-tbody tr:first-child .btn-toggle-inst').getAttribute('class');
+    assert(esActivoRestaurado.includes('admin-action-btn--toggle-active'), 'Debe volver a toggle-active al reactivar');
+    console.log('✓ Patrón homogéneo de Gestión de Menús (Editar + Toggle) validado con éxito.');
 
     // Probar abrir Modal Editar Institución (NU)
     console.log('[Paso 2: Abrir Modal Editar en Institución NU]');

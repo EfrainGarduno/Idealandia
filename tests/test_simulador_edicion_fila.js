@@ -209,8 +209,8 @@ async function run() {
         const inv1Width = await page.$eval('#sim-row-1 .sim-input-inv1', el => el.getBoundingClientRect().width);
         const inv2Width = await page.$eval('#sim-row-1 .sim-input-inv2', el => el.getBoundingClientRect().width);
         console.log(`Ancho medido de inputs: Inv1=${inv1Width}px, Inv2=${inv2Width}px`);
-        assert(inv1Width >= 120, `El campo Inversión 1 debe tener al menos 120px de ancho (obtenido: ${inv1Width}px)`);
-        assert(inv2Width >= 120, `El campo Inversión 2 debe tener al menos 120px de ancho (obtenido: ${inv2Width}px)`);
+        assert(inv1Width >= 95, `El campo Inversión 1 debe tener al menos 95px de ancho (obtenido: ${inv1Width}px)`);
+        assert(inv2Width >= 95, `El campo Inversión 2 debe tener al menos 95px de ancho (obtenido: ${inv2Width}px)`);
 
         // Probar escritura de $10,000,000
         await page.fill('#sim-row-1 .sim-input-inv1', '10000000');

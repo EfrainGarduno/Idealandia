@@ -92,7 +92,7 @@
             flex-direction: column;
             justify-content: flex-start;
             align-items: center;
-            padding: 40px;
+            padding: 30px 24px;
             box-sizing: border-box;
             overflow-y: auto;
         }
@@ -111,9 +111,9 @@
 
         #admin.content-section,
         #servicios.content-section {
-            max-width: 96%; /* Take up more horizontal space for admin tables and investment simulator */
-            width: 100%;
-            padding: 24px 28px;
+            max-width: 99%; /* Take up more horizontal space for admin tables and investment simulator */
+            width: 99%;
+            padding: 20px 16px;
             align-items: stretch;
             box-sizing: border-box;
         }
@@ -2646,15 +2646,15 @@ th.sortable-th.sort-desc .sort-indicator {
 
 .simulador-table {
     width: 100%;
-    min-width: 980px;
+    min-width: 920px;
     border-collapse: collapse;
-    font-size: 0.85rem;
+    font-size: 0.81rem;
 }
 
 .simulador-table th,
 .simulador-table td {
     vertical-align: middle;
-    padding: 8px 6px;
+    padding: 5px 3px;
     box-sizing: border-box;
 }
 
@@ -2691,9 +2691,9 @@ th.sortable-th.sort-desc .sort-indicator {
 /* Simulador de Inversiones - Controles por fila y resaltado de simulación personalizada */
 .sim-row-input {
     width: 100%;
-    min-width: 60px;
-    padding: 3px 5px;
-    font-size: 0.85rem;
+    min-width: 50px;
+    padding: 2px 4px;
+    font-size: 0.81rem;
     font-weight: 700;
     text-align: right;
     border: 1px solid #cbd5e1;
@@ -2712,21 +2712,21 @@ th.sortable-th.sort-desc .sort-indicator {
 }
 
 .sim-input-tasa {
-    max-width: 75px;
+    max-width: 62px;
     color: #0f172a;
 }
 
 .sim-input-inv1,
 .sim-input-inv2 {
     width: 100%;
-    min-width: 125px;
-    max-width: 140px;
+    min-width: 98px;
+    max-width: 114px;
     background: #fffbeb;
     font-weight: 700;
 }
 
 .sim-input-meses {
-    max-width: 55px;
+    max-width: 44px;
     text-align: center;
 }
 
@@ -2743,12 +2743,12 @@ th.sortable-th.sort-desc .sort-indicator {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 0.72rem;
+    font-size: 0.70rem;
     font-weight: 700;
     color: #c2410c;
     background: #ffedd5;
     border: 1px solid #fed7aa;
-    padding: 2px 8px;
+    padding: 2px 6px;
     border-radius: 9999px;
     margin-top: 3px;
     cursor: pointer;
@@ -2771,10 +2771,10 @@ th.sortable-th.sort-desc .sort-indicator {
 }
 
 .sim-cell-restricciones {
-    font-size: 0.8rem;
+    font-size: 0.77rem;
     color: #475569;
-    max-width: 220px;
-    line-height: 1.35;
+    max-width: 175px;
+    line-height: 1.30;
 }
 
 .sim-restriccion-item {

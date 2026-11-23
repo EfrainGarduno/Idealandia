@@ -3422,7 +3422,7 @@ async function loadFinanzasInstituciones() {
     const tbody = document.getElementById('admin-finanzas-instituciones-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando instituciones...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando instituciones...</td></tr>';
 
     try {
         const res = await fetch('/api/admin/finanzas/instituciones');
@@ -3437,7 +3437,7 @@ async function loadFinanzasInstituciones() {
 
         tbody.innerHTML = '';
         if (finanzasInstitucionesCache.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">No hay instituciones registradas.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #64748b;">No hay instituciones registradas.</td></tr>';
             return;
         }
 
@@ -3459,51 +3459,71 @@ async function loadFinanzasInstituciones() {
                 ? `<span style="color: #166534; font-weight: 600;">Desde ${esqActivo.fecha_inicio_vigencia} (${esqActivo.fecha_fin_vigencia || 'Abierta'})</span>`
                 : `<span style="color: #991b1b; font-style: italic;">Sin vigencia activa</span>`;
 
-            tr.innerHTML = `
-                <td>${inst.id}</td>
-                <td><strong>${escapeHTML(inst.nombre)}</strong></td>
-                <td><span style="font-weight: 700; padding: 2px 8px; border-radius: 4px; background: ${tInfo.bg}; color: ${tInfo.color}; font-size: 0.82rem;">${tInfo.label}</span></td>
-                <td style="font-size: 0.85rem; color: #475569;">${escapeHTML(inst.condiciones_resumen || '—')}</td>
-                <td>${inst.orden_visual}</td>
-                <td style="font-size: 0.85rem;">${vigenciaTexto}</td>
-                <td>
-                    <span style="padding: 3px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; background: ${inst.activo ? '#dcfce7' : '#fee2e2'}; color: ${inst.activo ? '#166534' : '#991b1b'}; display: inline-flex; align-items: center; gap: 5px;">
-                        <i class="fas ${inst.activo ? 'fa-check' : 'fa-ban'}" style="font-weight: 900;"></i> ${inst.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                </td>
-                <td style="white-space: nowrap;">
-                    <button type="button" class="btn btn-secondary btn-sm btn-edit-inst" data-id="${inst.id}" style="padding: 4px 10px; font-size: 0.82rem;" title="Editar institución y condiciones">
-                        <i class="fas fa-edit"></i> Editar
-                    </button>
-                    <button type="button" class="btn btn-sm btn-toggle-inst" data-id="${inst.id}" data-activo="${inst.activo}" style="padding: 4px 10px; font-size: 0.82rem; font-weight: 600; background: ${inst.activo ? '#fee2e2' : '#dcfce7'}; color: ${inst.activo ? '#991b1b' : '#166534'}; border: 1px solid ${inst.activo ? '#fca5a5' : '#86efac'}; border-radius: 6px; margin-left: 6px; cursor: pointer;" title="${inst.activo ? 'Desactivar institución' : 'Activar institución'}">
-                        <i class="fas ${inst.activo ? 'fa-ban' : 'fa-check'}"></i> ${inst.activo ? 'Desactivar' : 'Activar'}
-                    </button>
-                </td>
-            `;
+            // Columna 1: Institución
+            let td = document.createElement('td');
+            td.innerHTML = `<strong>${escapeHTML(inst.nombre)}</strong>`;
+            tr.appendChild(td);
+
+            // Columna 2: Tipo
+            td = document.createElement('td');
+            td.style.textAlign = 'center';
+            td.innerHTML = `<span style="font-weight: 700; padding: 2px 8px; border-radius: 4px; background: ${tInfo.bg}; color: ${tInfo.color}; font-size: 0.82rem;">${tInfo.label}</span>`;
+            tr.appendChild(td);
+
+            // Columna 3: Condición Resumen
+            td = document.createElement('td');
+            td.style.fontSize = '0.85rem';
+            td.style.color = '#475569';
+            td.textContent = inst.condiciones_resumen || '—';
+            tr.appendChild(td);
+
+            // Columna 4: Orden
+            td = document.createElement('td');
+            td.style.textAlign = 'center';
+            td.textContent = inst.orden_visual;
+            tr.appendChild(td);
+
+            // Columna 5: Vigencia Actual
+            td = document.createElement('td');
+            td.style.fontSize = '0.85rem';
+            td.innerHTML = vigenciaTexto;
+            tr.appendChild(td);
+
+            // Columna 6: Acciones (Patrón homogéneo de Gestión de Menús: Editar + Toggle Activo/Inactivo)
+            td = document.createElement('td');
+            td.className = 'admin-actions-cell';
+            const actionsGroup = createAdminActionsGroup();
+
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar institución',
+                srText: 'Editar',
+                className: 'btn-edit-inst',
+                onClick: () => abrirModalEditarInstitucion(inst)
+            });
+            actionsGroup.appendChild(editBtn);
+
+            const toggleBtn = createAdminActionButton({
+                type: inst.activo ? 'toggle-active' : 'toggle-inactive',
+                icon: inst.activo ? 'fas fa-toggle-on' : 'fas fa-toggle-off',
+                title: inst.activo ? 'Desactivar institución' : 'Activar institución',
+                srText: inst.activo ? 'Desactivar' : 'Activar',
+                className: 'btn-toggle-inst',
+                onClick: async () => {
+                    await toggleEstatusInstitucion(inst.id, inst.activo ? 0 : 1);
+                }
+            });
+            actionsGroup.appendChild(toggleBtn);
+            td.appendChild(actionsGroup);
+            tr.appendChild(td);
 
             tbody.appendChild(tr);
         });
 
-        // Listeners para botones de acción
-        tbody.querySelectorAll('.btn-edit-inst').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const id = parseInt(btn.dataset.id, 10);
-                const inst = finanzasInstitucionesCache.find(i => i.id === id);
-                if (inst) abrirModalEditarInstitucion(inst);
-            });
-        });
-
-        tbody.querySelectorAll('.btn-toggle-inst').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const id = parseInt(btn.dataset.id, 10);
-                const activoActual = parseInt(btn.dataset.activo, 10);
-                await toggleEstatusInstitucion(id, activoActual === 1 ? 0 : 1);
-            });
-        });
-
     } catch (err) {
         console.error('Error in loadFinanzasInstituciones:', err);
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #991b1b; padding: 20px;">Error interno al cargar instituciones.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #991b1b; padding: 20px;">Error interno al cargar instituciones.</td></tr>';
     }
 }
 
