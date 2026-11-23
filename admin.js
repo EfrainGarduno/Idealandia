@@ -399,6 +399,8 @@ function initAdminTabs() {
     const tabContents = document.querySelectorAll('.admin-tab-content');
 
     tabBtns.forEach(btn => {
+        if (btn.dataset.configured) return;
+        btn.dataset.configured = 'true';
         btn.addEventListener('click', (e) => {
             const targetId = btn.getAttribute('data-tab');
             const requiredPerm = ADMIN_TAB_PERMISSIONS[targetId];
@@ -450,7 +452,8 @@ function initAdminTabs() {
         });
     });
 
-    if (adminSection) {
+    if (adminSection && !adminSection.dataset.observed) {
+        adminSection.dataset.observed = 'true';
         observer.observe(adminSection, { attributes: true });
     }
 }
@@ -3284,6 +3287,8 @@ function initAdminBlocks() {
     const blocks = document.querySelectorAll('.admin-main-block');
 
     blockBtns.forEach(btn => {
+        if (btn.dataset.configured) return;
+        btn.dataset.configured = 'true';
         btn.addEventListener('click', () => {
             const blockId = btn.getAttribute('data-block');
             blockBtns.forEach(b => {
@@ -3316,6 +3321,8 @@ function initAdminBlocks() {
     // Subtabs de Finanzas
     const finanzasSubtabBtns = document.querySelectorAll('.admin-finanzas-subtab-btn');
     finanzasSubtabBtns.forEach(btn => {
+        if (btn.dataset.configured) return;
+        btn.dataset.configured = 'true';
         btn.addEventListener('click', () => {
             const target = btn.getAttribute('data-finanzastab');
             finanzasSubtabBtns.forEach(b => b.classList.remove('active'));
@@ -3851,10 +3858,6 @@ function agregarFilaRestriccionInstForm(restData = null) {
             if (ordInput) ordInput.value = idx + 1;
         });
     });
-}
-
-    recalcularResumenCondicionesInstModal();
-    modal.style.display = 'flex';
 }
 
 function agregarFilaTramoInstForm(tramoData = null) {
