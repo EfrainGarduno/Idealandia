@@ -8,15 +8,44 @@
     'use strict';
 
     let catalogoInstituciones = [];
+    let catalogoEstrategias = [];
     let institucionesSeleccionadas = new Set();
     let fechaConsultaActual = new Date().toISOString().slice(0, 10);
-    let estrategiaActual = 'individual'; // 'individual' | 'diversificada'
+    let estrategiaActual = 'individual'; // 'individual' | 'maximo_rendimiento' | 'equilibrada' | 'conservadora'
     let ultimaEstrategiaDiversificada = null;
+
+    // Estado de visibilidad de columnas opcionales (Condiciones y Restricciones)
+    let colCondicionesVisible = true;
+    let colRestriccionesVisible = true;
 
     // Estado reactivo en memoria para simulación personalizada por fila (NO PERSISTE EN BD)
     const valoresOriginalesPorInst = new Map(); // id -> { tasa, inv1, inv2, meses }
     const valoresPersonalizadosPorInst = new Map(); // id -> { tasa, inv1, inv2, meses, isModified }
     const resultadosCalculadosPorInst = new Map(); // id -> { total_mensual, total_periodo, rend1, rend2 }
+
+    /**
+     * Parsea de forma robusta el valor numérico del input de inversión global.
+     * Soporta valores formateados con comas (ej. $10,000,000 -> 10000000).
+     */
+    function parseInversionGlobal() {
+        const input = document.getElementById('simulador-inversion-global');
+        if (!input) return 40000;
+        const clean = String(input.value || '').replace(/[^0-9.]/g, '');
+        const num = parseFloat(clean);
+        return isNaN(num) ? 0 : Math.max(0, num);
+    }
+
+    /**
+     * Formatea el campo de Inversión Total con comas para facilitar su lectura en cantidades grandes.
+     */
+    function formatearInversionGlobal() {
+        const input = document.getElementById('simulador-inversion-global');
+        if (!input) return;
+        const val = parseInversionGlobal();
+        if (val > 0) {
+            input.value = Number(val).toLocaleString('es-MX', { maximumFractionDigits: 2 });
+        }
+    }
 
     /**
      * Escapa caracteres especiales HTML para renderizado seguro.
@@ -107,6 +136,7 @@
 
             const data = await res.json();
             catalogoInstituciones = Array.isArray(data.instituciones) ? data.instituciones : [];
+            catalogoEstrategias = Array.isArray(data.estrategias) ? data.estrategias : [];
 
             // Por defecto, todas las instituciones quedan seleccionadas
             institucionesSeleccionadas.clear();
@@ -144,6 +174,38 @@
         if (inputInversion && !inputInversion.dataset.configured) {
             inputInversion.dataset.configured = 'true';
             inputInversion.addEventListener('input', () => recalcularSimulacion());
+            inputInversion.addEventListener('blur', () => formatearInversionGlobal());
+        }
+
+        // Toggles para mostrar/ocultar a discreción las columnas Condiciones y Restricciones
+        const btnColCond = document.getElementById('simulador-toggle-col-condiciones');
+        const btnColRest = document.getElementById('simulador-toggle-col-restricciones');
+        const tableContainer = document.getElementById('simulador-table-container');
+
+        if (btnColCond && !btnColCond.dataset.configured) {
+            btnColCond.dataset.configured = 'true';
+            btnColCond.addEventListener('click', () => {
+                colCondicionesVisible = !colCondicionesVisible;
+                if (tableContainer) tableContainer.classList.toggle('hide-col-condiciones', !colCondicionesVisible);
+                btnColCond.classList.toggle('active', colCondicionesVisible);
+                btnColCond.classList.toggle('inactive', !colCondicionesVisible);
+                btnColCond.innerHTML = colCondicionesVisible
+                    ? '<i class="fas fa-eye"></i> Condiciones'
+                    : '<i class="fas fa-eye-slash"></i> Condiciones';
+            });
+        }
+
+        if (btnColRest && !btnColRest.dataset.configured) {
+            btnColRest.dataset.configured = 'true';
+            btnColRest.addEventListener('click', () => {
+                colRestriccionesVisible = !colRestriccionesVisible;
+                if (tableContainer) tableContainer.classList.toggle('hide-col-restricciones', !colRestriccionesVisible);
+                btnColRest.classList.toggle('active', colRestriccionesVisible);
+                btnColRest.classList.toggle('inactive', !colRestriccionesVisible);
+                btnColRest.innerHTML = colRestriccionesVisible
+                    ? '<i class="fas fa-eye"></i> Restricciones'
+                    : '<i class="fas fa-eye-slash"></i> Restricciones';
+            });
         }
 
         if (inputMeses && !inputMeses.dataset.configured) {
@@ -336,11 +398,11 @@
                     </span>
                 </td>
                 <!-- Condiciones financieras de tasa -->
-                <td style="font-size: 0.85rem; color: #475569;">
+                <td class="sim-col-condiciones" style="font-size: 0.85rem; color: #475569;">
                     ${inst.condiciones_resumen || (tieneEsquema ? inst.esquema.nombre_esquema : 'Sin condiciones activas')}
                 </td>
                 <!-- Restricciones (Requisitos independientes para el cliente) -->
-                <td>
+                <td class="sim-col-restricciones">
                     ${renderizarRestriccionesHtml(inst.restricciones)}
                 </td>
                 <!-- Inversión Base (Límite base de condición de la institución) -->
@@ -627,9 +689,8 @@
      * Si una fila está modificada, mantiene sus valores personalizados y recalcula su estado.
      */
     function recalcularSimulacion() {
-        const inputInversion = document.getElementById('simulador-inversion-global');
         const inputMeses = document.getElementById('simulador-meses-global');
-        const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 0) || 0;
+        const capitalGlobal = parseInversionGlobal();
         const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
 
         catalogoInstituciones.forEach(inst => {
@@ -1011,7 +1072,7 @@
                 </div>
                 <div id="simulador-chips-disponibles" style="display: flex; flex-wrap: wrap; gap: 8px;">
                     ${disponibles.map(inst => `
-                        <button type="button" class="btn-agregar-inst" data-inst-id="${inst.id}" 
+                        <button type="button" class="btn-agregar-inst" id="sim-chip-add-${inst.id}" data-inst-id="${inst.id}" 
                                 style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 0.84rem; font-weight: 600; color: #1d4ed8; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 20px; cursor: pointer; transition: all 0.15s ease-in-out; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
                                 onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#60a5fa';"
                                 onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#93c5fd';"
@@ -1129,7 +1190,7 @@
      * - 'diversificada': Mejor combinación diversificada de capital
      */
     function actualizarResumenSegunEstrategia() {
-        if (estrategiaActual === 'diversificada') {
+        if (estrategiaActual !== 'individual') {
             actualizarEstrategiaDiversificada();
         } else {
             actualizarResumenComparativo();
@@ -1137,53 +1198,76 @@
     }
 
     /**
-     * Cambia la estrategia de inversión entre Mayor rendimiento e Inversión diversificada.
+     * Cambia la estrategia de inversión entre Individual y las tres diversificadas:
+     * - individual: Mayor rendimiento en una sola institución
+     * - maximo_rendimiento: 🟢 Máximo rendimiento
+     * - equilibrada: 🔵 Equilibrada
+     * - conservadora: 🟠 Conservadora
      */
     function cambiarEstrategia(estrategia) {
+        if (estrategia === 'diversificada') estrategia = 'maximo_rendimiento';
         estrategiaActual = estrategia;
 
-        const labelInd = document.querySelector('.sim-strategy-individual');
-        const labelDiv = document.querySelector('.sim-strategy-diversificada');
-        const paramsDiv = document.getElementById('simulador-params-diversificado');
+        // Actualizar checked en radios si no lo estuviera
+        const radios = document.querySelectorAll('input[name="simulador-estrategia"]');
+        radios.forEach(r => {
+            if (r.value === estrategia) r.checked = true;
+        });
+
+        const labels = {
+            'individual': document.querySelector('.sim-strategy-individual'),
+            'maximo_rendimiento': document.querySelector('.sim-strategy-maximo'),
+            'equilibrada': document.querySelector('.sim-strategy-equilibrada'),
+            'conservadora': document.querySelector('.sim-strategy-conservadora')
+        };
+
+        // Resetear estilos de todos los botones de estrategia
+        Object.values(labels).forEach(lbl => {
+            if (lbl) {
+                lbl.style.borderColor = '#cbd5e1';
+                lbl.style.background = '#f8fafc';
+                lbl.style.color = '#475569';
+                lbl.style.fontWeight = '600';
+            }
+        });
+
+        // Aplicar estilo activo a la opción seleccionada
+        const activeLbl = labels[estrategia];
+        if (activeLbl) {
+            if (estrategia === 'individual') {
+                activeLbl.style.borderColor = '#3b82f6';
+                activeLbl.style.background = '#eff6ff';
+                activeLbl.style.color = '#1d4ed8';
+            } else if (estrategia === 'maximo_rendimiento') {
+                activeLbl.style.borderColor = '#16a34a';
+                activeLbl.style.background = '#f0fdf4';
+                activeLbl.style.color = '#15803d';
+            } else if (estrategia === 'equilibrada') {
+                activeLbl.style.borderColor = '#2563eb';
+                activeLbl.style.background = '#eff6ff';
+                activeLbl.style.color = '#1d4ed8';
+            } else if (estrategia === 'conservadora') {
+                activeLbl.style.borderColor = '#d97706';
+                activeLbl.style.background = '#fffbeb';
+                activeLbl.style.color = '#b45309';
+            }
+            activeLbl.style.fontWeight = '700';
+        }
+
         const panelInd = document.getElementById('simulador-resumen-comparativo');
         const panelDiv = document.getElementById('simulador-panel-diversificado');
+        const paramsDiv = document.getElementById('simulador-params-diversificado');
 
-        if (estrategia === 'diversificada') {
-            if (labelDiv) {
-                labelDiv.style.borderColor = '#16a34a';
-                labelDiv.style.background = '#f0fdf4';
-                labelDiv.style.color = '#15803d';
-                labelDiv.style.fontWeight = '700';
-            }
-            if (labelInd) {
-                labelInd.style.borderColor = '#cbd5e1';
-                labelInd.style.background = '#f8fafc';
-                labelInd.style.color = '#475569';
-                labelInd.style.fontWeight = '600';
-            }
-            if (paramsDiv) paramsDiv.style.display = 'block';
-            if (panelInd) panelInd.style.display = 'none';
-            if (panelDiv) panelDiv.style.display = 'block';
+        if (paramsDiv) paramsDiv.style.display = (estrategia === 'individual') ? 'none' : 'block';
 
-            actualizarEstrategiaDiversificada();
-        } else {
-            if (labelInd) {
-                labelInd.style.borderColor = '#3b82f6';
-                labelInd.style.background = '#eff6ff';
-                labelInd.style.color = '#1d4ed8';
-                labelInd.style.fontWeight = '700';
-            }
-            if (labelDiv) {
-                labelDiv.style.borderColor = '#cbd5e1';
-                labelDiv.style.background = '#f8fafc';
-                labelDiv.style.color = '#475569';
-                labelDiv.style.fontWeight = '600';
-            }
-            if (paramsDiv) paramsDiv.style.display = 'none';
+        if (estrategia === 'individual') {
             if (panelInd) panelInd.style.display = 'block';
             if (panelDiv) panelDiv.style.display = 'none';
-
             actualizarResumenComparativo();
+        } else {
+            if (panelInd) panelInd.style.display = 'none';
+            if (panelDiv) panelDiv.style.display = 'block';
+            actualizarEstrategiaDiversificada();
         }
     }
 
@@ -1194,15 +1278,9 @@
         const panelDiv = document.getElementById('simulador-panel-diversificado');
         if (!panelDiv) return;
 
-        const inputInversion = document.getElementById('simulador-inversion-global');
+        const capital = parseInversionGlobal();
         const inputMeses = document.getElementById('simulador-meses-global');
-        const selectNumInst = document.getElementById('simulador-num-instituciones');
-        const inputMaxPct = document.getElementById('simulador-max-porcentaje');
-
-        const capital = parseFloat(inputInversion ? inputInversion.value : 40000) || 40000;
         const meses = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
-        const numInstVal = selectNumInst ? selectNumInst.value : 'todas';
-        const maxPctVal = parseFloat(inputMaxPct ? inputMaxPct.value : 50) || 50;
 
         // Filtrar exclusivamente instituciones que estén activas en BD y seleccionadas por el usuario
         const seleccionadas = catalogoInstituciones.filter(i => institucionesSeleccionadas.has(i.id));
@@ -1222,8 +1300,8 @@
             inversionTotal: capital,
             meses: meses,
             instituciones: seleccionadas,
-            numInstituciones: numInstVal,
-            maxPorcentajePorInst: maxPctVal,
+            estrategia: estrategiaActual,
+            estrategiasConfig: catalogoEstrategias,
             personalizaciones: valoresPersonalizadosPorInst
         });
 
@@ -1254,24 +1332,33 @@
         const difSigno = difPeriodo >= 0 ? `+${formatMoney(difPeriodo)}` : formatMoney(difPeriodo);
         const difColor = difPeriodo >= 0 ? '#166534' : '#b45309';
 
+        const estInfo = res.estrategia || {};
+        const estColor = estInfo.color || '#16a34a';
+        const estIcono = estInfo.icono || 'fas fa-chart-line';
+        const estNombre = estInfo.nombre || 'Estrategia Diversificada';
+
         panelDiv.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 18px;">
-                <!-- Encabezado con Indicador de Rendimiento Diversificado -->
+                <!-- Encabezado con Indicador de Estrategia -->
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; border-bottom: 2px solid #bbf7d0; padding-bottom: 14px;">
                     <div>
                         <div style="font-weight: 800; font-size: 1.15rem; color: #166534; display: flex; align-items: center; gap: 8px;">
-                            <i class="fas fa-trophy" style="color: #eab308; font-size: 1.3rem;"></i>
-                            <span>🏆 Mejor Inversión Diversificada</span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 6px; background: ${estColor}15; color: ${estColor}; border: 1px solid ${estColor}40;">
+                                <i class="${estIcono}"></i> ${escapeHTML(estNombre)}
+                            </span>
+                            <span style="color: #0f172a; font-size: 1rem; font-weight: 700;">— Mejor Inversión Diversificada</span>
                         </div>
-                        <div style="color: #475569; font-size: 0.88rem; margin-top: 4px;">
+                        <div style="color: #475569; font-size: 0.88rem; margin-top: 6px;">
                             <span>Capital a invertir: <strong>${formatMoney(res.inversionTotal)}</strong></span>
                             <span style="margin: 0 6px;">•</span>
                             <span>Plazo: <strong>${res.meses} ${res.meses === 1 ? 'mes' : 'meses'}</strong></span>
                             <span style="margin: 0 6px;">•</span>
                             <span>Instituciones utilizadas: <strong style="color: #166534;">${res.numInstitucionesUtilizadas}</strong></span>
+                            <span style="margin: 0 6px;">•</span>
+                            <span>Tope por institución: <strong>${formatPercent(res.maxPorcentajePorInst)}</strong></span>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 18px; flex-wrap: wrap; text-align: right;">
+                    <div style="display: flex; gap: 14px; flex-wrap: wrap; text-align: right;">
                         <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 8px 14px;">
                             <span style="font-size: 0.78rem; font-weight: 600; color: #166534; display: block;">Rendimiento Estimado</span>
                             <strong style="font-size: 1.25rem; color: #15803d;">${formatMoney(res.rendimientoPeriodoTotal)}</strong>
@@ -1280,21 +1367,31 @@
                         <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 14px;">
                             <span style="font-size: 0.78rem; font-weight: 600; color: #1d4ed8; display: block;">Tasa Efectiva Ponderada</span>
                             <strong style="font-size: 1.25rem; color: #1e40af;">${formatPercent(res.tasaEfectivaPonderada)}</strong>
-                            <small style="display: block; font-size: 0.76rem; color: #475569;">anualizada</small>
+                            <small style="display: block; font-size: 0.76rem; color: #475569;">anualizada real</small>
                         </div>
                     </div>
                 </div>
 
-                <!-- Control de Balance del Capital (Validación matemática estricta) -->
-                <div style="display: flex; gap: 14px; flex-wrap: wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 16px; font-size: 0.86rem;">
-                    <div><span style="color: #64748b;">Capital disponible:</span> <strong>${formatMoney(res.inversionTotal)}</strong></div>
+                <!-- Control de Balance del Capital (Validación matemática estricta: Capital = Distribuido + Sin Distribuir) -->
+                <div style="display: flex; gap: 14px; flex-wrap: wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 16px; font-size: 0.86rem; align-items: center;">
+                    <div><span style="color: #64748b;">Capital total disponible:</span> <strong>${formatMoney(res.inversionTotal)}</strong></div>
                     <div><span style="color: #64748b;">Capital distribuido:</span> <strong style="color: #166534;">${formatMoney(res.capitalDistribuido)}</strong></div>
                     <div>
                         <span style="color: #64748b;">Capital sin distribuir:</span> 
-                        <strong style="color: ${res.capitalSinDistribuir === 0 ? '#166534' : '#dc2626'};">${formatMoney(res.capitalSinDistribuir)}</strong>
-                        ${res.capitalSinDistribuir === 0 ? '<span style="color: #166534; font-weight: 700; margin-left: 4px;">✓ 100% asignado</span>' : ''}
+                        <strong style="color: ${res.capitalSinDistribuir <= 0.01 ? '#166534' : '#dc2626'};">${formatMoney(res.capitalSinDistribuir)}</strong>
+                        ${res.capitalSinDistribuir <= 0.01 ? '<span style="color: #166534; font-weight: 700; margin-left: 4px;">✓ 100% asignado</span>' : ''}
                     </div>
                 </div>
+
+                <!-- Alerta si quedó capital sin distribuir (Explicación transparente) -->
+                ${res.capitalSinDistribuir > 0.01 ? `
+                    <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 16px; color: #9a3412; font-size: 0.88rem;">
+                        <div style="font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                            <i class="fas fa-exclamation-triangle"></i> Capital sin distribuir: ${formatMoney(res.capitalSinDistribuir)}
+                        </div>
+                        <div>${escapeHTML(res.motivoSinDistribuir)}</div>
+                    </div>
+                ` : ''}
 
                 <!-- Tabla de Distribución Recomendada -->
                 <div>
@@ -1306,6 +1403,7 @@
                             <thead>
                                 <tr style="background: #f1f5f9; color: #334155; border-bottom: 2px solid #cbd5e1; text-align: left;">
                                     <th style="padding: 10px 12px;">Institución</th>
+                                    <th style="padding: 10px 12px; text-align: center;">Tipo</th>
                                     <th style="padding: 10px 12px; text-align: right; background: #fef3c7;">Inversión Asignada</th>
                                     <th style="padding: 10px 12px; text-align: center;">% Capital</th>
                                     <th style="padding: 10px 12px; text-align: right;">Tasa Ponderada</th>
@@ -1317,6 +1415,11 @@
                                 ${res.asignaciones.map(a => `
                                     <tr style="border-bottom: 1px solid #e2e8f0;">
                                         <td style="padding: 8px 12px; font-weight: 700; color: #0f172a;">${escapeHTML(a.nombre)}</td>
+                                        <td style="padding: 8px 12px; text-align: center;">
+                                            <span style="font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #334155;">
+                                                ${escapeHTML(a.tipoDescripcion || a.tipo)}
+                                            </span>
+                                        </td>
                                         <td style="padding: 8px 12px; text-align: right; font-weight: 700; background: #fffbeb; color: #92400e;">${formatMoney(a.inversionAsignada)}</td>
                                         <td style="padding: 8px 12px; text-align: center; font-weight: 600; color: #475569;">${formatPercent(a.porcentajeDelCapital)}</td>
                                         <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #1e40af;">${formatPercent(a.tasaPonderada)}</td>
@@ -1327,9 +1430,10 @@
                             </tbody>
                             <tfoot>
                                 <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #cbd5e1;">
-                                    <td style="padding: 10px 12px; color: #0f172a;">TOTAL</td>
+                                    <td style="padding: 10px 12px; color: #0f172a;">TOTAL DISTRIBUIDO</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #64748b;">${res.numInstitucionesUtilizadas} inst.</td>
                                     <td style="padding: 10px 12px; text-align: right; color: #92400e; background: #fef3c7;">${formatMoney(res.capitalDistribuido)}</td>
-                                    <td style="padding: 10px 12px; text-align: center; color: #475569;">100.00%</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #475569;">${formatPercent(res.inversionTotal > 0 ? (res.capitalDistribuido / res.inversionTotal) * 100 : 0)}</td>
                                     <td style="padding: 10px 12px; text-align: right; color: #1e40af;">${formatPercent(res.tasaEfectivaPonderada)}</td>
                                     <td style="padding: 10px 12px; text-align: right; color: #047857; background: #ecfdf5;">${formatMoney(res.rendimientoMensualTotal)}</td>
                                     <td style="padding: 10px 12px; text-align: right; color: #166534; background: #dcfce7; font-size: 1.05em;">${formatMoney(res.rendimientoPeriodoTotal)}</td>
@@ -1339,17 +1443,31 @@
                     </div>
                 </div>
 
-                <!-- Alertas de Restricciones Relevantes -->
+                <!-- Alertas de Restricciones Relevantes de Instituciones Asignadas -->
                 ${res.restriccionesRelevantes.length > 0 ? `
                     <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px;">
                         <div style="font-weight: 700; color: #92400e; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                            <i class="fas fa-exclamation-triangle"></i> Requisitos / Restricciones a considerar para esta distribución:
+                            <i class="fas fa-exclamation-triangle"></i> Requisitos / Restricciones a considerar para cumplir estas tasas:
                         </div>
                         <ul style="margin: 0; padding-left: 20px; font-size: 0.84rem; color: #78350f;">
                             ${res.restriccionesRelevantes.map(r => `
                                 <li style="margin-bottom: 3px;">
-                                    <strong>${escapeHTML(r.nombre)}:</strong> ${escapeHTML(r.descripcion)}
+                                    <strong>${escapeHTML(r.nombre)} (${escapeHTML(r.tipoDescripcion)}):</strong> ${escapeHTML(r.descripcion)}
                                 </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+
+                <!-- Instituciones No Elegibles (si existen) -->
+                ${Array.isArray(res.institucionesNoElegibles) && res.institucionesNoElegibles.length > 0 ? `
+                    <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: #64748b;">
+                        <div style="font-weight: 700; color: #475569; margin-bottom: 4px;">
+                            <i class="fas fa-info-circle"></i> Instituciones seleccionadas no elegibles en esta simulación:
+                        </div>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            ${res.institucionesNoElegibles.map(ie => `
+                                <li><strong>${escapeHTML(ie.nombre)}:</strong> ${escapeHTML(ie.motivo)}</li>
                             `).join('')}
                         </ul>
                     </div>

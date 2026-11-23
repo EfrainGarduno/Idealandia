@@ -978,6 +978,12 @@
 
             <!-- Vista Asesorías Financieras: Simulador de Inversiones -->
             <div id="servicios-financieras-view" class="servicios-view-container" style="display: none; width: 100%;">
+                <style>
+                    #simulador-table-container.hide-col-condiciones .sim-col-condiciones { display: none !important; }
+                    #simulador-table-container.hide-col-restricciones .sim-col-restricciones { display: none !important; }
+                    .sim-col-toggle-btn.inactive { background: #f1f5f9 !important; color: #94a3b8 !important; border-color: #cbd5e1 !important; text-decoration: line-through; }
+                    .simulador-money-container:focus-within { border-color: #eab308 !important; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.25) !important; }
+                </style>
                 <div class="servicios-back-bar" style="margin-bottom: 20px;">
                     <button type="button" id="btn-volver-catalogo-financieras" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i> Volver al Catálogo de Servicios
@@ -1005,32 +1011,52 @@
                         <i class="fas fa-sliders" style="color: #2563eb;"></i> Parámetros de Simulación
                     </div>
 
-                    <!-- Selector de Estrategia de Inversión -->
+                    <!-- Selector de Modalidad y Estrategias de Inversión -->
                     <div style="margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
-                        <label style="display: block; font-weight: 700; color: #1e293b; margin-bottom: 8px; font-size: 0.95rem;">
-                            <i class="fas fa-chess-knight" style="color: #2563eb;"></i> Estrategia de inversión:
-                        </label>
-                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                            <label class="sim-strategy-option sim-strategy-individual" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; border: 2px solid #3b82f6; background: #eff6ff; font-weight: 700; font-size: 0.92rem; color: #1d4ed8;">
-                                <input type="radio" name="simulador-estrategia" value="individual" checked style="cursor: pointer; width: 16px; height: 16px;">
-                                <span>🔵 Mayor rendimiento</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                            <label style="font-weight: 700; color: #1e293b; margin: 0; font-size: 0.95rem;">
+                                <i class="fas fa-chess-knight" style="color: #2563eb;"></i> Modalidad y Estrategia de inversión:
                             </label>
-                            <label class="sim-strategy-option sim-strategy-diversificada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.92rem; color: #475569;">
-                                <input type="radio" name="simulador-estrategia" value="diversificada" style="cursor: pointer; width: 16px; height: 16px;">
-                                <span>🟢 Mejor inversión diversificada</span>
+                            <!-- Controles para ocultar/mostrar columnas Condiciones y Restricciones a discreción -->
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #64748b;">Columnas:</span>
+                                <button type="button" id="simulador-toggle-col-condiciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.78rem; padding: 4px 10px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Condiciones">
+                                    <i class="fas fa-eye"></i> Condiciones
+                                </button>
+                                <button type="button" id="simulador-toggle-col-restricciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.78rem; padding: 4px 10px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Restricciones">
+                                    <i class="fas fa-eye"></i> Restricciones
+                                </button>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <label class="sim-strategy-option sim-strategy-individual" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #3b82f6; background: #eff6ff; font-weight: 700; font-size: 0.9rem; color: #1d4ed8; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="individual" checked style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🔵 Mayor rendimiento (Individual)</span>
+                            </label>
+                            <label class="sim-strategy-option sim-strategy-maximo sim-strategy-diversificada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="maximo_rendimiento" data-alias="diversificada" style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🟢 Máximo rendimiento</span>
+                            </label>
+                            <label class="sim-strategy-option sim-strategy-equilibrada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="equilibrada" style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🔵 Equilibrada</span>
+                            </label>
+                            <label class="sim-strategy-option sim-strategy-conservadora" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="conservadora" style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🟠 Conservadora</span>
                             </label>
                         </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; align-items: flex-end;">
-                        <!-- Inversión Total -->
+                        <!-- Inversión Total (Diseño responsive con prefijo exterior flex para evitar superposición en móviles) -->
                         <div>
                             <label for="simulador-inversion-global" style="display: block; font-weight: 600; color: #334155; margin-bottom: 6px;">
                                 Inversión Total ($ MXN):
                             </label>
-                            <div style="position: relative;">
-                                <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-weight: 700; color: #64748b;">$</span>
-                                <input type="number" id="simulador-inversion-global" class="form-control" value="40000" min="1" step="1000" style="padding-left: 28px; background: #fffbeb; border: 2px solid #fde047; font-weight: 700; color: #0f172a; font-size: 1.08rem; border-radius: 8px; width: 100%;">
+                            <div class="simulador-money-container" style="display: flex; align-items: stretch; background: #fffbeb; border: 2px solid #fde047; border-radius: 8px; overflow: hidden; box-sizing: border-box; width: 100%;">
+                                <span style="display: flex; align-items: center; justify-content: center; padding: 0 14px; font-weight: 800; font-size: 1.15rem; color: #475569; background: #fef08a; border-right: 1px solid #facc15; user-select: none;">$</span>
+                                <input type="text" inputmode="numeric" id="simulador-inversion-global" class="form-control" value="40,000" style="border: none; background: transparent; font-weight: 700; color: #0f172a; font-size: 1.1rem; padding: 10px 14px; width: 100%; box-shadow: none; outline: none; border-radius: 0;">
                             </div>
                             <small style="color: #64748b; font-size: 0.78rem;">Se distribuye automáticamente en los tramos de cada institución.</small>
                         </div>
@@ -1062,40 +1088,11 @@
                                 <i class="fas fa-times"></i> Ninguna
                             </button>
                         </div>
+                    </div>
 
-                        <!-- Parámetros específicos de Diversificación (Visibles solo en modo diversificado) -->
-                        <div id="simulador-params-diversificado" style="display: none; grid-column: 1 / -1; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-top: 6px;">
-                            <div style="font-weight: 700; color: #166534; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-sliders-h"></i> Parámetros de Diversificación
-                            </div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: flex-end;">
-                                <!-- Número de instituciones -->
-                                <div>
-                                    <label for="simulador-num-instituciones" style="display: block; font-weight: 600; color: #1e293b; margin-bottom: 6px; font-size: 0.85rem;">
-                                        Diversificar entre:
-                                    </label>
-                                    <select id="simulador-num-instituciones" class="form-select" style="font-weight: 700; font-size: 0.95rem; border-radius: 8px; width: 100%; padding: 8px 12px; border: 1px solid #86efac; background: #ffffff;">
-                                        <option value="2">2 instituciones</option>
-                                        <option value="3">3 instituciones</option>
-                                        <option value="4">4 instituciones</option>
-                                        <option value="5">5 instituciones</option>
-                                        <option value="todas" selected>Todas las disponibles</option>
-                                    </select>
-                                    <small style="color: #475569; font-size: 0.75rem;">Reparte el capital entre la cantidad seleccionada.</small>
-                                </div>
-                                <!-- Máximo por institución (%) -->
-                                <div>
-                                    <label for="simulador-max-porcentaje" style="display: block; font-weight: 600; color: #1e293b; margin-bottom: 6px; font-size: 0.85rem;">
-                                        Máximo por institución (%):
-                                    </label>
-                                    <div style="position: relative;">
-                                        <input type="number" id="simulador-max-porcentaje" class="form-control" value="50" min="10" max="100" step="5" style="padding-right: 28px; font-weight: 700; font-size: 0.95rem; border-radius: 8px; width: 100%; border: 1px solid #86efac; background: #ffffff;">
-                                        <span style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-weight: 700; color: #64748b;">%</span>
-                                    </div>
-                                    <small style="color: #475569; font-size: 0.75rem;">Tope de concentración de capital por institución.</small>
-                                </div>
-                            </div>
-                        </div>
+                    <!-- Contenedor de estado para parámetros diversificados -->
+                    <div id="simulador-params-diversificado" style="display: none; padding: 8px 12px; background: #f0fdf4; border-radius: 6px; font-size: 0.85rem; color: #166534; margin-top: 8px;">
+                        <span><i class="fas fa-sliders-h"></i> Parámetros de diversificación configurados dinámicamente según la estrategia elegida.</span>
                     </div>
 
                     <!-- Resumen comparativo dinámico (Modo: Mayor rendimiento) -->
@@ -1129,8 +1126,8 @@
                                 <th style="width: 30px; text-align: center;">Sel</th>
                                 <th style="min-width: 80px;">Institución</th>
                                 <th style="width: 34px; text-align: center;">Tipo</th>
-                                <th style="min-width: 95px;">Condiciones</th>
-                                <th style="min-width: 95px;">Restricciones</th>
+                                <th class="sim-col-condiciones" style="min-width: 95px;">Condiciones</th>
+                                <th class="sim-col-restricciones" style="min-width: 95px;">Restricciones</th>
                                 <th style="min-width: 75px; text-align: right;">Inversión Base</th>
                                 <th style="width: 52px; text-align: right;">Tasa %</th>
                                 <th style="min-width: 98px; text-align: right; background: #fef3c7;">Inversión 1</th>

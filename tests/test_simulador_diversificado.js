@@ -330,7 +330,7 @@ async function run() {
 
         // Cambiar a estrategia "Mejor inversión diversificada"
         console.log('[Cambiando selector a: 🟢 Mejor inversión diversificada]');
-        await page.click('input[name="simulador-estrategia"][value="diversificada"]');
+        await page.click('input[name="simulador-estrategia"][value="maximo_rendimiento"], input[name="simulador-estrategia"][value="diversificada"]');
         await page.waitForTimeout(200);
 
         // Verificar que el panel diversificado es visible y el individual está oculto

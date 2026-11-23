@@ -4443,10 +4443,32 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
             });
         }
 
+        // Consultar estrategias configuradas en BD
+        let estrategias = [];
+        try {
+            const [rowsEstrategias] = await pool.query(
+                `SELECT codigo, nombre, color, icono, 
+                        CAST(max_concentracion_inst AS DOUBLE) AS max_concentracion_inst,
+                        min_instituciones,
+                        CAST(max_concentracion_tipo AS DOUBLE) AS max_concentracion_tipo,
+                        diversificar_tipos,
+                        CAST(asignacion_minima_viable AS DOUBLE) AS asignacion_minima_viable,
+                        descripcion_criterio,
+                        orden_visual
+                 FROM finanzas_estrategias_config
+                 WHERE activo = 1
+                 ORDER BY orden_visual ASC`
+            );
+            estrategias = rowsEstrategias;
+        } catch (errEst) {
+            console.warn('Advertencia al consultar finanzas_estrategias_config:', errEst.message);
+        }
+
         res.json({
             success: true,
             fecha: fecha,
-            instituciones: resultado
+            instituciones: resultado,
+            estrategias: estrategias
         });
     } catch (error) {
         console.error('Error in GET /api/finanzas/simulador:', error);

@@ -243,16 +243,71 @@
         });
     }
 
+    // Catálogo base de estrategias preconfiguradas (utilizado como fallback si la BD no está disponible)
+    const ESTRATEGIAS_DEFAULT = {
+        'maximo_rendimiento': {
+            codigo: 'maximo_rendimiento',
+            nombre: 'Máximo rendimiento',
+            color: '#16a34a',
+            icono: 'fas fa-trophy',
+            max_concentracion_inst: 100.0,
+            min_instituciones: 1,
+            max_concentracion_tipo: null,
+            diversificar_tipos: 0,
+            asignacion_minima_viable: 1000.0,
+            descripcion_criterio: 'Se priorizaron las instituciones con mayor rendimiento estimado, permitiendo una mayor concentración del capital dentro de los límites configurados y respetando tramos y restricciones.'
+        },
+        'equilibrada': {
+            codigo: 'equilibrada',
+            nombre: 'Equilibrada',
+            color: '#2563eb',
+            icono: 'fas fa-balance-scale',
+            max_concentracion_inst: 40.0,
+            min_instituciones: 3,
+            max_concentracion_tipo: 60.0,
+            diversificar_tipos: 1,
+            asignacion_minima_viable: 2000.0,
+            descripcion_criterio: 'Se buscó un equilibrio entre rendimiento y diversificación, limitando la concentración por institución al 40% y procurando variedad entre tipos de instituciones (Bancos, Sofipos y Fintechs).'
+        },
+        'conservadora': {
+            codigo: 'conservadora',
+            nombre: 'Conservadora',
+            color: '#d97706',
+            icono: 'fas fa-shield-alt',
+            max_concentracion_inst: 25.0,
+            min_instituciones: 4,
+            max_concentracion_tipo: 40.0,
+            diversificar_tipos: 1,
+            asignacion_minima_viable: 2000.0,
+            descripcion_criterio: 'Se priorizó una mayor diversificación del capital y una menor concentración por institución (máximo 25%) y por sector, aceptando una posible reducción del rendimiento estimado en favor de una distribución más amplia.'
+        }
+    };
+
+    function obtenerDescripcionTipoInstitucion(tipo) {
+        switch (tipo) {
+            case 'B': return 'Banco';
+            case 'S': return 'Sofipo';
+            case 'F': return 'Fintech';
+            case 'O': return 'Otro';
+            default: return 'Institución';
+        }
+    }
+
     /**
      * Calcula la mejor inversión diversificada entre un conjunto de instituciones seleccionadas.
      * 
-     * Maximiza el rendimiento total del capital distribuido respetando:
-     * - Capital total disponible (SUMA(asignaciones) = inversionTotal).
-     * - Número de instituciones solicitado (K) o todas las disponibles.
-     * - Límite máximo de concentración por institución (ej. maxPorcentajePorInst = 50%).
-     * - Tramos y tasas marginales de cada institución.
-     * - Restricciones y requisitos de cada institución.
-     * - Preservación de modificaciones manuales de usuario si existen.
+     * Implementa las tres estrategias de inversión:
+     * - 🟢 Máximo rendimiento (máxima ganancia estimada, concentración alta)
+     * - 🔵 Equilibrada (equilibrio rendimiento y concentración media por inst y tipo)
+     * - 🟠 Conservadora (prioriza diversificación amplia y menor concentración por inst y tipo)
+     * 
+     * Respeta:
+     * - Parámetros configurables desde BD (finanzas_estrategias_config).
+     * - Invariante matemático: Capital Total = Capital Distribuido + Capital sin Distribuir.
+     * - Tramos y tasas marginales de cada institución (modelo actual).
+     * - Restricciones y requisitos reales de BD (clasificación elegible / no elegible).
+     * - Tasa efectiva ponderada real = Σ(rendimiento anual de cada asignación) / capital distribuido.
+     * - Sin asignaciones simbólicas arbitrarias para forzar métricas.
      * 
      * @param {Object} params Parámetros de la diversificación
      * @returns {Object} Estrategia calculada con desglose, comparativa y explicaciones
@@ -261,72 +316,150 @@
         inversionTotal = 0,
         meses = 1,
         instituciones = [],
+        estrategia = 'maximo_rendimiento',
+        estrategiasConfig = [],
         numInstituciones = 'todas',
-        maxPorcentajePorInst = 50,
+        maxPorcentajePorInst = null,
         personalizaciones = new Map()
     }) {
         const capital = Math.max(0, parseFloat(inversionTotal) || 0);
         const plazoMeses = Math.max(1, parseInt(meses, 10) || 1);
-        const maxPct = Math.min(100, Math.max(1, parseFloat(maxPorcentajePorInst) || 50));
 
-        // Filtrar instituciones válidas con esquemas y tramos
-        const instValidas = (Array.isArray(instituciones) ? instituciones : []).filter(inst => {
+        // 1. Resolver la configuración de la estrategia
+        let cfg = null;
+        if (typeof estrategia === 'object' && estrategia !== null) {
+            cfg = { ...estrategia };
+        } else {
+            const codigoStr = String(estrategia || 'maximo_rendimiento').toLowerCase();
+            if (Array.isArray(estrategiasConfig) && estrategiasConfig.length > 0) {
+                const encontrada = estrategiasConfig.find(e => e.codigo === codigoStr);
+                if (encontrada) cfg = { ...encontrada };
+            }
+            if (!cfg && ESTRATEGIAS_DEFAULT[codigoStr]) {
+                cfg = { ...ESTRATEGIAS_DEFAULT[codigoStr] };
+            }
+            if (!cfg) {
+                cfg = { ...ESTRATEGIAS_DEFAULT['maximo_rendimiento'] };
+            }
+        }
+
+        // Si se envió explícitamente maxPorcentajePorInst (por compatibilidad o control manual), respetarlo
+        if (maxPorcentajePorInst !== null && maxPorcentajePorInst !== undefined && !isNaN(parseFloat(maxPorcentajePorInst))) {
+            cfg.max_concentracion_inst = Math.min(100, Math.max(1, parseFloat(maxPorcentajePorInst)));
+        }
+
+        const maxPctInst = Math.min(100, Math.max(1, parseFloat(cfg.max_concentracion_inst) || 100));
+        const maxPctTipo = (cfg.max_concentracion_tipo !== null && cfg.max_concentracion_tipo !== undefined && !isNaN(parseFloat(cfg.max_concentracion_tipo)))
+            ? Math.min(100, Math.max(1, parseFloat(cfg.max_concentracion_tipo)))
+            : null;
+        const diversificarTipos = Boolean(cfg.diversificar_tipos);
+        const minInstitucionesDeseadas = Math.max(1, parseInt(cfg.min_instituciones, 10) || 1);
+
+        // Umbral de asignación mínima viable para evitar asignaciones simbólicas ($50)
+        let asignacionMinimaViable = parseFloat(cfg.asignacion_minima_viable) || 1000.0;
+        if (capital < asignacionMinimaViable * 2) {
+            asignacionMinimaViable = Math.max(100, capital / 4);
+        }
+
+        // 2. Evaluar elegibilidad y restricciones de las instituciones seleccionadas
+        const institucionesValidas = (Array.isArray(instituciones) ? instituciones : []).filter(inst => {
             const tramos = (inst.esquema && Array.isArray(inst.esquema.tramos)) ? inst.esquema.tramos : [];
             return tramos.length > 0;
         });
 
-        if (instValidas.length === 0 || capital <= 0) {
+        const institucionesElegibles = [];
+        const institucionesNoElegibles = [];
+
+        institucionesValidas.forEach(inst => {
+            const restrs = Array.isArray(inst.restricciones) ? inst.restricciones : [];
+            let esElegible = true;
+            let motivoIneligibilidad = '';
+
+            // Evaluar restricciones financieras cuantitativas (ej. depósito mínimo requerido)
+            for (const r of restrs) {
+                if (r && r.activo !== 0 && r.activo !== false) {
+                    const desc = (r.descripcion || '').toLowerCase();
+                    // Detectar si requiere depósito mayor al capital disponible (ej. "depósito de $3,000")
+                    const matchDeposito = desc.match(/dep[oó]sito\s+(?:mensual\s+)?(?:de\s+)?\$?([0-9,.]+)/i);
+                    if (matchDeposito) {
+                        const montoReq = parseFloat(matchDeposito[1].replace(/,/g, '')) || 0;
+                        if (montoReq > 0 && capital < montoReq) {
+                            esElegible = false;
+                            motivoIneligibilidad = `Requiere depósito mínimo de $${formatMoneyInternal(montoReq)} mensuales y el capital disponible es menor ($${formatMoneyInternal(capital)}).`;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (esElegible) {
+                institucionesElegibles.push(inst);
+            } else {
+                institucionesNoElegibles.push({
+                    institucionId: inst.id,
+                    nombre: inst.nombre,
+                    tipo: inst.tipo,
+                    tipoDescripcion: obtenerDescripcionTipoInstitucion(inst.tipo),
+                    motivo: motivoIneligibilidad
+                });
+            }
+        });
+
+        if (institucionesElegibles.length === 0 || capital <= 0) {
             return {
                 exito: false,
-                mensajeError: 'No hay instituciones financieras con condiciones activas disponibles para diversificar.',
+                mensajeError: capital <= 0
+                    ? 'Introduce un capital de inversión mayor a $0 para calcular la estrategia diversificada.'
+                    : 'No hay instituciones financieras elegibles disponibles que cumplan con las condiciones para diversificar.',
                 inversionTotal: capital,
                 meses: plazoMeses,
+                estrategia: {
+                    codigo: cfg.codigo,
+                    nombre: cfg.nombre,
+                    color: cfg.color,
+                    icono: cfg.icono,
+                    max_concentracion_inst: maxPctInst,
+                    max_concentracion_tipo: maxPctTipo,
+                    min_instituciones: minInstitucionesDeseadas,
+                    diversificar_tipos: diversificarTipos,
+                    descripcion_criterio: cfg.descripcion_criterio
+                },
                 numInstitucionesSolicitado: numInstituciones,
                 numInstitucionesUtilizadas: 0,
-                maxPorcentajePorInst: maxPct,
+                maxPorcentajePorInst: maxPctInst,
                 topeMaximoPorInst: 0,
                 rendimientoPeriodoTotal: 0,
                 rendimientoMensualTotal: 0,
                 tasaEfectivaPonderada: 0,
                 capitalDistribuido: 0,
                 capitalSinDistribuir: capital,
+                motivoSinDistribuir: 'No hay instituciones financieras elegibles seleccionadas.',
                 asignaciones: [],
                 restriccionesRelevantes: [],
+                institucionesNoElegibles,
                 concentracion: { institucionMayorAsignacion: '—', montoMayorAsignacion: 0, porcentajeMayorAsignacion: 0 },
-                explicacion: 'Selecciona al menos una institución financiera para calcular la estrategia diversificada.',
+                explicacion: 'Selecciona al menos una institución financiera elegible para calcular la estrategia diversificada.',
                 comparativa: null
             };
         }
 
-        // Determinar K (número de instituciones objetivo)
-        let K = instValidas.length;
-        if (numInstituciones !== 'todas' && !isNaN(parseInt(numInstituciones, 10))) {
-            K = Math.max(1, Math.min(instValidas.length, parseInt(numInstituciones, 10)));
-        }
-
-        // Si solo hay 1 institución disponible o K === 1, no aplica límite de concentración (recibe 100%)
-        const topePorInst = (instValidas.length === 1 || K === 1)
+        // 3. Topes de concentración según la estrategia
+        const topePorInst = (institucionesElegibles.length === 1 || maxPctInst >= 100)
             ? capital
-            : (capital * (maxPct / 100));
+            : (capital * (maxPctInst / 100));
 
-        // Si K * topePorInst < capital, ajustar K para que la suma matemática sea alcanzable
-        const minInstitucionesRequeridas = Math.ceil(capital / (topePorInst || 1));
-        if (K < minInstitucionesRequeridas && instValidas.length >= minInstitucionesRequeridas) {
-            K = minInstitucionesRequeridas;
-        }
+        const topePorTipo = maxPctTipo !== null
+            ? (capital * (maxPctTipo / 100))
+            : capital;
 
-        // Función auxiliar para optimizar asignación para un conjunto dado de instituciones
-        function optimizarAsignacionParaConjunto(subset) {
+        function resolverAsignacionParaConjunto(subset) {
+            // Descomponer cada institución del subconjunto en tramos marginales
             const tramosSlices = [];
-            const asignacionMinima = subset.length > 1 ? Math.min(50, capital / (subset.length * 2)) : 0;
-
             subset.forEach(inst => {
                 const tramos = [...inst.esquema.tramos].sort((a, b) => (parseFloat(a.limite_inferior) || 0) - (parseFloat(b.limite_inferior) || 0));
-                
-                // Verificar si tiene personalización manual
                 const custom = personalizaciones.get ? personalizaciones.get(inst.id) : (personalizaciones[inst.id] || null);
                 const isCustom = custom && custom.isModified;
-                
+
                 tramos.forEach(t => {
                     const inf = parseFloat(t.limite_inferior) || 0;
                     const sup = (t.limite_superior !== null && t.limite_superior !== undefined && t.limite_superior !== '')
@@ -341,6 +474,8 @@
                             tramosSlices.push({
                                 institucionId: inst.id,
                                 instNombre: inst.nombre,
+                                instTipo: inst.tipo,
+                                instTipoDesc: obtenerDescripcionTipoInstitucion(inst.tipo),
                                 numeroTramo: t.numero_tramo,
                                 inf,
                                 sup: supEfectivo,
@@ -353,62 +488,62 @@
                 });
             });
 
-            // Ordenar slices de mayor a menor tasa anual
+            // Ordenar tramos por tasa anual descendente
             tramosSlices.sort((a, b) => b.tasa - a.tasa);
 
             let capitalRestante = capital;
             const asignadoPorInst = new Map();
-            subset.forEach(inst => asignadoPorInst.set(inst.id, 0));
+            const asignadoPorTipo = new Map();
+            subset.forEach(inst => {
+                asignadoPorInst.set(inst.id, 0);
+                asignadoPorTipo.set(inst.tipo, 0);
+            });
 
-            // Si hay más de una institución, asegurar asignación mínima a cada una para garantizar diversidad
-            if (subset.length > 1 && asignacionMinima > 0 && capitalRestante >= subset.length * asignacionMinima) {
-                subset.forEach(inst => {
-                    const sliceInicial = tramosSlices.find(s => s.institucionId === inst.id && s.capacidad > 0);
-                    if (sliceInicial) {
-                        const montoBase = Math.min(asignacionMinima, sliceInicial.capacidad, capitalRestante);
-                        sliceInicial.montoAsignado += montoBase;
-                        sliceInicial.capacidad -= montoBase;
-                        capitalRestante -= montoBase;
-                        asignadoPorInst.set(inst.id, (asignadoPorInst.get(inst.id) || 0) + montoBase);
-                    }
-                });
+            // Si la estrategia exige diversificar por tipos, procurar asignación mínima a tipos distintos
+            if (diversificarTipos && subset.length > 1) {
+                const tiposDisponibles = Array.from(new Set(subset.map(i => i.tipo)));
+                if (tiposDisponibles.length > 1 && capitalRestante >= tiposDisponibles.length * asignacionMinimaViable) {
+                    tiposDisponibles.forEach(tipo => {
+                        const sliceDelTipo = tramosSlices.find(s => s.instTipo === tipo && s.capacidad >= asignacionMinimaViable && (asignadoPorInst.get(s.institucionId) || 0) === 0);
+                        if (sliceDelTipo) {
+                            const montoReserva = Math.min(asignacionMinimaViable, sliceDelTipo.capacidad, capitalRestante);
+                            const instId = sliceDelTipo.institucionId;
+                            sliceDelTipo.montoAsignado += montoReserva;
+                            sliceDelTipo.capacidad -= montoReserva;
+                            capitalRestante -= montoReserva;
+                            asignadoPorInst.set(instId, (asignadoPorInst.get(instId) || 0) + montoReserva);
+                            asignadoPorTipo.set(tipo, (asignadoPorTipo.get(tipo) || 0) + montoReserva);
+                        }
+                    });
+                }
             }
 
-            // Distribuir el resto vorazmente por mayor tasa marginal respetando topePorInst
-            for (let i = 0; i < tramosSlices.length && capitalRestante > 0; i++) {
+            // Distribución Voraz Óptima sobre tramos de mayor rendimiento respetando topes de inst y tipo
+            for (let i = 0; i < tramosSlices.length && capitalRestante > 0.001; i++) {
                 const slice = tramosSlices[i];
                 const instId = slice.institucionId;
+                const instTipo = slice.instTipo;
+
                 const yaAsignadoInst = asignadoPorInst.get(instId) || 0;
                 const margenInst = Math.max(0, topePorInst - yaAsignadoInst);
-                const margenSlice = Math.min(slice.capacidad, margenInst, capitalRestante);
 
-                if (margenSlice > 0) {
-                    slice.montoAsignado += margenSlice;
-                    slice.capacidad -= margenSlice;
-                    capitalRestante -= margenSlice;
-                    asignadoPorInst.set(instId, yaAsignadoInst + margenSlice);
+                const yaAsignadoTipo = asignadoPorTipo.get(instTipo) || 0;
+                const margenTipo = Math.max(0, topePorTipo - yaAsignadoTipo);
+
+                const cupo = Math.min(slice.capacidad, margenInst, margenTipo, capitalRestante);
+
+                if (cupo > 0) {
+                    slice.montoAsignado += cupo;
+                    slice.capacidad -= cupo;
+                    capitalRestante -= cupo;
+                    asignadoPorInst.set(instId, yaAsignadoInst + cupo);
+                    asignadoPorTipo.set(instTipo, yaAsignadoTipo + cupo);
                 }
             }
 
-            // Si quedó remanente por redondeo o límites finos, repartir entre las que tengan margen
-            if (capitalRestante > 0.001) {
-                for (let i = 0; i < tramosSlices.length && capitalRestante > 0; i++) {
-                    const slice = tramosSlices[i];
-                    const instId = slice.institucionId;
-                    const yaAsignadoInst = asignadoPorInst.get(instId) || 0;
-                    const margenInst = Math.max(0, topePorInst - yaAsignadoInst);
-                    const margen = Math.min(margenInst, capitalRestante);
-                    if (margen > 0) {
-                        slice.montoAsignado += margen;
-                        capitalRestante -= margen;
-                        asignadoPorInst.set(instId, yaAsignadoInst + margen);
-                    }
-                }
-            }
-
+            const asignaciones = [];
             let rendPeriodoTotal = 0;
             let rendMensualTotal = 0;
-            const desglosePorInst = [];
 
             subset.forEach(inst => {
                 const montoInst = asignadoPorInst.get(inst.id) || 0;
@@ -419,10 +554,11 @@
 
                     const tasaPond = montoInst > 0 ? (sim.total_mensual * 12 / montoInst) * 100 : 0;
 
-                    desglosePorInst.push({
+                    asignaciones.push({
                         institucionId: inst.id,
                         nombre: inst.nombre,
                         tipo: inst.tipo,
+                        tipoDescripcion: obtenerDescripcionTipoInstitucion(inst.tipo),
                         inversionAsignada: montoInst,
                         porcentajeDelCapital: (montoInst / capital) * 100,
                         tasaPonderada: tasaPond,
@@ -437,19 +573,28 @@
                 }
             });
 
+            asignaciones.sort((a, b) => b.inversionAsignada - a.inversionAsignada);
+            const totalDistribuido = asignaciones.reduce((sum, a) => sum + a.inversionAsignada, 0);
+            const capitalSinDistribuir = Math.max(0, capital - totalDistribuido);
+
             return {
-                subset,
-                desglosePorInst,
-                capitalRestante,
+                asignaciones,
+                totalDistribuido,
+                capitalSinDistribuir,
                 rendPeriodoTotal,
                 rendMensualTotal
             };
         }
 
-        let mejorResultado = null;
+        // Determinar K si numInstituciones se envió de forma explícita
+        let K = institucionesElegibles.length;
+        if (numInstituciones !== 'todas' && !isNaN(parseInt(numInstituciones, 10))) {
+            K = Math.max(1, Math.min(institucionesElegibles.length, parseInt(numInstituciones, 10)));
+        }
 
-        if (K >= instValidas.length) {
-            mejorResultado = optimizarAsignacionParaConjunto(instValidas);
+        let mejorPlan = null;
+        if (K >= institucionesElegibles.length) {
+            mejorPlan = resolverAsignacionParaConjunto(institucionesElegibles);
         } else {
             function obtenerCombinaciones(arr, k) {
                 if (k === 1) return arr.map(el => [el]);
@@ -462,42 +607,61 @@
                 return combs;
             }
 
-            const combinaciones = obtenerCombinaciones(instValidas, K);
+            const combinaciones = obtenerCombinaciones(institucionesElegibles, K);
             let mejorRend = -1;
 
             for (const combo of combinaciones) {
-                const res = optimizarAsignacionParaConjunto(combo);
-                if (res.desglosePorInst.length === K && res.capitalRestante <= 0.01) {
-                    if (res.rendPeriodoTotal > mejorRend) {
-                        mejorRend = res.rendPeriodoTotal;
-                        mejorResultado = res;
+                const plan = resolverAsignacionParaConjunto(combo);
+                if (plan.asignaciones.length === K && plan.capitalSinDistribuir <= 0.01) {
+                    if (plan.rendPeriodoTotal > mejorRend) {
+                        mejorRend = plan.rendPeriodoTotal;
+                        mejorPlan = plan;
                     }
                 }
             }
 
-            if (!mejorResultado) {
+            if (!mejorPlan) {
                 for (const combo of combinaciones) {
-                    const res = optimizarAsignacionParaConjunto(combo);
-                    if (res.rendPeriodoTotal > mejorRend) {
-                        mejorRend = res.rendPeriodoTotal;
-                        mejorResultado = res;
+                    const plan = resolverAsignacionParaConjunto(combo);
+                    if (plan.rendPeriodoTotal > mejorRend) {
+                        mejorRend = plan.rendPeriodoTotal;
+                        mejorPlan = plan;
                     }
                 }
             }
+
+            if (!mejorPlan) {
+                mejorPlan = resolverAsignacionParaConjunto(institucionesElegibles);
+            }
         }
 
-        if (!mejorResultado) {
-            mejorResultado = optimizarAsignacionParaConjunto(instValidas);
+        const asignacionesFinales = mejorPlan.asignaciones;
+        const totalDistribuido = mejorPlan.totalDistribuido;
+        const capitalSinDistribuir = mejorPlan.capitalSinDistribuir;
+        const rendPeriodoTotal = mejorPlan.rendPeriodoTotal;
+        const rendMensualTotal = mejorPlan.rendMensualTotal;
+
+        // Tasa efectiva ponderada estricta = Σ(rendimiento anual de cada asignación) / capital total distribuido
+        const tasaEfectivaPonderada = totalDistribuido > 0
+            ? (rendMensualTotal * 12 / totalDistribuido) * 100
+            : 0;
+
+        // Explicación de capital sin distribuir si aplica
+        let motivoSinDistribuir = null;
+        if (capitalSinDistribuir > 0.01) {
+            const motivos = [];
+            if (maxPctInst < 100) {
+                motivos.push(`las instituciones elegibles alcanzaron su límite máximo de concentración (${maxPctInst}% por institución)`);
+            }
+            if (maxPctTipo !== null && maxPctTipo < 100) {
+                motivos.push(`los sectores alcanzaron su límite de concentración (${maxPctTipo}% por tipo)`);
+            }
+            motivoSinDistribuir = motivos.length > 0
+                ? `El capital restante no pudo asignarse debido a que ${motivos.join(' y ')}, y no hay instituciones elegibles adicionales disponibles para absorberlo.`
+                : 'El capital restante no pudo asignarse debido a las restricciones configuradas de las instituciones disponibles.';
         }
 
-        // Ordenar asignaciones por monto asignado descendente
-        const asignacionesFinales = mejorResultado.desglosePorInst.sort((a, b) => b.inversionAsignada - a.inversionAsignada);
-
-        const totalDistribuido = asignacionesFinales.reduce((sum, a) => sum + a.inversionAsignada, 0);
-        const capitalSinDistribuir = Math.max(0, capital - totalDistribuido);
-        const tasaEfectivaPonderada = capital > 0 ? (mejorResultado.rendMensualTotal * 12 / capital) * 100 : 0;
-
-        // Restricciones relevantes de las instituciones asignadas
+        // Restricciones relevantes de las instituciones utilizadas
         const restriccionesRelevantes = [];
         asignacionesFinales.forEach(a => {
             const activas = a.restricciones.filter(r => r && r.activo !== 0 && r.activo !== false);
@@ -505,6 +669,8 @@
                 restriccionesRelevantes.push({
                     institucionId: a.institucionId,
                     nombre: a.nombre,
+                    tipo: a.tipo,
+                    tipoDescripcion: a.tipoDescripcion,
                     descripcion: r.descripcion
                 });
             });
@@ -518,32 +684,42 @@
             porcentajeMayorAsignacion: mayorAsignacion && capital > 0 ? (mayorAsignacion.inversionAsignada / capital) * 100 : 0
         };
 
-        // Comparativa contra "Todo en una institución"
+        // Comparativa contra "Todo en una sola institución" (sin diversificar)
         let mejorIndividual = null;
         let mejorIndRend = -1;
-        instValidas.forEach(inst => {
+        institucionesElegibles.forEach(inst => {
             const sim = simularInversion(capital, plazoMeses, inst.esquema.tramos);
             if (sim.total_periodo > mejorIndRend) {
                 mejorIndRend = sim.total_periodo;
                 mejorIndividual = {
                     institucionId: inst.id,
                     nombre: inst.nombre,
+                    tipo: inst.tipo,
+                    tipoDescripcion: obtenerDescripcionTipoInstitucion(inst.tipo),
                     rendimientoPeriodo: sim.total_periodo,
                     rendimientoMensual: sim.total_mensual
                 };
             }
         });
 
-        const diferenciaPeriodo = mejorResultado.rendPeriodoTotal - (mejorIndividual ? mejorIndividual.rendimientoPeriodo : 0);
-        const diferenciaMensual = mejorResultado.rendMensualTotal - (mejorIndividual ? mejorIndividual.rendimientoMensual : 0);
+        const diferenciaPeriodo = rendPeriodoTotal - (mejorIndividual ? mejorIndividual.rendimientoPeriodo : 0);
+        const diferenciaMensual = rendMensualTotal - (mejorIndividual ? mejorIndividual.rendimientoMensual : 0);
 
-        // Explicación dinámica de la distribución
-        const nombresUsadas = asignacionesFinales.map(a => a.nombre);
+        // Explicación adaptada al criterio de la estrategia
         let explicacion = '';
+        const nombresUsadas = asignacionesFinales.map(a => `${a.nombre} (${a.tipoDescripcion})`);
+
         if (asignacionesFinales.length === 1) {
-            explicacion = `La estrategia asigna la totalidad del capital a ${asignacionesFinales[0].nombre} al ser la única institución disponible para esta simulación.`;
+            explicacion = `La estrategia asigna la totalidad del capital distribuido a ${asignacionesFinales[0].nombre} (${asignacionesFinales[0].tipoDescripcion}) al ser la única institución elegible que optimiza las condiciones seleccionadas.`;
         } else {
-            explicacion = `La estrategia distribuye el capital en ${asignacionesFinales.length} instituciones (${nombresUsadas.join(', ')}) aprovechando los tramos con mayor tasa de rendimiento, limitando la concentración al ${maxPct}% ($${formatMoneyInternal(topePorInst)}) por institución para diversificar el riesgo.`;
+            if (cfg.codigo === 'maximo_rendimiento') {
+                explicacion = `Se priorizaron las instituciones con mayor rendimiento estimado (${nombresUsadas.join(', ')}), permitiendo una mayor concentración del capital dentro de los límites configurados y aprovechando los tramos con mejores tasas.`;
+            } else if (cfg.codigo === 'conservadora') {
+                explicacion = `Se priorizó una mayor diversificación del capital y una menor concentración por institución (máximo ${maxPctInst}%) y por tipo (${nombresUsadas.join(', ')}), aceptando una posible reducción del rendimiento estimado en favor de una distribución más amplia.`;
+            } else {
+                // Equilibrada
+                explicacion = `Se buscó un equilibrio entre rendimiento y diversificación, limitando la concentración por institución al ${maxPctInst}% y distribuyendo el capital entre ${asignacionesFinales.length} instituciones de distintos tipos (${nombresUsadas.join(', ')}).`;
+            }
         }
 
         return {
@@ -551,25 +727,38 @@
             mensajeError: null,
             inversionTotal: capital,
             meses: plazoMeses,
+            estrategia: {
+                codigo: cfg.codigo,
+                nombre: cfg.nombre,
+                color: cfg.color,
+                icono: cfg.icono,
+                max_concentracion_inst: maxPctInst,
+                max_concentracion_tipo: maxPctTipo,
+                min_instituciones: minInstitucionesDeseadas,
+                diversificar_tipos: diversificarTipos,
+                descripcion_criterio: cfg.descripcion_criterio
+            },
             numInstitucionesSolicitado: numInstituciones,
             numInstitucionesUtilizadas: asignacionesFinales.length,
-            maxPorcentajePorInst: maxPct,
+            maxPorcentajePorInst: maxPctInst,
             topeMaximoPorInst: topePorInst,
-            rendimientoPeriodoTotal: mejorResultado.rendPeriodoTotal,
-            rendimientoMensualTotal: mejorResultado.rendMensualTotal,
-            tasaEfectivaPonderada,
+            rendimientoPeriodoTotal: rendPeriodoTotal,
+            rendimientoMensualTotal: rendMensualTotal,
+            tasaEfectivaPonderada: tasaEfectivaPonderada,
             capitalDistribuido: totalDistribuido,
             capitalSinDistribuir: capitalSinDistribuir,
+            motivoSinDistribuir: motivoSinDistribuir,
             asignaciones: asignacionesFinales,
             restriccionesRelevantes,
+            institucionesNoElegibles,
             concentracion,
             explicacion,
             comparativa: {
                 mejorIndividual,
                 diversificada: {
                     numInstituciones: asignacionesFinales.length,
-                    rendimientoPeriodo: mejorResultado.rendPeriodoTotal,
-                    rendimientoMensual: mejorResultado.rendMensualTotal
+                    rendimientoPeriodo: rendPeriodoTotal,
+                    rendimientoMensual: rendMensualTotal
                 },
                 diferenciaPeriodo,
                 diferenciaMensual,
@@ -583,6 +772,8 @@
         simularInversion,
         validarTramos,
         generarResumenCondiciones,
-        calcularMejorInversionDiversificada
+        calcularMejorInversionDiversificada,
+        ESTRATEGIAS_DEFAULT,
+        obtenerDescripcionTipoInstitucion
     };
 }));
