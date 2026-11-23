@@ -467,6 +467,135 @@ function parseDateToIso(str) {
     return null;
 }
 
+/**
+ * Determina el último periodo registrado cronológicamente a partir de un conjunto de periodos.
+ * REGLA ESTRICTA: El orden se determina únicamente por la fecha más reciente (fechaHasta DESC, luego fechaDesde DESC).
+ * NUNCA se utiliza el 'id' de la tabla ni de los objetos.
+ * Fechas comparadas como strings de calendario ISO YYYY-MM-DD sin conversiones con desfase de timezone.
+ */
+function determinarUltimoPeriodoCronologico(periodos) {
+    if (!Array.isArray(periodos) || periodos.length === 0) {
+        return null;
+    }
+
+    const periodosValidos = [];
+    for (const p of periodos) {
+        if (!p) continue;
+        const fDesde = parseDateToIso(p.fechaDesde || p.fecha_desde || p.fechaInicio || p.fecha_inicio);
+        const fHasta = parseDateToIso(p.fechaHasta || p.fecha_hasta || p.fechaFin || p.fecha_fin);
+        const sal = parseFloat(p.salario || p.salarioDiario || p.salario_diario);
+        const dias = parseInt(p.dias || p.diasUtilizados, 10) || 1;
+
+        if (fDesde && fHasta && !isNaN(sal) && sal > 0) {
+            periodosValidos.push({
+                ...p,
+                fechaDesde: fDesde,
+                fechaHasta: fHasta,
+                salario: sal,
+                dias: dias
+            });
+        }
+    }
+
+    if (periodosValidos.length === 0) {
+        return null;
+    }
+
+    // Ordenamiento estrictamente cronológico:
+    // 1. fechaHasta descendente (el que termine más recientemente primero)
+    // 2. fechaDesde descendente (en caso de empate en fechaHasta, el que haya iniciado más tarde)
+    // Se excluye terminantemente el 'id'
+    periodosValidos.sort((a, b) => {
+        if (a.fechaHasta !== b.fechaHasta) {
+            return b.fechaHasta.localeCompare(a.fechaHasta);
+        }
+        return b.fechaDesde.localeCompare(a.fechaDesde);
+    });
+
+    return periodosValidos[0];
+}
+
+/**
+ * Valida el salario proyectado frente al último salario diario vigente registrado en usuario_periodos_imss.
+ * Regla de negocio:
+ * Si el usuario introduce un salario menor al último salario registrado cronológicamente,
+ * se debe advertir que el salario promedio de las 250 semanas podría disminuir en lugar de aumentar.
+ * 
+ * Casos contemplados:
+ * 1. Salario proyectado menor -> requiere advertencia (permite Cancelar / Continuar)
+ * 2. Salario proyectado igual -> sin advertencia
+ * 3. Salario proyectado mayor -> sin advertencia
+ * 4. Usuario sin periodos registrados -> seguro, no ejecuta comparación
+ * 5. Valor no numérico, vacío, cero o negativo -> error de validación estándar de campo
+ */
+function validarSalarioProyectadoVsUltimoPeriodo(params) {
+    const { salarioProyectado, ultimoSalarioRegistrado } = params || {};
+
+    // 1. Validación de campo salario proyectado (Caso 5)
+    if (salarioProyectado === undefined || salarioProyectado === null || String(salarioProyectado).trim() === '') {
+        return {
+            valido: false,
+            error: 'EMPTY_PROJECTED_SALARY',
+            mensaje: 'Por favor ingresa un salario diario proyectado válido mayor a cero.'
+        };
+    }
+
+    const salProj = parseFloat(salarioProyectado);
+    if (isNaN(salProj) || salProj <= 0) {
+        return {
+            valido: false,
+            error: 'INVALID_PROJECTED_SALARY',
+            mensaje: 'Por favor ingresa un salario diario proyectado válido mayor a cero.'
+        };
+    }
+
+    // 2. Validación de historial registrado (Caso 4)
+    const ultimoSal = parseFloat(ultimoSalarioRegistrado);
+    if (isNaN(ultimoSal) || ultimoSal <= 0) {
+        return {
+            valido: true,
+            requiereAdvertencia: false,
+            sinHistorial: true,
+            salarioProyectado: salProj,
+            ultimoSalarioRegistrado: null
+        };
+    }
+
+    // Redondear a 2 decimales para evitar problemas de precisión en punto flotante
+    const salProjRound = Math.round(salProj * 100) / 100;
+    const ultimoSalRound = Math.round(ultimoSal * 100) / 100;
+
+    // 3. Comparación contra el último salario cronológicamente vigente
+    if (salProjRound < ultimoSalRound) {
+        // Caso 1: Proyectado menor
+        const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+        const salProjFmt = formatter.format(salProjRound);
+        const ultimoSalFmt = formatter.format(ultimoSalRound);
+
+        return {
+            valido: true,
+            requiereAdvertencia: true,
+            sinHistorial: false,
+            salarioProyectado: salProjRound,
+            ultimoSalarioRegistrado: ultimoSalRound,
+            diferencia: Math.round((ultimoSalRound - salProjRound) * 100) / 100,
+            salarioProyectadoFormateado: salProjFmt,
+            ultimoSalarioFormateado: ultimoSalFmt,
+            mensajeAdvertencia: `⚠️ Advertencia: El salario diario proyectado (${salProjFmt}) es menor que tu último salario diario registrado (${ultimoSalFmt}). Esto puede disminuir tu salario promedio de las últimas 250 semanas y, por lo tanto, reducir la pensión proyectada.\n\n¿Deseas continuar con este salario?`
+        };
+    }
+
+    // Caso 2 (igual) o Caso 3 (mayor)
+    return {
+        valido: true,
+        requiereAdvertencia: false,
+        sinHistorial: false,
+        salarioProyectado: salProjRound,
+        ultimoSalarioRegistrado: ultimoSalRound,
+        diferencia: Math.round((salProjRound - ultimoSalRound) * 100) / 100
+    };
+}
+
 function addDaysToIso(isoStr, numDays) {
     const [y, m, d] = isoStr.split('-').map(Number);
     const dt = new Date(Date.UTC(y, m - 1, d + numDays, 12, 0, 0));
@@ -1210,6 +1339,8 @@ if (typeof window !== 'undefined') {
     window.calculateInclusiveDays = calculateInclusiveDays;
     window.parseDateToIso = parseDateToIso;
     window.addDaysToIso = addDaysToIso;
+    window.determinarUltimoPeriodoCronologico = determinarUltimoPeriodoCronologico;
+    window.validarSalarioProyectadoVsUltimoPeriodo = validarSalarioProyectadoVsUltimoPeriodo;
     window.TABLA_PORCENTAJES_LEY73 = TABLA_EDAD;
 }
 
@@ -1231,6 +1362,8 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateInclusiveDays,
         parseDateToIso,
         addDaysToIso,
+        determinarUltimoPeriodoCronologico,
+        validarSalarioProyectadoVsUltimoPeriodo,
         TABLA_GRUPOS_SALARIALES,
         TABLA_EDAD,
         TABLA_PORCENTAJES_LEY73: TABLA_EDAD,

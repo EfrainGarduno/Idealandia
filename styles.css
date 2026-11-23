@@ -92,7 +92,7 @@
             flex-direction: column;
             justify-content: flex-start;
             align-items: center;
-            padding: 40px;
+            padding: 30px 24px;
             box-sizing: border-box;
             overflow-y: auto;
         }
@@ -109,9 +109,13 @@
             box-sizing: border-box;
         }
 
-        #admin.content-section {
-            max-width: 95%; /* Take up more horizontal space for admin tables */
-            padding: 20px;
+        #admin.content-section,
+        #servicios.content-section {
+            max-width: 99%; /* Take up more horizontal space for admin tables and investment simulator */
+            width: 99%;
+            padding: 20px 16px;
+            align-items: stretch;
+            box-sizing: border-box;
         }
         .hero {
             text-align: center;
@@ -2622,4 +2626,175 @@ th.sortable-th.sort-desc .sort-indicator {
     padding-top: 15px;
     border-top: 1px solid #dee2e6;
 }
+
+/* ==========================================================================
+   SIMULADOR DE INVERSIONES - ASESORÍAS FINANCIERAS (EXPANSIÓN HORIZONTAL & RESPONSIVE)
+   ========================================================================== */
+#servicios-financieras-view {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+#simulador-table-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+}
+
+.simulador-table {
+    width: 100%;
+    min-width: 920px;
+    border-collapse: collapse;
+    font-size: 0.81rem;
+}
+
+.simulador-table th,
+.simulador-table td {
+    vertical-align: middle;
+    padding: 5px 3px;
+    box-sizing: border-box;
+}
+
+.simulador-table th {
+    white-space: normal !important;
+    line-height: 1.25;
+}
+
+/* Tablet & Pantallas Medianas */
+@media (max-width: 1100px) {
+    #servicios.content-section {
+        max-width: 98% !important;
+        padding: 20px 16px !important;
+    }
+}
+
+/* Móvil: evitar overflow global y habilitar scroll fluido solo en la tabla */
+@media (max-width: 768px) {
+    #servicios.content-section {
+        max-width: 100% !important;
+        padding: 14px 10px !important;
+        border-radius: 8px;
+    }
+
+    #servicios-financieras-view {
+        padding: 0;
+    }
+
+    .simulador-controls-card {
+        padding: 16px 12px !important;
+    }
+}
+
+/* Simulador de Inversiones - Controles por fila y resaltado de simulación personalizada */
+.sim-row-input {
+    width: 100%;
+    min-width: 50px;
+    padding: 2px 4px;
+    font-size: 0.81rem;
+    font-weight: 700;
+    text-align: right;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #1e293b;
+    box-sizing: border-box;
+    transition: all 0.15s ease-in-out;
+}
+
+.sim-row-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    background: #ffffff;
+}
+
+.sim-input-tasa {
+    max-width: 62px;
+    color: #0f172a;
+}
+
+.sim-input-inv1,
+.sim-input-inv2 {
+    width: 100%;
+    min-width: 98px;
+    max-width: 114px;
+    background: #fffbeb;
+    font-weight: 700;
+}
+
+.sim-input-meses {
+    max-width: 44px;
+    text-align: center;
+}
+
+.fila-simulacion-modificada {
+    background-color: #fff7ed !important;
+    border-left: 4px solid #f97316 !important;
+}
+
+.fila-simulacion-modificada td {
+    background-color: inherit !important;
+}
+
+.badge-sim-modificada {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.70rem;
+    font-weight: 700;
+    color: #c2410c;
+    background: #ffedd5;
+    border: 1px solid #fed7aa;
+    padding: 2px 6px;
+    border-radius: 9999px;
+    margin-top: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    text-decoration: none;
+    line-height: 1.2;
+    user-select: none;
+}
+
+.badge-sim-modificada:hover {
+    background: #ea580c;
+    color: #ffffff;
+    border-color: #ea580c;
+    box-shadow: 0 1px 4px rgba(234, 88, 12, 0.35);
+    transform: scale(1.04);
+}
+
+.badge-sim-modificada:active {
+    transform: scale(0.97);
+}
+
+.sim-cell-restricciones {
+    font-size: 0.77rem;
+    color: #475569;
+    max-width: 175px;
+    line-height: 1.30;
+}
+
+.sim-restriccion-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.sim-restriccion-item:last-child {
+    margin-bottom: 0;
+}
+
+.sim-restriccion-bullet {
+    color: #ea580c;
+    font-weight: 700;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+
 

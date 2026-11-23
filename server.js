@@ -21,6 +21,8 @@ const {
     extractBirthDateFromCurp,
     calcularEdadPensionaria,
     reconstructDeterministicPeriods,
+    determinarUltimoPeriodoCronologico,
+    validarSalarioProyectadoVsUltimoPeriodo,
     SALARIO_MINIMO_GENERAL_VIGENTE,
     SALARIOS_MINIMOS_GENERALES
 } = require('./pension');
@@ -32,6 +34,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { parsePhoneNumber, isValidPhoneNumber } = require('libphonenumber-js');
 const { getEngine, listAvailableEngines } = require('./ideaEngines');
+const MotorFinanciero = require('./public/js/motorFinanciero');
 
 
 async function verifyToken(token, connectionPool) {
@@ -129,7 +132,8 @@ const ADMIN_PERMISOS = [
     'permisos.read', 'permisos.create', 'permisos.update', 'permisos.delete',
     'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete',
     'menus.read', 'menus.create', 'menus.update', 'menus.delete',
-    'asociados.read', 'asociados.autorizar', 'asociados.rechazar', 'asociados.pedir_informacion'
+    'asociados.read', 'asociados.autorizar', 'asociados.rechazar', 'asociados.pedir_informacion',
+    'finanzas.read', 'finanzas.create', 'finanzas.update', 'finanzas.delete'
 ];
 
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
@@ -152,6 +156,12 @@ const FUNCIONALIDAD_PERMISOS_MAPPING = {
         'asesoria_pensiones.create',
         'asesoria_pensiones.update',
         'asesoria_pensiones.delete'
+    ],
+    'asesorias_financieras': [
+        'asesorias_financieras.read',
+        'asesorias_financieras.create',
+        'asesorias_financieras.update',
+        'asesorias_financieras.delete'
     ]
 };
 
@@ -361,6 +371,33 @@ async function ensureUsuarioPeriodosImssTable(connOrPool) {
     }
 }
 
+let institucionRestriccionesTableReady = false;
+async function ensureInstitucionRestriccionesTable(connOrPool) {
+    if (institucionRestriccionesTableReady) return;
+    const runner = connOrPool || pool;
+    try {
+        if (runner && typeof runner.query === 'function') {
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS institucion_restricciones (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    institucion_id INT UNSIGNED NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    activo TINYINT(1) NOT NULL DEFAULT 1,
+                    orden INT NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_restricciones_institucion FOREIGN KEY (institucion_id) 
+                        REFERENCES instituciones_financieras(id) ON DELETE CASCADE,
+                    INDEX idx_restricciones_inst_activo (institucion_id, activo, orden)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            `);
+            institucionRestriccionesTableReady = true;
+        }
+    } catch (err) {
+        console.warn('Note: institucion_restricciones table check/creation:', err.message);
+    }
+}
+
 pool.getConnection()
     .then(async (connection) => {
         console.log("Connected to MySQL database.");
@@ -371,6 +408,7 @@ pool.getConnection()
             }
             await ensureAccesoPermisosTable(connection);
             await ensureUsuarioPeriodosImssTable(connection);
+            await ensureInstitucionRestriccionesTable(connection);
         } catch (e) {}
         connection.release();
     })
@@ -613,6 +651,26 @@ const requireAnyPermission = (permCodes) => {
             return res.status(500).json({ error: 'Error interno del servidor al verificar permiso.' });
         }
     };
+};
+
+const authMiddleware = async (req, res, next) => {
+    try {
+        if (!req.userId) {
+            const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+            if (!token) {
+                return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+            }
+            const decoded = await verifyToken(token, pool);
+            req.userId = decoded.id;
+            req.user = decoded;
+        }
+        next();
+    } catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+            return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+        }
+        return res.status(500).json({ error: 'Error interno del servidor al verificar autenticación.' });
+    }
 };
 
 async function assignDefaultUserRole(connOrPool, userId) {
@@ -1187,15 +1245,41 @@ app.get('/api/pension/historial-imss', requireAnyPermission(['calculadora.interm
             ...r,
             salario: parseFloat(r.salario)
         }));
+        const ultimoPeriodo = determinarUltimoPeriodoCronologico(formattedRows);
         res.status(200).json({
             success: true,
             count: formattedRows.length,
             tieneHistorial: formattedRows.length > 0,
+            ultimoPeriodo: ultimoPeriodo,
+            ultimoSalario: ultimoPeriodo ? ultimoPeriodo.salario : null,
             periodos: formattedRows
         });
     } catch (err) {
         console.error('Error in /api/pension/historial-imss:', err);
         res.status(500).json({ error: 'Error al consultar el historial IMSS del usuario.' });
+    }
+});
+
+app.get('/api/pension/ultimo-salario-vigente', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            "SELECT id, patron, DATE_FORMAT(fecha_desde, '%Y-%m-%d') as fechaDesde, DATE_FORMAT(fecha_hasta, '%Y-%m-%d') as fechaHasta, salario, dias FROM usuario_periodos_imss WHERE usuario_id = ? ORDER BY fecha_hasta DESC, fecha_desde DESC",
+            [req.userId]
+        );
+        const formattedRows = rows.map(r => ({
+            ...r,
+            salario: parseFloat(r.salario)
+        }));
+        const ultimoPeriodo = determinarUltimoPeriodoCronologico(formattedRows);
+        res.status(200).json({
+            success: true,
+            tieneHistorial: Boolean(ultimoPeriodo),
+            ultimoPeriodo: ultimoPeriodo,
+            ultimoSalario: ultimoPeriodo ? ultimoPeriodo.salario : null
+        });
+    } catch (err) {
+        console.error('Error in /api/pension/ultimo-salario-vigente:', err);
+        res.status(500).json({ error: 'Error al consultar el último salario vigente del usuario.' });
     }
 });
 
@@ -1306,6 +1390,15 @@ app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']
                 message: projectionResult.message
             });
         }
+
+        if (periodosHistoricos && periodosHistoricos.length > 0) {
+            const ultimoPeriodo = determinarUltimoPeriodoCronologico(periodosHistoricos);
+            if (ultimoPeriodo) {
+                projectionResult.ultimoPeriodo = ultimoPeriodo;
+                projectionResult.ultimoSalario = ultimoPeriodo.salario;
+            }
+        }
+
         res.status(200).json(projectionResult);
     } catch (err) {
         console.error('Error in /api/pension/proyectar:', err);
@@ -4261,6 +4354,772 @@ app.post('/api/admin/asociados/:id/mas-informacion', requireFunctionality('admin
         if (connection) {
             try { connection.release(); } catch (_) {}
         }
+    }
+});
+
+// =============================================================================
+// MÓDULO ASESORÍAS FINANCIERAS - SIMULADOR DE INVERSIONES & CONSOLA FINANZAS
+// =============================================================================
+
+// 1. API Pública del Simulador (Usuario autenticado)
+app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
+    try {
+        let fecha = req.query.fecha;
+        if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+            fecha = new Date().toISOString().slice(0, 10);
+        }
+
+        // Consultar instituciones activas
+        const [instituciones] = await pool.query(
+            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo
+             FROM instituciones_financieras
+             WHERE activo = 1
+             ORDER BY orden_visual ASC, nombre ASC`
+        );
+
+        const resultado = [];
+
+        for (const inst of instituciones) {
+            // Consultar esquema vigente para la fecha dada
+            const [esquemas] = await pool.query(
+                `SELECT id, institucion_id, nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia, activo
+                 FROM institucion_esquemas_tasas
+                 WHERE institucion_id = ?
+                   AND activo = 1
+                   AND fecha_inicio_vigencia <= ?
+                   AND (fecha_fin_vigencia IS NULL OR fecha_fin_vigencia >= ?)
+                 ORDER BY fecha_inicio_vigencia DESC
+                 LIMIT 1`,
+                [inst.id, fecha, fecha]
+            );
+
+            let esquema = null;
+            let autoResumen = null;
+            if (esquemas.length > 0) {
+                const esq = esquemas[0];
+                const [tramos] = await pool.query(
+                    `SELECT id, esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo
+                     FROM institucion_tramos_tasas
+                     WHERE esquema_id = ?
+                     ORDER BY numero_tramo ASC`,
+                    [esq.id]
+                );
+                const tramosMapeados = tramos.map(t => ({
+                    id: t.id,
+                    numero_tramo: t.numero_tramo,
+                    limite_inferior: parseFloat(t.limite_inferior),
+                    limite_superior: t.limite_superior !== null ? parseFloat(t.limite_superior) : null,
+                    tasa_anual: parseFloat(t.tasa_anual),
+                    descripcion_tramo: t.descripcion_tramo
+                }));
+                autoResumen = MotorFinanciero.generarResumenCondiciones(tramosMapeados);
+                esquema = {
+                    id: esq.id,
+                    nombre_esquema: esq.nombre_esquema,
+                    fecha_inicio_vigencia: esq.fecha_inicio_vigencia,
+                    fecha_fin_vigencia: esq.fecha_fin_vigencia,
+                    tramos: tramosMapeados
+                };
+            }
+
+            // Consultar restricciones activas de la institución para el simulador
+            const [restricciones] = await pool.query(
+                `SELECT id, institucion_id, descripcion, orden, activo
+                 FROM institucion_restricciones
+                 WHERE institucion_id = ? AND activo = 1
+                 ORDER BY orden ASC, id ASC`,
+                [inst.id]
+            );
+
+            resultado.push({
+                id: inst.id,
+                nombre: inst.nombre,
+                tipo: inst.tipo,
+                descripcion: inst.descripcion,
+                condiciones_resumen: autoResumen || inst.condiciones_resumen,
+                orden_visual: inst.orden_visual,
+                esquema: esquema,
+                restricciones: restricciones
+            });
+        }
+
+        res.json({
+            success: true,
+            fecha: fecha,
+            instituciones: resultado
+        });
+    } catch (error) {
+        console.error('Error in GET /api/finanzas/simulador:', error);
+        res.status(500).json({ error: 'Error al consultar el simulador de inversiones.' });
+    }
+});
+
+// 2. APIs Administrativas (Protegidas por RBAC)
+// Listar instituciones completas con todos sus esquemas, tramos y restricciones
+app.get('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
+    try {
+        const [instituciones] = await pool.query(
+            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo, created_at, updated_at
+             FROM instituciones_financieras
+             ORDER BY orden_visual ASC, nombre ASC`
+        );
+
+        const resultado = [];
+        const hoy = new Date().toISOString().slice(0, 10);
+        for (const inst of instituciones) {
+            const [esquemas] = await pool.query(
+                `SELECT id, institucion_id, nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia, activo, created_at, updated_at
+                 FROM institucion_esquemas_tasas
+                 WHERE institucion_id = ?
+                 ORDER BY fecha_inicio_vigencia DESC`,
+                [inst.id]
+            );
+
+            const esquemasConTramos = [];
+            for (const esq of esquemas) {
+                const [tramos] = await pool.query(
+                    `SELECT id, esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo
+                     FROM institucion_tramos_tasas
+                     WHERE esquema_id = ?
+                     ORDER BY numero_tramo ASC`,
+                    [esq.id]
+                );
+                esquemasConTramos.push({
+                    ...esq,
+                    tramos: tramos.map(t => ({
+                        ...t,
+                        limite_inferior: parseFloat(t.limite_inferior),
+                        limite_superior: t.limite_superior !== null ? parseFloat(t.limite_superior) : null,
+                        tasa_anual: parseFloat(t.tasa_anual)
+                    }))
+                });
+            }
+
+            const esqActivo = esquemasConTramos.find(e => e.activo === 1 && (!e.fecha_fin_vigencia || e.fecha_fin_vigencia >= hoy));
+            const autoResumen = (esqActivo && esqActivo.tramos && esqActivo.tramos.length > 0)
+                ? MotorFinanciero.generarResumenCondiciones(esqActivo.tramos)
+                : null;
+
+            // Consultar restricciones de la institución para la administración
+            const [restricciones] = await pool.query(
+                `SELECT id, institucion_id, descripcion, orden, activo, created_at, updated_at
+                 FROM institucion_restricciones
+                 WHERE institucion_id = ?
+                 ORDER BY orden ASC, id ASC`,
+                [inst.id]
+            );
+
+            resultado.push({
+                ...inst,
+                condiciones_resumen: autoResumen || inst.condiciones_resumen,
+                esquemas: esquemasConTramos,
+                restricciones: restricciones
+            });
+        }
+
+        res.json({ success: true, instituciones: resultado });
+    } catch (error) {
+        console.error('Error in GET /api/admin/finanzas/instituciones:', error);
+        res.status(500).json({ error: 'Error interno al consultar instituciones financieras.' });
+    }
+});
+
+// Crear institución financiera (con soporte opcional de esquema y tramos iniciales)
+app.post('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requirePermission('finanzas.create'), async (req, res) => {
+    let connection;
+    try {
+        const { nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo, esquema } = req.body;
+        if (!nombre || typeof nombre !== 'string' || !nombre.trim()) {
+            return res.status(400).json({ error: 'El nombre de la institución es obligatorio.' });
+        }
+        const tipoValido = ['B', 'S', 'F', 'O'].includes(tipo) ? tipo : 'B';
+        const orden = parseInt(orden_visual, 10) || 0;
+        const estatus = activo === 0 || activo === false ? 0 : 1;
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        let resumenFinal = condiciones_resumen || null;
+        if (esquema && Array.isArray(esquema.tramos) && esquema.tramos.length > 0) {
+            const val = MotorFinanciero.validarTramos(esquema.tramos);
+            if (!val.valido) {
+                await connection.rollback();
+                return res.status(400).json({ error: val.error });
+            }
+            resumenFinal = MotorFinanciero.generarResumenCondiciones(esquema.tramos);
+        }
+
+        const [result] = await connection.query(
+            `INSERT INTO instituciones_financieras (nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [nombre.trim(), tipoValido, descripcion || null, resumenFinal, orden, estatus]
+        );
+        const nuevaInstId = result.insertId;
+
+        if (esquema && Array.isArray(esquema.tramos) && esquema.tramos.length > 0) {
+            const fechaInicio = esquema.fecha_inicio_vigencia || new Date().toISOString().slice(0, 10);
+            const fechaFin = esquema.fecha_fin_vigencia || null;
+            const esqActivo = esquema.activo !== undefined ? (esquema.activo ? 1 : 0) : 1;
+            const [resEsq] = await connection.query(
+                `INSERT INTO institucion_esquemas_tasas (institucion_id, nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia, activo)
+                 VALUES (?, ?, ?, ?, ?)`,
+                [nuevaInstId, (esquema.nombre_esquema || 'General').trim(), fechaInicio, fechaFin, esqActivo]
+            );
+            const nuevoEsqId = resEsq.insertId;
+
+            for (let i = 0; i < esquema.tramos.length; i++) {
+                const t = esquema.tramos[i];
+                const inf = parseFloat(t.limite_inferior) || 0;
+                const sup = (t.limite_superior !== null && t.limite_superior !== undefined && t.limite_superior !== '')
+                    ? parseFloat(t.limite_superior)
+                    : null;
+                const tasa = parseFloat(t.tasa_anual) || 0;
+                await connection.query(
+                    `INSERT INTO institucion_tramos_tasas (esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [nuevoEsqId, i + 1, inf, sup, tasa, t.descripcion_tramo || null]
+                );
+            }
+        }
+
+        // Restricciones iniciales si fueron enviadas
+        if (Array.isArray(req.body.restricciones)) {
+            for (const r of req.body.restricciones) {
+                if (r && r.descripcion && typeof r.descripcion === 'string' && r.descripcion.trim()) {
+                    await connection.query(
+                        `INSERT INTO institucion_restricciones (institucion_id, descripcion, orden, activo)
+                         VALUES (?, ?, ?, ?)`,
+                        [nuevaInstId, r.descripcion.trim(), parseInt(r.orden, 10) || 1, (r.activo === 0 || r.activo === false) ? 0 : 1]
+                    );
+                }
+            }
+        }
+
+        await connection.commit();
+        res.status(201).json({
+            success: true,
+            id: nuevaInstId,
+            message: 'Institución financiera creada exitosamente.'
+        });
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in POST /api/admin/finanzas/instituciones:', error);
+        res.status(500).json({ error: 'Error al registrar la institución financiera.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+// Actualizar institución financiera (con soporte para mantener tasas, esquemas y tramos)
+app.put('/api/admin/finanzas/instituciones/:id', requireFunctionality('admin'), requirePermission('finanzas.update'), async (req, res) => {
+    let connection;
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo, esquema } = req.body;
+
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de institución inválido.' });
+        }
+        if (nombre !== undefined && (!nombre || typeof nombre !== 'string' || !nombre.trim())) {
+            return res.status(400).json({ error: 'El nombre no puede estar vacío.' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        const [existente] = await connection.query('SELECT * FROM instituciones_financieras WHERE id = ?', [id]);
+        if (existente.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Institución financiera no encontrada.' });
+        }
+
+        const current = existente[0];
+        let autoResumen = null;
+
+        // Si se envió esquema con tramos
+        if (esquema && Array.isArray(esquema.tramos) && esquema.tramos.length > 0) {
+            const valTramos = MotorFinanciero.validarTramos(esquema.tramos);
+            if (!valTramos.valido) {
+                await connection.rollback();
+                return res.status(400).json({ error: valTramos.error });
+            }
+
+            autoResumen = MotorFinanciero.generarResumenCondiciones(esquema.tramos);
+            const fechaInicio = esquema.fecha_inicio_vigencia || new Date().toISOString().slice(0, 10);
+            const fechaFin = esquema.fecha_fin_vigencia || null;
+            const esqActivo = esquema.activo !== undefined ? (esquema.activo ? 1 : 0) : 1;
+            const nombreEsq = (esquema.nombre_esquema || 'General').trim();
+
+            if (esquema.nueva_vigencia || !esquema.id) {
+                // Modo nueva vigencia histórica: cerrar esquema previo si procede y crear nuevo
+                if (esquema.cerrar_anterior !== false) {
+                    const [fechaAnteriorRows] = await connection.query(
+                        'SELECT DATE_SUB(?, INTERVAL 1 DAY) as dia_anterior',
+                        [fechaInicio]
+                    );
+                    const diaAnterior = fechaAnteriorRows[0].dia_anterior;
+                    await connection.query(
+                        `UPDATE institucion_esquemas_tasas
+                         SET fecha_fin_vigencia = ?
+                         WHERE institucion_id = ?
+                           AND fecha_fin_vigencia IS NULL
+                           AND fecha_inicio_vigencia < ?
+                           AND activo = 1`,
+                        [diaAnterior, id, fechaInicio]
+                    );
+                }
+
+                const [resEsq] = await connection.query(
+                    `INSERT INTO institucion_esquemas_tasas (institucion_id, nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia, activo)
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [id, nombreEsq, fechaInicio, fechaFin, esqActivo]
+                );
+                const nuevoEsqId = resEsq.insertId;
+
+                for (let i = 0; i < esquema.tramos.length; i++) {
+                    const t = esquema.tramos[i];
+                    const inf = parseFloat(t.limite_inferior) || 0;
+                    const sup = (t.limite_superior !== null && t.limite_superior !== undefined && t.limite_superior !== '')
+                        ? parseFloat(t.limite_superior)
+                        : null;
+                    const tasa = parseFloat(t.tasa_anual) || 0;
+                    await connection.query(
+                        `INSERT INTO institucion_tramos_tasas (esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo)
+                         VALUES (?, ?, ?, ?, ?, ?)`,
+                        [nuevoEsqId, i + 1, inf, sup, tasa, t.descripcion_tramo || null]
+                    );
+                }
+            } else {
+                // Modificar esquema existente
+                const esqId = parseInt(esquema.id, 10);
+                await connection.query(
+                    `UPDATE institucion_esquemas_tasas
+                     SET nombre_esquema = ?, fecha_inicio_vigencia = ?, fecha_fin_vigencia = ?, activo = ?
+                     WHERE id = ? AND institucion_id = ?`,
+                    [nombreEsq, fechaInicio, fechaFin, esqActivo, esqId, id]
+                );
+
+                await connection.query('DELETE FROM institucion_tramos_tasas WHERE esquema_id = ?', [esqId]);
+                for (let i = 0; i < esquema.tramos.length; i++) {
+                    const t = esquema.tramos[i];
+                    const inf = parseFloat(t.limite_inferior) || 0;
+                    const sup = (t.limite_superior !== null && t.limite_superior !== undefined && t.limite_superior !== '')
+                        ? parseFloat(t.limite_superior)
+                        : null;
+                    const tasa = parseFloat(t.tasa_anual) || 0;
+                    await connection.query(
+                        `INSERT INTO institucion_tramos_tasas (esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo)
+                         VALUES (?, ?, ?, ?, ?, ?)`,
+                        [esqId, i + 1, inf, sup, tasa, t.descripcion_tramo || null]
+                    );
+                }
+            }
+        }
+
+        const updateNombre = nombre !== undefined ? nombre.trim() : current.nombre;
+        const updateTipo = (tipo && ['B', 'S', 'F', 'O'].includes(tipo)) ? tipo : current.tipo;
+        const updateDesc = descripcion !== undefined ? descripcion : current.descripcion;
+        const updateCond = autoResumen || (condiciones_resumen !== undefined ? condiciones_resumen : current.condiciones_resumen);
+        const updateOrden = orden_visual !== undefined ? parseInt(orden_visual, 10) : current.orden_visual;
+        const updateActivo = activo !== undefined ? (activo ? 1 : 0) : current.activo;
+
+        await connection.query(
+            `UPDATE instituciones_financieras
+             SET nombre = ?, tipo = ?, descripcion = ?, condiciones_resumen = ?, orden_visual = ?, activo = ?
+             WHERE id = ?`,
+            [updateNombre, updateTipo, updateDesc, updateCond, updateOrden, updateActivo, id]
+        );
+
+        // Sincronización de restricciones asociadas si fueron enviadas
+        if (Array.isArray(req.body.restricciones)) {
+            for (const r of req.body.restricciones) {
+                if (r._deleted && r.id) {
+                    await connection.query('DELETE FROM institucion_restricciones WHERE id = ? AND institucion_id = ?', [r.id, id]);
+                } else if (r.id) {
+                    const desc = typeof r.descripcion === 'string' ? r.descripcion.trim() : '';
+                    if (desc) {
+                        await connection.query(
+                            `UPDATE institucion_restricciones 
+                             SET descripcion = ?, orden = ?, activo = ? 
+                             WHERE id = ? AND institucion_id = ?`,
+                            [desc, parseInt(r.orden, 10) || 1, (r.activo === 0 || r.activo === false) ? 0 : 1, r.id, id]
+                        );
+                    }
+                } else if (r.descripcion && typeof r.descripcion === 'string' && r.descripcion.trim()) {
+                    await connection.query(
+                        `INSERT INTO institucion_restricciones (institucion_id, descripcion, orden, activo) 
+                         VALUES (?, ?, ?, ?)`,
+                        [id, r.descripcion.trim(), parseInt(r.orden, 10) || 1, (r.activo === 0 || r.activo === false) ? 0 : 1]
+                    );
+                }
+            }
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: 'Institución, tasas y restricciones actualizadas correctamente.' });
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in PUT /api/admin/finanzas/instituciones/:id:', error);
+        res.status(500).json({ error: 'Error al actualizar la institución financiera.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+// Desactivar institución financiera (Soft delete seguro)
+app.delete('/api/admin/finanzas/instituciones/:id', requireFunctionality('admin'), requirePermission('finanzas.delete'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de institución inválido.' });
+        }
+
+        await pool.query('UPDATE instituciones_financieras SET activo = 0 WHERE id = ?', [id]);
+        res.json({ success: true, message: 'Institución desactivada exitosamente.' });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/finanzas/instituciones/:id:', error);
+        res.status(500).json({ error: 'Error al desactivar la institución financiera.' });
+    }
+});
+
+// ==========================================
+// ENDPOINTS REST DEDICADOS PARA RESTRICCIONES
+// ==========================================
+
+// Listar restricciones de una institución
+app.get('/api/admin/finanzas/instituciones/:id/restricciones', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
+    try {
+        const instId = parseInt(req.params.id, 10);
+        if (isNaN(instId) || instId <= 0) {
+            return res.status(400).json({ error: 'ID de institución inválido.' });
+        }
+        const [rows] = await pool.query(
+            `SELECT id, institucion_id, descripcion, activo, orden, created_at, updated_at
+             FROM institucion_restricciones
+             WHERE institucion_id = ?
+             ORDER BY orden ASC, id ASC`,
+            [instId]
+        );
+        res.json({ success: true, restricciones: rows });
+    } catch (err) {
+        console.error('Error in GET /api/admin/finanzas/instituciones/:id/restricciones:', err);
+        res.status(500).json({ error: 'Error al consultar las restricciones.' });
+    }
+});
+
+// Crear restricción para una institución
+app.post('/api/admin/finanzas/instituciones/:id/restricciones', requireFunctionality('admin'), requirePermission('finanzas.create'), async (req, res) => {
+    try {
+        const instId = parseInt(req.params.id, 10);
+        const { descripcion, orden, activo } = req.body;
+        if (isNaN(instId) || instId <= 0) {
+            return res.status(400).json({ error: 'ID de institución inválido.' });
+        }
+        if (!descripcion || typeof descripcion !== 'string' || !descripcion.trim()) {
+            return res.status(400).json({ error: 'La descripción de la restricción es obligatoria.' });
+        }
+
+        const ord = parseInt(orden, 10) || 1;
+        const act = (activo === 0 || activo === false) ? 0 : 1;
+
+        const [result] = await pool.query(
+            `INSERT INTO institucion_restricciones (institucion_id, descripcion, activo, orden)
+             VALUES (?, ?, ?, ?)`,
+            [instId, descripcion.trim(), act, ord]
+        );
+
+        res.status(201).json({
+            success: true,
+            id: result.insertId,
+            message: 'Restricción creada exitosamente.'
+        });
+    } catch (err) {
+        console.error('Error in POST /api/admin/finanzas/instituciones/:id/restricciones:', err);
+        res.status(500).json({ error: 'Error al registrar la restricción.' });
+    }
+});
+
+// Actualizar restricción
+app.put('/api/admin/finanzas/restricciones/:id', requireFunctionality('admin'), requirePermission('finanzas.update'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de restricción inválido.' });
+        }
+        const { descripcion, orden, activo } = req.body;
+
+        const [existing] = await pool.query('SELECT * FROM institucion_restricciones WHERE id = ?', [id]);
+        if (existing.length === 0) {
+            return res.status(404).json({ error: 'Restricción no encontrada.' });
+        }
+        const cur = existing[0];
+
+        const newDesc = descripcion !== undefined ? descripcion.trim() : cur.descripcion;
+        if (!newDesc) {
+            return res.status(400).json({ error: 'La descripción no puede estar vacía.' });
+        }
+        const newOrd = orden !== undefined ? (parseInt(orden, 10) || 1) : cur.orden;
+        const newAct = activo !== undefined ? (activo ? 1 : 0) : cur.activo;
+
+        await pool.query(
+            `UPDATE institucion_restricciones
+             SET descripcion = ?, orden = ?, activo = ?
+             WHERE id = ?`,
+            [newDesc, newOrd, newAct, id]
+        );
+
+        res.json({ success: true, message: 'Restricción actualizada exitosamente.' });
+    } catch (err) {
+        console.error('Error in PUT /api/admin/finanzas/restricciones/:id:', err);
+        res.status(500).json({ error: 'Error al actualizar la restricción.' });
+    }
+});
+
+// Eliminar / Desactivar restricción
+app.delete('/api/admin/finanzas/restricciones/:id', requireFunctionality('admin'), requirePermission('finanzas.delete'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de restricción inválido.' });
+        }
+        const hard = req.query.hard === 'true';
+        if (hard) {
+            await pool.query('DELETE FROM institucion_restricciones WHERE id = ?', [id]);
+        } else {
+            await pool.query('UPDATE institucion_restricciones SET activo = 0 WHERE id = ?', [id]);
+        }
+        res.json({ success: true, message: 'Restricción eliminada/desactivada exitosamente.' });
+    } catch (err) {
+        console.error('Error in DELETE /api/admin/finanzas/restricciones/:id:', err);
+        res.status(500).json({ error: 'Error al eliminar la restricción.' });
+    }
+});
+
+// Crear nuevo esquema de tasas y condiciones (con nueva vigencia y tramos)
+app.post('/api/admin/finanzas/esquemas', requireFunctionality('admin'), requirePermission('finanzas.create'), async (req, res) => {
+    let connection;
+    try {
+        const { institucion_id, nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia, activo, cerrar_anterior, tramos } = req.body;
+
+        const instId = parseInt(institucion_id, 10);
+        if (isNaN(instId) || instId <= 0) {
+            return res.status(400).json({ error: 'Institución financiera requerida.' });
+        }
+
+        if (!fecha_inicio_vigencia || !/^\d{4}-\d{2}-\d{2}$/.test(fecha_inicio_vigencia)) {
+            return res.status(400).json({ error: 'La fecha inicial de vigencia debe tener formato YYYY-MM-DD.' });
+        }
+
+        let fechaFin = null;
+        if (fecha_fin_vigencia) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_fin_vigencia)) {
+                return res.status(400).json({ error: 'La fecha final de vigencia debe tener formato YYYY-MM-DD.' });
+            }
+            if (fecha_fin_vigencia < fecha_inicio_vigencia) {
+                return res.status(400).json({ error: 'La fecha final no puede ser anterior a la fecha inicial.' });
+            }
+            fechaFin = fecha_fin_vigencia;
+        }
+
+        // Validar coherencia matemática de tramos
+        const validacionTramos = MotorFinanciero.validarTramos(tramos);
+        if (!validacionTramos.valido) {
+            return res.status(400).json({ error: validacionTramos.error });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Si se solicita cerrar el esquema anterior abierto
+        if (cerrar_anterior) {
+            // Calcular fecha día anterior (usando strings calendario sin timezone)
+            const [fechaAnteriorRows] = await connection.query(
+                'SELECT DATE_SUB(?, INTERVAL 1 DAY) as dia_anterior',
+                [fecha_inicio_vigencia]
+            );
+            const diaAnterior = fechaAnteriorRows[0].dia_anterior;
+
+            await connection.query(
+                `UPDATE institucion_esquemas_tasas
+                 SET fecha_fin_vigencia = ?
+                 WHERE institucion_id = ?
+                   AND fecha_fin_vigencia IS NULL
+                   AND fecha_inicio_vigencia < ?
+                   AND activo = 1`,
+                [diaAnterior, instId, fecha_inicio_vigencia]
+            );
+        }
+
+        // 2. Verificar que no exista traslape con otro esquema activo
+        const [traslapes] = await connection.query(
+            `SELECT id, nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia
+             FROM institucion_esquemas_tasas
+             WHERE institucion_id = ?
+               AND activo = 1
+               AND fecha_inicio_vigencia <= ?
+               AND (fecha_fin_vigencia IS NULL OR fecha_fin_vigencia >= ?)`,
+            [instId, fechaFin || '9999-12-31', fecha_inicio_vigencia]
+        );
+
+        if (traslapes.length > 0) {
+            await connection.rollback();
+            return res.status(400).json({
+                error: `Existe otro esquema activo ('${traslapes[0].nombre_esquema}', vigencia: ${traslapes[0].fecha_inicio_vigencia} a ${traslapes[0].fecha_fin_vigencia || 'indefinida'}) con fechas que se traslapan. Cierre el esquema anterior o ajuste las fechas.`
+            });
+        }
+
+        // 3. Insertar el nuevo esquema
+        const estatus = activo === 0 || activo === false ? 0 : 1;
+        const [resEsq] = await connection.query(
+            `INSERT INTO institucion_esquemas_tasas (institucion_id, nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia, activo)
+             VALUES (?, ?, ?, ?, ?)`,
+            [instId, (nombre_esquema || 'General').trim(), fecha_inicio_vigencia, fechaFin, estatus]
+        );
+        const nuevoEsquemaId = resEsq.insertId;
+
+        // 4. Insertar los tramos
+        for (let i = 0; i < tramos.length; i++) {
+            const t = tramos[i];
+            const inf = parseFloat(t.limite_inferior) || 0;
+            const sup = t.limite_superior !== null && t.limite_superior !== undefined && t.limite_superior !== ''
+                ? parseFloat(t.limite_superior)
+                : null;
+            const tasa = parseFloat(t.tasa_anual) || 0;
+
+            await connection.query(
+                `INSERT INTO institucion_tramos_tasas (esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [nuevoEsquemaId, i + 1, inf, sup, tasa, t.descripcion_tramo || null]
+            );
+        }
+
+        const resumenAuto = MotorFinanciero.generarResumenCondiciones(tramos);
+        await connection.query('UPDATE instituciones_financieras SET condiciones_resumen = ? WHERE id = ?', [resumenAuto, instId]);
+
+        await connection.commit();
+        res.status(201).json({
+            success: true,
+            id: nuevoEsquemaId,
+            message: 'Nuevo esquema de inversión y vigencia registrado correctamente.'
+        });
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in POST /api/admin/finanzas/esquemas:', error);
+        res.status(500).json({ error: 'Error al registrar el nuevo esquema de inversión.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+// Modificar esquema y/o actualizar sus tramos
+app.put('/api/admin/finanzas/esquemas/:id', requireFunctionality('admin'), requirePermission('finanzas.update'), async (req, res) => {
+    let connection;
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de esquema inválido.' });
+        }
+
+        const { nombre_esquema, fecha_inicio_vigencia, fecha_fin_vigencia, activo, tramos } = req.body;
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        const [existente] = await connection.query('SELECT * FROM institucion_esquemas_tasas WHERE id = ?', [id]);
+        if (existente.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Esquema no encontrado.' });
+        }
+
+        const current = existente[0];
+        const updateNombre = nombre_esquema !== undefined ? nombre_esquema.trim() : current.nombre_esquema;
+        const updateInicio = fecha_inicio_vigencia !== undefined ? fecha_inicio_vigencia : current.fecha_inicio_vigencia;
+        let updateFin = fecha_fin_vigencia !== undefined ? (fecha_fin_vigencia || null) : current.fecha_fin_vigencia;
+        const updateActivo = activo !== undefined ? (activo ? 1 : 0) : current.activo;
+
+        if (updateFin && updateFin < updateInicio) {
+            await connection.rollback();
+            return res.status(400).json({ error: 'La fecha final no puede ser anterior a la inicial.' });
+        }
+
+        // Si se pasan tramos para reemplazar, validarlos
+        if (Array.isArray(tramos) && tramos.length > 0) {
+            const val = MotorFinanciero.validarTramos(tramos);
+            if (!val.valido) {
+                await connection.rollback();
+                return res.status(400).json({ error: val.error });
+            }
+
+            // Eliminar tramos anteriores e insertar los nuevos
+            await connection.query('DELETE FROM institucion_tramos_tasas WHERE esquema_id = ?', [id]);
+            for (let i = 0; i < tramos.length; i++) {
+                const t = tramos[i];
+                const inf = parseFloat(t.limite_inferior) || 0;
+                const sup = t.limite_superior !== null && t.limite_superior !== undefined && t.limite_superior !== ''
+                    ? parseFloat(t.limite_superior)
+                    : null;
+                const tasa = parseFloat(t.tasa_anual) || 0;
+
+                await connection.query(
+                    `INSERT INTO institucion_tramos_tasas (esquema_id, numero_tramo, limite_inferior, limite_superior, tasa_anual, descripcion_tramo)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [id, i + 1, inf, sup, tasa, t.descripcion_tramo || null]
+                );
+            }
+        }
+
+        await connection.query(
+            `UPDATE institucion_esquemas_tasas
+             SET nombre_esquema = ?, fecha_inicio_vigencia = ?, fecha_fin_vigencia = ?, activo = ?
+             WHERE id = ?`,
+            [updateNombre, updateInicio, updateFin, updateActivo, id]
+        );
+
+        if (Array.isArray(tramos) && tramos.length > 0) {
+            const resumenAuto = MotorFinanciero.generarResumenCondiciones(tramos);
+            await connection.query('UPDATE instituciones_financieras SET condiciones_resumen = ? WHERE id = ?', [resumenAuto, current.institucion_id]);
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: 'Esquema actualizado correctamente.' });
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        console.error('Error in PUT /api/admin/finanzas/esquemas/:id:', error);
+        res.status(500).json({ error: 'Error al actualizar el esquema de inversión.' });
+    } finally {
+        if (connection) {
+            try { connection.release(); } catch (_) {}
+        }
+    }
+});
+
+// Desactivar esquema (Soft delete)
+app.delete('/api/admin/finanzas/esquemas/:id', requireFunctionality('admin'), requirePermission('finanzas.delete'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de esquema inválido.' });
+        }
+
+        await pool.query('UPDATE institucion_esquemas_tasas SET activo = 0 WHERE id = ?', [id]);
+        res.json({ success: true, message: 'Esquema desactivado correctamente.' });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/finanzas/esquemas/:id:', error);
+        res.status(500).json({ error: 'Error al desactivar el esquema.' });
     }
 });
 
