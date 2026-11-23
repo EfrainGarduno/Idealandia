@@ -10,6 +10,8 @@
     let catalogoInstituciones = [];
     let institucionesSeleccionadas = new Set();
     let fechaConsultaActual = new Date().toISOString().slice(0, 10);
+    let estrategiaActual = 'individual'; // 'individual' | 'diversificada'
+    let ultimaEstrategiaDiversificada = null;
 
     // Estado reactivo en memoria para simulación personalizada por fila (NO PERSISTE EN BD)
     const valoresOriginalesPorInst = new Map(); // id -> { tasa, inv1, inv2, meses }
@@ -107,7 +109,8 @@
             catalogoInstituciones = Array.isArray(data.instituciones) ? data.instituciones : [];
 
             // Por defecto, todas las instituciones quedan seleccionadas
-            institucionesSeleccionadas = new Set(catalogoInstituciones.map(i => i.id));
+            institucionesSeleccionadas.clear();
+            catalogoInstituciones.forEach(i => institucionesSeleccionadas.add(i.id));
 
             // Limpiar personalizaciones al cargar catálogo nuevo
             valoresPersonalizadosPorInst.clear();
@@ -168,6 +171,38 @@
             btnDeseleccionarTodas.dataset.configured = 'true';
             btnDeseleccionarTodas.addEventListener('click', () => {
                 deseleccionarTodas();
+            });
+        }
+
+        // Selector de estrategia (Mayor rendimiento vs Mejor inversión diversificada)
+        const radiosEstrategia = document.querySelectorAll('input[name="simulador-estrategia"]');
+        radiosEstrategia.forEach(radio => {
+            if (!radio.dataset.configured) {
+                radio.dataset.configured = 'true';
+                radio.addEventListener('change', (e) => {
+                    cambiarEstrategia(e.target.value);
+                });
+            }
+        });
+
+        // Parámetros de diversificación
+        const selectNumInst = document.getElementById('simulador-num-instituciones');
+        if (selectNumInst && !selectNumInst.dataset.configured) {
+            selectNumInst.dataset.configured = 'true';
+            selectNumInst.addEventListener('change', () => {
+                if (estrategiaActual === 'diversificada') {
+                    actualizarEstrategiaDiversificada();
+                }
+            });
+        }
+
+        const inputMaxPct = document.getElementById('simulador-max-porcentaje');
+        if (inputMaxPct && !inputMaxPct.dataset.configured) {
+            inputMaxPct.dataset.configured = 'true';
+            inputMaxPct.addEventListener('input', () => {
+                if (estrategiaActual === 'diversificada') {
+                    actualizarEstrategiaDiversificada();
+                }
             });
         }
     }
@@ -539,7 +574,7 @@
         let rendExtraPeriodo = 0;
         if (tramos.length >= 3) {
             const inputInversion = document.getElementById('simulador-inversion-global');
-            const cap = parseFloat(inputInversion ? inputInversion.value : 0) || 0;
+            const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : (parseFloat(inputInversion ? inputInversion.value : 0) || 0);
             const simTemp = window.MotorFinanciero.simularInversion(cap, curMeses, tramos);
             if (simTemp && Array.isArray(simTemp.tramos)) {
                 for (let k = 2; k < simTemp.tramos.length; k++) {
@@ -666,7 +701,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -724,7 +759,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -840,7 +875,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -863,7 +898,7 @@
         recalcularSimulacion();
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -918,7 +953,7 @@
         institucionesSeleccionadas.clear();
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -1032,7 +1067,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     function actualizarResumenComparativo() {
@@ -1088,6 +1123,379 @@
         }
     }
 
+    /**
+     * Alterna y actualiza el resumen visual según la estrategia activa:
+     * - 'individual': Mayor rendimiento en una sola institución
+     * - 'diversificada': Mejor combinación diversificada de capital
+     */
+    function actualizarResumenSegunEstrategia() {
+        if (estrategiaActual === 'diversificada') {
+            actualizarEstrategiaDiversificada();
+        } else {
+            actualizarResumenComparativo();
+        }
+    }
+
+    /**
+     * Cambia la estrategia de inversión entre Mayor rendimiento e Inversión diversificada.
+     */
+    function cambiarEstrategia(estrategia) {
+        estrategiaActual = estrategia;
+
+        const labelInd = document.querySelector('.sim-strategy-individual');
+        const labelDiv = document.querySelector('.sim-strategy-diversificada');
+        const paramsDiv = document.getElementById('simulador-params-diversificado');
+        const panelInd = document.getElementById('simulador-resumen-comparativo');
+        const panelDiv = document.getElementById('simulador-panel-diversificado');
+
+        if (estrategia === 'diversificada') {
+            if (labelDiv) {
+                labelDiv.style.borderColor = '#16a34a';
+                labelDiv.style.background = '#f0fdf4';
+                labelDiv.style.color = '#15803d';
+                labelDiv.style.fontWeight = '700';
+            }
+            if (labelInd) {
+                labelInd.style.borderColor = '#cbd5e1';
+                labelInd.style.background = '#f8fafc';
+                labelInd.style.color = '#475569';
+                labelInd.style.fontWeight = '600';
+            }
+            if (paramsDiv) paramsDiv.style.display = 'block';
+            if (panelInd) panelInd.style.display = 'none';
+            if (panelDiv) panelDiv.style.display = 'block';
+
+            actualizarEstrategiaDiversificada();
+        } else {
+            if (labelInd) {
+                labelInd.style.borderColor = '#3b82f6';
+                labelInd.style.background = '#eff6ff';
+                labelInd.style.color = '#1d4ed8';
+                labelInd.style.fontWeight = '700';
+            }
+            if (labelDiv) {
+                labelDiv.style.borderColor = '#cbd5e1';
+                labelDiv.style.background = '#f8fafc';
+                labelDiv.style.color = '#475569';
+                labelDiv.style.fontWeight = '600';
+            }
+            if (paramsDiv) paramsDiv.style.display = 'none';
+            if (panelInd) panelInd.style.display = 'block';
+            if (panelDiv) panelDiv.style.display = 'none';
+
+            actualizarResumenComparativo();
+        }
+    }
+
+    /**
+     * Calcula y actualiza el panel de la estrategia de inversión diversificada.
+     */
+    function actualizarEstrategiaDiversificada() {
+        const panelDiv = document.getElementById('simulador-panel-diversificado');
+        if (!panelDiv) return;
+
+        const inputInversion = document.getElementById('simulador-inversion-global');
+        const inputMeses = document.getElementById('simulador-meses-global');
+        const selectNumInst = document.getElementById('simulador-num-instituciones');
+        const inputMaxPct = document.getElementById('simulador-max-porcentaje');
+
+        const capital = parseFloat(inputInversion ? inputInversion.value : 40000) || 40000;
+        const meses = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+        const numInstVal = selectNumInst ? selectNumInst.value : 'todas';
+        const maxPctVal = parseFloat(inputMaxPct ? inputMaxPct.value : 50) || 50;
+
+        // Filtrar exclusivamente instituciones que estén activas en BD y seleccionadas por el usuario
+        const seleccionadas = catalogoInstituciones.filter(i => institucionesSeleccionadas.has(i.id));
+
+        if (seleccionadas.length === 0) {
+            panelDiv.innerHTML = `
+                <div style="color: #64748b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-info-circle" style="color: #3b82f6;"></i>
+                    <em>Selecciona al menos una institución financiera para calcular la inversión diversificada.</em>
+                </div>
+            `;
+            ultimaEstrategiaDiversificada = null;
+            return;
+        }
+
+        const resultado = window.MotorFinanciero.calcularMejorInversionDiversificada({
+            inversionTotal: capital,
+            meses: meses,
+            instituciones: seleccionadas,
+            numInstituciones: numInstVal,
+            maxPorcentajePorInst: maxPctVal,
+            personalizaciones: valoresPersonalizadosPorInst
+        });
+
+        ultimaEstrategiaDiversificada = resultado;
+        renderizarPanelDiversificado(resultado);
+    }
+
+    /**
+     * Renderiza el panel visual completo de la propuesta diversificada.
+     */
+    function renderizarPanelDiversificado(res) {
+        const panelDiv = document.getElementById('simulador-panel-diversificado');
+        if (!panelDiv) return;
+
+        if (!res || !res.exito) {
+            panelDiv.innerHTML = `
+                <div style="color: #dc2626; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${escapeHTML(res ? res.mensajeError : 'No fue posible calcular la distribución.')}</span>
+                </div>
+            `;
+            return;
+        }
+
+        const comp = res.comparativa || {};
+        const mejorInd = comp.mejorIndividual || { nombre: '—', rendimientoPeriodo: 0, rendimientoMensual: 0 };
+        const difPeriodo = comp.diferenciaPeriodo || 0;
+        const difSigno = difPeriodo >= 0 ? `+${formatMoney(difPeriodo)}` : formatMoney(difPeriodo);
+        const difColor = difPeriodo >= 0 ? '#166534' : '#b45309';
+
+        panelDiv.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 18px;">
+                <!-- Encabezado con Indicador de Rendimiento Diversificado -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; border-bottom: 2px solid #bbf7d0; padding-bottom: 14px;">
+                    <div>
+                        <div style="font-weight: 800; font-size: 1.15rem; color: #166534; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-trophy" style="color: #eab308; font-size: 1.3rem;"></i>
+                            <span>🏆 Mejor Inversión Diversificada</span>
+                        </div>
+                        <div style="color: #475569; font-size: 0.88rem; margin-top: 4px;">
+                            <span>Capital a invertir: <strong>${formatMoney(res.inversionTotal)}</strong></span>
+                            <span style="margin: 0 6px;">•</span>
+                            <span>Plazo: <strong>${res.meses} ${res.meses === 1 ? 'mes' : 'meses'}</strong></span>
+                            <span style="margin: 0 6px;">•</span>
+                            <span>Instituciones utilizadas: <strong style="color: #166534;">${res.numInstitucionesUtilizadas}</strong></span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 18px; flex-wrap: wrap; text-align: right;">
+                        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 8px 14px;">
+                            <span style="font-size: 0.78rem; font-weight: 600; color: #166534; display: block;">Rendimiento Estimado</span>
+                            <strong style="font-size: 1.25rem; color: #15803d;">${formatMoney(res.rendimientoPeriodoTotal)}</strong>
+                            <small style="display: block; font-size: 0.76rem; color: #475569;">(${formatMoney(res.rendimientoMensualTotal)}/mes)</small>
+                        </div>
+                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 14px;">
+                            <span style="font-size: 0.78rem; font-weight: 600; color: #1d4ed8; display: block;">Tasa Efectiva Ponderada</span>
+                            <strong style="font-size: 1.25rem; color: #1e40af;">${formatPercent(res.tasaEfectivaPonderada)}</strong>
+                            <small style="display: block; font-size: 0.76rem; color: #475569;">anualizada</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control de Balance del Capital (Validación matemática estricta) -->
+                <div style="display: flex; gap: 14px; flex-wrap: wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 16px; font-size: 0.86rem;">
+                    <div><span style="color: #64748b;">Capital disponible:</span> <strong>${formatMoney(res.inversionTotal)}</strong></div>
+                    <div><span style="color: #64748b;">Capital distribuido:</span> <strong style="color: #166534;">${formatMoney(res.capitalDistribuido)}</strong></div>
+                    <div>
+                        <span style="color: #64748b;">Capital sin distribuir:</span> 
+                        <strong style="color: ${res.capitalSinDistribuir === 0 ? '#166534' : '#dc2626'};">${formatMoney(res.capitalSinDistribuir)}</strong>
+                        ${res.capitalSinDistribuir === 0 ? '<span style="color: #166534; font-weight: 700; margin-left: 4px;">✓ 100% asignado</span>' : ''}
+                    </div>
+                </div>
+
+                <!-- Tabla de Distribución Recomendada -->
+                <div>
+                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-chart-pie" style="color: #16a34a;"></i> Distribución Recomendada
+                    </div>
+                    <div class="table-responsive" style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
+                        <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 0.88rem;">
+                            <thead>
+                                <tr style="background: #f1f5f9; color: #334155; border-bottom: 2px solid #cbd5e1; text-align: left;">
+                                    <th style="padding: 10px 12px;">Institución</th>
+                                    <th style="padding: 10px 12px; text-align: right; background: #fef3c7;">Inversión Asignada</th>
+                                    <th style="padding: 10px 12px; text-align: center;">% Capital</th>
+                                    <th style="padding: 10px 12px; text-align: right;">Tasa Ponderada</th>
+                                    <th style="padding: 10px 12px; text-align: right; background: #ecfdf5;">Rend. Mensual</th>
+                                    <th style="padding: 10px 12px; text-align: right; background: #dcfce7;">Rend. Periodo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${res.asignaciones.map(a => `
+                                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                                        <td style="padding: 8px 12px; font-weight: 700; color: #0f172a;">${escapeHTML(a.nombre)}</td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 700; background: #fffbeb; color: #92400e;">${formatMoney(a.inversionAsignada)}</td>
+                                        <td style="padding: 8px 12px; text-align: center; font-weight: 600; color: #475569;">${formatPercent(a.porcentajeDelCapital)}</td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #1e40af;">${formatPercent(a.tasaPonderada)}</td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #047857;">${formatMoney(a.rendimientoMensual)}</td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 800; color: #166534; background: #f0fdf4;">${formatMoney(a.rendimientoPeriodo)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #cbd5e1;">
+                                    <td style="padding: 10px 12px; color: #0f172a;">TOTAL</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #92400e; background: #fef3c7;">${formatMoney(res.capitalDistribuido)}</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #475569;">100.00%</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #1e40af;">${formatPercent(res.tasaEfectivaPonderada)}</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #047857; background: #ecfdf5;">${formatMoney(res.rendimientoMensualTotal)}</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #166534; background: #dcfce7; font-size: 1.05em;">${formatMoney(res.rendimientoPeriodoTotal)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Alertas de Restricciones Relevantes -->
+                ${res.restriccionesRelevantes.length > 0 ? `
+                    <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px;">
+                        <div style="font-weight: 700; color: #92400e; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-exclamation-triangle"></i> Requisitos / Restricciones a considerar para esta distribución:
+                        </div>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 0.84rem; color: #78350f;">
+                            ${res.restriccionesRelevantes.map(r => `
+                                <li style="margin-bottom: 3px;">
+                                    <strong>${escapeHTML(r.nombre)}:</strong> ${escapeHTML(r.descripcion)}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+
+                <!-- Fila Inferior: Comparativa + Concentración -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                    <!-- Comparativa: Todo en una vs Diversificada -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+                        <div style="font-weight: 700; font-size: 0.88rem; color: #334155; margin-bottom: 8px;">
+                            <i class="fas fa-balance-scale" style="color: #3b82f6;"></i> Comparativa contra una sola institución
+                        </div>
+                        <div style="font-size: 0.84rem; color: #475569; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Todo en una (<strong>${escapeHTML(mejorInd.nombre)}</strong>):</span>
+                                <strong style="color: #0f172a;">${formatMoney(mejorInd.rendimientoPeriodo)}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Inversión diversificada (<strong>${res.numInstitucionesUtilizadas} inst.</strong>):</span>
+                                <strong style="color: #166534;">${formatMoney(res.rendimientoPeriodoTotal)}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                                <span>Diferencia:</span>
+                                <strong style="color: ${difColor}; font-size: 0.95em;">${difSigno}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Métrica de Concentración -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+                        <div style="font-weight: 700; font-size: 0.88rem; color: #334155; margin-bottom: 8px;">
+                            <i class="fas fa-shield-alt" style="color: #10b981;"></i> Métrica de Concentración
+                        </div>
+                        <div style="font-size: 0.84rem; color: #475569; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Mayor asignación:</span>
+                                <strong>${formatMoney(res.concentracion.montoMayorAsignacion)} (${escapeHTML(res.concentracion.institucionMayorAsignacion)})</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Concentración máxima:</span>
+                                <strong style="color: #1e40af;">${formatPercent(res.concentracion.porcentajeMayorAsignacion)}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                                <span>Tope configurado:</span>
+                                <span>${formatPercent(res.maxPorcentajePorInst)} ($${formatMoney(res.topeMaximoPorInst)})</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ¿Por qué esta distribución? -->
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; font-size: 0.85rem; color: #166534;">
+                    <strong><i class="fas fa-lightbulb" style="color: #eab308;"></i> ¿Por qué esta distribución?</strong>
+                    <p style="margin: 4px 0 0 0; line-height: 1.45;">${escapeHTML(res.explicacion)}</p>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 8px;">
+                    <button type="button" id="simulador-btn-aplicar-estrategia" class="btn btn-primary" style="background: #166534; border-color: #15803d; font-weight: 700; padding: 8px 18px;">
+                        <i class="fas fa-check-circle"></i> Aplicar estrategia a la tabla
+                    </button>
+                    <button type="button" id="simulador-btn-restablecer-simulacion" class="btn btn-secondary" style="font-weight: 600; padding: 8px 18px;">
+                        <i class="fas fa-undo"></i> Restablecer simulación
+                    </button>
+                    <span style="font-size: 0.8rem; color: #64748b;">(Aplica estos montos directamente a las filas de la tabla para analizarlas o editarlas)</span>
+                </div>
+            </div>
+        `;
+
+        // Conectar botones
+        const btnAplicar = document.getElementById('simulador-btn-aplicar-estrategia');
+        if (btnAplicar) {
+            btnAplicar.addEventListener('click', () => {
+                aplicarEstrategiaDiversificada();
+            });
+        }
+
+        const btnRestablecer = document.getElementById('simulador-btn-restablecer-simulacion');
+        if (btnRestablecer) {
+            btnRestablecer.addEventListener('click', () => {
+                restablecerSimulacionNormal();
+            });
+        }
+    }
+
+    /**
+     * Aplica los montos de la estrategia diversificada a las filas de la tabla interactiva:
+     * - Asigna Inversión 1 e Inversión 2 en las instituciones recomendadas.
+     * - Asigna 0 a las instituciones no incluidas en la estrategia.
+     * - Agrega una insignia "Estrategia Diversificada" a las filas participantes.
+     * - Recalcula rendimientos por fila de forma reactiva.
+     */
+    function aplicarEstrategiaDiversificada() {
+        if (!ultimaEstrategiaDiversificada || !ultimaEstrategiaDiversificada.asignaciones) return;
+
+        const asignacionesMap = new Map();
+        ultimaEstrategiaDiversificada.asignaciones.forEach(a => {
+            asignacionesMap.set(a.institucionId, a);
+        });
+
+        catalogoInstituciones.forEach(inst => {
+            const tr = document.getElementById(`sim-row-${inst.id}`);
+            if (!tr) return;
+
+            const inputInv1 = tr.querySelector('.sim-input-inv1');
+            const inputInv2 = tr.querySelector('.sim-input-inv2');
+            const inputMeses = tr.querySelector('.sim-input-meses');
+            const asig = asignacionesMap.get(inst.id);
+
+            // Eliminar badge previo de estrategia si existía
+            const oldBadge = tr.querySelector('.badge-estrategia-diversificada');
+            if (oldBadge) oldBadge.remove();
+
+            if (asig && asig.inversionAsignada > 0) {
+                if (inputInv1) inputInv1.value = asig.inversion1.toFixed(2);
+                if (inputInv2) inputInv2.value = asig.inversion2.toFixed(2);
+                if (inputMeses) inputMeses.value = ultimaEstrategiaDiversificada.meses;
+
+                // Agregar badge de estrategia
+                const nameDiv = tr.querySelector('td:nth-child(2) > div');
+                if (nameDiv) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge-estrategia-diversificada';
+                    badge.style.cssText = 'background: #dcfce7; color: #166534; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; border: 1px solid #86efac; margin-left: 4px;';
+                    badge.innerHTML = '<i class="fas fa-chart-pie" style="font-size: 0.65rem;"></i> Estrategia';
+                    nameDiv.appendChild(badge);
+                }
+
+                recalcularFila(inst.id, tr);
+            } else {
+                // No incluida en la estrategia: poner a 0
+                if (inputInv1) inputInv1.value = '0.00';
+                if (inputInv2) inputInv2.value = '0.00';
+                recalcularFila(inst.id, tr);
+            }
+        });
+    }
+
+    /**
+     * Restablece la simulación a su distribución normal (capital global en tramos).
+     */
+    function restablecerSimulacionNormal() {
+        document.querySelectorAll('.badge-estrategia-diversificada').forEach(b => b.remove());
+        recalcularSimulacion();
+    }
+
     // Exponer públicamente al objeto global
     window.inicializarSimuladorFinanciero = inicializarSimuladorFinanciero;
     window.cargarCatalogoSimulador = cargarCatalogoSimulador;
@@ -1098,6 +1506,12 @@
     window.agregarInstitucion = agregarInstitucion;
     window.seleccionarTodas = seleccionarTodas;
     window.deseleccionarTodas = deseleccionarTodas;
+    window.cambiarEstrategia = cambiarEstrategia;
+    window.actualizarEstrategiaDiversificada = actualizarEstrategiaDiversificada;
+    window.aplicarEstrategiaDiversificada = aplicarEstrategiaDiversificada;
+    window.restablecerSimulacionNormal = restablecerSimulacionNormal;
+    window.getEstrategiaActual = () => estrategiaActual;
+    window.getUltimaEstrategiaDiversificada = () => ultimaEstrategiaDiversificada;
     window.valoresPersonalizadosPorInst = valoresPersonalizadosPorInst;
     window.valoresOriginalesPorInst = valoresOriginalesPorInst;
     window.resultadosCalculadosPorInst = resultadosCalculadosPorInst;

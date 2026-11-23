@@ -1004,6 +1004,24 @@
                     <div style="font-weight: 700; color: #0f172a; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-sliders" style="color: #2563eb;"></i> Parámetros de Simulación
                     </div>
+
+                    <!-- Selector de Estrategia de Inversión -->
+                    <div style="margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
+                        <label style="display: block; font-weight: 700; color: #1e293b; margin-bottom: 8px; font-size: 0.95rem;">
+                            <i class="fas fa-chess-knight" style="color: #2563eb;"></i> Estrategia de inversión:
+                        </label>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <label class="sim-strategy-option sim-strategy-individual" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; border: 2px solid #3b82f6; background: #eff6ff; font-weight: 700; font-size: 0.92rem; color: #1d4ed8;">
+                                <input type="radio" name="simulador-estrategia" value="individual" checked style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🔵 Mayor rendimiento</span>
+                            </label>
+                            <label class="sim-strategy-option sim-strategy-diversificada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.92rem; color: #475569;">
+                                <input type="radio" name="simulador-estrategia" value="diversificada" style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🟢 Mejor inversión diversificada</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; align-items: flex-end;">
                         <!-- Inversión Total -->
                         <div>
@@ -1044,10 +1062,49 @@
                                 <i class="fas fa-times"></i> Ninguna
                             </button>
                         </div>
+
+                        <!-- Parámetros específicos de Diversificación (Visibles solo en modo diversificado) -->
+                        <div id="simulador-params-diversificado" style="display: none; grid-column: 1 / -1; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-top: 6px;">
+                            <div style="font-weight: 700; color: #166534; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-sliders-h"></i> Parámetros de Diversificación
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: flex-end;">
+                                <!-- Número de instituciones -->
+                                <div>
+                                    <label for="simulador-num-instituciones" style="display: block; font-weight: 600; color: #1e293b; margin-bottom: 6px; font-size: 0.85rem;">
+                                        Diversificar entre:
+                                    </label>
+                                    <select id="simulador-num-instituciones" class="form-select" style="font-weight: 700; font-size: 0.95rem; border-radius: 8px; width: 100%; padding: 8px 12px; border: 1px solid #86efac; background: #ffffff;">
+                                        <option value="2">2 instituciones</option>
+                                        <option value="3">3 instituciones</option>
+                                        <option value="4">4 instituciones</option>
+                                        <option value="5">5 instituciones</option>
+                                        <option value="todas" selected>Todas las disponibles</option>
+                                    </select>
+                                    <small style="color: #475569; font-size: 0.75rem;">Reparte el capital entre la cantidad seleccionada.</small>
+                                </div>
+                                <!-- Máximo por institución (%) -->
+                                <div>
+                                    <label for="simulador-max-porcentaje" style="display: block; font-weight: 600; color: #1e293b; margin-bottom: 6px; font-size: 0.85rem;">
+                                        Máximo por institución (%):
+                                    </label>
+                                    <div style="position: relative;">
+                                        <input type="number" id="simulador-max-porcentaje" class="form-control" value="50" min="10" max="100" step="5" style="padding-right: 28px; font-weight: 700; font-size: 0.95rem; border-radius: 8px; width: 100%; border: 1px solid #86efac; background: #ffffff;">
+                                        <span style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-weight: 700; color: #64748b;">%</span>
+                                    </div>
+                                    <small style="color: #475569; font-size: 0.75rem;">Tope de concentración de capital por institución.</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Resumen comparativo dinámico -->
+                    <!-- Resumen comparativo dinámico (Modo: Mayor rendimiento) -->
                     <div id="simulador-resumen-comparativo" style="margin-top: 18px; padding: 12px 18px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+
+                    <!-- Panel Destacado de Mejor Inversión Diversificada (Modo: Diversificado) -->
+                    <div id="simulador-panel-diversificado" style="display: none; margin-top: 18px; background: #ffffff; border: 2px solid #86efac; border-radius: 10px; padding: 20px; box-shadow: 0 4px 14px rgba(22, 101, 52, 0.08);">
                         <!-- Se llena dinámicamente -->
                     </div>
 
