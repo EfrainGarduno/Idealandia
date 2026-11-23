@@ -160,27 +160,16 @@
         if (btnSeleccionarTodas && !btnSeleccionarTodas.dataset.configured) {
             btnSeleccionarTodas.dataset.configured = 'true';
             btnSeleccionarTodas.addEventListener('click', () => {
-                catalogoInstituciones.forEach(i => institucionesSeleccionadas.add(i.id));
-                actualizarCheckboxesYRecalcular();
+                seleccionarTodas();
             });
         }
 
         if (btnDeseleccionarTodas && !btnDeseleccionarTodas.dataset.configured) {
             btnDeseleccionarTodas.dataset.configured = 'true';
             btnDeseleccionarTodas.addEventListener('click', () => {
-                institucionesSeleccionadas.clear();
-                actualizarCheckboxesYRecalcular();
+                deseleccionarTodas();
             });
         }
-    }
-
-    function actualizarCheckboxesYRecalcular() {
-        const checkboxes = document.querySelectorAll('.simulador-check-inst');
-        checkboxes.forEach(chk => {
-            const id = parseInt(chk.dataset.instId, 10);
-            chk.checked = institucionesSeleccionadas.has(id);
-        });
-        actualizarEstiloFilasSeleccionadas();
     }
 
     /**
@@ -229,6 +218,11 @@
             const tInfo = tipoMap[inst.tipo] || { label: inst.tipo || 'O', title: 'Otro', color: '#475569', bg: '#f1f5f9' };
 
             const isChecked = institucionesSeleccionadas.has(inst.id);
+            if (!isChecked) {
+                tr.style.display = 'none';
+            } else {
+                tr.classList.add('row-selected');
+            }
 
             // Simulación base con parámetros globales
             const sim = tieneEsquema ? window.MotorFinanciero.simularInversion(capitalGlobal, mesesGlobal, tramos) : null;
@@ -388,6 +382,22 @@
             }
         });
 
+        // Fila de estado vacío si no hay instituciones seleccionadas
+        const emptyTr = document.createElement('tr');
+        emptyTr.id = 'sim-row-vacia';
+        emptyTr.style.display = (institucionesSeleccionadas.size === 0) ? '' : 'none';
+        emptyTr.innerHTML = `
+            <td colspan="14" style="text-align: center; padding: 32px 20px; color: #64748b; font-size: 0.95rem; background: #fafafa;">
+                <div style="font-weight: 600; color: #334155; margin-bottom: 6px;">
+                    <i class="fas fa-filter" style="color: #64748b; margin-right: 6px;"></i> No hay instituciones seleccionadas en la tabla
+                </div>
+                <div style="font-size: 0.85rem; color: #64748b;">
+                    Selecciona al menos una institución desde <strong>Instituciones disponibles</strong> o pulsa <strong>Todas</strong> para comparar rendimientos.
+                </div>
+            </td>
+        `;
+        tbody.appendChild(emptyTr);
+
         // Configurar listener para inputs editables por fila (reactivo en tiempo real)
         tbody.querySelectorAll('.sim-row-input').forEach(input => {
             input.addEventListener('input', (e) => {
@@ -413,11 +423,10 @@
             chk.addEventListener('change', (e) => {
                 const id = parseInt(e.target.dataset.instId, 10);
                 if (e.target.checked) {
-                    institucionesSeleccionadas.add(id);
+                    agregarInstitucion(id);
                 } else {
-                    institucionesSeleccionadas.delete(id);
+                    quitarInstitucion(id);
                 }
-                actualizarEstiloFilasSeleccionadas();
             });
         });
 
@@ -655,25 +664,374 @@
             }
         });
 
+        actualizarVisibilidadEstadoVacio();
+        actualizarPanelDisponibles();
         actualizarResumenComparativo();
     }
 
     /**
-     * Resalta visualmente las filas seleccionadas y calcula el resumen comparativo.
+     * Quita una institución de la simulación activa:
+     * - Guarda cualquier modificación manual pendiente en memoria
+     * - Oculta la fila y subfila inmediatamente de la tabla (desaparece por completo)
+     * - Actualiza el panel de disponibles para permitir volver a agregarla en cualquier momento
+     * - Recalcula el indicador de mayor rendimiento excluyendo esta institución
+     * - No toca la base de datos (estado 100% de la sesión del usuario)
+     */
+    function quitarInstitucion(instId) {
+        const tr = document.getElementById(`sim-row-${instId}`);
+        if (tr) {
+            // Guardar cualquier valor editado antes de ocultar
+            const inputTasa = tr.querySelector('.sim-input-tasa');
+            const inputInv1 = tr.querySelector('.sim-input-inv1');
+            const inputInv2 = tr.querySelector('.sim-input-inv2');
+            const inputMeses = tr.querySelector('.sim-input-meses');
+            const orig = valoresOriginalesPorInst.get(instId) || { tasa: 0, inv1: 0, inv2: 0, meses: 1 };
+
+            if (inputTasa && inputInv1 && inputInv2 && inputMeses) {
+                const curTasa = parseFloat(inputTasa.value) || 0;
+                const curInv1 = parseFloat(inputInv1.value) || 0;
+                const curInv2 = parseFloat(inputInv2.value) || 0;
+                const curMeses = parseInt(inputMeses.value, 10) || 1;
+
+                const isModified = (
+                    Math.abs(curTasa - orig.tasa) > 0.001 ||
+                    Math.abs(curInv1 - orig.inv1) > 0.001 ||
+                    Math.abs(curInv2 - orig.inv2) > 0.001 ||
+                    Math.abs(curMeses - orig.meses) > 0.001
+                );
+
+                if (isModified) {
+                    valoresPersonalizadosPorInst.set(instId, {
+                        tasa: curTasa,
+                        inv1: curInv1,
+                        inv2: curInv2,
+                        meses: curMeses,
+                        isModified: true
+                    });
+                }
+            }
+
+            tr.style.display = 'none';
+            tr.classList.remove('row-selected');
+            const chk = tr.querySelector('.simulador-check-inst');
+            if (chk) chk.checked = false;
+        }
+
+        const subTr = document.getElementById(`sim-subrow-${instId}`);
+        if (subTr) subTr.style.display = 'none';
+
+        institucionesSeleccionadas.delete(instId);
+
+        actualizarVisibilidadEstadoVacio();
+        actualizarPanelDisponibles();
+        actualizarResumenComparativo();
+    }
+
+    /**
+     * Vuelve a agregar una institución deseleccionada a la tabla:
+     * - Reaparece en su posición normal según el orden configurado
+     * - Checkbox marcado como seleccionado
+     * - Recalcula: Inversión Base, Tasa, Inv1, Inv2, Meses, Rend1, Rend2, Total mensual, Total periodo
+     * - Conserva modificaciones manuales previas (Tasa, Inv1, Inv2, Meses) y estado "Editado"
+     * - Si no tenía modificaciones, usa los parámetros globales actuales
+     * - Actualiza el panel de disponibles y el indicador de Mayor Rendimiento
+     */
+    function agregarInstitucion(instId) {
+        institucionesSeleccionadas.add(instId);
+        const tr = document.getElementById(`sim-row-${instId}`);
+        const inst = catalogoInstituciones.find(i => i.id === instId);
+
+        if (tr && inst) {
+            tr.style.display = '';
+            tr.classList.add('row-selected');
+            const chk = tr.querySelector('.simulador-check-inst');
+            if (chk) chk.checked = true;
+
+            const tramos = (inst.esquema && Array.isArray(inst.esquema.tramos)) ? inst.esquema.tramos : [];
+            const inputInversion = document.getElementById('simulador-inversion-global');
+            const inputMeses = document.getElementById('simulador-meses-global');
+            const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 40000) || 40000;
+            const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+
+            const sim = tramos.length > 0 ? window.MotorFinanciero.simularInversion(capitalGlobal, mesesGlobal, tramos) : null;
+
+            const newOrigTasa = sim ? sim.tasa_base : 0;
+            const newOrigInv1 = sim ? sim.inversion_base : capitalGlobal;
+            const newOrigInv2 = sim ? sim.inversion_2 : 0;
+            const newOrigMeses = mesesGlobal;
+
+            valoresOriginalesPorInst.set(inst.id, {
+                tasa: newOrigTasa,
+                inv1: newOrigInv1,
+                inv2: newOrigInv2,
+                meses: newOrigMeses
+            });
+
+            // Actualizar Inversión Base (límite base de condición en BD)
+            const elInvBase = tr.querySelector('.sim-val-inv-base');
+            if (elInvBase) {
+                elInvBase.textContent = (sim && sim.monto_2 !== null) ? formatMoney(sim.monto_2) : '—';
+            }
+
+            const custom = valoresPersonalizadosPorInst.get(inst.id);
+            const isModified = !!(custom && custom.isModified);
+
+            const inputTasa = tr.querySelector('.sim-input-tasa');
+            const inputInv1 = tr.querySelector('.sim-input-inv1');
+            const inputInv2 = tr.querySelector('.sim-input-inv2');
+            const inputMesesRow = tr.querySelector('.sim-input-meses');
+            const badge = tr.querySelector(`#sim-badge-${inst.id}`);
+
+            if (isModified) {
+                if (inputTasa) inputTasa.value = custom.tasa.toFixed(2);
+                if (inputInv1) inputInv1.value = custom.inv1.toFixed(2);
+                if (inputInv2) inputInv2.value = custom.inv2.toFixed(2);
+                if (inputMesesRow) inputMesesRow.value = custom.meses;
+                tr.classList.add('fila-simulacion-modificada');
+                if (badge) badge.style.display = 'inline-flex';
+                recalcularFila(inst.id, tr);
+            } else {
+                if (inputTasa) inputTasa.value = newOrigTasa.toFixed(2);
+                if (inputInv1) inputInv1.value = newOrigInv1.toFixed(2);
+                if (inputInv2) inputInv2.value = newOrigInv2.toFixed(2);
+                if (inputMesesRow) inputMesesRow.value = newOrigMeses;
+                tr.classList.remove('fila-simulacion-modificada');
+                if (badge) badge.style.display = 'none';
+
+                const rend1 = (newOrigInv1 * (newOrigTasa / 100) / 12) * newOrigMeses;
+                const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
+                const rend2 = (newOrigInv2 * (tasa2 / 100) / 12) * newOrigMeses;
+
+                let rendExtraMensual = 0;
+                let rendExtraPeriodo = 0;
+                if (tramos.length >= 3 && sim && Array.isArray(sim.tramos)) {
+                    for (let k = 2; k < sim.tramos.length; k++) {
+                        rendExtraMensual += sim.tramos[k].rendimiento_mensual;
+                        rendExtraPeriodo += (sim.tramos[k].rendimiento_mensual * newOrigMeses);
+                    }
+                }
+
+                const totalMensual = (newOrigInv1 * (newOrigTasa / 100) / 12) + (newOrigInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
+                const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
+
+                const elRend1 = tr.querySelector('.sim-val-rend1');
+                const elRend2 = tr.querySelector('.sim-val-rend2');
+                const elTotM = tr.querySelector('.sim-val-total-mensual');
+                const elTotP = tr.querySelector('.sim-val-total-periodo');
+
+                if (elRend1) elRend1.textContent = formatMoney(rend1);
+                if (elRend2) elRend2.textContent = formatMoney(rend2);
+                if (elTotM) elTotM.textContent = formatMoney(totalMensual);
+                if (elTotP) elTotP.textContent = formatMoney(totalPeriodo);
+
+                resultadosCalculadosPorInst.set(inst.id, {
+                    total_mensual: totalMensual,
+                    total_periodo: totalPeriodo,
+                    rend1: rend1,
+                    rend2: rend2
+                });
+
+                const subrowTbody = document.getElementById(`sim-subrow-tbody-${inst.id}`);
+                if (subrowTbody && sim) {
+                    subrowTbody.innerHTML = renderizarSubTramosHtml(sim);
+                }
+            }
+        }
+
+        actualizarVisibilidadEstadoVacio();
+        actualizarPanelDisponibles();
+        actualizarResumenComparativo();
+    }
+
+    /**
+     * Selecciona todas las instituciones disponibles:
+     * - Muestra todos los renglones en la tabla
+     * - Marca todos los checkboxes
+     * - Recalcula resultados respetando modificaciones manuales previas
+     */
+    function seleccionarTodas() {
+        catalogoInstituciones.forEach(inst => {
+            institucionesSeleccionadas.add(inst.id);
+            const tr = document.getElementById(`sim-row-${inst.id}`);
+            if (tr) {
+                tr.style.display = '';
+                tr.classList.add('row-selected');
+                const chk = tr.querySelector('.simulador-check-inst');
+                if (chk) chk.checked = true;
+            }
+        });
+        recalcularSimulacion();
+        actualizarVisibilidadEstadoVacio();
+        actualizarPanelDisponibles();
+        actualizarResumenComparativo();
+    }
+
+    /**
+     * Deselecciona todas las instituciones:
+     * - Oculta todos los renglones de la tabla
+     * - Desmarca todos los checkboxes
+     * - Conserva las instituciones disponibles para volver a agregarlas
+     * - Preserva cualquier modificación manual previa
+     */
+    function deseleccionarTodas() {
+        catalogoInstituciones.forEach(inst => {
+            const tr = document.getElementById(`sim-row-${inst.id}`);
+            if (tr) {
+                const inputTasa = tr.querySelector('.sim-input-tasa');
+                const inputInv1 = tr.querySelector('.sim-input-inv1');
+                const inputInv2 = tr.querySelector('.sim-input-inv2');
+                const inputMeses = tr.querySelector('.sim-input-meses');
+                const orig = valoresOriginalesPorInst.get(inst.id) || { tasa: 0, inv1: 0, inv2: 0, meses: 1 };
+
+                if (inputTasa && inputInv1 && inputInv2 && inputMeses) {
+                    const curTasa = parseFloat(inputTasa.value) || 0;
+                    const curInv1 = parseFloat(inputInv1.value) || 0;
+                    const curInv2 = parseFloat(inputInv2.value) || 0;
+                    const curMeses = parseInt(inputMeses.value, 10) || 1;
+
+                    const isModified = (
+                        Math.abs(curTasa - orig.tasa) > 0.001 ||
+                        Math.abs(curInv1 - orig.inv1) > 0.001 ||
+                        Math.abs(curInv2 - orig.inv2) > 0.001 ||
+                        Math.abs(curMeses - orig.meses) > 0.001
+                    );
+
+                    if (isModified) {
+                        valoresPersonalizadosPorInst.set(inst.id, {
+                            tasa: curTasa,
+                            inv1: curInv1,
+                            inv2: curInv2,
+                            meses: curMeses,
+                            isModified: true
+                        });
+                    }
+                }
+                tr.style.display = 'none';
+                tr.classList.remove('row-selected');
+                const chk = tr.querySelector('.simulador-check-inst');
+                if (chk) chk.checked = false;
+            }
+            const subTr = document.getElementById(`sim-subrow-${inst.id}`);
+            if (subTr) subTr.style.display = 'none';
+        });
+
+        institucionesSeleccionadas.clear();
+        actualizarVisibilidadEstadoVacio();
+        actualizarPanelDisponibles();
+        actualizarResumenComparativo();
+    }
+
+    /**
+     * Alterna la visibilidad del mensaje de estado vacío en la tabla
+     */
+    function actualizarVisibilidadEstadoVacio() {
+        const emptyTr = document.getElementById('sim-row-vacia');
+        if (emptyTr) {
+            emptyTr.style.display = (institucionesSeleccionadas.size === 0) ? '' : 'none';
+        }
+    }
+
+    /**
+     * Renderiza la zona/control de instituciones disponibles para recuperar las deseleccionadas.
+     * Muestra botones estilo chip interactivos [ + Institución ] y dropdown select.
+     */
+    function actualizarPanelDisponibles() {
+        const container = document.getElementById('simulador-disponibles-container');
+        if (!container) return;
+
+        const disponibles = catalogoInstituciones.filter(i => !institucionesSeleccionadas.has(i.id));
+
+        if (disponibles.length === 0) {
+            container.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                    <div style="font-size: 0.86rem; color: #047857; display: flex; align-items: center; gap: 6px; font-weight: 600;">
+                        <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                        <span>Todas las instituciones financieras activas están seleccionadas en la simulación.</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #64748b;">
+                        Deselecciona la casilla de cualquier institución en la tabla para excluirla de la comparación.
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 700; font-size: 0.88rem; color: #1e293b;">
+                            <i class="fas fa-layer-group" style="color: #2563eb;"></i> Instituciones disponibles (${disponibles.length}):
+                        </span>
+                        <span style="font-size: 0.78rem; color: #64748b;">(Haz clic para volver a incorporarla a la tabla)</span>
+                    </div>
+                    <div>
+                        <select id="simulador-select-agregar" class="form-select" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; cursor: pointer;">
+                            <option value="">Agregar institución ▾</option>
+                            ${disponibles.map(inst => `
+                                <option value="${inst.id}">+ ${escapeHTML(inst.nombre)}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div id="simulador-chips-disponibles" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${disponibles.map(inst => `
+                        <button type="button" class="btn-agregar-inst" data-inst-id="${inst.id}" 
+                                style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 0.84rem; font-weight: 600; color: #1d4ed8; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 20px; cursor: pointer; transition: all 0.15s ease-in-out; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
+                                onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#60a5fa';"
+                                onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#93c5fd';"
+                                title="Volver a agregar ${escapeHTML(inst.nombre)} a la simulación">
+                            <i class="fas fa-plus" style="font-size: 0.72rem;"></i>
+                            <span>${escapeHTML(inst.nombre)}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+
+        container.querySelectorAll('.btn-agregar-inst').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const instId = parseInt(e.currentTarget.dataset.instId, 10);
+                agregarInstitucion(instId);
+            });
+        });
+
+        const selectEl = document.getElementById('simulador-select-agregar');
+        if (selectEl) {
+            selectEl.addEventListener('change', (e) => {
+                const instId = parseInt(e.target.value, 10);
+                if (instId) {
+                    agregarInstitucion(instId);
+                }
+            });
+        }
+    }
+
+    /**
+     * Resalta visualmente las filas seleccionadas y oculta por completo las deseleccionadas.
      */
     function actualizarEstiloFilasSeleccionadas() {
         catalogoInstituciones.forEach(inst => {
             const tr = document.getElementById(`sim-row-${inst.id}`);
             if (!tr) return;
             const isSelected = institucionesSeleccionadas.has(inst.id);
+            const chk = tr.querySelector('.simulador-check-inst');
+            if (chk) chk.checked = isSelected;
+
             if (isSelected) {
-                tr.style.opacity = '1';
+                tr.style.display = '';
                 tr.classList.add('row-selected');
             } else {
-                tr.style.opacity = '0.45';
+                tr.style.display = 'none';
                 tr.classList.remove('row-selected');
+                const subTr = document.getElementById(`sim-subrow-${inst.id}`);
+                if (subTr) subTr.style.display = 'none';
             }
         });
+
+        actualizarVisibilidadEstadoVacio();
+        actualizarPanelDisponibles();
         actualizarResumenComparativo();
     }
 
@@ -683,11 +1041,16 @@
 
         const seleccionadas = catalogoInstituciones.filter(i => institucionesSeleccionadas.has(i.id));
         if (seleccionadas.length === 0) {
-            resumenBox.innerHTML = `<em>Selecciona al menos una institución financiera mediante los checkboxes para comparar resultados.</em>`;
+            resumenBox.innerHTML = `
+                <div style="color: #64748b; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-info-circle" style="color: #3b82f6;"></i>
+                    <em>Selecciona al menos una institución para comparar rendimientos.</em>
+                </div>
+            `;
             return;
         }
 
-        // Encontrar la mejor opción de rendimiento del periodo entre las seleccionadas
+        // Encontrar la mejor opción de rendimiento del periodo exclusivamente entre las seleccionadas
         let mejorInst = null;
         let mejorPeriodo = -1;
         let mejorMensual = -1;
@@ -731,7 +1094,14 @@
     window.recalcularSimulacion = recalcularSimulacion;
     window.recalcularFila = recalcularFila;
     window.restablecerFilaOriginal = restablecerFilaOriginal;
+    window.quitarInstitucion = quitarInstitucion;
+    window.agregarInstitucion = agregarInstitucion;
+    window.seleccionarTodas = seleccionarTodas;
+    window.deseleccionarTodas = deseleccionarTodas;
     window.valoresPersonalizadosPorInst = valoresPersonalizadosPorInst;
     window.valoresOriginalesPorInst = valoresOriginalesPorInst;
     window.resultadosCalculadosPorInst = resultadosCalculadosPorInst;
+    window.institucionesSeleccionadas = institucionesSeleccionadas;
+    window.getCatalogoInstituciones = () => catalogoInstituciones;
+    window.getInstitucionesSeleccionadas = () => institucionesSeleccionadas;
 }());
