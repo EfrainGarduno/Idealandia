@@ -2278,31 +2278,24 @@ index 0000000..ead936b
 +                            isSetupComplete = true;
 +                            updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 +
-+                            // Send Initial identity, manual and ideas messages once setup is complete
++                            // Send Initial identity, context and ideas messages once setup is complete
 +                            try {
 +                                console.time('LiveContextLoad');
 +                                let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 +
-+                                // 1. Cargar el manual (optimizado con caché)
++                                // 1. Cargar contexto oficial desde MySQL ai_contexto
 +                                try {
-+                                    if (!window.cachedManualText) {
-+                                        const manualRes = await fetch('/docs/idealandia_manual.md');
-+                                        if (manualRes.ok) {
-+                                            window.cachedManualText = await manualRes.text();
-+                                        } else {
-+                                            console.warn("No se pudo obtener el manual (no ok).");
++                                    const contextoRes = await fetch('/api/ai/contexto-activo');
++                                    if (contextoRes.ok) {
++                                        const contextoData = await contextoRes.json();
++                                        if (contextoData && contextoData.contexto) {
++                                            contextText += "--- CONTEXTO DE IDEALANDIA ---\n" + contextoData.contexto + "\n\n";
++                                            console.log("Contexto activo cargado.");
 +                                        }
 +                                    }
-+
-+                                    if (window.cachedManualText) {
-+                                        contextText += "--- MANUAL IDEALANDIA ---\n" + window.cachedManualText + "\n\n";
-+                                        console.log("Manual de Idealandia cargado en el contexto desde caché.");
-+                                    } else {
-+                                        contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
-+                                    }
 +                                } catch (e) {
-+                                    console.error("Excepción al cargar el manual:", e);
-+                                    contextText += "Error al cargar el manual de Idealandia.\n\n";
++                                    console.error("Excepción al cargar el contexto:", e);
++                                    contextText += "Error al cargar contexto de Idealandia.\n\n";
 +                                }
 +
 +                                // 2. Cargar usuario e ideas

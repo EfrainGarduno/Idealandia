@@ -2,7 +2,7 @@
 
 ## 1. Servicio Compartido de Conocimiento
 Para que Idealita Chat (texto) e Idealita Live (voz) utilicen la misma base de conocimiento de forma coherente y segura, se creará un módulo unificado (`knowledgeService.js`) en el backend.
-- Realizará búsquedas locales (basadas en secciones, títulos y palabras clave o expresiones regulares) sobre `docs/idealandia_manual.md` y `docs/idealandia_capabilities.json`.
+- Realizará consultas sobre la tabla MySQL `ai_contexto` y `docs/idealandia_capabilities.json`.
 - **No se integrarán bases de datos vectoriales** (ej. Pinecone) ni dependencias adicionales, ya que el tamaño del manual y el catálogo actual es manejable en memoria, y un buscador local por palabras clave/secciones es suficiente para el alcance del proyecto, minimizando dependencias y costos de infraestructura.
 
 ## 2. Autenticación y Control de Acceso (RBAC)

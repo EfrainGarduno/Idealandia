@@ -1435,6 +1435,9 @@
                 <button type="button" class="admin-nav-block-btn" data-block="admin-block-finanzas" style="padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; border: 1px solid #cbd5e1; cursor: pointer; transition: all 0.2s; background: #f8fafc; color: #475569; display: inline-flex; align-items: center; gap: 8px;">
                     <i class="fas fa-coins"></i> Finanzas
                 </button>
+                <button type="button" class="admin-nav-block-btn" data-block="admin-block-contexto" style="padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; border: 1px solid #cbd5e1; cursor: pointer; transition: all 0.2s; background: #f8fafc; color: #475569; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-brain"></i> Contexto de Idealita
+                </button>
             </div>
 
             <!-- BLOQUE 1: CONSOLA (Módulos existentes 100% preservados) -->
@@ -1725,6 +1728,70 @@
                     </div>
                 </div>
             </div> <!-- /#admin-block-finanzas -->
+
+            <!-- BLOQUE 4: CONTEXTO DE IDEALITA (ai_contexto - FASE 1) -->
+            <div id="admin-block-contexto" class="admin-main-block" style="display: none; width: 100%;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #1e293b; font-size: 1.4rem; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-brain" style="color: #8b5cf6;"></i> Contexto de Idealita
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.95rem;">
+                                Base de conocimiento administrable para guiar las respuestas y asesorías de Idealita.
+                            </p>
+                        </div>
+                        <button type="button" id="btn-nuevo-contexto" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700; background: #8b5cf6; border-color: #7c3aed; padding: 10px 18px; border-radius: 8px;">
+                            <i class="fas fa-plus-circle"></i> Nuevo Contexto
+                        </button>
+                    </div>
+
+                    <!-- Barra de Filtros y Búsqueda -->
+                    <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; background: #f8fafc; padding: 14px 18px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                        <div style="flex: 1; min-width: 220px; position: relative;">
+                            <input type="text" id="admin-contexto-search" class="form-control" placeholder="Buscar por título, contenido o categoría..." style="width: 100%; padding-left: 36px; border-radius: 6px;">
+                            <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+                        </div>
+                        <div style="min-width: 180px;">
+                            <select id="admin-contexto-filtro-categoria" class="form-control" style="width: 100%; border-radius: 6px;">
+                                <option value="todas">Todas las categorías</option>
+                            </select>
+                        </div>
+                        <div style="min-width: 150px;">
+                            <select id="admin-contexto-filtro-estatus" class="form-control" style="width: 100%; border-radius: 6px;">
+                                <option value="todos">Todos los estados</option>
+                                <option value="1">Solo activos</option>
+                                <option value="0">Solo inactivos</option>
+                            </select>
+                        </div>
+                        <div>
+                            <span id="admin-contexto-counter" style="font-size: 0.85rem; font-weight: 700; background: #ede9fe; color: #6d28d9; padding: 6px 14px; border-radius: 12px; display: inline-block;">
+                                0 registros
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="admin-table" id="admin-contexto-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 130px;">Categoría</th>
+                                    <th style="min-width: 160px;">Título</th>
+                                    <th style="min-width: 260px;">Contenido</th>
+                                    <th style="width: 90px; text-align: center;">Prioridad</th>
+                                    <th style="width: 75px; text-align: center;">Versión</th>
+                                    <th style="width: 95px; text-align: center;">Estatus</th>
+                                    <th style="width: 140px; text-align: center;">Actualizado</th>
+                                    <th style="width: 110px; text-align: center;" data-no-sort="true">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-contexto-tbody">
+                                <!-- Filas dinámicas -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div> <!-- /#admin-block-contexto -->
         </section>
 
         <!-- Modal Detalle de Asociado -->
@@ -1737,6 +1804,73 @@
                 <div id="modal-asociado-detalle-body">
                     <!-- Rellenado dinámicamente -->
                 </div>
+            </div>
+        </div>
+
+        <!-- Modal Crear/Editar Contexto de Idealita (ai_contexto - FASE 1) -->
+        <div id="modal-ai-contexto" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 720px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
+                    <h3 id="modal-ai-contexto-titulo" style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-brain" style="color: #8b5cf6;"></i> <span>Nuevo Contexto de Idealita</span>
+                    </h3>
+                    <button type="button" id="btn-cerrar-modal-ai-contexto" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666;" aria-label="Cerrar">&times;</button>
+                </div>
+                <form id="form-ai-contexto">
+                    <input type="hidden" id="ai-contexto-id" value="">
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label for="ai-contexto-categoria" style="font-weight: 600; display: block; margin-bottom: 4px;">Categoría *</label>
+                            <input type="text" id="ai-contexto-categoria" list="lista-categorias-contexto" class="form-control" required placeholder="Selecciona o escribe una categoría..." style="width: 100%;">
+                            <datalist id="lista-categorias-contexto">
+                                <option value="General">
+                                <option value="Idealandia">
+                                <option value="Idealita">
+                                <option value="Reglas">
+                                <option value="Ideas">
+                                <option value="Finanzas">
+                                <option value="Pensiones">
+                                <option value="Asociados">
+                                <option value="Servicios">
+                                <option value="Administración">
+                            </datalist>
+                            <small style="color: #64748b; font-size: 0.75rem;">Puedes elegir una sugerida o escribir una nueva.</small>
+                        </div>
+                        <div>
+                            <label for="ai-contexto-prioridad" style="font-weight: 600; display: block; margin-bottom: 4px;">Prioridad</label>
+                            <input type="number" id="ai-contexto-prioridad" class="form-control" value="100" min="1" step="1" style="width: 100%;">
+                            <small style="color: #64748b; font-size: 0.75rem;">Mayor valor = mayor relevancia para la IA.</small>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label for="ai-contexto-titulo" style="font-weight: 600; display: block; margin-bottom: 4px;">Título *</label>
+                        <input type="text" id="ai-contexto-titulo" class="form-control" required maxlength="255" placeholder="Título descriptivo del conocimiento o regla..." style="width: 100%;">
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label for="ai-contexto-contenido" style="font-weight: 600; display: block; margin-bottom: 4px;">Contenido / Conocimiento *</label>
+                        <textarea id="ai-contexto-contenido" class="form-control" required rows="9" placeholder="Escribe aquí el conocimiento, instrucciones o contexto detallado para Idealita..." style="width: 100%; min-height: 200px; font-family: inherit; font-size: 0.9rem; line-height: 1.5; resize: vertical;"></textarea>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid #f1f5f9; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; margin: 0;">
+                            <input type="checkbox" id="ai-contexto-activo" checked style="width: 18px; height: 18px;">
+                            <span>Contexto activo para Idealita</span>
+                        </label>
+                        <div id="ai-contexto-version-badge" style="font-size: 0.78rem; color: #64748b; background: #f8fafc; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            Versión: <strong id="ai-contexto-version-val">1</strong> <span style="color: #94a3b8;">(se incrementa al editar contenido)</span>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button type="button" id="btn-cancelar-modal-ai-contexto" class="btn btn-secondary">Cancelar</button>
+                        <button type="submit" id="btn-guardar-ai-contexto" class="btn btn-primary" style="background: #8b5cf6; border-color: #7c3aed; font-weight: 700;">
+                            <i class="fas fa-save"></i> Guardar Contexto
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -3322,6 +3456,7 @@
                     key: 'asesoria-pensiones',
                     nombre: 'Asesoría de Pensiones',
                     descripcion: 'Obtén herramientas y recursos especializados para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.',
+                    modalidadesTitulo: 'Modalidades de la Calculadora de Pensiones:',
                     modalidadesInfo: [
                         {
                             nombre: 'Calculadora Básica',
@@ -3361,9 +3496,36 @@
                 },
                 'asesorias-financieras': {
                     key: 'asesorias-financieras',
-                    nombre: 'Asesorías Financieras',
-                    descripcion: 'Recibe orientación y asesoría experta para la gestión de tus finanzas personales y proyectos de inversión.',
-                    icon: 'fa-chart-line',
+                    nombre: 'Asesorías Financieras — Simulador de Inversiones',
+                    descripcion: 'Simulador interactivo y comparador de rendimientos de inversión en México. Modela escenarios de ahorro, evalúa tasas escalonadas por tramos y optimiza tu capital con estrategias diversificadas entre Bancos, Sofipos y Fintechs.',
+                    modalidadesTitulo: 'Capacidades y Módulos del Simulador:',
+                    modalidadesInfo: [
+                        {
+                            nombre: 'Simulador y Comparador Individual',
+                            badge: 'Individual',
+                            badgeColor: '#1d4ed8',
+                            badgeBg: '#dbeafe',
+                            desc: 'Comparativa de rendimientos multi-institución con tasas, condiciones y restricciones vigentes.',
+                            incluye: 'Cálculo automatizado por tramos escalonados (Inversión 1 e Inversión 2), edición interactiva de montos y plazos en fila, control para ocultar y mostrar columnas sin recargar, y ordenamiento por encabezados manteniendo los tramos unidos a su institución.'
+                        },
+                        {
+                            nombre: 'Estrategias de Inversión Diversificada',
+                            badge: 'Diversificado',
+                            badgeColor: '#16a34a',
+                            badgeBg: '#dcfce7',
+                            desc: 'Distribución algorítmica de capital optimizada según el perfil de rendimiento y riesgo.',
+                            incluye: 'Estrategias automáticas de Máximo Rendimiento, Equilibrada y Conservadora; topes dinámicos de asignación, tabla de distribución recomendada ordenable por columna, métricas de concentración de capital y comparativa de ganancia vs mejor institución individual.'
+                        },
+                        {
+                            nombre: 'Motor Financiero Parametrizado',
+                            badge: 'Administrable',
+                            badgeColor: '#7c3aed',
+                            badgeBg: '#f3e8ff',
+                            desc: 'Reglas de negocio, entidades y condiciones 100% administrables desde la Consola.',
+                            incluye: 'Catálogo de Instituciones Financieras (Bancos, Sofipos, Fintechs), esquemas y vigencias históricas/futuras de tasas, tramos escalonados, restricciones operativas y parametrización de algoritmos de diversificación.'
+                        }
+                    ],
+                    icon: 'fa-coins',
                     target: 'asesorias-financieras'
                 },
                 'emprendimientos': {
@@ -3427,7 +3589,7 @@
                         };
                         return {
                             ...meta,
-                            nombre: h.nombre,
+                            nombre: meta.nombre || h.nombre,
                             autorizado: h.autorizado !== false
                         };
                     })
@@ -3453,13 +3615,13 @@
                             ${(serv.modalidadesInfo && Array.isArray(serv.modalidadesInfo)) ? `
                                 <div class="servicio-modalidades-list" style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px;">
                                     <div style="font-weight: 700; font-size: 0.88em; color: #1e293b; margin-bottom: 2px;">
-                                        <i class="fas fa-layer-group" style="color: #007bff;"></i> Modalidades de la Calculadora:
+                                        <i class="fas fa-layer-group" style="color: #007bff;"></i> ${escapeHTML(serv.modalidadesTitulo || 'Modalidades del Servicio:')}
                                     </div>
                                     ${serv.modalidadesInfo.map(m => `
-                                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid ${m.badge === 'Básica' ? '#64748b' : (m.badge === 'Intermedia' ? '#2563eb' : '#d97706')}; border-radius: 6px; padding: 8px 10px; font-size: 0.82em;">
+                                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid ${m.badgeColor || (m.badge === 'Básica' ? '#64748b' : (m.badge === 'Intermedia' ? '#2563eb' : '#d97706'))}; border-radius: 6px; padding: 8px 10px; font-size: 0.82em;">
                                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
                                                 <strong style="color: #0f172a; font-size: 0.95em;">${escapeHTML(m.nombre)}</strong>
-                                                <span style="font-size: 0.75em; padding: 1px 6px; border-radius: 8px; font-weight: 600; background: ${m.badge === 'Básica' ? '#e2e8f0' : (m.badge === 'Intermedia' ? '#dbeafe' : '#fef3c7')}; color: ${m.badge === 'Básica' ? '#475569' : (m.badge === 'Intermedia' ? '#1d4ed8' : '#b45309')};">${escapeHTML(m.badge)}</span>
+                                                <span style="font-size: 0.75em; padding: 1px 6px; border-radius: 8px; font-weight: 600; background: ${m.badgeBg || (m.badge === 'Básica' ? '#e2e8f0' : (m.badge === 'Intermedia' ? '#dbeafe' : '#fef3c7'))}; color: ${m.badgeColor || (m.badge === 'Básica' ? '#475569' : (m.badge === 'Intermedia' ? '#1d4ed8' : '#b45309'))};">${escapeHTML(m.badge)}</span>
                                             </div>
                                             <div style="color: #475569; margin-bottom: 3px; font-style: italic;">${escapeHTML(m.desc)}</div>
                                             <div style="color: #334155; line-height: 1.35;"><strong>Incluye:</strong> ${escapeHTML(m.incluye)}</div>
@@ -10639,31 +10801,30 @@ ${userMessage}`;
                             isSetupComplete = true;
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
-                            // Send Initial identity, manual and ideas messages once setup is complete
+                            // Send Initial identity, context and ideas messages once setup is complete
                             try {
                                 console.time('LiveContextLoad');
                                 let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 
-                                // 1. Cargar el manual (optimizado con caché)
+                                // 1. Cargar contexto oficial desde la base de datos MySQL (ai_contexto)
                                 try {
-                                    if (!window.cachedManualText) {
-                                        const manualRes = await fetch('/docs/idealandia_manual.md');
-                                        if (manualRes.ok) {
-                                            window.cachedManualText = await manualRes.text();
+                                    const contextoRes = await fetch('/api/ai/contexto-activo');
+                                    if (contextoRes.ok) {
+                                        const contextoData = await contextoRes.json();
+                                        if (contextoData && contextoData.contexto) {
+                                            contextText += "--- CONTEXTO DE IDEALANDIA ---\n" + contextoData.contexto + "\n\n";
+                                            console.log("Contexto activo de Idealandia cargado desde MySQL (ai_contexto).");
                                         } else {
-                                            console.warn("No se pudo obtener el manual (no ok).");
+                                            contextText += "No hay registros activos en el contexto de Idealandia actualmente.\n\n";
+                                            console.log("ai_contexto vacío o sin registros activos.");
                                         }
-                                    }
-
-                                    if (window.cachedManualText) {
-                                        contextText += "--- MANUAL IDEALANDIA ---\n" + window.cachedManualText + "\n\n";
-                                        console.log("Manual de Idealandia cargado en el contexto desde caché.");
                                     } else {
-                                        contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
+                                        console.warn("No se pudo obtener el contexto activo (no ok).");
+                                        contextText += "El contexto de Idealandia no está disponible actualmente.\n\n";
                                     }
                                 } catch (e) {
-                                    console.error("Excepción al cargar el manual:", e);
-                                    contextText += "Error al cargar el manual de Idealandia.\n\n";
+                                    console.error("Excepción al cargar el contexto desde ai_contexto:", e);
+                                    contextText += "Error al cargar el contexto de Idealandia.\n\n";
                                 }
 
                                 // 2. Cargar usuario e ideas

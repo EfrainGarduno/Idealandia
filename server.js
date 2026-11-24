@@ -6,7 +6,7 @@ if (!process.env.GEMINI_API_KEY) {
         require('dotenv').config({ path: fallbackEnv });
     }
 }
-const { searchKnowledge } = require('./knowledgeService');
+const { searchKnowledge, getAIContexto, searchAIContexto } = require('./knowledgeService');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -117,7 +117,8 @@ if (!process.env.AUTH_SECRET) {
 // Database Connection Pool
 
 const FUNCIONALIDAD_CODE_ALIASES = {
-    'admin': 'administracion'
+    'admin': 'administracion',
+    'contexto': 'contexto_idealita'
 };
 
 function normalizeFunctionalityCode(code) {
@@ -133,12 +134,25 @@ const ADMIN_PERMISOS = [
     'funcionalidades.read', 'funcionalidades.create', 'funcionalidades.update', 'funcionalidades.delete',
     'menus.read', 'menus.create', 'menus.update', 'menus.delete',
     'asociados.read', 'asociados.autorizar', 'asociados.rechazar', 'asociados.pedir_informacion',
-    'finanzas.read', 'finanzas.create', 'finanzas.update', 'finanzas.delete'
+    'finanzas.read', 'finanzas.create', 'finanzas.update', 'finanzas.delete',
+    'contexto.read', 'contexto.create', 'contexto.update', 'contexto.delete'
 ];
 
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
     'administracion': ADMIN_PERMISOS,
     'admin': ADMIN_PERMISOS,
+    'contexto_idealita': [
+        'contexto.read',
+        'contexto.create',
+        'contexto.update',
+        'contexto.delete'
+    ],
+    'contexto': [
+        'contexto.read',
+        'contexto.create',
+        'contexto.update',
+        'contexto.delete'
+    ],
     'ideas': [
         'ideas.read',
         'ideas.create',
@@ -2733,11 +2747,39 @@ app.post('/api/logout', (req, res) => {
 // requireAdmin: validates entry to the 'admin' functionality (Level 2)
 const requireAdmin = requireFunctionality('administracion');
 
+const requireAdminOrSubmodule = async (req, res, next) => {
+    try {
+        if (!req.userId) {
+            const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+            if (!token) {
+                return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+            }
+            const decoded = await verifyToken(token, pool);
+            req.userId = decoded.id;
+            req.user = decoded;
+        }
+        const hasAdminAccess = await checkUserFunctionalityAccess(pool, req.userId, 'administracion');
+        const hasContextoAccess = await checkUserFunctionalityAccess(pool, req.userId, 'contexto_idealita');
+        if (!hasAdminAccess && !hasContextoAccess) {
+            return res.status(403).json({
+                error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                code: 'RBAC_ACCESS_DENIED'
+            });
+        }
+        next();
+    } catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+            return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+        }
+        return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
+    }
+};
+
 app.get('/api/admin/check', requireFunctionality('admin'), async (req, res) => {
     res.status(200).json({ message: 'Acceso de administrador concedido.' });
 });
 
-app.get('/api/admin/mis-permisos', requireFunctionality('admin'), async (req, res) => {
+app.get('/api/admin/mis-permisos', requireAdminOrSubmodule, async (req, res) => {
     try {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         const permisos = await getUserPermissions(pool, req.userId);
@@ -4029,6 +4071,19 @@ app.get('/api/knowledge', async (req, res) => {
 });
 
 // =============================================================================
+// CONTEXTO DE IDEALITA (Consumo interno para Live / Chat desde MySQL ai_contexto)
+// =============================================================================
+app.get('/api/ai/contexto-activo', async (req, res) => {
+    try {
+        const contexto = await getAIContexto(pool);
+        res.status(200).json({ ok: true, contexto });
+    } catch (error) {
+        console.error('Error al obtener contexto activo en /api/ai/contexto-activo:', error);
+        res.status(500).json({ ok: false, error: 'Error al obtener el contexto activo de Idealandia.' });
+    }
+});
+
+// =============================================================================
 // ADMINISTRACIÓN DE ASOCIADOS
 // =============================================================================
 
@@ -5233,6 +5288,230 @@ app.put('/api/admin/finanzas/estrategias/:id', requireFunctionality('admin'), re
     } catch (error) {
         console.error('Error in PUT /api/admin/finanzas/estrategias/:id:', error);
         res.status(500).json({ error: 'Error al actualizar la estrategia de inversión.' });
+    }
+});
+
+// =========================================================================
+// 4. APIs Administrativas para Contexto de Idealita (ai_contexto - FASE 1)
+// =========================================================================
+
+const requireContextoFunctionality = async (req, res, next) => {
+    try {
+        if (!req.userId) {
+            const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+            if (!token) {
+                return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+            }
+            const decoded = await verifyToken(token, pool);
+            req.userId = decoded.id;
+            req.user = decoded;
+        }
+
+        const hasContexto = await checkUserFunctionalityAccess(pool, req.userId, 'contexto_idealita');
+        const hasAdmin = await checkUserFunctionalityAccess(pool, req.userId, 'administracion');
+        if (!hasContexto && !hasAdmin) {
+            return res.status(403).json({
+                error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                code: 'RBAC_ACCESS_DENIED',
+                funcionalidad: 'contexto_idealita'
+            });
+        }
+        next();
+    } catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+            return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+        }
+        return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
+    }
+};
+
+// Listar contextos con filtros y búsqueda
+app.get('/api/admin/contexto', requireContextoFunctionality, requirePermission('contexto.read'), async (req, res) => {
+    try {
+        const { categoria, activo, busqueda } = req.query;
+        let query = 'SELECT id, categoria, titulo, contenido, prioridad, activo, version, created_at, updated_at FROM ai_contexto WHERE 1=1';
+        const params = [];
+
+        if (activo !== undefined && activo !== '' && activo !== 'todos') {
+            query += ' AND activo = ?';
+            params.push(activo === '1' || activo === 1 || activo === 'true' ? 1 : 0);
+        }
+
+        if (categoria && categoria.trim() !== '' && categoria !== 'todas') {
+            query += ' AND categoria = ?';
+            params.push(categoria.trim());
+        }
+
+        if (busqueda && busqueda.trim() !== '') {
+            query += ' AND (titulo LIKE ? OR contenido LIKE ? OR categoria LIKE ?)';
+            const wildcard = `%${busqueda.trim()}%`;
+            params.push(wildcard, wildcard, wildcard);
+        }
+
+        query += ' ORDER BY prioridad DESC, updated_at DESC';
+
+        const [contextos] = await pool.query(query, params);
+
+        // Consultar categorías distintas para poblar filtros/selectores
+        const [catRows] = await pool.query('SELECT DISTINCT categoria FROM ai_contexto WHERE categoria IS NOT NULL AND categoria != "" ORDER BY categoria ASC');
+        const dbCategories = catRows.map(r => r.categoria);
+        const defaultCategories = ['General', 'Idealandia', 'Idealita', 'Reglas', 'Ideas', 'Finanzas', 'Pensiones', 'Asociados', 'Servicios', 'Administración'];
+        const allCategories = Array.from(new Set([...defaultCategories, ...dbCategories]));
+
+        res.json({ success: true, contextos, categorias: allCategories });
+    } catch (error) {
+        console.error('Error in GET /api/admin/contexto:', error);
+        res.status(500).json({ error: 'Error al consultar el contexto de Idealita.' });
+    }
+});
+
+// Obtener categorías disponibles
+app.get('/api/admin/contexto/categorias', requireContextoFunctionality, requirePermission('contexto.read'), async (req, res) => {
+    try {
+        const [catRows] = await pool.query('SELECT DISTINCT categoria FROM ai_contexto WHERE categoria IS NOT NULL AND categoria != "" ORDER BY categoria ASC');
+        const dbCategories = catRows.map(r => r.categoria);
+        const defaultCategories = ['General', 'Idealandia', 'Idealita', 'Reglas', 'Ideas', 'Finanzas', 'Pensiones', 'Asociados', 'Servicios', 'Administración'];
+        const allCategories = Array.from(new Set([...defaultCategories, ...dbCategories]));
+        res.json({ success: true, categorias: allCategories });
+    } catch (error) {
+        console.error('Error in GET /api/admin/contexto/categorias:', error);
+        res.status(500).json({ error: 'Error al consultar categorías.' });
+    }
+});
+
+// Obtener un contexto por ID
+app.get('/api/admin/contexto/:id', requireContextoFunctionality, requirePermission('contexto.read'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
+
+        const [rows] = await pool.query('SELECT id, categoria, titulo, contenido, prioridad, activo, version, created_at, updated_at FROM ai_contexto WHERE id = ?', [id]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Registro de contexto no encontrado.' });
+
+        res.json({ success: true, contexto: rows[0] });
+    } catch (error) {
+        console.error('Error in GET /api/admin/contexto/:id:', error);
+        res.status(500).json({ error: 'Error al obtener el registro de contexto.' });
+    }
+});
+
+// Crear nuevo contexto
+app.post('/api/admin/contexto', requireContextoFunctionality, requirePermission('contexto.create'), async (req, res) => {
+    try {
+        const { categoria, titulo, contenido, prioridad, activo } = req.body;
+
+        if (!titulo || typeof titulo !== 'string' || titulo.trim() === '') {
+            return res.status(400).json({ error: 'El título es obligatorio.' });
+        }
+        if (!contenido || typeof contenido !== 'string' || contenido.trim() === '') {
+            return res.status(400).json({ error: 'El contenido es obligatorio.' });
+        }
+
+        const catLimpia = (categoria && typeof categoria === 'string' && categoria.trim() !== '') ? categoria.trim() : 'General';
+        const titLimpio = titulo.trim();
+        const prio = Number.isInteger(parseInt(prioridad, 10)) ? parseInt(prioridad, 10) : 100;
+        const act = (activo === 0 || activo === false || activo === '0') ? 0 : 1;
+
+        const [result] = await pool.query(
+            `INSERT INTO ai_contexto (categoria, titulo, contenido, prioridad, activo, version)
+             VALUES (?, ?, ?, ?, ?, 1)`,
+            [catLimpia, titLimpio, contenido, prio, act]
+        );
+
+        const newId = result.insertId;
+        const [rows] = await pool.query('SELECT id, categoria, titulo, contenido, prioridad, activo, version, created_at, updated_at FROM ai_contexto WHERE id = ?', [newId]);
+
+        res.status(201).json({ success: true, message: 'Contexto creado exitosamente.', contexto: rows[0] });
+    } catch (error) {
+        console.error('Error in POST /api/admin/contexto:', error);
+        res.status(500).json({ error: 'Error al crear el registro de contexto.' });
+    }
+});
+
+// Editar contexto existente
+app.put('/api/admin/contexto/:id', requireContextoFunctionality, requirePermission('contexto.update'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
+
+        const { categoria, titulo, contenido, prioridad, activo } = req.body;
+
+        if (!titulo || typeof titulo !== 'string' || titulo.trim() === '') {
+            return res.status(400).json({ error: 'El título es obligatorio.' });
+        }
+        if (!contenido || typeof contenido !== 'string' || contenido.trim() === '') {
+            return res.status(400).json({ error: 'El contenido es obligatorio.' });
+        }
+
+        // Consultar registro actual para verificar si hubo cambio de contenido e incrementar versión
+        const [current] = await pool.query('SELECT id, contenido, version FROM ai_contexto WHERE id = ?', [id]);
+        if (current.length === 0) return res.status(404).json({ error: 'Registro de contexto no encontrado.' });
+
+        const catLimpia = (categoria && typeof categoria === 'string' && categoria.trim() !== '') ? categoria.trim() : 'General';
+        const titLimpio = titulo.trim();
+        const prio = Number.isInteger(parseInt(prioridad, 10)) ? parseInt(prioridad, 10) : 100;
+        const act = (activo === 0 || activo === false || activo === '0') ? 0 : 1;
+
+        // Si el contenido fue modificado, incrementar la versión automáticamente
+        const contenidoModificado = current[0].contenido !== contenido;
+        const nuevaVersion = contenidoModificado ? (current[0].version + 1) : current[0].version;
+
+        await pool.query(
+            `UPDATE ai_contexto 
+             SET categoria = ?, titulo = ?, contenido = ?, prioridad = ?, activo = ?, version = ?
+             WHERE id = ?`,
+            [catLimpia, titLimpio, contenido, prio, act, nuevaVersion, id]
+        );
+
+        const [rows] = await pool.query('SELECT id, categoria, titulo, contenido, prioridad, activo, version, created_at, updated_at FROM ai_contexto WHERE id = ?', [id]);
+
+        res.json({ success: true, message: 'Contexto actualizado exitosamente.', contexto: rows[0], versionIncrementada: contenidoModificado });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/contexto/:id:', error);
+        res.status(500).json({ error: 'Error al actualizar el registro de contexto.' });
+    }
+});
+
+// Alternar estatus activo/inactivo
+app.patch('/api/admin/contexto/:id/toggle', requireContextoFunctionality, requirePermission('contexto.update'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
+
+        const [current] = await pool.query('SELECT id, activo FROM ai_contexto WHERE id = ?', [id]);
+        if (current.length === 0) return res.status(404).json({ error: 'Registro de contexto no encontrado.' });
+
+        let nuevoActivo;
+        if (req.body && req.body.activo !== undefined) {
+            nuevoActivo = (req.body.activo === 1 || req.body.activo === true || req.body.activo === '1') ? 1 : 0;
+        } else {
+            nuevoActivo = current[0].activo === 1 ? 0 : 1;
+        }
+
+        await pool.query('UPDATE ai_contexto SET activo = ? WHERE id = ?', [nuevoActivo, id]);
+
+        res.json({ success: true, message: `Contexto ${nuevoActivo === 1 ? 'activado' : 'desactivado'} exitosamente.`, activo: nuevoActivo });
+    } catch (error) {
+        console.error('Error in PATCH /api/admin/contexto/:id/toggle:', error);
+        res.status(500).json({ error: 'Error al cambiar estatus del contexto.' });
+    }
+});
+
+// Eliminar contexto
+app.delete('/api/admin/contexto/:id', requireContextoFunctionality, requirePermission('contexto.delete'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
+
+        const [current] = await pool.query('SELECT id, titulo FROM ai_contexto WHERE id = ?', [id]);
+        if (current.length === 0) return res.status(404).json({ error: 'Registro de contexto no encontrado.' });
+
+        await pool.query('DELETE FROM ai_contexto WHERE id = ?', [id]);
+
+        res.json({ success: true, message: `Contexto "${current[0].titulo}" eliminado exitosamente.` });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/contexto/:id:', error);
+        res.status(500).json({ error: 'Error al eliminar el registro de contexto.' });
     }
 });
 

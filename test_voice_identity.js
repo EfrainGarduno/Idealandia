@@ -44,10 +44,10 @@ window.fetch = async (url) => {
             json: async () => ({ ideas: [{ id: 1, titulo: 'Idea mock', estado: 'pendiente' }] })
         };
     }
-    if (url === '/docs/idealandia_manual.md') {
+    if (url === '/api/ai/contexto-activo') {
         return {
             ok: true,
-            text: async () => "# Manual Idealandia Mock"
+            json: async () => ({ ok: true, contexto: "Contexto Idealandia Mock" })
         };
     }
     if (url === '/api/live-token') {
@@ -209,9 +209,9 @@ setTimeout(() => {
                     return;
                 }
 
-                assert.ok(contextMessages.length > 0, 'Should send initial context message containing manual and ideas');
+                assert.ok(contextMessages.length > 0, 'Should send initial context message containing context and ideas');
                 const contextMsg = JSON.parse(contextMessages[0]).clientContent.turns[0].parts[0].text;
-                assert.ok(contextMsg.includes('MANUAL IDEALANDIA'), 'Context should include manual section');
+                assert.ok(contextMsg.includes('CONTEXTO DE IDEALANDIA'), 'Context should include context section');
                 assert.ok(contextMsg.includes('Test User'), 'Context should include the user identity');
                 assert.ok(contextMsg.includes('IDEAS DEL USUARIO'), 'Context should include ideas section');
                 assert.ok(contextMsg.includes('Idea mock'), 'Context should include the mocked ideas');
