@@ -291,9 +291,8 @@
             return;
         }
 
-        const inputInversion = document.getElementById('simulador-inversion-global');
         const inputMeses = document.getElementById('simulador-meses-global');
-        const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 40000) || 40000;
+        const capitalGlobal = parseInversionGlobal() || 40000;
         const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
 
         catalogoInstituciones.forEach(inst => {
@@ -635,8 +634,7 @@
         let rendExtraMensual = 0;
         let rendExtraPeriodo = 0;
         if (tramos.length >= 3) {
-            const inputInversion = document.getElementById('simulador-inversion-global');
-            const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : (parseFloat(inputInversion ? inputInversion.value : 0) || 0);
+            const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : parseInversionGlobal();
             const simTemp = window.MotorFinanciero.simularInversion(cap, curMeses, tramos);
             if (simTemp && Array.isArray(simTemp.tramos)) {
                 for (let k = 2; k < simTemp.tramos.length; k++) {
@@ -844,9 +842,8 @@
             if (chk) chk.checked = true;
 
             const tramos = (inst.esquema && Array.isArray(inst.esquema.tramos)) ? inst.esquema.tramos : [];
-            const inputInversion = document.getElementById('simulador-inversion-global');
             const inputMeses = document.getElementById('simulador-meses-global');
-            const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 40000) || 40000;
+            const capitalGlobal = parseInversionGlobal() || 40000;
             const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
 
             const sim = tramos.length > 0 ? window.MotorFinanciero.simularInversion(capitalGlobal, mesesGlobal, tramos) : null;
