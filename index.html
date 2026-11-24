@@ -3456,6 +3456,7 @@
                     key: 'asesoria-pensiones',
                     nombre: 'Asesoría de Pensiones',
                     descripcion: 'Obtén herramientas y recursos especializados para la planeación, cálculo y análisis de tu pensión bajo el Régimen Ley 73.',
+                    modalidadesTitulo: 'Modalidades de la Calculadora de Pensiones:',
                     modalidadesInfo: [
                         {
                             nombre: 'Calculadora Básica',
@@ -3495,9 +3496,36 @@
                 },
                 'asesorias-financieras': {
                     key: 'asesorias-financieras',
-                    nombre: 'Asesorías Financieras',
-                    descripcion: 'Recibe orientación y asesoría experta para la gestión de tus finanzas personales y proyectos de inversión.',
-                    icon: 'fa-chart-line',
+                    nombre: 'Asesorías Financieras — Simulador de Inversiones',
+                    descripcion: 'Simulador interactivo y comparador de rendimientos de inversión en México. Modela escenarios de ahorro, evalúa tasas escalonadas por tramos y optimiza tu capital con estrategias diversificadas entre Bancos, Sofipos y Fintechs.',
+                    modalidadesTitulo: 'Capacidades y Módulos del Simulador:',
+                    modalidadesInfo: [
+                        {
+                            nombre: 'Simulador y Comparador Individual',
+                            badge: 'Individual',
+                            badgeColor: '#1d4ed8',
+                            badgeBg: '#dbeafe',
+                            desc: 'Comparativa de rendimientos multi-institución con tasas, condiciones y restricciones vigentes.',
+                            incluye: 'Cálculo automatizado por tramos escalonados (Inversión 1 e Inversión 2), edición interactiva de montos y plazos en fila, control para ocultar y mostrar columnas sin recargar, y ordenamiento por encabezados manteniendo los tramos unidos a su institución.'
+                        },
+                        {
+                            nombre: 'Estrategias de Inversión Diversificada',
+                            badge: 'Diversificado',
+                            badgeColor: '#16a34a',
+                            badgeBg: '#dcfce7',
+                            desc: 'Distribución algorítmica de capital optimizada según el perfil de rendimiento y riesgo.',
+                            incluye: 'Estrategias automáticas de Máximo Rendimiento, Equilibrada y Conservadora; topes dinámicos de asignación, tabla de distribución recomendada ordenable por columna, métricas de concentración de capital y comparativa de ganancia vs mejor institución individual.'
+                        },
+                        {
+                            nombre: 'Motor Financiero Parametrizado',
+                            badge: 'Administrable',
+                            badgeColor: '#7c3aed',
+                            badgeBg: '#f3e8ff',
+                            desc: 'Reglas de negocio, entidades y condiciones 100% administrables desde la Consola.',
+                            incluye: 'Catálogo de Instituciones Financieras (Bancos, Sofipos, Fintechs), esquemas y vigencias históricas/futuras de tasas, tramos escalonados, restricciones operativas y parametrización de algoritmos de diversificación.'
+                        }
+                    ],
+                    icon: 'fa-coins',
                     target: 'asesorias-financieras'
                 },
                 'emprendimientos': {
@@ -3561,7 +3589,7 @@
                         };
                         return {
                             ...meta,
-                            nombre: h.nombre,
+                            nombre: meta.nombre || h.nombre,
                             autorizado: h.autorizado !== false
                         };
                     })
@@ -3587,13 +3615,13 @@
                             ${(serv.modalidadesInfo && Array.isArray(serv.modalidadesInfo)) ? `
                                 <div class="servicio-modalidades-list" style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px;">
                                     <div style="font-weight: 700; font-size: 0.88em; color: #1e293b; margin-bottom: 2px;">
-                                        <i class="fas fa-layer-group" style="color: #007bff;"></i> Modalidades de la Calculadora:
+                                        <i class="fas fa-layer-group" style="color: #007bff;"></i> ${escapeHTML(serv.modalidadesTitulo || 'Modalidades del Servicio:')}
                                     </div>
                                     ${serv.modalidadesInfo.map(m => `
-                                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid ${m.badge === 'Básica' ? '#64748b' : (m.badge === 'Intermedia' ? '#2563eb' : '#d97706')}; border-radius: 6px; padding: 8px 10px; font-size: 0.82em;">
+                                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid ${m.badgeColor || (m.badge === 'Básica' ? '#64748b' : (m.badge === 'Intermedia' ? '#2563eb' : '#d97706'))}; border-radius: 6px; padding: 8px 10px; font-size: 0.82em;">
                                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
                                                 <strong style="color: #0f172a; font-size: 0.95em;">${escapeHTML(m.nombre)}</strong>
-                                                <span style="font-size: 0.75em; padding: 1px 6px; border-radius: 8px; font-weight: 600; background: ${m.badge === 'Básica' ? '#e2e8f0' : (m.badge === 'Intermedia' ? '#dbeafe' : '#fef3c7')}; color: ${m.badge === 'Básica' ? '#475569' : (m.badge === 'Intermedia' ? '#1d4ed8' : '#b45309')};">${escapeHTML(m.badge)}</span>
+                                                <span style="font-size: 0.75em; padding: 1px 6px; border-radius: 8px; font-weight: 600; background: ${m.badgeBg || (m.badge === 'Básica' ? '#e2e8f0' : (m.badge === 'Intermedia' ? '#dbeafe' : '#fef3c7'))}; color: ${m.badgeColor || (m.badge === 'Básica' ? '#475569' : (m.badge === 'Intermedia' ? '#1d4ed8' : '#b45309'))};">${escapeHTML(m.badge)}</span>
                                             </div>
                                             <div style="color: #475569; margin-bottom: 3px; font-style: italic;">${escapeHTML(m.desc)}</div>
                                             <div style="color: #334155; line-height: 1.35;"><strong>Incluye:</strong> ${escapeHTML(m.incluye)}</div>
