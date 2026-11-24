@@ -8,13 +8,87 @@
     'use strict';
 
     let catalogoInstituciones = [];
+    let catalogoEstrategias = [];
     let institucionesSeleccionadas = new Set();
     let fechaConsultaActual = new Date().toISOString().slice(0, 10);
+    let estrategiaActual = 'individual'; // 'individual' | 'maximo_rendimiento' | 'equilibrada' | 'conservadora'
+    let ultimaEstrategiaDiversificada = null;
+
+    // Metadatos y estado unificado de visibilidad de columnas (100% presentación visual)
+    const METADATA_COLUMNAS = [
+        { id: 'sel', label: 'Sel (Checkbox)' },
+        { id: 'institucion', label: 'Institución' },
+        { id: 'tipo', label: 'Tipo' },
+        { id: 'condiciones', label: 'Condiciones' },
+        { id: 'restricciones', label: 'Restricciones' },
+        { id: 'inv-base', label: 'Inversión Base' },
+        { id: 'tasa', label: 'Tasa %' },
+        { id: 'inv1', label: 'Inversión 1' },
+        { id: 'inv2', label: 'Inversión 2' },
+        { id: 'meses', label: 'Meses' },
+        { id: 'rend1', label: 'Rend1' },
+        { id: 'rend2', label: 'Rend2' },
+        { id: 'total-mensual', label: 'Total mensual' },
+        { id: 'total-periodo', label: 'Total periodo' }
+    ];
+
+    const estadoColumnas = {
+        'sel': true,
+        'institucion': true,
+        'tipo': true,
+        'condiciones': true,
+        'restricciones': true,
+        'inv-base': true,
+        'tasa': true,
+        'inv1': true,
+        'inv2': true,
+        'meses': true,
+        'rend1': true,
+        'rend2': true,
+        'total-mensual': true,
+        'total-periodo': true
+    };
+
+    let colCondicionesVisible = true;
+    let colRestriccionesVisible = true;
+
+    // Estado de ordenamiento de la tabla
+    let columnaOrdenadaActual = null;
+    let direccionOrdenActual = 'none'; // 'asc' | 'desc' | 'none'
+    let ordenOriginalInstituciones = [];
+
+    // Estado de ordenamiento de la tabla de distribución recomendada (estrategias)
+    let columnaOrdenadaDistribucion = null;
+    let direccionOrdenDistribucion = 'none'; // 'asc' | 'desc' | 'none'
 
     // Estado reactivo en memoria para simulación personalizada por fila (NO PERSISTE EN BD)
     const valoresOriginalesPorInst = new Map(); // id -> { tasa, inv1, inv2, meses }
     const valoresPersonalizadosPorInst = new Map(); // id -> { tasa, inv1, inv2, meses, isModified }
     const resultadosCalculadosPorInst = new Map(); // id -> { total_mensual, total_periodo, rend1, rend2 }
+
+    /**
+     * Parsea de forma robusta el valor numérico del input de inversión global.
+     * Soporta valores formateados con comas (ej. $10,000,000 -> 10000000).
+     */
+    function parseInversionGlobal() {
+        const input = document.getElementById('simulador-inversion-global');
+        if (!input) return 40000;
+        const clean = String(input.value || '').replace(/[^0-9.]/g, '');
+        const num = parseFloat(clean);
+        return isNaN(num) ? 0 : Math.max(0, num);
+    }
+
+    /**
+     * Formatea el campo de Inversión Total con comas para facilitar su lectura en cantidades grandes.
+     */
+    function formatearInversionGlobal() {
+        const input = document.getElementById('simulador-inversion-global');
+        if (!input) return;
+        const val = parseInversionGlobal();
+        if (val > 0) {
+            input.value = Number(val).toLocaleString('es-MX', { maximumFractionDigits: 2 });
+        }
+    }
 
     /**
      * Escapa caracteres especiales HTML para renderizado seguro.
@@ -105,9 +179,11 @@
 
             const data = await res.json();
             catalogoInstituciones = Array.isArray(data.instituciones) ? data.instituciones : [];
+            catalogoEstrategias = Array.isArray(data.estrategias) ? data.estrategias : [];
 
             // Por defecto, todas las instituciones quedan seleccionadas
-            institucionesSeleccionadas = new Set(catalogoInstituciones.map(i => i.id));
+            institucionesSeleccionadas.clear();
+            catalogoInstituciones.forEach(i => institucionesSeleccionadas.add(i.id));
 
             // Limpiar personalizaciones al cargar catálogo nuevo
             valoresPersonalizadosPorInst.clear();
@@ -129,6 +205,418 @@
     }
 
     /**
+     * Alterna la visibilidad de una columna sin alterar ningún dato ni recálculo.
+     */
+    function toggleColumnaSimulador(colId, visible = null) {
+        if (!(colId in estadoColumnas)) return;
+        estadoColumnas[colId] = visible !== null ? !!visible : !estadoColumnas[colId];
+
+        if (colId === 'condiciones') colCondicionesVisible = estadoColumnas[colId];
+        if (colId === 'restricciones') colRestriccionesVisible = estadoColumnas[colId];
+
+        aplicarVisibilidadColumnas();
+    }
+
+    /**
+     * Aplica las clases CSS al contenedor según estadoColumnas y actualiza los controles visuales.
+     */
+    function aplicarVisibilidadColumnas() {
+        const tableContainer = document.getElementById('simulador-table-container');
+        if (!tableContainer) return;
+
+        let totalVisibles = 0;
+        const totalCols = METADATA_COLUMNAS.length;
+
+        METADATA_COLUMNAS.forEach(col => {
+            const isVis = estadoColumnas[col.id] !== false;
+            if (isVis) totalVisibles++;
+            tableContainer.classList.toggle(`hide-col-${col.id}`, !isVis);
+
+            // Actualizar checkbox en menú si existe
+            const chk = document.getElementById(`sim-col-chk-${col.id}`);
+            if (chk) chk.checked = isVis;
+
+            // Sincronizar botones rápidos existentes
+            if (col.id === 'condiciones') {
+                const btnCond = document.getElementById('simulador-toggle-col-condiciones');
+                if (btnCond) {
+                    btnCond.classList.toggle('active', isVis);
+                    btnCond.classList.toggle('inactive', !isVis);
+                    btnCond.innerHTML = isVis
+                        ? '<i class="fas fa-eye"></i> Condiciones'
+                        : '<i class="fas fa-eye-slash"></i> Condiciones';
+                }
+            } else if (col.id === 'restricciones') {
+                const btnRest = document.getElementById('simulador-toggle-col-restricciones');
+                if (btnRest) {
+                    btnRest.classList.toggle('active', isVis);
+                    btnRest.classList.toggle('inactive', !isVis);
+                    btnRest.innerHTML = isVis
+                        ? '<i class="fas fa-eye"></i> Restricciones'
+                        : '<i class="fas fa-eye-slash"></i> Restricciones';
+                }
+            }
+        });
+
+        // Actualizar badge en botón de columnas
+        const badge = document.getElementById('simulador-badge-columnas');
+        if (badge) {
+            badge.textContent = `${totalVisibles}/${totalCols}`;
+            if (totalVisibles < totalCols) {
+                badge.style.background = '#fef3c7';
+                badge.style.color = '#b45309';
+            } else {
+                badge.style.background = '#eff6ff';
+                badge.style.color = '#1d4ed8';
+            }
+        }
+    }
+
+    /**
+     * Muestra todas las columnas de la tabla.
+     */
+    function mostrarTodasLasColumnas() {
+        METADATA_COLUMNAS.forEach(col => {
+            estadoColumnas[col.id] = true;
+        });
+        colCondicionesVisible = true;
+        colRestriccionesVisible = true;
+        aplicarVisibilidadColumnas();
+    }
+
+    /**
+     * Configura el menú desplegable y los listeners de las columnas.
+     */
+    function configurarControlesColumnas() {
+        const btnMenu = document.getElementById('simulador-btn-columnas');
+        const menuDropdown = document.getElementById('simulador-menu-columnas');
+        const listaCols = document.getElementById('simulador-lista-columnas');
+        const btnMostrarTodas = document.getElementById('simulador-btn-mostrar-todas-cols');
+        const btnColCond = document.getElementById('simulador-toggle-col-condiciones');
+        const btnColRest = document.getElementById('simulador-toggle-col-restricciones');
+
+        // Renderizar checkboxes dinámicamente si el contenedor existe
+        if (listaCols && !listaCols.dataset.rendered) {
+            listaCols.dataset.rendered = 'true';
+            listaCols.innerHTML = '';
+            METADATA_COLUMNAS.forEach(col => {
+                const isChecked = estadoColumnas[col.id] !== false;
+                const item = document.createElement('label');
+                item.className = 'sim-col-chk-label';
+                item.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: #1e293b; user-select: none; transition: background 0.15s; margin: 0;';
+                item.innerHTML = `
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="sim-col-chk-${col.id}" data-col-id="${col.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+                        <span>${col.label}</span>
+                    </span>
+                `;
+                listaCols.appendChild(item);
+
+                const chk = item.querySelector('input');
+                chk.addEventListener('change', (e) => {
+                    toggleColumnaSimulador(col.id, e.target.checked);
+                });
+            });
+        }
+
+        // Toggle menú desplegable
+        if (btnMenu && !btnMenu.dataset.configured) {
+            btnMenu.dataset.configured = 'true';
+            btnMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (menuDropdown) {
+                    const isVisible = menuDropdown.style.display === 'block';
+                    menuDropdown.style.display = isVisible ? 'none' : 'block';
+                }
+            });
+        }
+
+        // Botón mostrar todas
+        if (btnMostrarTodas && !btnMostrarTodas.dataset.configured) {
+            btnMostrarTodas.dataset.configured = 'true';
+            btnMostrarTodas.addEventListener('click', (e) => {
+                e.preventDefault();
+                mostrarTodasLasColumnas();
+            });
+        }
+
+        // Toggles rápidos para Condiciones y Restricciones
+        if (btnColCond && !btnColCond.dataset.configured) {
+            btnColCond.dataset.configured = 'true';
+            btnColCond.addEventListener('click', () => {
+                toggleColumnaSimulador('condiciones');
+            });
+        }
+
+        if (btnColRest && !btnColRest.dataset.configured) {
+            btnColRest.dataset.configured = 'true';
+            btnColRest.addEventListener('click', () => {
+                toggleColumnaSimulador('restricciones');
+            });
+        }
+
+        // Cerrar menú al hacer clic fuera
+        if (!document.body.dataset.simColsMenuConfigured) {
+            document.body.dataset.simColsMenuConfigured = 'true';
+            document.addEventListener('click', (e) => {
+                const menu = document.getElementById('simulador-menu-columnas');
+                const btn = document.getElementById('simulador-btn-columnas');
+                if (menu && menu.style.display === 'block') {
+                    if (!menu.contains(e.target) && (!btn || !btn.contains(e.target))) {
+                        menu.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        aplicarVisibilidadColumnas();
+    }
+
+    /**
+     * Extrae el valor tipado para el ordenamiento de una columna de una institución dada.
+     */
+    function extraerValorOrdenamiento(inst, colId) {
+        const custom = valoresPersonalizadosPorInst.get(inst.id);
+        const orig = valoresOriginalesPorInst.get(inst.id);
+        const res = resultadosCalculadosPorInst.get(inst.id) || {};
+        const tr = document.getElementById(`sim-row-${inst.id}`);
+
+        switch (colId) {
+            case 'sel':
+                return institucionesSeleccionadas.has(inst.id) ? 1 : 0;
+
+            case 'institucion':
+                return String(inst.nombre || '').toLowerCase();
+
+            case 'tipo': {
+                const tipoMap = { 'B': 'Banco', 'S': 'Sofipo', 'F': 'Fintech', 'O': 'Otro' };
+                return String(tipoMap[inst.tipo] || inst.tipo || 'Otro').toLowerCase();
+            }
+
+            case 'condiciones':
+                return String(inst.condiciones_resumen || (inst.esquema ? inst.esquema.nombre_esquema : '') || '').toLowerCase();
+
+            case 'restricciones': {
+                if (Array.isArray(inst.restricciones) && inst.restricciones.length > 0) {
+                    return inst.restricciones.map(r => r.descripcion || '').join(' ').toLowerCase();
+                }
+                return '';
+            }
+
+            case 'inv-base': {
+                const el = tr ? tr.querySelector('.sim-val-inv-base') : null;
+                if (el) {
+                    const num = parseFloat(String(el.textContent).replace(/[^0-9.]/g, ''));
+                    return isNaN(num) ? 0 : num;
+                }
+                return 0;
+            }
+
+            case 'tasa': {
+                const input = tr ? tr.querySelector('.sim-input-tasa') : null;
+                if (input) {
+                    const num = parseFloat(input.value);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.tasa : (orig ? orig.tasa : 0);
+            }
+
+            case 'inv1': {
+                const input = tr ? tr.querySelector('.sim-input-inv1') : null;
+                if (input) {
+                    const num = parseFloat(input.value);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.inv1 : (orig ? orig.inv1 : 0);
+            }
+
+            case 'inv2': {
+                const input = tr ? tr.querySelector('.sim-input-inv2') : null;
+                if (input) {
+                    const num = parseFloat(input.value);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.inv2 : (orig ? orig.inv2 : 0);
+            }
+
+            case 'meses': {
+                const input = tr ? tr.querySelector('.sim-input-meses') : null;
+                if (input) {
+                    const num = parseInt(input.value, 10);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.meses : (orig ? orig.meses : 1);
+            }
+
+            case 'rend1':
+                return typeof res.rend1 === 'number' ? res.rend1 : 0;
+
+            case 'rend2':
+                return typeof res.rend2 === 'number' ? res.rend2 : 0;
+
+            case 'total-mensual':
+                return typeof res.total_mensual === 'number' ? res.total_mensual : 0;
+
+            case 'total-periodo':
+                return typeof res.total_periodo === 'number' ? res.total_periodo : 0;
+
+            default:
+                return '';
+        }
+    }
+
+    /**
+     * Ejecuta el ordenamiento de la tabla manteniendo cada institución unida estrictamente con sus tramos.
+     */
+    function ejecutarOrdenamientoSimulador(colId, dir) {
+        const tbody = document.getElementById('simulador-tbody');
+        if (!tbody) return;
+
+        // Construir grupos (institución + subfila de tramos)
+        const grupos = [];
+        catalogoInstituciones.forEach(inst => {
+            const row = document.getElementById(`sim-row-${inst.id}`);
+            if (!row) return;
+            const subrow = document.getElementById(`sim-subrow-${inst.id}`);
+            const valor = (dir === 'none' || !colId) ? null : extraerValorOrdenamiento(inst, colId);
+
+            grupos.push({
+                instId: inst.id,
+                row,
+                subrow,
+                valor,
+                ordenOriginal: ordenOriginalInstituciones.indexOf(inst.id)
+            });
+        });
+
+        if (dir === 'none' || !colId) {
+            grupos.sort((a, b) => a.ordenOriginal - b.ordenOriginal);
+        } else {
+            grupos.sort((a, b) => {
+                const valA = a.valor;
+                const valB = b.valor;
+
+                let cmp = 0;
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    cmp = valA - valB;
+                } else {
+                    cmp = String(valA || '').localeCompare(String(valB || ''), 'es', { sensitivity: 'base', numeric: true });
+                }
+
+                if (cmp === 0) {
+                    cmp = a.ordenOriginal - b.ordenOriginal;
+                }
+
+                return dir === 'desc' ? -cmp : cmp;
+            });
+        }
+
+        // Reubicar en el DOM preservando la integridad de cada institución y sus tramos
+        grupos.forEach(g => {
+            tbody.appendChild(g.row);
+            if (g.subrow) {
+                tbody.appendChild(g.subrow);
+            }
+        });
+
+        // La fila vacía siempre queda al final
+        const emptyTr = document.getElementById('sim-row-vacia');
+        if (emptyTr) tbody.appendChild(emptyTr);
+    }
+
+    /**
+     * Alterna la dirección del ordenamiento al hacer clic en un encabezado de columna.
+     */
+    function alternarOrdenColumna(colId) {
+        if (columnaOrdenadaActual === colId) {
+            if (direccionOrdenActual === 'asc') {
+                direccionOrdenActual = 'desc';
+            } else if (direccionOrdenActual === 'desc') {
+                direccionOrdenActual = 'none';
+                columnaOrdenadaActual = null;
+            } else {
+                direccionOrdenActual = 'asc';
+            }
+        } else {
+            columnaOrdenadaActual = colId;
+            direccionOrdenActual = 'asc';
+        }
+
+        actualizarIndicadoresOrdenVisual();
+        ejecutarOrdenamientoSimulador(columnaOrdenadaActual, direccionOrdenActual);
+    }
+
+    /**
+     * Actualiza los iconos visuales ASC/DESC en los encabezados th.
+     */
+    function actualizarIndicadoresOrdenVisual() {
+        const table = document.getElementById('simulador-main-table') || document.querySelector('.simulador-table');
+        if (!table) return;
+
+        const ths = table.querySelectorAll('thead th');
+        ths.forEach(th => {
+            const colClass = Array.from(th.classList).find(c => c.startsWith('sim-col-'));
+            const colId = th.dataset.col || (colClass ? colClass.replace('sim-col-', '') : null);
+            const ind = th.querySelector('.sim-sort-indicator');
+            if (!ind) return;
+
+            if (colId === columnaOrdenadaActual && direccionOrdenActual !== 'none') {
+                th.classList.add('th-col-sorted');
+                if (direccionOrdenActual === 'asc') {
+                    ind.innerHTML = ' <i class="fas fa-sort-up" style="color: #2563eb;"></i>';
+                    th.title = 'Columna ordenada ascendentemente. Clic para ordenar descendente.';
+                } else {
+                    ind.innerHTML = ' <i class="fas fa-sort-down" style="color: #2563eb;"></i>';
+                    th.title = 'Columna ordenada descendentemente. Clic para quitar orden.';
+                }
+            } else {
+                th.classList.remove('th-col-sorted');
+                ind.innerHTML = ' <i class="fas fa-sort" style="color: #cbd5e1;"></i>';
+                th.title = `Hacer clic para ordenar por ${th.textContent.replace(/[▲▼⇅]/g, '').trim()}`;
+            }
+        });
+    }
+
+    /**
+     * Configura los listeners exclusivos en los encabezados <th> de la tabla.
+     */
+    function configurarOrdenamientoTabla() {
+        const table = document.getElementById('simulador-main-table') || document.querySelector('.simulador-table');
+        if (!table) return;
+        const thead = table.querySelector('thead');
+        if (!thead) return;
+
+        const ths = thead.querySelectorAll('th');
+        ths.forEach(th => {
+            const colClass = Array.from(th.classList).find(c => c.startsWith('sim-col-'));
+            const colId = th.dataset.col || (colClass ? colClass.replace('sim-col-', '') : null);
+            if (!colId) return;
+
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+
+            let ind = th.querySelector('.sim-sort-indicator');
+            if (!ind) {
+                ind = document.createElement('span');
+                ind.className = 'sim-sort-indicator';
+                ind.style.cssText = 'margin-left: 5px; font-size: 0.72rem; color: #94a3b8; display: inline-block;';
+                ind.innerHTML = ' <i class="fas fa-sort"></i>';
+                th.appendChild(ind);
+            }
+
+            if (!th.dataset.sortConfigured) {
+                th.dataset.sortConfigured = 'true';
+                th.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                    alternarOrdenColumna(colId);
+                });
+            }
+        });
+
+        actualizarIndicadoresOrdenVisual();
+    }
+
+    /**
      * Configura los listeners de los controles principales.
      */
     function configurarEventosSimulador() {
@@ -141,7 +629,11 @@
         if (inputInversion && !inputInversion.dataset.configured) {
             inputInversion.dataset.configured = 'true';
             inputInversion.addEventListener('input', () => recalcularSimulacion());
+            inputInversion.addEventListener('blur', () => formatearInversionGlobal());
         }
+
+        // Inicializar controles unificados de visibilidad de columnas
+        configurarControlesColumnas();
 
         if (inputMeses && !inputMeses.dataset.configured) {
             inputMeses.dataset.configured = 'true';
@@ -170,6 +662,38 @@
                 deseleccionarTodas();
             });
         }
+
+        // Selector de estrategia (Mayor rendimiento vs Mejor inversión diversificada)
+        const radiosEstrategia = document.querySelectorAll('input[name="simulador-estrategia"]');
+        radiosEstrategia.forEach(radio => {
+            if (!radio.dataset.configured) {
+                radio.dataset.configured = 'true';
+                radio.addEventListener('change', (e) => {
+                    cambiarEstrategia(e.target.value);
+                });
+            }
+        });
+
+        // Parámetros de diversificación
+        const selectNumInst = document.getElementById('simulador-num-instituciones');
+        if (selectNumInst && !selectNumInst.dataset.configured) {
+            selectNumInst.dataset.configured = 'true';
+            selectNumInst.addEventListener('change', () => {
+                if (estrategiaActual === 'diversificada') {
+                    actualizarEstrategiaDiversificada();
+                }
+            });
+        }
+
+        const inputMaxPct = document.getElementById('simulador-max-porcentaje');
+        if (inputMaxPct && !inputMaxPct.dataset.configured) {
+            inputMaxPct.dataset.configured = 'true';
+            inputMaxPct.addEventListener('input', () => {
+                if (estrategiaActual === 'diversificada') {
+                    actualizarEstrategiaDiversificada();
+                }
+            });
+        }
     }
 
     /**
@@ -194,10 +718,11 @@
             return;
         }
 
-        const inputInversion = document.getElementById('simulador-inversion-global');
         const inputMeses = document.getElementById('simulador-meses-global');
-        const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 40000) || 40000;
+        const capitalGlobal = parseInversionGlobal() || 40000;
         const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+
+        ordenOriginalInstituciones = catalogoInstituciones.map(i => i.id);
 
         catalogoInstituciones.forEach(inst => {
             const tr = document.createElement('tr');
@@ -283,10 +808,10 @@
 
             // HTML de fila principal
             tr.innerHTML = `
-                <td style="text-align: center;">
+                <td class="sim-col-sel" style="text-align: center;">
                     <input type="checkbox" class="simulador-check-inst" data-inst-id="${inst.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
-                <td style="font-weight: 700; color: #1e293b;">
+                <td class="sim-col-institucion" style="font-weight: 700; color: #1e293b;">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                         <span>${inst.nombre}</span>
                         <button type="button" class="badge-sim-modificada btn-restablecer-fila" id="sim-badge-${inst.id}" data-inst-id="${inst.id}" style="${isModified ? 'display: inline-flex;' : 'display: none;'}" title="Hacer clic para restablecer los valores originales de la institución">
@@ -295,53 +820,53 @@
                     </div>
                     ${tramos.length >= 3 ? `<button type="button" class="btn-toggle-tramos" data-inst-id="${inst.id}" style="display: block; margin-top: 4px; font-size: 0.72rem; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; color: #2563eb; cursor: pointer;"><i class="fas fa-layer-group"></i> Ver ${tramos.length} tramos</button>` : ''}
                 </td>
-                <td style="text-align: center;">
+                <td class="sim-col-tipo" style="text-align: center;">
                     <span style="font-weight: 700; padding: 3px 8px; border-radius: 4px; background: ${tInfo.bg}; color: ${tInfo.color}; font-size: 0.85rem;" title="${tInfo.title}">
                         ${tInfo.label}
                     </span>
                 </td>
                 <!-- Condiciones financieras de tasa -->
-                <td style="font-size: 0.85rem; color: #475569;">
+                <td class="sim-col-condiciones" style="font-size: 0.85rem; color: #475569;">
                     ${inst.condiciones_resumen || (tieneEsquema ? inst.esquema.nombre_esquema : 'Sin condiciones activas')}
                 </td>
                 <!-- Restricciones (Requisitos independientes para el cliente) -->
-                <td>
+                <td class="sim-col-restricciones">
                     ${renderizarRestriccionesHtml(inst.restricciones)}
                 </td>
                 <!-- Inversión Base (Límite base de condición de la institución) -->
-                <td style="font-weight: 600; text-align: right; color: #334155;">
+                <td class="sim-col-inv-base" style="font-weight: 600; text-align: right; color: #334155;">
                     <span class="sim-val-inv-base">${valorInversionBaseCondicion}</span>
                 </td>
                 <!-- Tasa % (Editable por fila) -->
-                <td style="text-align: right;">
-                    <input type="number" step="0.01" min="0" max="100" class="sim-row-input sim-input-tasa" data-inst-id="${inst.id}" value="${curTasa.toFixed(2)}">
+                <td class="sim-col-tasa" style="text-align: right; min-width: 95px;">
+                    <input type="number" step="0.01" min="0" max="100" class="sim-row-input sim-input-tasa" data-inst-id="${inst.id}" value="${curTasa.toFixed(2)}" style="width: 72px; min-width: 68px; font-weight: 700; text-align: right;">
                 </td>
                 <!-- Inversión 1 (En lo que era Monto 2 va la inversión base y es editable, ampliado para hasta $10M+) -->
-                <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
+                <td class="sim-col-inv1 sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
                     <input type="number" step="100" min="0" class="sim-row-input sim-input-inv1" data-inst-id="${inst.id}" value="${curInv1.toFixed(2)}">
                 </td>
                 <!-- Inversión 2 (Editable por fila, ampliado para hasta $10M+) -->
-                <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
+                <td class="sim-col-inv2 sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
                     <input type="number" step="100" min="0" class="sim-row-input sim-input-inv2" data-inst-id="${inst.id}" value="${curInv2.toFixed(2)}">
                 </td>
                 <!-- Meses (Editable por fila) -->
-                <td style="text-align: center;">
+                <td class="sim-col-meses" style="text-align: center;">
                     <input type="number" step="1" min="1" max="120" class="sim-row-input sim-input-meses" data-inst-id="${inst.id}" value="${curMeses}">
                 </td>
                 <!-- Rend1 -->
-                <td style="text-align: right; color: #047857; font-weight: 600;">
+                <td class="sim-col-rend1" style="text-align: right; color: #047857; font-weight: 600;">
                     <span class="sim-val-rend1">${formatMoney(rend1)}</span>
                 </td>
                 <!-- Rend2 -->
-                <td style="text-align: right; color: #047857; font-weight: 600;">
+                <td class="sim-col-rend2" style="text-align: right; color: #047857; font-weight: 600;">
                     <span class="sim-val-rend2">${formatMoney(rend2)}</span>
                 </td>
                 <!-- Total mensual -->
-                <td style="text-align: right; font-weight: 700; color: #1e3a8a; background: #f0fdf4;">
+                <td class="sim-col-total-mensual" style="text-align: right; font-weight: 700; color: #1e3a8a; background: #f0fdf4;">
                     <span class="sim-val-total-mensual">${formatMoney(totalMensual)}</span>
                 </td>
                 <!-- Total periodo -->
-                <td style="text-align: right; font-weight: 800; color: #166534; background: #dcfce7;">
+                <td class="sim-col-total-periodo" style="text-align: right; font-weight: 800; color: #166534; background: #dcfce7;">
                     <span class="sim-val-total-periodo">${formatMoney(totalPeriodo)}</span>
                 </td>
             `;
@@ -446,6 +971,12 @@
         });
 
         actualizarEstiloFilasSeleccionadas();
+        aplicarVisibilidadColumnas();
+        configurarOrdenamientoTabla();
+        if (columnaOrdenadaActual && direccionOrdenActual !== 'none') {
+            ejecutarOrdenamientoSimulador(columnaOrdenadaActual, direccionOrdenActual);
+        }
+        actualizarContadorSeleccionadas();
     }
 
     /**
@@ -538,8 +1069,7 @@
         let rendExtraMensual = 0;
         let rendExtraPeriodo = 0;
         if (tramos.length >= 3) {
-            const inputInversion = document.getElementById('simulador-inversion-global');
-            const cap = parseFloat(inputInversion ? inputInversion.value : 0) || 0;
+            const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : parseInversionGlobal();
             const simTemp = window.MotorFinanciero.simularInversion(cap, curMeses, tramos);
             if (simTemp && Array.isArray(simTemp.tramos)) {
                 for (let k = 2; k < simTemp.tramos.length; k++) {
@@ -592,9 +1122,8 @@
      * Si una fila está modificada, mantiene sus valores personalizados y recalcula su estado.
      */
     function recalcularSimulacion() {
-        const inputInversion = document.getElementById('simulador-inversion-global');
         const inputMeses = document.getElementById('simulador-meses-global');
-        const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 0) || 0;
+        const capitalGlobal = parseInversionGlobal();
         const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
 
         catalogoInstituciones.forEach(inst => {
@@ -666,7 +1195,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -724,7 +1253,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -748,9 +1277,8 @@
             if (chk) chk.checked = true;
 
             const tramos = (inst.esquema && Array.isArray(inst.esquema.tramos)) ? inst.esquema.tramos : [];
-            const inputInversion = document.getElementById('simulador-inversion-global');
             const inputMeses = document.getElementById('simulador-meses-global');
-            const capitalGlobal = parseFloat(inputInversion ? inputInversion.value : 40000) || 40000;
+            const capitalGlobal = parseInversionGlobal() || 40000;
             const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
 
             const sim = tramos.length > 0 ? window.MotorFinanciero.simularInversion(capitalGlobal, mesesGlobal, tramos) : null;
@@ -840,7 +1368,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -863,7 +1391,7 @@
         recalcularSimulacion();
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -918,7 +1446,7 @@
         institucionesSeleccionadas.clear();
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     /**
@@ -928,6 +1456,19 @@
         const emptyTr = document.getElementById('sim-row-vacia');
         if (emptyTr) {
             emptyTr.style.display = (institucionesSeleccionadas.size === 0) ? '' : 'none';
+        }
+        actualizarContadorSeleccionadas();
+    }
+
+    /**
+     * Actualiza el badge indicador de instituciones seleccionadas / activas en la barra de herramientas.
+     */
+    function actualizarContadorSeleccionadas() {
+        const badge = document.getElementById('simulador-count-seleccionadas');
+        if (badge) {
+            const total = catalogoInstituciones.length;
+            const sel = institucionesSeleccionadas.size;
+            badge.textContent = `${sel} de ${total} activas`;
         }
     }
 
@@ -976,7 +1517,7 @@
                 </div>
                 <div id="simulador-chips-disponibles" style="display: flex; flex-wrap: wrap; gap: 8px;">
                     ${disponibles.map(inst => `
-                        <button type="button" class="btn-agregar-inst" data-inst-id="${inst.id}" 
+                        <button type="button" class="btn-agregar-inst" id="sim-chip-add-${inst.id}" data-inst-id="${inst.id}" 
                                 style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 0.84rem; font-weight: 600; color: #1d4ed8; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 20px; cursor: pointer; transition: all 0.15s ease-in-out; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
                                 onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#60a5fa';"
                                 onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#93c5fd';"
@@ -1032,7 +1573,7 @@
 
         actualizarVisibilidadEstadoVacio();
         actualizarPanelDisponibles();
-        actualizarResumenComparativo();
+        actualizarResumenSegunEstrategia();
     }
 
     function actualizarResumenComparativo() {
@@ -1088,6 +1629,618 @@
         }
     }
 
+    /**
+     * Alterna y actualiza el resumen visual según la estrategia activa:
+     * - 'individual': Mayor rendimiento en una sola institución
+     * - 'diversificada': Mejor combinación diversificada de capital
+     */
+    function actualizarResumenSegunEstrategia() {
+        if (estrategiaActual !== 'individual') {
+            actualizarEstrategiaDiversificada();
+        } else {
+            actualizarResumenComparativo();
+        }
+    }
+
+    /**
+     * Cambia la estrategia de inversión entre Individual y las tres diversificadas:
+     * - individual: Mayor rendimiento en una sola institución
+     * - maximo_rendimiento: 🟢 Máximo rendimiento
+     * - equilibrada: 🔵 Equilibrada
+     * - conservadora: 🟠 Conservadora
+     */
+    function cambiarEstrategia(estrategia) {
+        if (estrategia === 'diversificada') estrategia = 'maximo_rendimiento';
+        if (estrategiaActual !== estrategia) {
+            columnaOrdenadaDistribucion = null;
+            direccionOrdenDistribucion = 'none';
+        }
+        estrategiaActual = estrategia;
+
+        // Actualizar checked en radios si no lo estuviera
+        const radios = document.querySelectorAll('input[name="simulador-estrategia"]');
+        radios.forEach(r => {
+            if (r.value === estrategia) r.checked = true;
+        });
+
+        const labels = {
+            'individual': document.querySelector('.sim-strategy-individual'),
+            'maximo_rendimiento': document.querySelector('.sim-strategy-maximo'),
+            'equilibrada': document.querySelector('.sim-strategy-equilibrada'),
+            'conservadora': document.querySelector('.sim-strategy-conservadora')
+        };
+
+        // Resetear estilos de todos los botones de estrategia
+        Object.values(labels).forEach(lbl => {
+            if (lbl) {
+                lbl.style.borderColor = '#cbd5e1';
+                lbl.style.background = '#f8fafc';
+                lbl.style.color = '#475569';
+                lbl.style.fontWeight = '600';
+            }
+        });
+
+        // Aplicar estilo activo a la opción seleccionada
+        const activeLbl = labels[estrategia];
+        if (activeLbl) {
+            if (estrategia === 'individual') {
+                activeLbl.style.borderColor = '#3b82f6';
+                activeLbl.style.background = '#eff6ff';
+                activeLbl.style.color = '#1d4ed8';
+            } else if (estrategia === 'maximo_rendimiento') {
+                activeLbl.style.borderColor = '#16a34a';
+                activeLbl.style.background = '#f0fdf4';
+                activeLbl.style.color = '#15803d';
+            } else if (estrategia === 'equilibrada') {
+                activeLbl.style.borderColor = '#2563eb';
+                activeLbl.style.background = '#eff6ff';
+                activeLbl.style.color = '#1d4ed8';
+            } else if (estrategia === 'conservadora') {
+                activeLbl.style.borderColor = '#d97706';
+                activeLbl.style.background = '#fffbeb';
+                activeLbl.style.color = '#b45309';
+            }
+            activeLbl.style.fontWeight = '700';
+        }
+
+        const panelInd = document.getElementById('simulador-resumen-comparativo');
+        const panelDiv = document.getElementById('simulador-panel-diversificado');
+        const paramsDiv = document.getElementById('simulador-params-diversificado');
+
+        if (paramsDiv) paramsDiv.style.display = (estrategia === 'individual') ? 'none' : 'block';
+
+        if (estrategia === 'individual') {
+            if (panelInd) panelInd.style.display = 'block';
+            if (panelDiv) panelDiv.style.display = 'none';
+            actualizarResumenComparativo();
+        } else {
+            if (panelInd) panelInd.style.display = 'none';
+            if (panelDiv) panelDiv.style.display = 'block';
+            actualizarEstrategiaDiversificada();
+        }
+    }
+
+    /**
+     * Calcula y actualiza el panel de la estrategia de inversión diversificada.
+     */
+    function actualizarEstrategiaDiversificada() {
+        const panelDiv = document.getElementById('simulador-panel-diversificado');
+        if (!panelDiv) return;
+
+        const capital = parseInversionGlobal();
+        const inputMeses = document.getElementById('simulador-meses-global');
+        const meses = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+
+        // Filtrar exclusivamente instituciones que estén activas en BD y seleccionadas por el usuario
+        const seleccionadas = catalogoInstituciones.filter(i => institucionesSeleccionadas.has(i.id));
+
+        if (seleccionadas.length === 0) {
+            panelDiv.innerHTML = `
+                <div style="color: #64748b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-info-circle" style="color: #3b82f6;"></i>
+                    <em>Selecciona al menos una institución financiera para calcular la inversión diversificada.</em>
+                </div>
+            `;
+            ultimaEstrategiaDiversificada = null;
+            return;
+        }
+
+        const resultado = window.MotorFinanciero.calcularMejorInversionDiversificada({
+            inversionTotal: capital,
+            meses: meses,
+            instituciones: seleccionadas,
+            estrategia: estrategiaActual,
+            estrategiasConfig: catalogoEstrategias,
+            personalizaciones: valoresPersonalizadosPorInst
+        });
+
+        ultimaEstrategiaDiversificada = resultado;
+        renderizarPanelDiversificado(resultado);
+    }
+
+    /**
+     * Renderiza el panel visual completo de la propuesta diversificada.
+     */
+    function renderizarPanelDiversificado(res) {
+        const panelDiv = document.getElementById('simulador-panel-diversificado');
+        if (!panelDiv) return;
+
+        if (!res || !res.exito) {
+            panelDiv.innerHTML = `
+                <div style="color: #dc2626; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${escapeHTML(res ? res.mensajeError : 'No fue posible calcular la distribución.')}</span>
+                </div>
+            `;
+            return;
+        }
+
+        const comp = res.comparativa || {};
+        const mejorInd = comp.mejorIndividual || { nombre: '—', rendimientoPeriodo: 0, rendimientoMensual: 0 };
+        const difPeriodo = comp.diferenciaPeriodo || 0;
+        const difSigno = difPeriodo >= 0 ? `+${formatMoney(difPeriodo)}` : formatMoney(difPeriodo);
+        const difColor = difPeriodo >= 0 ? '#166534' : '#b45309';
+
+        const estInfo = res.estrategia || {};
+        const estColor = estInfo.color || '#16a34a';
+        const estIcono = estInfo.icono || 'fas fa-chart-line';
+        const estNombre = estInfo.nombre || 'Estrategia Diversificada';
+
+        panelDiv.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 18px;">
+                <!-- Encabezado con Indicador de Estrategia -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; border-bottom: 2px solid #bbf7d0; padding-bottom: 14px;">
+                    <div>
+                        <div style="font-weight: 800; font-size: 1.15rem; color: #166534; display: flex; align-items: center; gap: 8px;">
+                            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 6px; background: ${estColor}15; color: ${estColor}; border: 1px solid ${estColor}40;">
+                                <i class="${estIcono}"></i> ${escapeHTML(estNombre)}
+                            </span>
+                            <span style="color: #0f172a; font-size: 1rem; font-weight: 700;">— Mejor Inversión Diversificada</span>
+                        </div>
+                        <div style="color: #475569; font-size: 0.88rem; margin-top: 6px;">
+                            <span>Capital a invertir: <strong>${formatMoney(res.inversionTotal)}</strong></span>
+                            <span style="margin: 0 6px;">•</span>
+                            <span>Plazo: <strong>${res.meses} ${res.meses === 1 ? 'mes' : 'meses'}</strong></span>
+                            <span style="margin: 0 6px;">•</span>
+                            <span>Instituciones utilizadas: <strong style="color: #166534;">${res.numInstitucionesUtilizadas}</strong></span>
+                            <span style="margin: 0 6px;">•</span>
+                            <span>Tope por institución: <strong>${formatPercent(res.maxPorcentajePorInst)}</strong></span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 14px; flex-wrap: wrap; text-align: right;">
+                        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 8px 14px;">
+                            <span style="font-size: 0.78rem; font-weight: 600; color: #166534; display: block;">Rendimiento Estimado</span>
+                            <strong style="font-size: 1.25rem; color: #15803d;">${formatMoney(res.rendimientoPeriodoTotal)}</strong>
+                            <small style="display: block; font-size: 0.76rem; color: #475569;">(${formatMoney(res.rendimientoMensualTotal)}/mes)</small>
+                        </div>
+                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 14px;">
+                            <span style="font-size: 0.78rem; font-weight: 600; color: #1d4ed8; display: block;">Tasa Efectiva Ponderada</span>
+                            <strong style="font-size: 1.25rem; color: #1e40af;">${formatPercent(res.tasaEfectivaPonderada)}</strong>
+                            <small style="display: block; font-size: 0.76rem; color: #475569;">anualizada real</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control de Balance del Capital (Validación matemática estricta: Capital = Distribuido + Sin Distribuir) -->
+                <div style="display: flex; gap: 14px; flex-wrap: wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 16px; font-size: 0.86rem; align-items: center;">
+                    <div><span style="color: #64748b;">Capital total disponible:</span> <strong>${formatMoney(res.inversionTotal)}</strong></div>
+                    <div><span style="color: #64748b;">Capital distribuido:</span> <strong style="color: #166534;">${formatMoney(res.capitalDistribuido)}</strong></div>
+                    <div>
+                        <span style="color: #64748b;">Capital sin distribuir:</span> 
+                        <strong style="color: ${res.capitalSinDistribuir <= 0.01 ? '#166534' : '#dc2626'};">${formatMoney(res.capitalSinDistribuir)}</strong>
+                        ${res.capitalSinDistribuir <= 0.01 ? '<span style="color: #166534; font-weight: 700; margin-left: 4px;">✓ 100% asignado</span>' : ''}
+                    </div>
+                </div>
+
+                <!-- Alerta si quedó capital sin distribuir (Explicación transparente) -->
+                ${res.capitalSinDistribuir > 0.01 ? `
+                    <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 16px; color: #9a3412; font-size: 0.88rem;">
+                        <div style="font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                            <i class="fas fa-exclamation-triangle"></i> Capital sin distribuir: ${formatMoney(res.capitalSinDistribuir)}
+                        </div>
+                        <div>${escapeHTML(res.motivoSinDistribuir)}</div>
+                    </div>
+                ` : ''}
+
+                <!-- Tabla de Distribución Recomendada -->
+                <div>
+                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-chart-pie" style="color: #16a34a;"></i> Distribución Recomendada
+                        </span>
+                        <span style="font-size: 0.76rem; color: #64748b; font-weight: 600;">
+                            <i class="fas fa-info-circle"></i> Haz clic en los encabezados para ordenar columnas
+                        </span>
+                    </div>
+                    <div class="table-responsive" style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
+                        <table class="table simulador-tabla-distribucion" id="simulador-tabla-distribucion" style="width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 0.88rem;">
+                            <thead>
+                                <tr style="background: #f1f5f9; color: #334155; border-bottom: 2px solid #cbd5e1; text-align: left;">
+                                    <th class="th-dist-col" data-col-dist="institucion" style="padding: 10px 12px; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Institución">
+                                        Institución <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="tipo" style="padding: 10px 12px; text-align: center; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Tipo">
+                                        Tipo <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="inversion" style="padding: 10px 12px; text-align: right; background: #fef3c7; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Inversión Asignada">
+                                        Inversión Asignada <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="porcentaje" style="padding: 10px 12px; text-align: center; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por % Capital">
+                                        % Capital <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="tasa" style="padding: 10px 12px; text-align: right; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Tasa Ponderada">
+                                        Tasa Ponderada <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="rend-mensual" style="padding: 10px 12px; text-align: right; background: #ecfdf5; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Rendimiento Mensual">
+                                        Rend. Mensual <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="rend-periodo" style="padding: 10px 12px; text-align: right; background: #dcfce7; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Rendimiento Periodo">
+                                        Rend. Periodo <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="simulador-tbody-distribucion">
+                                ${res.asignaciones.map((a, idx) => `
+                                    <tr style="border-bottom: 1px solid #e2e8f0;"
+                                        class="sim-row-distribucion"
+                                        data-orig-index="${idx}"
+                                        data-nombre="${escapeHTML(a.nombre || '')}"
+                                        data-tipo="${escapeHTML(a.tipoDescripcion || a.tipo || '')}"
+                                        data-inversion="${a.inversionAsignada || 0}"
+                                        data-porcentaje="${a.porcentajeDelCapital || 0}"
+                                        data-tasa="${a.tasaPonderada || 0}"
+                                        data-rend-mensual="${a.rendimientoMensual || 0}"
+                                        data-rend-periodo="${a.rendimientoPeriodo || 0}">
+                                        <td style="padding: 8px 12px; font-weight: 700; color: #0f172a;">${escapeHTML(a.nombre)}</td>
+                                        <td style="padding: 8px 12px; text-align: center;">
+                                            <span style="font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #334155;">
+                                                ${escapeHTML(a.tipoDescripcion || a.tipo)}
+                                            </span>
+                                        </td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 700; background: #fffbeb; color: #92400e;">${formatMoney(a.inversionAsignada)}</td>
+                                        <td style="padding: 8px 12px; text-align: center; font-weight: 600; color: #475569;">${formatPercent(a.porcentajeDelCapital)}</td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #1e40af;">${formatPercent(a.tasaPonderada)}</td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #047857;">${formatMoney(a.rendimientoMensual)}</td>
+                                        <td style="padding: 8px 12px; text-align: right; font-weight: 800; color: #166534; background: #f0fdf4;">${formatMoney(a.rendimientoPeriodo)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #cbd5e1;">
+                                    <td style="padding: 10px 12px; color: #0f172a;">TOTAL DISTRIBUIDO</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #64748b;">${res.numInstitucionesUtilizadas} inst.</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #92400e; background: #fef3c7;">${formatMoney(res.capitalDistribuido)}</td>
+                                    <td style="padding: 10px 12px; text-align: center; color: #475569;">${formatPercent(res.inversionTotal > 0 ? (res.capitalDistribuido / res.inversionTotal) * 100 : 0)}</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #1e40af;">${formatPercent(res.tasaEfectivaPonderada)}</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #047857; background: #ecfdf5;">${formatMoney(res.rendimientoMensualTotal)}</td>
+                                    <td style="padding: 10px 12px; text-align: right; color: #166534; background: #dcfce7; font-size: 1.05em;">${formatMoney(res.rendimientoPeriodoTotal)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Alertas de Restricciones Relevantes de Instituciones Asignadas -->
+                ${res.restriccionesRelevantes.length > 0 ? `
+                    <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px;">
+                        <div style="font-weight: 700; color: #92400e; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-exclamation-triangle"></i> Requisitos / Restricciones a considerar para cumplir estas tasas:
+                        </div>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 0.84rem; color: #78350f;">
+                            ${res.restriccionesRelevantes.map(r => `
+                                <li style="margin-bottom: 3px;">
+                                    <strong>${escapeHTML(r.nombre)} (${escapeHTML(r.tipoDescripcion)}):</strong> ${escapeHTML(r.descripcion)}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+
+                <!-- Instituciones No Elegibles (si existen) -->
+                ${Array.isArray(res.institucionesNoElegibles) && res.institucionesNoElegibles.length > 0 ? `
+                    <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: #64748b;">
+                        <div style="font-weight: 700; color: #475569; margin-bottom: 4px;">
+                            <i class="fas fa-info-circle"></i> Instituciones seleccionadas no elegibles en esta simulación:
+                        </div>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            ${res.institucionesNoElegibles.map(ie => `
+                                <li><strong>${escapeHTML(ie.nombre)}:</strong> ${escapeHTML(ie.motivo)}</li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+
+                <!-- Fila Inferior: Comparativa + Concentración -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                    <!-- Comparativa: Todo en una vs Diversificada -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+                        <div style="font-weight: 700; font-size: 0.88rem; color: #334155; margin-bottom: 8px;">
+                            <i class="fas fa-balance-scale" style="color: #3b82f6;"></i> Comparativa contra una sola institución
+                        </div>
+                        <div style="font-size: 0.84rem; color: #475569; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Todo en una (<strong>${escapeHTML(mejorInd.nombre)}</strong>):</span>
+                                <strong style="color: #0f172a;">${formatMoney(mejorInd.rendimientoPeriodo)}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Inversión diversificada (<strong>${res.numInstitucionesUtilizadas} inst.</strong>):</span>
+                                <strong style="color: #166534;">${formatMoney(res.rendimientoPeriodoTotal)}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                                <span>Diferencia:</span>
+                                <strong style="color: ${difColor}; font-size: 0.95em;">${difSigno}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Métrica de Concentración -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+                        <div style="font-weight: 700; font-size: 0.88rem; color: #334155; margin-bottom: 8px;">
+                            <i class="fas fa-shield-alt" style="color: #10b981;"></i> Métrica de Concentración
+                        </div>
+                        <div style="font-size: 0.84rem; color: #475569; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Mayor asignación:</span>
+                                <strong>${formatMoney(res.concentracion.montoMayorAsignacion)} (${escapeHTML(res.concentracion.institucionMayorAsignacion)})</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Concentración máxima:</span>
+                                <strong style="color: #1e40af;">${formatPercent(res.concentracion.porcentajeMayorAsignacion)}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                                <span>Tope configurado:</span>
+                                <span>${formatPercent(res.maxPorcentajePorInst)} ($${formatMoney(res.topeMaximoPorInst)})</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ¿Por qué esta distribución? -->
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; font-size: 0.85rem; color: #166534;">
+                    <strong><i class="fas fa-lightbulb" style="color: #eab308;"></i> ¿Por qué esta distribución?</strong>
+                    <p style="margin: 4px 0 0 0; line-height: 1.45;">${escapeHTML(res.explicacion)}</p>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 8px;">
+                    <button type="button" id="simulador-btn-aplicar-estrategia" class="btn btn-primary" style="background: #166534; border-color: #15803d; font-weight: 700; padding: 8px 18px;">
+                        <i class="fas fa-check-circle"></i> Aplicar estrategia a la tabla
+                    </button>
+                    <button type="button" id="simulador-btn-restablecer-simulacion" class="btn btn-secondary" style="font-weight: 600; padding: 8px 18px;">
+                        <i class="fas fa-undo"></i> Restablecer simulación
+                    </button>
+                    <span style="font-size: 0.8rem; color: #64748b;">(Aplica estos montos directamente a las filas de la tabla para analizarlas o editarlas)</span>
+                </div>
+            </div>
+        `;
+
+        // Conectar botones
+        const btnAplicar = document.getElementById('simulador-btn-aplicar-estrategia');
+        if (btnAplicar) {
+            btnAplicar.addEventListener('click', () => {
+                aplicarEstrategiaDiversificada();
+            });
+        }
+
+        const btnRestablecer = document.getElementById('simulador-btn-restablecer-simulacion');
+        if (btnRestablecer) {
+            btnRestablecer.addEventListener('click', () => {
+                restablecerSimulacionNormal();
+            });
+        }
+
+        // Configurar ordenamiento interactivo de columnas en la tabla de distribución
+        configurarOrdenamientoTablaDistribucion();
+        if (columnaOrdenadaDistribucion && direccionOrdenDistribucion !== 'none') {
+            ejecutarOrdenamientoDistribucion(columnaOrdenadaDistribucion, direccionOrdenDistribucion);
+        }
+    }
+
+    /**
+     * Alterna la dirección del ordenamiento al hacer clic en un encabezado de la tabla de distribución recomendada.
+     */
+    function alternarOrdenColumnaDistribucion(colId) {
+        if (columnaOrdenadaDistribucion === colId) {
+            if (direccionOrdenDistribucion === 'asc') {
+                direccionOrdenDistribucion = 'desc';
+            } else if (direccionOrdenDistribucion === 'desc') {
+                direccionOrdenDistribucion = 'none';
+                columnaOrdenadaDistribucion = null;
+            } else {
+                direccionOrdenDistribucion = 'asc';
+            }
+        } else {
+            columnaOrdenadaDistribucion = colId;
+            direccionOrdenDistribucion = 'asc';
+        }
+
+        actualizarIndicadoresOrdenDistribucion();
+        ejecutarOrdenamientoDistribucion(columnaOrdenadaDistribucion, direccionOrdenDistribucion);
+    }
+
+    /**
+     * Actualiza los iconos visuales e indicadores ASC/DESC en los encabezados de la tabla de distribución recomendada.
+     */
+    function actualizarIndicadoresOrdenDistribucion() {
+        const table = document.getElementById('simulador-tabla-distribucion');
+        if (!table) return;
+
+        const ths = table.querySelectorAll('thead th[data-col-dist]');
+        ths.forEach(th => {
+            const colId = th.dataset.colDist;
+            const ind = th.querySelector('.sim-sort-indicator');
+
+            if (colId === columnaOrdenadaDistribucion && direccionOrdenDistribucion !== 'none') {
+                th.classList.add('th-col-sorted');
+                th.style.boxShadow = 'inset 0 -3px 0 #2563eb';
+                if (ind) {
+                    if (direccionOrdenDistribucion === 'asc') {
+                        ind.innerHTML = ' <i class="fas fa-sort-up" style="color: #2563eb;"></i>';
+                        th.title = 'Columna ordenada ascendentemente. Clic para ordenar descendente.';
+                    } else {
+                        ind.innerHTML = ' <i class="fas fa-sort-down" style="color: #2563eb;"></i>';
+                        th.title = 'Columna ordenada descendentemente. Clic para quitar orden.';
+                    }
+                }
+            } else {
+                th.classList.remove('th-col-sorted');
+                th.style.boxShadow = '';
+                if (ind) {
+                    ind.innerHTML = ' <i class="fas fa-sort" style="color: #cbd5e1;"></i>';
+                    th.title = `Hacer clic para ordenar por ${th.textContent.replace(/[▲▼⇅]/g, '').trim()}`;
+                }
+            }
+        });
+    }
+
+    /**
+     * Ejecuta el ordenamiento de las filas de la tabla de distribución recomendada.
+     */
+    function ejecutarOrdenamientoDistribucion(colId, dir) {
+        const tbody = document.getElementById('simulador-tbody-distribucion');
+        if (!tbody) return;
+
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        if (rows.length === 0) return;
+
+        if (dir === 'none' || !colId) {
+            rows.sort((a, b) => {
+                const idxA = parseInt(a.dataset.origIndex, 10) || 0;
+                const idxB = parseInt(b.dataset.origIndex, 10) || 0;
+                return idxA - idxB;
+            });
+        } else {
+            const esNumerico = ['inversion', 'porcentaje', 'tasa', 'rend-mensual', 'rend-periodo'].includes(colId);
+
+            rows.sort((a, b) => {
+                let valA, valB;
+                if (esNumerico) {
+                    valA = parseFloat(
+                        colId === 'inversion' ? a.dataset.inversion :
+                        colId === 'porcentaje' ? a.dataset.porcentaje :
+                        colId === 'tasa' ? a.dataset.tasa :
+                        colId === 'rend-mensual' ? a.dataset.rendMensual :
+                        a.dataset.rendPeriodo
+                    ) || 0;
+                    valB = parseFloat(
+                        colId === 'inversion' ? b.dataset.inversion :
+                        colId === 'porcentaje' ? b.dataset.porcentaje :
+                        colId === 'tasa' ? b.dataset.tasa :
+                        colId === 'rend-mensual' ? b.dataset.rendMensual :
+                        b.dataset.rendPeriodo
+                    ) || 0;
+                } else {
+                    valA = String(colId === 'institucion' ? a.dataset.nombre : a.dataset.tipo || '').toLowerCase();
+                    valB = String(colId === 'institucion' ? b.dataset.nombre : b.dataset.tipo || '').toLowerCase();
+                }
+
+                let cmp = 0;
+                if (esNumerico) {
+                    cmp = valA - valB;
+                } else {
+                    cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base', numeric: true });
+                }
+
+                if (cmp === 0) {
+                    const idxA = parseInt(a.dataset.origIndex, 10) || 0;
+                    const idxB = parseInt(b.dataset.origIndex, 10) || 0;
+                    cmp = idxA - idxB;
+                }
+
+                return dir === 'desc' ? -cmp : cmp;
+            });
+        }
+
+        rows.forEach(r => tbody.appendChild(r));
+    }
+
+    /**
+     * Configura los listeners en los encabezados <th> de la tabla de distribución recomendada.
+     */
+    function configurarOrdenamientoTablaDistribucion() {
+        const table = document.getElementById('simulador-tabla-distribucion');
+        if (!table) return;
+
+        const ths = table.querySelectorAll('thead th[data-col-dist]');
+        ths.forEach(th => {
+            const colId = th.dataset.colDist;
+            if (!colId) return;
+
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+
+            if (!th.dataset.sortDistConfigured) {
+                th.dataset.sortDistConfigured = 'true';
+                th.addEventListener('click', () => {
+                    alternarOrdenColumnaDistribucion(colId);
+                });
+            }
+        });
+
+        actualizarIndicadoresOrdenDistribucion();
+    }
+
+    /**
+     * Aplica los montos de la estrategia diversificada a las filas de la tabla interactiva:
+     * - Asigna Inversión 1 e Inversión 2 en las instituciones recomendadas.
+     * - Asigna 0 a las instituciones no incluidas en la estrategia.
+     * - Agrega una insignia "Estrategia Diversificada" a las filas participantes.
+     * - Recalcula rendimientos por fila de forma reactiva.
+     */
+    function aplicarEstrategiaDiversificada() {
+        if (!ultimaEstrategiaDiversificada || !ultimaEstrategiaDiversificada.asignaciones) return;
+
+        const asignacionesMap = new Map();
+        ultimaEstrategiaDiversificada.asignaciones.forEach(a => {
+            asignacionesMap.set(a.institucionId, a);
+        });
+
+        catalogoInstituciones.forEach(inst => {
+            const tr = document.getElementById(`sim-row-${inst.id}`);
+            if (!tr) return;
+
+            const inputInv1 = tr.querySelector('.sim-input-inv1');
+            const inputInv2 = tr.querySelector('.sim-input-inv2');
+            const inputMeses = tr.querySelector('.sim-input-meses');
+            const asig = asignacionesMap.get(inst.id);
+
+            // Eliminar badge previo de estrategia si existía
+            const oldBadge = tr.querySelector('.badge-estrategia-diversificada');
+            if (oldBadge) oldBadge.remove();
+
+            if (asig && asig.inversionAsignada > 0) {
+                if (inputInv1) inputInv1.value = asig.inversion1.toFixed(2);
+                if (inputInv2) inputInv2.value = asig.inversion2.toFixed(2);
+                if (inputMeses) inputMeses.value = ultimaEstrategiaDiversificada.meses;
+
+                // Agregar badge de estrategia
+                const nameDiv = tr.querySelector('td:nth-child(2) > div');
+                if (nameDiv) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge-estrategia-diversificada';
+                    badge.style.cssText = 'background: #dcfce7; color: #166534; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; border: 1px solid #86efac; margin-left: 4px;';
+                    badge.innerHTML = '<i class="fas fa-chart-pie" style="font-size: 0.65rem;"></i> Estrategia';
+                    nameDiv.appendChild(badge);
+                }
+
+                recalcularFila(inst.id, tr);
+            } else {
+                // No incluida en la estrategia: poner a 0
+                if (inputInv1) inputInv1.value = '0.00';
+                if (inputInv2) inputInv2.value = '0.00';
+                recalcularFila(inst.id, tr);
+            }
+        });
+    }
+
+    /**
+     * Restablece la simulación a su distribución normal (capital global en tramos).
+     */
+    function restablecerSimulacionNormal() {
+        document.querySelectorAll('.badge-estrategia-diversificada').forEach(b => b.remove());
+        recalcularSimulacion();
+    }
+
     // Exponer públicamente al objeto global
     window.inicializarSimuladorFinanciero = inicializarSimuladorFinanciero;
     window.cargarCatalogoSimulador = cargarCatalogoSimulador;
@@ -1098,10 +2251,28 @@
     window.agregarInstitucion = agregarInstitucion;
     window.seleccionarTodas = seleccionarTodas;
     window.deseleccionarTodas = deseleccionarTodas;
+    window.cambiarEstrategia = cambiarEstrategia;
+    window.actualizarEstrategiaDiversificada = actualizarEstrategiaDiversificada;
+    window.aplicarEstrategiaDiversificada = aplicarEstrategiaDiversificada;
+    window.restablecerSimulacionNormal = restablecerSimulacionNormal;
+    window.getEstrategiaActual = () => estrategiaActual;
+    window.getUltimaEstrategiaDiversificada = () => ultimaEstrategiaDiversificada;
     window.valoresPersonalizadosPorInst = valoresPersonalizadosPorInst;
     window.valoresOriginalesPorInst = valoresOriginalesPorInst;
     window.resultadosCalculadosPorInst = resultadosCalculadosPorInst;
     window.institucionesSeleccionadas = institucionesSeleccionadas;
     window.getCatalogoInstituciones = () => catalogoInstituciones;
     window.getInstitucionesSeleccionadas = () => institucionesSeleccionadas;
+    window.toggleColumnaSimulador = toggleColumnaSimulador;
+    window.mostrarTodasLasColumnas = mostrarTodasLasColumnas;
+    window.aplicarVisibilidadColumnas = aplicarVisibilidadColumnas;
+    window.getEstadoColumnas = () => ({ ...estadoColumnas });
+    window.alternarOrdenColumna = alternarOrdenColumna;
+    window.ordenarTablaSimulador = alternarOrdenColumna;
+    window.ejecutarOrdenamientoSimulador = ejecutarOrdenamientoSimulador;
+    window.getOrdenSimuladorActual = () => ({ columna: columnaOrdenadaActual, direccion: direccionOrdenActual });
+    window.alternarOrdenColumnaDistribucion = alternarOrdenColumnaDistribucion;
+    window.ordenarTablaDistribucion = alternarOrdenColumnaDistribucion;
+    window.ejecutarOrdenamientoDistribucion = ejecutarOrdenamientoDistribucion;
+    window.getOrdenDistribucionActual = () => ({ columna: columnaOrdenadaDistribucion, direccion: direccionOrdenDistribucion });
 }());

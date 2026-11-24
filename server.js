@@ -4443,10 +4443,32 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
             });
         }
 
+        // Consultar estrategias configuradas en BD
+        let estrategias = [];
+        try {
+            const [rowsEstrategias] = await pool.query(
+                `SELECT codigo, nombre, color, icono, 
+                        CAST(max_concentracion_inst AS DOUBLE) AS max_concentracion_inst,
+                        min_instituciones,
+                        CAST(max_concentracion_tipo AS DOUBLE) AS max_concentracion_tipo,
+                        diversificar_tipos,
+                        CAST(asignacion_minima_viable AS DOUBLE) AS asignacion_minima_viable,
+                        descripcion_criterio,
+                        orden_visual
+                 FROM finanzas_estrategias_config
+                 WHERE activo = 1
+                 ORDER BY orden_visual ASC`
+            );
+            estrategias = rowsEstrategias;
+        } catch (errEst) {
+            console.warn('Advertencia al consultar finanzas_estrategias_config:', errEst.message);
+        }
+
         res.json({
             success: true,
             fecha: fecha,
-            instituciones: resultado
+            instituciones: resultado,
+            estrategias: estrategias
         });
     } catch (error) {
         console.error('Error in GET /api/finanzas/simulador:', error);
@@ -5120,6 +5142,97 @@ app.delete('/api/admin/finanzas/esquemas/:id', requireFunctionality('admin'), re
     } catch (error) {
         console.error('Error in DELETE /api/admin/finanzas/esquemas/:id:', error);
         res.status(500).json({ error: 'Error al desactivar el esquema.' });
+    }
+});
+
+// 3. APIs Administrativas para Estrategias de Inversión Diversificada
+app.get('/api/admin/finanzas/estrategias', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
+    try {
+        const [estrategias] = await pool.query(
+            `SELECT id, codigo, nombre, color, icono, max_concentracion_inst, min_instituciones,
+                    max_concentracion_tipo, diversificar_tipos, asignacion_minima_viable,
+                    descripcion_criterio, orden_visual, activo, created_at, updated_at
+             FROM finanzas_estrategias_config
+             ORDER BY orden_visual ASC, id ASC`
+        );
+        res.json({ estrategias });
+    } catch (error) {
+        console.error('Error in GET /api/admin/finanzas/estrategias:', error);
+        res.status(500).json({ error: 'Error al consultar estrategias de inversión.' });
+    }
+});
+
+app.put('/api/admin/finanzas/estrategias/:id', requireFunctionality('admin'), requirePermission('finanzas.update'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de estrategia inválido.' });
+        }
+
+        const {
+            nombre,
+            max_concentracion_inst,
+            min_instituciones,
+            max_concentracion_tipo,
+            diversificar_tipos,
+            asignacion_minima_viable,
+            descripcion_criterio,
+            color,
+            icono,
+            activo
+        } = req.body;
+
+        const maxInst = parseFloat(max_concentracion_inst);
+        if (isNaN(maxInst) || maxInst <= 0 || maxInst > 100) {
+            return res.status(400).json({ error: 'La concentración máxima por institución debe ser un valor entre 1 y 100%.' });
+        }
+
+        const minInst = parseInt(min_instituciones, 10);
+        if (isNaN(minInst) || minInst < 1) {
+            return res.status(400).json({ error: 'El mínimo de instituciones debe ser al menos 1.' });
+        }
+
+        const maxTipo = (max_concentracion_tipo !== null && max_concentracion_tipo !== undefined && max_concentracion_tipo !== '')
+            ? parseFloat(max_concentracion_tipo)
+            : null;
+
+        const asigMin = parseFloat(asignacion_minima_viable) || 1000;
+        const divTipos = diversificar_tipos ? 1 : 0;
+        const act = (activo === undefined || activo === null || activo == 1) ? 1 : 0;
+
+        await pool.query(
+            `UPDATE finanzas_estrategias_config
+             SET nombre = COALESCE(?, nombre),
+                 max_concentracion_inst = ?,
+                 min_instituciones = ?,
+                 max_concentracion_tipo = ?,
+                 diversificar_tipos = ?,
+                 asignacion_minima_viable = ?,
+                 descripcion_criterio = COALESCE(?, descripcion_criterio),
+                 color = COALESCE(?, color),
+                 icono = COALESCE(?, icono),
+                 activo = ?,
+                 updated_at = NOW()
+             WHERE id = ?`,
+            [
+                nombre ? String(nombre).trim() : null,
+                maxInst,
+                minInst,
+                maxTipo,
+                divTipos,
+                asigMin,
+                descripcion_criterio ? String(descripcion_criterio).trim() : null,
+                color ? String(color).trim() : null,
+                icono ? String(icono).trim() : null,
+                act,
+                id
+            ]
+        );
+
+        res.json({ success: true, message: 'Estrategia de inversión actualizada exitosamente.' });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/finanzas/estrategias/:id:', error);
+        res.status(500).json({ error: 'Error al actualizar la estrategia de inversión.' });
     }
 });
 

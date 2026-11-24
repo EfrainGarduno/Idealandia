@@ -88,6 +88,7 @@ function createAdminActionsGroup() {
  */
 function makeAdminTableSortable(table) {
     if (!table) return;
+    if (table.classList.contains('simulador-table') || table.id === 'simulador-main-table' || table.closest('#servicios-financieras-view')) return;
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
     if (!thead || !tbody) return;
@@ -231,7 +232,8 @@ const ADMIN_TAB_PERMISSIONS = {
     'admin-accesos': 'admin.access',
     'admin-asociados': 'asociados.read',
     'admin-finanzas-instituciones': 'finanzas.read',
-    'admin-finanzas-tasas': 'finanzas.read'
+    'admin-finanzas-tasas': 'finanzas.read',
+    'admin-finanzas-estrategias': 'finanzas.read'
 };
 
 const ADMIN_TAB_CONFIG = [
@@ -243,7 +245,8 @@ const ADMIN_TAB_CONFIG = [
     { tabId: 'admin-accesos', perm: 'admin.access', loadFn: () => loadAccesos() },
     { tabId: 'admin-asociados', perm: 'asociados.read', loadFn: () => loadAsociados() },
     { tabId: 'admin-finanzas-instituciones', perm: 'finanzas.read', loadFn: () => loadFinanzasInstituciones() },
-    { tabId: 'admin-finanzas-tasas', perm: 'finanzas.read', loadFn: () => loadFinanzasTasas() }
+    { tabId: 'admin-finanzas-tasas', perm: 'finanzas.read', loadFn: () => loadFinanzasTasas() },
+    { tabId: 'admin-finanzas-estrategias', perm: 'finanzas.read', loadFn: () => loadFinanzasEstrategias() }
 ];
 
 function isUnauthorizedResponse(res, data) {
@@ -269,7 +272,8 @@ function clearAllAdminTables() {
     const tableIds = [
         'admin-usuarios-tbody', 'admin-roles-tbody', 'admin-permisos-tbody',
         'admin-funcionalidades-tbody', 'admin-menus-tbody', 'admin-accesos-tbody',
-        'admin-asociados-tbody', 'admin-finanzas-instituciones-tbody'
+        'admin-asociados-tbody', 'admin-finanzas-instituciones-tbody',
+        'admin-finanzas-estrategias-tbody'
     ];
     tableIds.forEach(id => {
         const el = document.getElementById(id);
@@ -3314,6 +3318,7 @@ function initAdminBlocks() {
                 const targetSubtab = subtabActiva ? subtabActiva.getAttribute('data-finanzastab') : 'admin-finanzas-instituciones';
                 if (targetSubtab === 'admin-finanzas-instituciones') loadFinanzasInstituciones();
                 else if (targetSubtab === 'admin-finanzas-tasas') loadFinanzasTasas();
+                else if (targetSubtab === 'admin-finanzas-estrategias') loadFinanzasEstrategias();
             }
         });
     });
@@ -3334,6 +3339,7 @@ function initAdminBlocks() {
 
             if (target === 'admin-finanzas-instituciones') loadFinanzasInstituciones();
             else if (target === 'admin-finanzas-tasas') loadFinanzasTasas();
+            else if (target === 'admin-finanzas-estrategias') loadFinanzasEstrategias();
         });
     });
 
@@ -4358,6 +4364,166 @@ async function toggleEstatusEsquema(id, nuevoEstatus) {
     }
 }
 
+let catalogoEstrategiasAdmin = [];
+
+async function loadFinanzasEstrategias() {
+    const tbody = document.getElementById('admin-finanzas-estrategias-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando estrategias de inversión...</td></tr>';
+
+    try {
+        const res = await fetch('/api/admin/finanzas/estrategias', {
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (res.status === 401 || res.status === 403) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #ef4444; padding: 20px;">${STANDARD_UNAUTHORIZED_MESSAGE}</td></tr>`;
+            return;
+        }
+
+        const data = await res.json();
+        catalogoEstrategiasAdmin = Array.isArray(data.estrategias) ? data.estrategias : [];
+
+        if (catalogoEstrategiasAdmin.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">No hay estrategias de inversión configuradas.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        catalogoEstrategiasAdmin.forEach(est => {
+            const tr = document.createElement('tr');
+            const maxInstStr = `${parseFloat(est.max_concentracion_inst || 0).toFixed(1)}%`;
+            const maxTipoStr = est.max_concentracion_tipo !== null && est.max_concentracion_tipo !== undefined
+                ? `${parseFloat(est.max_concentracion_tipo).toFixed(1)}%`
+                : '<span style="color: #94a3b8;">Sin límite</span>';
+            const asigMinStr = `$${parseFloat(est.asignacion_minima_viable || 1000).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+            const activoBadge = est.activo == 1
+                ? '<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">Activo</span>'
+                : '<span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">Inactivo</span>';
+            const divBadge = est.diversificar_tipos == 1
+                ? '<span style="background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;"><i class="fas fa-check"></i> Sí</span>'
+                : '<span style="background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">No</span>';
+
+            tr.innerHTML = `
+                <td>
+                    <div style="font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${est.color || '#2563eb'};"></span>
+                        <i class="${est.icono || 'fas fa-chart-line'}" style="color: ${est.color || '#2563eb'};"></i>
+                        <span>${est.nombre}</span>
+                    </div>
+                    <small style="color: #64748b; font-size: 0.75rem; display: block; margin-top: 2px;">${est.descripcion_criterio || ''}</small>
+                </td>
+                <td style="text-align: right; font-weight: 700; color: #047857;">${maxInstStr}</td>
+                <td style="text-align: center; font-weight: 600;">${est.min_instituciones || 1}</td>
+                <td style="text-align: right; font-weight: 600;">${maxTipoStr}</td>
+                <td style="text-align: center;">${divBadge}</td>
+                <td style="text-align: right; font-weight: 600;">${asigMinStr}</td>
+                <td style="text-align: center;">${activoBadge}</td>
+                <td style="text-align: center;">
+                    <button type="button" class="btn btn-secondary btn-sm btn-editar-estrategia" data-id="${est.id}" style="padding: 4px 10px; font-size: 0.82rem;" title="Editar Parámetros">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Configurar botones de editar
+        tbody.querySelectorAll('.btn-editar-estrategia').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseInt(btn.getAttribute('data-id'), 10);
+                abrirModalEditarEstrategia(id);
+            });
+        });
+
+        configurarModalFinanzasEstrategia();
+    } catch (err) {
+        console.error('Error cargando estrategias de inversión:', err);
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #ef4444; padding: 20px;">Error de red al consultar estrategias.</td></tr>';
+    }
+}
+
+function abrirModalEditarEstrategia(id) {
+    const est = catalogoEstrategiasAdmin.find(e => e.id === id);
+    if (!est) return;
+
+    const modal = document.getElementById('modal-finanzas-estrategia');
+    if (!modal) return;
+
+    document.getElementById('finanzas-estrategia-id').value = est.id;
+    document.getElementById('finanzas-estrategia-nombre').value = est.nombre || '';
+    document.getElementById('finanzas-estrategia-max-inst').value = parseFloat(est.max_concentracion_inst || 100);
+    document.getElementById('finanzas-estrategia-min-inst').value = parseInt(est.min_instituciones || 1, 10);
+    document.getElementById('finanzas-estrategia-max-tipo').value = est.max_concentracion_tipo !== null && est.max_concentracion_tipo !== undefined ? parseFloat(est.max_concentracion_tipo) : '';
+    document.getElementById('finanzas-estrategia-asig-min').value = parseFloat(est.asignacion_minima_viable || 1000);
+    document.getElementById('finanzas-estrategia-div-tipos').value = est.diversificar_tipos == 1 ? '1' : '0';
+    document.getElementById('finanzas-estrategia-activo').value = est.activo == 1 ? '1' : '0';
+    document.getElementById('finanzas-estrategia-descripcion').value = est.descripcion_criterio || '';
+
+    const tit = document.getElementById('modal-finanzas-estrategia-titulo');
+    if (tit) tit.textContent = `Editar Estrategia: ${est.nombre}`;
+
+    modal.style.display = 'block';
+}
+
+function configurarModalFinanzasEstrategia() {
+    const modal = document.getElementById('modal-finanzas-estrategia');
+    const form = document.getElementById('form-finanzas-estrategia');
+    const btnCerrar = document.getElementById('btn-cerrar-modal-finanzas-estrategia');
+    const btnCancelar = document.getElementById('btn-cancelar-modal-finanzas-estrategia');
+
+    if (!modal || !form || form.dataset.configured) return;
+    form.dataset.configured = 'true';
+
+    const cerrar = () => { modal.style.display = 'none'; };
+    if (btnCerrar) btnCerrar.addEventListener('click', cerrar);
+    if (btnCancelar) btnCancelar.addEventListener('click', cerrar);
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('finanzas-estrategia-id').value;
+        const nombre = document.getElementById('finanzas-estrategia-nombre').value;
+        const maxInst = document.getElementById('finanzas-estrategia-max-inst').value;
+        const minInst = document.getElementById('finanzas-estrategia-min-inst').value;
+        const maxTipo = document.getElementById('finanzas-estrategia-max-tipo').value;
+        const asigMin = document.getElementById('finanzas-estrategia-asig-min').value;
+        const divTipos = document.getElementById('finanzas-estrategia-div-tipos').value;
+        const activo = document.getElementById('finanzas-estrategia-activo').value;
+        const descripcion = document.getElementById('finanzas-estrategia-descripcion').value;
+
+        try {
+            const res = await fetch(`/api/admin/finanzas/estrategias/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nombre,
+                    max_concentracion_inst: parseFloat(maxInst),
+                    min_instituciones: parseInt(minInst, 10),
+                    max_concentracion_tipo: maxTipo ? parseFloat(maxTipo) : null,
+                    diversificar_tipos: parseInt(divTipos, 10),
+                    asignacion_minima_viable: parseFloat(asigMin) || 1000,
+                    descripcion_criterio: descripcion,
+                    activo: parseInt(activo, 10)
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                modal.style.display = 'none';
+                if (window.showModal) window.showModal(data.message || 'Estrategia actualizada exitosamente.');
+                await loadFinanzasEstrategias();
+            } else {
+                handleAdminError(res, data, 'Error al actualizar la estrategia.');
+            }
+        } catch (err) {
+            console.error('Error guardando estrategia:', err);
+            if (window.showModal) window.showModal('Error de red al actualizar la estrategia.');
+        }
+    });
+}
+
 window.loadFinanzasInstituciones = loadFinanzasInstituciones;
 window.loadFinanzasTasas = loadFinanzasTasas;
+window.loadFinanzasEstrategias = loadFinanzasEstrategias;
 window.initAdminBlocks = initAdminBlocks;
