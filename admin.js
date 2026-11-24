@@ -3534,7 +3534,7 @@ async function loadFinanzasInstituciones() {
     const tbody = document.getElementById('admin-finanzas-instituciones-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando instituciones...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando instituciones...</td></tr>';
 
     try {
         const res = await fetch('/api/admin/finanzas/instituciones');
@@ -3549,7 +3549,7 @@ async function loadFinanzasInstituciones() {
 
         tbody.innerHTML = '';
         if (finanzasInstitucionesCache.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #64748b;">No hay instituciones registradas.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">No hay instituciones registradas.</td></tr>';
             return;
         }
 
@@ -3560,9 +3560,17 @@ async function loadFinanzasInstituciones() {
             'O': { label: 'Otro', color: '#b45309', bg: '#fef3c7' }
         };
 
+        const riesgoMap = {
+            'Bajo': { color: '#166534', bg: '#dcfce7' },
+            'Medio': { color: '#1d4ed8', bg: '#dbeafe' },
+            'Alto': { color: '#c2410c', bg: '#ffedd5' },
+            'Muy alto': { color: '#991b1b', bg: '#fee2e2' }
+        };
+
         finanzasInstitucionesCache.forEach(inst => {
             const tr = document.createElement('tr');
             const tInfo = tipoMap[inst.tipo] || { label: inst.tipo || 'O', color: '#475569', bg: '#f1f5f9' };
+            const rInfo = riesgoMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9' };
 
             // Determinar vigencia actual
             const esquemas = inst.esquemas || [];
@@ -3582,26 +3590,41 @@ async function loadFinanzasInstituciones() {
             td.innerHTML = `<span style="font-weight: 700; padding: 2px 8px; border-radius: 4px; background: ${tInfo.bg}; color: ${tInfo.color}; font-size: 0.82rem;">${tInfo.label}</span>`;
             tr.appendChild(td);
 
-            // Columna 3: Condición Resumen
+            // Columna 3: Riesgo
+            td = document.createElement('td');
+            td.style.textAlign = 'center';
+            td.innerHTML = `<span style="font-weight: 700; padding: 2px 8px; border-radius: 4px; background: ${rInfo.bg}; color: ${rInfo.color}; font-size: 0.82rem;">${escapeHTML(inst.nivel_riesgo || 'Medio')}</span>`;
+            tr.appendChild(td);
+
+            // Columna 4: Monto / Plazo Mínimo
+            td = document.createElement('td');
+            td.style.textAlign = 'center';
+            td.style.fontSize = '0.85rem';
+            const mMin = parseFloat(inst.monto_minimo) || 0;
+            const pMin = parseInt(inst.plazo_minimo, 10) || 1;
+            td.innerHTML = `<span>$${mMin.toLocaleString('es-MX')} / <strong>${pMin}m</strong></span>`;
+            tr.appendChild(td);
+
+            // Columna 5: Condición Resumen
             td = document.createElement('td');
             td.style.fontSize = '0.85rem';
             td.style.color = '#475569';
             td.textContent = inst.condiciones_resumen || '—';
             tr.appendChild(td);
 
-            // Columna 4: Orden
+            // Columna 6: Orden
             td = document.createElement('td');
             td.style.textAlign = 'center';
             td.textContent = inst.orden_visual;
             tr.appendChild(td);
 
-            // Columna 5: Vigencia Actual
+            // Columna 7: Vigencia Actual
             td = document.createElement('td');
             td.style.fontSize = '0.85rem';
             td.innerHTML = vigenciaTexto;
             tr.appendChild(td);
 
-            // Columna 6: Acciones (Patrón homogéneo de Gestión de Menús: Editar + Toggle Activo/Inactivo)
+            // Columna 8: Acciones (Patrón homogéneo de Gestión de Menús: Editar + Toggle Activo/Inactivo)
             td = document.createElement('td');
             td.className = 'admin-actions-cell';
             const actionsGroup = createAdminActionsGroup();
@@ -3635,7 +3658,7 @@ async function loadFinanzasInstituciones() {
 
     } catch (err) {
         console.error('Error in loadFinanzasInstituciones:', err);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #991b1b; padding: 20px;">Error interno al cargar instituciones.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #991b1b; padding: 20px;">Error interno al cargar instituciones.</td></tr>';
     }
 }
 
@@ -3848,6 +3871,13 @@ function abrirModalNuevaInstitucion() {
     document.getElementById('finanzas-inst-esq-fecha-inicio').value = new Date().toISOString().slice(0, 10);
     document.getElementById('finanzas-inst-esq-fecha-fin').value = '';
 
+    const inputMontoMinNew = document.getElementById('finanzas-inst-monto-min');
+    if (inputMontoMinNew) inputMontoMinNew.value = '0';
+    const inputPlazoMinNew = document.getElementById('finanzas-inst-plazo-min');
+    if (inputPlazoMinNew) inputPlazoMinNew.value = '1';
+    const selectRiesgoNew = document.getElementById('finanzas-inst-nivel-riesgo');
+    if (selectRiesgoNew) selectRiesgoNew.value = 'Medio';
+
     if (wrapperNuevaVigencia) wrapperNuevaVigencia.style.display = 'none';
     if (titulo) titulo.textContent = 'Nueva Institución Financiera y Condiciones';
 
@@ -3881,6 +3911,13 @@ function abrirModalEditarInstitucion(inst) {
     document.getElementById('finanzas-inst-desc').value = inst.descripcion || '';
     document.getElementById('finanzas-inst-orden').value = inst.orden_visual || 0;
     document.getElementById('finanzas-inst-activo').checked = inst.activo == 1;
+
+    const inputMontoMin = document.getElementById('finanzas-inst-monto-min');
+    if (inputMontoMin) inputMontoMin.value = inst.monto_minimo !== undefined && inst.monto_minimo !== null ? inst.monto_minimo : 0;
+    const inputPlazoMin = document.getElementById('finanzas-inst-plazo-min');
+    if (inputPlazoMin) inputPlazoMin.value = inst.plazo_minimo !== undefined && inst.plazo_minimo !== null ? inst.plazo_minimo : 1;
+    const selectRiesgo = document.getElementById('finanzas-inst-nivel-riesgo');
+    if (selectRiesgo) selectRiesgo.value = inst.nivel_riesgo || 'Medio';
 
     if (titulo) titulo.textContent = `Editar Institución: ${inst.nombre}`;
 
@@ -4098,6 +4135,9 @@ async function guardarInstitucionForm() {
     const descripcion = document.getElementById('finanzas-inst-desc').value.trim();
     const orden_visual = parseInt(document.getElementById('finanzas-inst-orden').value, 10) || 0;
     const activo = document.getElementById('finanzas-inst-activo').checked ? 1 : 0;
+    const monto_minimo = Math.max(0, parseFloat(document.getElementById('finanzas-inst-monto-min')?.value) || 0);
+    const plazo_minimo = Math.max(1, parseInt(document.getElementById('finanzas-inst-plazo-min')?.value, 10) || 1);
+    const nivel_riesgo = document.getElementById('finanzas-inst-nivel-riesgo')?.value || 'Medio';
 
     // Datos del esquema
     const esquemaId = document.getElementById('finanzas-inst-esquema-id').value;
@@ -4176,6 +4216,9 @@ async function guardarInstitucionForm() {
         condiciones_resumen,
         orden_visual,
         activo,
+        monto_minimo,
+        plazo_minimo,
+        nivel_riesgo,
         restricciones,
         esquema: {
             id: esquemaId ? parseInt(esquemaId, 10) : null,
