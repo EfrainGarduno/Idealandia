@@ -6,7 +6,7 @@ if (!process.env.GEMINI_API_KEY) {
         require('dotenv').config({ path: fallbackEnv });
     }
 }
-const { searchKnowledge } = require('./knowledgeService');
+const { searchKnowledge, getAIContexto, searchAIContexto } = require('./knowledgeService');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -4067,6 +4067,19 @@ app.get('/api/knowledge', async (req, res) => {
     } catch (error) {
         console.error('Error in /api/knowledge:', error);
         res.status(500).json({ error: 'Error interno del servidor al consultar la base de conocimiento.' });
+    }
+});
+
+// =============================================================================
+// CONTEXTO DE IDEALITA (Consumo interno para Live / Chat desde MySQL ai_contexto)
+// =============================================================================
+app.get('/api/ai/contexto-activo', async (req, res) => {
+    try {
+        const contexto = await getAIContexto(pool);
+        res.status(200).json({ ok: true, contexto });
+    } catch (error) {
+        console.error('Error al obtener contexto activo en /api/ai/contexto-activo:', error);
+        res.status(500).json({ ok: false, error: 'Error al obtener el contexto activo de Idealandia.' });
     }
 });
 

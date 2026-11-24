@@ -10806,7 +10806,8 @@ ${userMessage}`;
                                 console.time('LiveContextLoad');
                                 let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 
-                                // 1. Cargar el manual (optimizado con caché)
+                                // 1. MODO PRUEBA CONTROLADA: Contexto desde MySQL ai_contexto (Reversible)
+                                /* --- CÓDIGO ANTERIOR CON MANUAL EN MARKDOWN COMENTADO TEMPORALMENTE ---
                                 try {
                                     if (!window.cachedManualText) {
                                         const manualRes = await fetch('/docs/idealandia_manual.md');
@@ -10826,6 +10827,28 @@ ${userMessage}`;
                                 } catch (e) {
                                     console.error("Excepción al cargar el manual:", e);
                                     contextText += "Error al cargar el manual de Idealandia.\n\n";
+                                }
+                                ------------------------------------------------------------------------ */
+
+                                // Nueva obtención desde la base de datos MySQL (ai_contexto)
+                                try {
+                                    const contextoRes = await fetch('/api/ai/contexto-activo');
+                                    if (contextoRes.ok) {
+                                        const contextoData = await contextoRes.json();
+                                        if (contextoData && contextoData.contexto) {
+                                            contextText += "--- CONTEXTO DE IDEALANDIA ---\n" + contextoData.contexto + "\n\n";
+                                            console.log("Contexto activo de Idealandia cargado desde MySQL (ai_contexto).");
+                                        } else {
+                                            contextText += "No hay registros activos en el contexto de Idealandia actualmente.\n\n";
+                                            console.log("ai_contexto vacío o sin registros activos.");
+                                        }
+                                    } else {
+                                        console.warn("No se pudo obtener el contexto activo (no ok).");
+                                        contextText += "El contexto de Idealandia no está disponible actualmente.\n\n";
+                                    }
+                                } catch (e) {
+                                    console.error("Excepción al cargar el contexto desde ai_contexto:", e);
+                                    contextText += "Error al cargar el contexto de Idealandia.\n\n";
                                 }
 
                                 // 2. Cargar usuario e ideas
