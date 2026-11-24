@@ -14,7 +14,41 @@
     let estrategiaActual = 'individual'; // 'individual' | 'maximo_rendimiento' | 'equilibrada' | 'conservadora'
     let ultimaEstrategiaDiversificada = null;
 
-    // Estado de visibilidad de columnas opcionales (Condiciones y Restricciones)
+    // Metadatos y estado unificado de visibilidad de columnas (100% presentación visual)
+    const METADATA_COLUMNAS = [
+        { id: 'sel', label: 'Sel (Checkbox)' },
+        { id: 'institucion', label: 'Institución' },
+        { id: 'tipo', label: 'Tipo' },
+        { id: 'condiciones', label: 'Condiciones' },
+        { id: 'restricciones', label: 'Restricciones' },
+        { id: 'inv-base', label: 'Inversión Base' },
+        { id: 'tasa', label: 'Tasa %' },
+        { id: 'inv1', label: 'Inversión 1' },
+        { id: 'inv2', label: 'Inversión 2' },
+        { id: 'meses', label: 'Meses' },
+        { id: 'rend1', label: 'Rend1' },
+        { id: 'rend2', label: 'Rend2' },
+        { id: 'total-mensual', label: 'Total mensual' },
+        { id: 'total-periodo', label: 'Total periodo' }
+    ];
+
+    const estadoColumnas = {
+        'sel': true,
+        'institucion': true,
+        'tipo': true,
+        'condiciones': true,
+        'restricciones': true,
+        'inv-base': true,
+        'tasa': true,
+        'inv1': true,
+        'inv2': true,
+        'meses': true,
+        'rend1': true,
+        'rend2': true,
+        'total-mensual': true,
+        'total-periodo': true
+    };
+
     let colCondicionesVisible = true;
     let colRestriccionesVisible = true;
 
@@ -162,6 +196,174 @@
     }
 
     /**
+     * Alterna la visibilidad de una columna sin alterar ningún dato ni recálculo.
+     */
+    function toggleColumnaSimulador(colId, visible = null) {
+        if (!(colId in estadoColumnas)) return;
+        estadoColumnas[colId] = visible !== null ? !!visible : !estadoColumnas[colId];
+
+        if (colId === 'condiciones') colCondicionesVisible = estadoColumnas[colId];
+        if (colId === 'restricciones') colRestriccionesVisible = estadoColumnas[colId];
+
+        aplicarVisibilidadColumnas();
+    }
+
+    /**
+     * Aplica las clases CSS al contenedor según estadoColumnas y actualiza los controles visuales.
+     */
+    function aplicarVisibilidadColumnas() {
+        const tableContainer = document.getElementById('simulador-table-container');
+        if (!tableContainer) return;
+
+        let totalVisibles = 0;
+        const totalCols = METADATA_COLUMNAS.length;
+
+        METADATA_COLUMNAS.forEach(col => {
+            const isVis = estadoColumnas[col.id] !== false;
+            if (isVis) totalVisibles++;
+            tableContainer.classList.toggle(`hide-col-${col.id}`, !isVis);
+
+            // Actualizar checkbox en menú si existe
+            const chk = document.getElementById(`sim-col-chk-${col.id}`);
+            if (chk) chk.checked = isVis;
+
+            // Sincronizar botones rápidos existentes
+            if (col.id === 'condiciones') {
+                const btnCond = document.getElementById('simulador-toggle-col-condiciones');
+                if (btnCond) {
+                    btnCond.classList.toggle('active', isVis);
+                    btnCond.classList.toggle('inactive', !isVis);
+                    btnCond.innerHTML = isVis
+                        ? '<i class="fas fa-eye"></i> Condiciones'
+                        : '<i class="fas fa-eye-slash"></i> Condiciones';
+                }
+            } else if (col.id === 'restricciones') {
+                const btnRest = document.getElementById('simulador-toggle-col-restricciones');
+                if (btnRest) {
+                    btnRest.classList.toggle('active', isVis);
+                    btnRest.classList.toggle('inactive', !isVis);
+                    btnRest.innerHTML = isVis
+                        ? '<i class="fas fa-eye"></i> Restricciones'
+                        : '<i class="fas fa-eye-slash"></i> Restricciones';
+                }
+            }
+        });
+
+        // Actualizar badge en botón de columnas
+        const badge = document.getElementById('simulador-badge-columnas');
+        if (badge) {
+            badge.textContent = `${totalVisibles}/${totalCols}`;
+            if (totalVisibles < totalCols) {
+                badge.style.background = '#fef3c7';
+                badge.style.color = '#b45309';
+            } else {
+                badge.style.background = '#eff6ff';
+                badge.style.color = '#1d4ed8';
+            }
+        }
+    }
+
+    /**
+     * Muestra todas las columnas de la tabla.
+     */
+    function mostrarTodasLasColumnas() {
+        METADATA_COLUMNAS.forEach(col => {
+            estadoColumnas[col.id] = true;
+        });
+        colCondicionesVisible = true;
+        colRestriccionesVisible = true;
+        aplicarVisibilidadColumnas();
+    }
+
+    /**
+     * Configura el menú desplegable y los listeners de las columnas.
+     */
+    function configurarControlesColumnas() {
+        const btnMenu = document.getElementById('simulador-btn-columnas');
+        const menuDropdown = document.getElementById('simulador-menu-columnas');
+        const listaCols = document.getElementById('simulador-lista-columnas');
+        const btnMostrarTodas = document.getElementById('simulador-btn-mostrar-todas-cols');
+        const btnColCond = document.getElementById('simulador-toggle-col-condiciones');
+        const btnColRest = document.getElementById('simulador-toggle-col-restricciones');
+
+        // Renderizar checkboxes dinámicamente si el contenedor existe
+        if (listaCols && !listaCols.dataset.rendered) {
+            listaCols.dataset.rendered = 'true';
+            listaCols.innerHTML = '';
+            METADATA_COLUMNAS.forEach(col => {
+                const isChecked = estadoColumnas[col.id] !== false;
+                const item = document.createElement('label');
+                item.className = 'sim-col-chk-label';
+                item.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: #1e293b; user-select: none; transition: background 0.15s; margin: 0;';
+                item.innerHTML = `
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="sim-col-chk-${col.id}" data-col-id="${col.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+                        <span>${col.label}</span>
+                    </span>
+                `;
+                listaCols.appendChild(item);
+
+                const chk = item.querySelector('input');
+                chk.addEventListener('change', (e) => {
+                    toggleColumnaSimulador(col.id, e.target.checked);
+                });
+            });
+        }
+
+        // Toggle menú desplegable
+        if (btnMenu && !btnMenu.dataset.configured) {
+            btnMenu.dataset.configured = 'true';
+            btnMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (menuDropdown) {
+                    const isVisible = menuDropdown.style.display === 'block';
+                    menuDropdown.style.display = isVisible ? 'none' : 'block';
+                }
+            });
+        }
+
+        // Botón mostrar todas
+        if (btnMostrarTodas && !btnMostrarTodas.dataset.configured) {
+            btnMostrarTodas.dataset.configured = 'true';
+            btnMostrarTodas.addEventListener('click', (e) => {
+                e.preventDefault();
+                mostrarTodasLasColumnas();
+            });
+        }
+
+        // Toggles rápidos para Condiciones y Restricciones
+        if (btnColCond && !btnColCond.dataset.configured) {
+            btnColCond.dataset.configured = 'true';
+            btnColCond.addEventListener('click', () => {
+                toggleColumnaSimulador('condiciones');
+            });
+        }
+
+        if (btnColRest && !btnColRest.dataset.configured) {
+            btnColRest.dataset.configured = 'true';
+            btnColRest.addEventListener('click', () => {
+                toggleColumnaSimulador('restricciones');
+            });
+        }
+
+        // Cerrar menú al hacer clic fuera
+        if (!document.body.dataset.simColsMenuConfigured) {
+            document.body.dataset.simColsMenuConfigured = 'true';
+            document.addEventListener('click', (e) => {
+                const menu = document.getElementById('simulador-menu-columnas');
+                const btn = document.getElementById('simulador-btn-columnas');
+                if (menu && menu.style.display === 'block') {
+                    if (!menu.contains(e.target) && (!btn || !btn.contains(e.target))) {
+                        menu.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        aplicarVisibilidadColumnas();
+    }
+
+    /**
      * Configura los listeners de los controles principales.
      */
     function configurarEventosSimulador() {
@@ -177,36 +379,8 @@
             inputInversion.addEventListener('blur', () => formatearInversionGlobal());
         }
 
-        // Toggles para mostrar/ocultar a discreción las columnas Condiciones y Restricciones
-        const btnColCond = document.getElementById('simulador-toggle-col-condiciones');
-        const btnColRest = document.getElementById('simulador-toggle-col-restricciones');
-        const tableContainer = document.getElementById('simulador-table-container');
-
-        if (btnColCond && !btnColCond.dataset.configured) {
-            btnColCond.dataset.configured = 'true';
-            btnColCond.addEventListener('click', () => {
-                colCondicionesVisible = !colCondicionesVisible;
-                if (tableContainer) tableContainer.classList.toggle('hide-col-condiciones', !colCondicionesVisible);
-                btnColCond.classList.toggle('active', colCondicionesVisible);
-                btnColCond.classList.toggle('inactive', !colCondicionesVisible);
-                btnColCond.innerHTML = colCondicionesVisible
-                    ? '<i class="fas fa-eye"></i> Condiciones'
-                    : '<i class="fas fa-eye-slash"></i> Condiciones';
-            });
-        }
-
-        if (btnColRest && !btnColRest.dataset.configured) {
-            btnColRest.dataset.configured = 'true';
-            btnColRest.addEventListener('click', () => {
-                colRestriccionesVisible = !colRestriccionesVisible;
-                if (tableContainer) tableContainer.classList.toggle('hide-col-restricciones', !colRestriccionesVisible);
-                btnColRest.classList.toggle('active', colRestriccionesVisible);
-                btnColRest.classList.toggle('inactive', !colRestriccionesVisible);
-                btnColRest.innerHTML = colRestriccionesVisible
-                    ? '<i class="fas fa-eye"></i> Restricciones'
-                    : '<i class="fas fa-eye-slash"></i> Restricciones';
-            });
-        }
+        // Inicializar controles unificados de visibilidad de columnas
+        configurarControlesColumnas();
 
         if (inputMeses && !inputMeses.dataset.configured) {
             inputMeses.dataset.configured = 'true';
@@ -379,10 +553,10 @@
 
             // HTML de fila principal
             tr.innerHTML = `
-                <td style="text-align: center;">
+                <td class="sim-col-sel" style="text-align: center;">
                     <input type="checkbox" class="simulador-check-inst" data-inst-id="${inst.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
-                <td style="font-weight: 700; color: #1e293b;">
+                <td class="sim-col-institucion" style="font-weight: 700; color: #1e293b;">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                         <span>${inst.nombre}</span>
                         <button type="button" class="badge-sim-modificada btn-restablecer-fila" id="sim-badge-${inst.id}" data-inst-id="${inst.id}" style="${isModified ? 'display: inline-flex;' : 'display: none;'}" title="Hacer clic para restablecer los valores originales de la institución">
@@ -391,7 +565,7 @@
                     </div>
                     ${tramos.length >= 3 ? `<button type="button" class="btn-toggle-tramos" data-inst-id="${inst.id}" style="display: block; margin-top: 4px; font-size: 0.72rem; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; color: #2563eb; cursor: pointer;"><i class="fas fa-layer-group"></i> Ver ${tramos.length} tramos</button>` : ''}
                 </td>
-                <td style="text-align: center;">
+                <td class="sim-col-tipo" style="text-align: center;">
                     <span style="font-weight: 700; padding: 3px 8px; border-radius: 4px; background: ${tInfo.bg}; color: ${tInfo.color}; font-size: 0.85rem;" title="${tInfo.title}">
                         ${tInfo.label}
                     </span>
@@ -405,39 +579,39 @@
                     ${renderizarRestriccionesHtml(inst.restricciones)}
                 </td>
                 <!-- Inversión Base (Límite base de condición de la institución) -->
-                <td style="font-weight: 600; text-align: right; color: #334155;">
+                <td class="sim-col-inv-base" style="font-weight: 600; text-align: right; color: #334155;">
                     <span class="sim-val-inv-base">${valorInversionBaseCondicion}</span>
                 </td>
                 <!-- Tasa % (Editable por fila) -->
-                <td style="text-align: right;">
+                <td class="sim-col-tasa" style="text-align: right;">
                     <input type="number" step="0.01" min="0" max="100" class="sim-row-input sim-input-tasa" data-inst-id="${inst.id}" value="${curTasa.toFixed(2)}">
                 </td>
                 <!-- Inversión 1 (En lo que era Monto 2 va la inversión base y es editable, ampliado para hasta $10M+) -->
-                <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
+                <td class="sim-col-inv1 sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
                     <input type="number" step="100" min="0" class="sim-row-input sim-input-inv1" data-inst-id="${inst.id}" value="${curInv1.toFixed(2)}">
                 </td>
                 <!-- Inversión 2 (Editable por fila, ampliado para hasta $10M+) -->
-                <td class="sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
+                <td class="sim-col-inv2 sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
                     <input type="number" step="100" min="0" class="sim-row-input sim-input-inv2" data-inst-id="${inst.id}" value="${curInv2.toFixed(2)}">
                 </td>
                 <!-- Meses (Editable por fila) -->
-                <td style="text-align: center;">
+                <td class="sim-col-meses" style="text-align: center;">
                     <input type="number" step="1" min="1" max="120" class="sim-row-input sim-input-meses" data-inst-id="${inst.id}" value="${curMeses}">
                 </td>
                 <!-- Rend1 -->
-                <td style="text-align: right; color: #047857; font-weight: 600;">
+                <td class="sim-col-rend1" style="text-align: right; color: #047857; font-weight: 600;">
                     <span class="sim-val-rend1">${formatMoney(rend1)}</span>
                 </td>
                 <!-- Rend2 -->
-                <td style="text-align: right; color: #047857; font-weight: 600;">
+                <td class="sim-col-rend2" style="text-align: right; color: #047857; font-weight: 600;">
                     <span class="sim-val-rend2">${formatMoney(rend2)}</span>
                 </td>
                 <!-- Total mensual -->
-                <td style="text-align: right; font-weight: 700; color: #1e3a8a; background: #f0fdf4;">
+                <td class="sim-col-total-mensual" style="text-align: right; font-weight: 700; color: #1e3a8a; background: #f0fdf4;">
                     <span class="sim-val-total-mensual">${formatMoney(totalMensual)}</span>
                 </td>
                 <!-- Total periodo -->
-                <td style="text-align: right; font-weight: 800; color: #166534; background: #dcfce7;">
+                <td class="sim-col-total-periodo" style="text-align: right; font-weight: 800; color: #166534; background: #dcfce7;">
                     <span class="sim-val-total-periodo">${formatMoney(totalPeriodo)}</span>
                 </td>
             `;
@@ -542,6 +716,7 @@
         });
 
         actualizarEstiloFilasSeleccionadas();
+        aplicarVisibilidadColumnas();
     }
 
     /**
@@ -1633,4 +1808,8 @@
     window.institucionesSeleccionadas = institucionesSeleccionadas;
     window.getCatalogoInstituciones = () => catalogoInstituciones;
     window.getInstitucionesSeleccionadas = () => institucionesSeleccionadas;
+    window.toggleColumnaSimulador = toggleColumnaSimulador;
+    window.mostrarTodasLasColumnas = mostrarTodasLasColumnas;
+    window.aplicarVisibilidadColumnas = aplicarVisibilidadColumnas;
+    window.getEstadoColumnas = () => ({ ...estadoColumnas });
 }());
