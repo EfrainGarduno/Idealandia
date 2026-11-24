@@ -57,6 +57,10 @@
     let direccionOrdenActual = 'none'; // 'asc' | 'desc' | 'none'
     let ordenOriginalInstituciones = [];
 
+    // Estado de ordenamiento de la tabla de distribución recomendada (estrategias)
+    let columnaOrdenadaDistribucion = null;
+    let direccionOrdenDistribucion = 'none'; // 'asc' | 'desc' | 'none'
+
     // Estado reactivo en memoria para simulación personalizada por fila (NO PERSISTE EN BD)
     const valoresOriginalesPorInst = new Map(); // id -> { tasa, inv1, inv2, meses }
     const valoresPersonalizadosPorInst = new Map(); // id -> { tasa, inv1, inv2, meses, isModified }
@@ -1647,6 +1651,10 @@
      */
     function cambiarEstrategia(estrategia) {
         if (estrategia === 'diversificada') estrategia = 'maximo_rendimiento';
+        if (estrategiaActual !== estrategia) {
+            columnaOrdenadaDistribucion = null;
+            direccionOrdenDistribucion = 'none';
+        }
         estrategiaActual = estrategia;
 
         // Actualizar checked en radios si no lo estuviera
@@ -1836,25 +1844,53 @@
 
                 <!-- Tabla de Distribución Recomendada -->
                 <div>
-                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                        <i class="fas fa-chart-pie" style="color: #16a34a;"></i> Distribución Recomendada
+                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-chart-pie" style="color: #16a34a;"></i> Distribución Recomendada
+                        </span>
+                        <span style="font-size: 0.76rem; color: #64748b; font-weight: 600;">
+                            <i class="fas fa-info-circle"></i> Haz clic en los encabezados para ordenar columnas
+                        </span>
                     </div>
                     <div class="table-responsive" style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
-                        <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 0.88rem;">
+                        <table class="table simulador-tabla-distribucion" id="simulador-tabla-distribucion" style="width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 0.88rem;">
                             <thead>
                                 <tr style="background: #f1f5f9; color: #334155; border-bottom: 2px solid #cbd5e1; text-align: left;">
-                                    <th style="padding: 10px 12px;">Institución</th>
-                                    <th style="padding: 10px 12px; text-align: center;">Tipo</th>
-                                    <th style="padding: 10px 12px; text-align: right; background: #fef3c7;">Inversión Asignada</th>
-                                    <th style="padding: 10px 12px; text-align: center;">% Capital</th>
-                                    <th style="padding: 10px 12px; text-align: right;">Tasa Ponderada</th>
-                                    <th style="padding: 10px 12px; text-align: right; background: #ecfdf5;">Rend. Mensual</th>
-                                    <th style="padding: 10px 12px; text-align: right; background: #dcfce7;">Rend. Periodo</th>
+                                    <th class="th-dist-col" data-col-dist="institucion" style="padding: 10px 12px; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Institución">
+                                        Institución <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="tipo" style="padding: 10px 12px; text-align: center; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Tipo">
+                                        Tipo <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="inversion" style="padding: 10px 12px; text-align: right; background: #fef3c7; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Inversión Asignada">
+                                        Inversión Asignada <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="porcentaje" style="padding: 10px 12px; text-align: center; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por % Capital">
+                                        % Capital <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="tasa" style="padding: 10px 12px; text-align: right; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Tasa Ponderada">
+                                        Tasa Ponderada <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="rend-mensual" style="padding: 10px 12px; text-align: right; background: #ecfdf5; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Rendimiento Mensual">
+                                        Rend. Mensual <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
+                                    <th class="th-dist-col" data-col-dist="rend-periodo" style="padding: 10px 12px; text-align: right; background: #dcfce7; cursor: pointer; user-select: none;" title="Hacer clic para ordenar por Rendimiento Periodo">
+                                        Rend. Periodo <span class="sim-sort-indicator"><i class="fas fa-sort" style="color: #cbd5e1; font-size: 0.72rem;"></i></span>
+                                    </th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                ${res.asignaciones.map(a => `
-                                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <tbody id="simulador-tbody-distribucion">
+                                ${res.asignaciones.map((a, idx) => `
+                                    <tr style="border-bottom: 1px solid #e2e8f0;"
+                                        class="sim-row-distribucion"
+                                        data-orig-index="${idx}"
+                                        data-nombre="${escapeHTML(a.nombre || '')}"
+                                        data-tipo="${escapeHTML(a.tipoDescripcion || a.tipo || '')}"
+                                        data-inversion="${a.inversionAsignada || 0}"
+                                        data-porcentaje="${a.porcentajeDelCapital || 0}"
+                                        data-tasa="${a.tasaPonderada || 0}"
+                                        data-rend-mensual="${a.rendimientoMensual || 0}"
+                                        data-rend-periodo="${a.rendimientoPeriodo || 0}">
                                         <td style="padding: 8px 12px; font-weight: 700; color: #0f172a;">${escapeHTML(a.nombre)}</td>
                                         <td style="padding: 8px 12px; text-align: center;">
                                             <span style="font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #334155;">
@@ -1992,6 +2028,156 @@
                 restablecerSimulacionNormal();
             });
         }
+
+        // Configurar ordenamiento interactivo de columnas en la tabla de distribución
+        configurarOrdenamientoTablaDistribucion();
+        if (columnaOrdenadaDistribucion && direccionOrdenDistribucion !== 'none') {
+            ejecutarOrdenamientoDistribucion(columnaOrdenadaDistribucion, direccionOrdenDistribucion);
+        }
+    }
+
+    /**
+     * Alterna la dirección del ordenamiento al hacer clic en un encabezado de la tabla de distribución recomendada.
+     */
+    function alternarOrdenColumnaDistribucion(colId) {
+        if (columnaOrdenadaDistribucion === colId) {
+            if (direccionOrdenDistribucion === 'asc') {
+                direccionOrdenDistribucion = 'desc';
+            } else if (direccionOrdenDistribucion === 'desc') {
+                direccionOrdenDistribucion = 'none';
+                columnaOrdenadaDistribucion = null;
+            } else {
+                direccionOrdenDistribucion = 'asc';
+            }
+        } else {
+            columnaOrdenadaDistribucion = colId;
+            direccionOrdenDistribucion = 'asc';
+        }
+
+        actualizarIndicadoresOrdenDistribucion();
+        ejecutarOrdenamientoDistribucion(columnaOrdenadaDistribucion, direccionOrdenDistribucion);
+    }
+
+    /**
+     * Actualiza los iconos visuales e indicadores ASC/DESC en los encabezados de la tabla de distribución recomendada.
+     */
+    function actualizarIndicadoresOrdenDistribucion() {
+        const table = document.getElementById('simulador-tabla-distribucion');
+        if (!table) return;
+
+        const ths = table.querySelectorAll('thead th[data-col-dist]');
+        ths.forEach(th => {
+            const colId = th.dataset.colDist;
+            const ind = th.querySelector('.sim-sort-indicator');
+
+            if (colId === columnaOrdenadaDistribucion && direccionOrdenDistribucion !== 'none') {
+                th.classList.add('th-col-sorted');
+                th.style.boxShadow = 'inset 0 -3px 0 #2563eb';
+                if (ind) {
+                    if (direccionOrdenDistribucion === 'asc') {
+                        ind.innerHTML = ' <i class="fas fa-sort-up" style="color: #2563eb;"></i>';
+                        th.title = 'Columna ordenada ascendentemente. Clic para ordenar descendente.';
+                    } else {
+                        ind.innerHTML = ' <i class="fas fa-sort-down" style="color: #2563eb;"></i>';
+                        th.title = 'Columna ordenada descendentemente. Clic para quitar orden.';
+                    }
+                }
+            } else {
+                th.classList.remove('th-col-sorted');
+                th.style.boxShadow = '';
+                if (ind) {
+                    ind.innerHTML = ' <i class="fas fa-sort" style="color: #cbd5e1;"></i>';
+                    th.title = `Hacer clic para ordenar por ${th.textContent.replace(/[▲▼⇅]/g, '').trim()}`;
+                }
+            }
+        });
+    }
+
+    /**
+     * Ejecuta el ordenamiento de las filas de la tabla de distribución recomendada.
+     */
+    function ejecutarOrdenamientoDistribucion(colId, dir) {
+        const tbody = document.getElementById('simulador-tbody-distribucion');
+        if (!tbody) return;
+
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        if (rows.length === 0) return;
+
+        if (dir === 'none' || !colId) {
+            rows.sort((a, b) => {
+                const idxA = parseInt(a.dataset.origIndex, 10) || 0;
+                const idxB = parseInt(b.dataset.origIndex, 10) || 0;
+                return idxA - idxB;
+            });
+        } else {
+            const esNumerico = ['inversion', 'porcentaje', 'tasa', 'rend-mensual', 'rend-periodo'].includes(colId);
+
+            rows.sort((a, b) => {
+                let valA, valB;
+                if (esNumerico) {
+                    valA = parseFloat(
+                        colId === 'inversion' ? a.dataset.inversion :
+                        colId === 'porcentaje' ? a.dataset.porcentaje :
+                        colId === 'tasa' ? a.dataset.tasa :
+                        colId === 'rend-mensual' ? a.dataset.rendMensual :
+                        a.dataset.rendPeriodo
+                    ) || 0;
+                    valB = parseFloat(
+                        colId === 'inversion' ? b.dataset.inversion :
+                        colId === 'porcentaje' ? b.dataset.porcentaje :
+                        colId === 'tasa' ? b.dataset.tasa :
+                        colId === 'rend-mensual' ? b.dataset.rendMensual :
+                        b.dataset.rendPeriodo
+                    ) || 0;
+                } else {
+                    valA = String(colId === 'institucion' ? a.dataset.nombre : a.dataset.tipo || '').toLowerCase();
+                    valB = String(colId === 'institucion' ? b.dataset.nombre : b.dataset.tipo || '').toLowerCase();
+                }
+
+                let cmp = 0;
+                if (esNumerico) {
+                    cmp = valA - valB;
+                } else {
+                    cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base', numeric: true });
+                }
+
+                if (cmp === 0) {
+                    const idxA = parseInt(a.dataset.origIndex, 10) || 0;
+                    const idxB = parseInt(b.dataset.origIndex, 10) || 0;
+                    cmp = idxA - idxB;
+                }
+
+                return dir === 'desc' ? -cmp : cmp;
+            });
+        }
+
+        rows.forEach(r => tbody.appendChild(r));
+    }
+
+    /**
+     * Configura los listeners en los encabezados <th> de la tabla de distribución recomendada.
+     */
+    function configurarOrdenamientoTablaDistribucion() {
+        const table = document.getElementById('simulador-tabla-distribucion');
+        if (!table) return;
+
+        const ths = table.querySelectorAll('thead th[data-col-dist]');
+        ths.forEach(th => {
+            const colId = th.dataset.colDist;
+            if (!colId) return;
+
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+
+            if (!th.dataset.sortDistConfigured) {
+                th.dataset.sortDistConfigured = 'true';
+                th.addEventListener('click', () => {
+                    alternarOrdenColumnaDistribucion(colId);
+                });
+            }
+        });
+
+        actualizarIndicadoresOrdenDistribucion();
     }
 
     /**
@@ -2085,4 +2271,8 @@
     window.ordenarTablaSimulador = alternarOrdenColumna;
     window.ejecutarOrdenamientoSimulador = ejecutarOrdenamientoSimulador;
     window.getOrdenSimuladorActual = () => ({ columna: columnaOrdenadaActual, direccion: direccionOrdenActual });
+    window.alternarOrdenColumnaDistribucion = alternarOrdenColumnaDistribucion;
+    window.ordenarTablaDistribucion = alternarOrdenColumnaDistribucion;
+    window.ejecutarOrdenamientoDistribucion = ejecutarOrdenamientoDistribucion;
+    window.getOrdenDistribucionActual = () => ({ columna: columnaOrdenadaDistribucion, direccion: direccionOrdenDistribucion });
 }());
