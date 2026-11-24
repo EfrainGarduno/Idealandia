@@ -225,25 +225,52 @@ async function runTests() {
         await page.goto(baseUrl, { waitUntil: 'networkidle' });
         await page.waitForTimeout(500);
 
-        // 4.1 Abrir sección Administración
-        await page.evaluate(() => {
+        // 4.1 Abrir sección Administración y sincronizar permisos
+        await page.evaluate(async () => {
             document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
             const sec = document.getElementById('admin');
             if (sec) sec.style.display = 'block';
-            const block = document.getElementById('admin-block-consola');
-            if (block) block.style.display = 'block';
+            if (typeof syncAdminTabsAndPermissions === 'function') {
+                await syncAdminTabsAndPermissions();
+            }
         });
+        await page.waitForTimeout(600);
 
-        // 4.2 Clic en la pestaña "Contexto de Idealita"
-        const tabBtn = await page.$('.admin-tab-btn[data-tab="admin-contexto"]');
-        assert(tabBtn, 'El botón de la pestaña Contexto de Idealita debe existir');
-        await tabBtn.click();
+        // 4.2 Verificar que NO existe como pestaña interna de Consola
+        const tabInternaConsola = await page.$('#admin-block-consola .admin-tab-btn[data-tab="admin-contexto"]');
+        assert(!tabInternaConsola, 'Contexto de Idealita NO debe ser una pestaña interna de Consola');
+        console.log('✓ Verificado: "Contexto de Idealita" ya no es una pestaña interna de Consola.');
+
+        // 4.3 Verificar que existe como botón de navegación principal en .admin-main-nav
+        const navBlockBtns = await page.$$eval('.admin-main-nav .admin-nav-block-btn', btns =>
+            btns.map(b => ({
+                text: b.textContent.trim(),
+                block: b.getAttribute('data-block')
+            }))
+        );
+        const tieneConsola = navBlockBtns.some(b => b.block === 'admin-block-consola');
+        const tienePlanes = navBlockBtns.some(b => b.block === 'admin-block-planes');
+        const tieneFinanzas = navBlockBtns.some(b => b.block === 'admin-block-finanzas');
+        const tieneContexto = navBlockBtns.some(b => b.block === 'admin-block-contexto');
+
+        assert(tieneConsola, 'Debe existir botón principal Consola');
+        assert(tienePlanes, 'Debe existir botón principal Planes Idealandia');
+        assert(tieneFinanzas, 'Debe existir botón principal Finanzas');
+        assert(tieneContexto, 'Debe existir botón principal Contexto de Idealita al mismo nivel');
+        console.log('✓ Verificado: "Contexto de Idealita" es un botón de navegación principal junto a Consola, Planes y Finanzas.');
+
+        // 4.4 Clic en el botón principal "Contexto de Idealita"
+        const btnPrincipalContexto = await page.$('.admin-nav-block-btn[data-block="admin-block-contexto"]');
+        assert(btnPrincipalContexto, 'El botón principal Contexto de Idealita debe existir');
+        await btnPrincipalContexto.click();
         await page.waitForTimeout(400);
 
-        // Verificar que el contenedor de la pestaña está visible
-        const tabContentVisible = await page.$eval('#admin-contexto', el => el.style.display !== 'none');
-        assert(tabContentVisible, 'El contenido de la pestaña admin-contexto debe estar visible');
-        console.log('✓ Pestaña "Contexto de Idealita" abierta en la Consola de Administración.');
+        // Verificar que el contenedor de bloque principal está visible y Consola oculta
+        const blockContextoVisible = await page.$eval('#admin-block-contexto', el => el.style.display !== 'none');
+        const blockConsolaVisible = await page.$eval('#admin-block-consola', el => el.style.display !== 'none');
+        assert(blockContextoVisible, 'El bloque principal #admin-block-contexto debe estar visible');
+        assert(!blockConsolaVisible, 'El bloque #admin-block-consola debe estar oculto');
+        console.log('✓ Clic en "Contexto de Idealita" abre directamente la administración de la base de conocimiento.');
 
         // Esperar a que cargue la tabla
         await page.waitForSelector('#admin-contexto-tbody tr', { timeout: 10000 });

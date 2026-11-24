@@ -117,7 +117,8 @@ if (!process.env.AUTH_SECRET) {
 // Database Connection Pool
 
 const FUNCIONALIDAD_CODE_ALIASES = {
-    'admin': 'administracion'
+    'admin': 'administracion',
+    'contexto': 'contexto_idealita'
 };
 
 function normalizeFunctionalityCode(code) {
@@ -140,6 +141,18 @@ const ADMIN_PERMISOS = [
 const FUNCIONALIDAD_PERMISOS_MAPPING = {
     'administracion': ADMIN_PERMISOS,
     'admin': ADMIN_PERMISOS,
+    'contexto_idealita': [
+        'contexto.read',
+        'contexto.create',
+        'contexto.update',
+        'contexto.delete'
+    ],
+    'contexto': [
+        'contexto.read',
+        'contexto.create',
+        'contexto.update',
+        'contexto.delete'
+    ],
     'ideas': [
         'ideas.read',
         'ideas.create',
@@ -2734,11 +2747,39 @@ app.post('/api/logout', (req, res) => {
 // requireAdmin: validates entry to the 'admin' functionality (Level 2)
 const requireAdmin = requireFunctionality('administracion');
 
+const requireAdminOrSubmodule = async (req, res, next) => {
+    try {
+        if (!req.userId) {
+            const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+            if (!token) {
+                return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+            }
+            const decoded = await verifyToken(token, pool);
+            req.userId = decoded.id;
+            req.user = decoded;
+        }
+        const hasAdminAccess = await checkUserFunctionalityAccess(pool, req.userId, 'administracion');
+        const hasContextoAccess = await checkUserFunctionalityAccess(pool, req.userId, 'contexto_idealita');
+        if (!hasAdminAccess && !hasContextoAccess) {
+            return res.status(403).json({
+                error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                code: 'RBAC_ACCESS_DENIED'
+            });
+        }
+        next();
+    } catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+            return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+        }
+        return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
+    }
+};
+
 app.get('/api/admin/check', requireFunctionality('admin'), async (req, res) => {
     res.status(200).json({ message: 'Acceso de administrador concedido.' });
 });
 
-app.get('/api/admin/mis-permisos', requireFunctionality('admin'), async (req, res) => {
+app.get('/api/admin/mis-permisos', requireAdminOrSubmodule, async (req, res) => {
     try {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         const permisos = await getUserPermissions(pool, req.userId);
@@ -5241,8 +5282,38 @@ app.put('/api/admin/finanzas/estrategias/:id', requireFunctionality('admin'), re
 // 4. APIs Administrativas para Contexto de Idealita (ai_contexto - FASE 1)
 // =========================================================================
 
+const requireContextoFunctionality = async (req, res, next) => {
+    try {
+        if (!req.userId) {
+            const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+            if (!token) {
+                return res.status(401).json({ error: 'No autorizado. Token no proporcionado.', code: 'AUTH_REQUIRED' });
+            }
+            const decoded = await verifyToken(token, pool);
+            req.userId = decoded.id;
+            req.user = decoded;
+        }
+
+        const hasContexto = await checkUserFunctionalityAccess(pool, req.userId, 'contexto_idealita');
+        const hasAdmin = await checkUserFunctionalityAccess(pool, req.userId, 'administracion');
+        if (!hasContexto && !hasAdmin) {
+            return res.status(403).json({
+                error: 'Acceso no autorizado o vencido para esta funcionalidad.',
+                code: 'RBAC_ACCESS_DENIED',
+                funcionalidad: 'contexto_idealita'
+            });
+        }
+        next();
+    } catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError' || error.message === 'Token revocado' || error.message === 'Usuario no encontrado' || error.message === 'Usuario inactivo') {
+            return res.status(401).json({ error: 'Token inválido o expirado.', code: 'AUTH_REQUIRED' });
+        }
+        return res.status(500).json({ error: 'Error interno del servidor al verificar acceso.' });
+    }
+};
+
 // Listar contextos con filtros y búsqueda
-app.get('/api/admin/contexto', requireFunctionality('admin'), requirePermission('contexto.read'), async (req, res) => {
+app.get('/api/admin/contexto', requireContextoFunctionality, requirePermission('contexto.read'), async (req, res) => {
     try {
         const { categoria, activo, busqueda } = req.query;
         let query = 'SELECT id, categoria, titulo, contenido, prioridad, activo, version, created_at, updated_at FROM ai_contexto WHERE 1=1';
@@ -5282,7 +5353,7 @@ app.get('/api/admin/contexto', requireFunctionality('admin'), requirePermission(
 });
 
 // Obtener categorías disponibles
-app.get('/api/admin/contexto/categorias', requireFunctionality('admin'), requirePermission('contexto.read'), async (req, res) => {
+app.get('/api/admin/contexto/categorias', requireContextoFunctionality, requirePermission('contexto.read'), async (req, res) => {
     try {
         const [catRows] = await pool.query('SELECT DISTINCT categoria FROM ai_contexto WHERE categoria IS NOT NULL AND categoria != "" ORDER BY categoria ASC');
         const dbCategories = catRows.map(r => r.categoria);
@@ -5296,7 +5367,7 @@ app.get('/api/admin/contexto/categorias', requireFunctionality('admin'), require
 });
 
 // Obtener un contexto por ID
-app.get('/api/admin/contexto/:id', requireFunctionality('admin'), requirePermission('contexto.read'), async (req, res) => {
+app.get('/api/admin/contexto/:id', requireContextoFunctionality, requirePermission('contexto.read'), async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
@@ -5312,7 +5383,7 @@ app.get('/api/admin/contexto/:id', requireFunctionality('admin'), requirePermiss
 });
 
 // Crear nuevo contexto
-app.post('/api/admin/contexto', requireFunctionality('admin'), requirePermission('contexto.create'), async (req, res) => {
+app.post('/api/admin/contexto', requireContextoFunctionality, requirePermission('contexto.create'), async (req, res) => {
     try {
         const { categoria, titulo, contenido, prioridad, activo } = req.body;
 
@@ -5345,7 +5416,7 @@ app.post('/api/admin/contexto', requireFunctionality('admin'), requirePermission
 });
 
 // Editar contexto existente
-app.put('/api/admin/contexto/:id', requireFunctionality('admin'), requirePermission('contexto.update'), async (req, res) => {
+app.put('/api/admin/contexto/:id', requireContextoFunctionality, requirePermission('contexto.update'), async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
@@ -5389,7 +5460,7 @@ app.put('/api/admin/contexto/:id', requireFunctionality('admin'), requirePermiss
 });
 
 // Alternar estatus activo/inactivo
-app.patch('/api/admin/contexto/:id/toggle', requireFunctionality('admin'), requirePermission('contexto.update'), async (req, res) => {
+app.patch('/api/admin/contexto/:id/toggle', requireContextoFunctionality, requirePermission('contexto.update'), async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });
@@ -5414,7 +5485,7 @@ app.patch('/api/admin/contexto/:id/toggle', requireFunctionality('admin'), requi
 });
 
 // Eliminar contexto
-app.delete('/api/admin/contexto/:id', requireFunctionality('admin'), requirePermission('contexto.delete'), async (req, res) => {
+app.delete('/api/admin/contexto/:id', requireContextoFunctionality, requirePermission('contexto.delete'), async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) return res.status(400).json({ error: 'ID inválido.' });

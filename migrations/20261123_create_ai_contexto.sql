@@ -32,18 +32,22 @@ INSERT IGNORE INTO permisos (codigo, nombre, descripcion, activo) VALUES
 ('contexto.update', 'Modificar Contexto de IA', 'Permite editar y activar/desactivar contexto de Idealita', 1),
 ('contexto.delete', 'Eliminar Contexto de IA', 'Permite eliminar conocimiento de Idealita', 1);
 
--- 3. Vincular permisos con las funcionalidades administrativas (administracion / admin)
+-- 3. Funcionalidad específica para Contexto de Idealita
+INSERT IGNORE INTO funcionalidades (codigo, nombre, descripcion, activo) VALUES
+('contexto_idealita', 'Contexto de Idealita', 'Administración de la base de conocimiento y contexto para Idealita', 1);
+
+-- 4. Vincular permisos con la funcionalidad específica (contexto_idealita) y administracion
 INSERT IGNORE INTO funcionalidad_permisos (funcionalidad_id, permiso_id)
 SELECT f.id, p.id
 FROM funcionalidades f
 CROSS JOIN permisos p
-WHERE f.codigo IN ('administracion', 'admin')
+WHERE f.codigo IN ('contexto_idealita', 'administracion', 'admin')
   AND p.codigo IN ('contexto.read', 'contexto.create', 'contexto.update', 'contexto.delete')
   AND NOT EXISTS (
     SELECT 1 FROM funcionalidad_permisos fp WHERE fp.funcionalidad_id = f.id AND fp.permiso_id = p.id
   );
 
--- 4. Asignar los nuevos permisos al rol 'administrador'
+-- 5. Asignar los nuevos permisos al rol 'administrador'
 INSERT IGNORE INTO rol_permisos (rol_id, permiso_id)
 SELECT r.id, p.id
 FROM roles r

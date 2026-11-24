@@ -231,10 +231,16 @@ const ADMIN_TAB_PERMISSIONS = {
     'admin-menus': 'menus.read',
     'admin-accesos': 'admin.access',
     'admin-asociados': 'asociados.read',
-    'admin-contexto': 'contexto.read',
     'admin-finanzas-instituciones': 'finanzas.read',
     'admin-finanzas-tasas': 'finanzas.read',
     'admin-finanzas-estrategias': 'finanzas.read'
+};
+
+const ADMIN_BLOCK_PERMISSIONS = {
+    'admin-block-consola': ['usuarios.read', 'roles.read', 'permisos.read', 'funcionalidades.read', 'menus.read', 'admin.access', 'asociados.read'],
+    'admin-block-planes': ['admin.access'],
+    'admin-block-finanzas': ['finanzas.read'],
+    'admin-block-contexto': ['contexto.read']
 };
 
 const ADMIN_TAB_CONFIG = [
@@ -245,7 +251,6 @@ const ADMIN_TAB_CONFIG = [
     { tabId: 'admin-menus', perm: 'menus.read', loadFn: () => loadMenus() },
     { tabId: 'admin-accesos', perm: 'admin.access', loadFn: () => loadAccesos() },
     { tabId: 'admin-asociados', perm: 'asociados.read', loadFn: () => loadAsociados() },
-    { tabId: 'admin-contexto', perm: 'contexto.read', loadFn: () => loadAiContexto() },
     { tabId: 'admin-finanzas-instituciones', perm: 'finanzas.read', loadFn: () => loadFinanzasInstituciones() },
     { tabId: 'admin-finanzas-tasas', perm: 'finanzas.read', loadFn: () => loadFinanzasTasas() },
     { tabId: 'admin-finanzas-estrategias', perm: 'finanzas.read', loadFn: () => loadFinanzasEstrategias() }
@@ -312,18 +317,100 @@ async function syncAdminTabsAndPermissions() {
 
         window.userAdminPermissions = new Set(perms);
 
-        const tabBtns = document.querySelectorAll('.admin-tab-btn');
-        const tabContents = document.querySelectorAll('.admin-tab-content');
+        // 1. Sincronizar visibilidad de botones de bloques principales en .admin-main-nav
+        const consolaPerms = ['usuarios.read', 'roles.read', 'permisos.read', 'funcionalidades.read', 'menus.read', 'admin.access', 'asociados.read'];
+        const hasConsolaAccess = consolaPerms.some(p => window.userAdminPermissions.has(p));
+        const hasFinanzasAccess = window.userAdminPermissions.has('finanzas.read');
+        const hasContextoAccess = window.userAdminPermissions.has('contexto.read');
 
-        let firstAuthorizedItem = null;
+        const btnConsola = document.querySelector('.admin-nav-block-btn[data-block="admin-block-consola"]');
+        const btnPlanes = document.querySelector('.admin-nav-block-btn[data-block="admin-block-planes"]');
+        const btnFinanzas = document.querySelector('.admin-nav-block-btn[data-block="admin-block-finanzas"]');
+        const btnContexto = document.querySelector('.admin-nav-block-btn[data-block="admin-block-contexto"]');
+
+        if (btnConsola) {
+            btnConsola.style.display = hasConsolaAccess ? 'inline-flex' : 'none';
+            if (!hasConsolaAccess) btnConsola.classList.remove('active');
+        }
+        if (btnPlanes) {
+            btnPlanes.style.display = hasConsolaAccess ? 'inline-flex' : 'none';
+        }
+        if (btnFinanzas) {
+            btnFinanzas.style.display = hasFinanzasAccess ? 'inline-flex' : 'none';
+            if (!hasFinanzasAccess) btnFinanzas.classList.remove('active');
+        }
+        if (btnContexto) {
+            btnContexto.style.display = hasContextoAccess ? 'inline-flex' : 'none';
+            if (!hasContextoAccess) btnContexto.classList.remove('active');
+        }
+
+        // Si el usuario no tiene permisos para ningún módulo administrativo:
+        if (!hasConsolaAccess && !hasFinanzasAccess && !hasContextoAccess) {
+            const adminSection = document.getElementById('admin');
+            if (adminSection) adminSection.style.display = 'none';
+            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+            const inicioLink = document.querySelector('a[data-section="inicio"]');
+            if (inicioLink) inicioLink.click();
+            return;
+        }
+
+        // Determinar qué bloque principal debe estar activo
+        let activeBlockBtn = document.querySelector('.admin-nav-block-btn.active');
+        if (activeBlockBtn && activeBlockBtn.style.display === 'none') {
+            activeBlockBtn.classList.remove('active');
+            activeBlockBtn = null;
+        }
+
+        if (!activeBlockBtn) {
+            if (hasConsolaAccess && btnConsola) activeBlockBtn = btnConsola;
+            else if (hasContextoAccess && btnContexto) activeBlockBtn = btnContexto;
+            else if (hasFinanzasAccess && btnFinanzas) activeBlockBtn = btnFinanzas;
+        }
+
+        const blockBtns = document.querySelectorAll('.admin-nav-block-btn');
+        const blocks = document.querySelectorAll('.admin-main-block');
+        blockBtns.forEach(b => {
+            b.classList.remove('active');
+            b.style.background = '#f8fafc';
+            b.style.color = '#475569';
+            b.style.border = '1px solid #cbd5e1';
+        });
+        blocks.forEach(bl => bl.style.display = 'none');
+
+        let activeBlockId = null;
+        if (activeBlockBtn) {
+            activeBlockBtn.classList.add('active');
+            activeBlockBtn.style.background = '#2563eb';
+            activeBlockBtn.style.color = '#ffffff';
+            activeBlockBtn.style.border = 'none';
+            activeBlockId = activeBlockBtn.getAttribute('data-block');
+            const activeBlockEl = document.getElementById(activeBlockId);
+            if (activeBlockEl) activeBlockEl.style.display = 'block';
+
+            if (activeBlockId === 'admin-block-contexto') {
+                await loadAiContexto();
+            } else if (activeBlockId === 'admin-block-finanzas') {
+                const subtabActiva = document.querySelector('.admin-finanzas-subtab-btn.active');
+                const targetSubtab = subtabActiva ? subtabActiva.getAttribute('data-finanzastab') : 'admin-finanzas-instituciones';
+                if (targetSubtab === 'admin-finanzas-instituciones') await loadFinanzasInstituciones();
+                else if (targetSubtab === 'admin-finanzas-tasas') await loadFinanzasTasas();
+                else if (targetSubtab === 'admin-finanzas-estrategias') await loadFinanzasEstrategias();
+            }
+        }
+
+        // 2. Sincronizar pestañas internas de Consola
+        const tabBtns = document.querySelectorAll('#admin-block-consola .admin-tab-btn');
+        const tabContents = document.querySelectorAll('#admin-block-consola .admin-tab-content');
+
+        let firstAuthorizedConsolaItem = null;
 
         ADMIN_TAB_CONFIG.forEach(item => {
             const btn = document.querySelector(`.admin-tab-btn[data-tab="${item.tabId}"]`);
             const content = document.getElementById(item.tabId);
             const isAuth = window.userAdminPermissions.has(item.perm);
 
-            if (isAuth && !firstAuthorizedItem) {
-                firstAuthorizedItem = item;
+            if (isAuth && !firstAuthorizedConsolaItem && item.tabId.startsWith('admin-') && !item.tabId.startsWith('admin-finanzas')) {
+                firstAuthorizedConsolaItem = item;
             }
 
             if (btn) {
@@ -344,41 +431,34 @@ async function syncAdminTabsAndPermissions() {
             }
         });
 
-        if (!firstAuthorizedItem) {
-            const adminSection = document.getElementById('admin');
-            if (adminSection) adminSection.style.display = 'none';
-            if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
-            const inicioLink = document.querySelector('a[data-section="inicio"]');
-            if (inicioLink) inicioLink.click();
-            return;
+        if (activeBlockId === 'admin-block-consola' && firstAuthorizedConsolaItem) {
+            const currentActiveBtn = document.querySelector('#admin-block-consola .admin-tab-btn.active');
+            const currentTabId = currentActiveBtn ? currentActiveBtn.getAttribute('data-tab') : null;
+            let selectedItem = null;
+            if (currentTabId && window.userAdminPermissions.has(ADMIN_TAB_PERMISSIONS[currentTabId])) {
+                selectedItem = ADMIN_TAB_CONFIG.find(item => item.tabId === currentTabId);
+            }
+
+            if (!selectedItem) {
+                selectedItem = firstAuthorizedConsolaItem;
+            }
+
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => {
+                c.classList.remove('active');
+                c.style.display = 'none';
+            });
+
+            const activeBtn = document.querySelector(`.admin-tab-btn[data-tab="${selectedItem.tabId}"]`);
+            const activeContent = document.getElementById(selectedItem.tabId);
+            if (activeBtn) activeBtn.classList.add('active');
+            if (activeContent) {
+                activeContent.classList.add('active');
+                activeContent.style.display = '';
+            }
+
+            await selectedItem.loadFn();
         }
-
-        const currentActiveBtn = document.querySelector('.admin-tab-btn.active');
-        const currentTabId = currentActiveBtn ? currentActiveBtn.getAttribute('data-tab') : null;
-        let selectedItem = null;
-        if (currentTabId && window.userAdminPermissions.has(ADMIN_TAB_PERMISSIONS[currentTabId])) {
-            selectedItem = ADMIN_TAB_CONFIG.find(item => item.tabId === currentTabId);
-        }
-
-        if (!selectedItem) {
-            selectedItem = firstAuthorizedItem;
-        }
-
-        tabBtns.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(c => {
-            c.classList.remove('active');
-            c.style.display = 'none';
-        });
-
-        const activeBtn = document.querySelector(`.admin-tab-btn[data-tab="${selectedItem.tabId}"]`);
-        const activeContent = document.getElementById(selectedItem.tabId);
-        if (activeBtn) activeBtn.classList.add('active');
-        if (activeContent) {
-            activeContent.classList.add('active');
-            activeContent.style.display = '';
-        }
-
-        await selectedItem.loadFn();
 
     } finally {
         isSyncingAdminTabs = false;
@@ -3298,6 +3378,27 @@ function initAdminBlocks() {
         btn.dataset.configured = 'true';
         btn.addEventListener('click', () => {
             const blockId = btn.getAttribute('data-block');
+
+            // Control de acceso RBAC por bloque principal
+            if (blockId === 'admin-block-contexto') {
+                if (window.userAdminPermissions && !window.userAdminPermissions.has('contexto.read')) {
+                    if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                    return;
+                }
+            } else if (blockId === 'admin-block-finanzas') {
+                if (window.userAdminPermissions && !window.userAdminPermissions.has('finanzas.read')) {
+                    if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                    return;
+                }
+            } else if (blockId === 'admin-block-consola') {
+                const consolaPerms = ['usuarios.read', 'roles.read', 'permisos.read', 'funcionalidades.read', 'menus.read', 'admin.access', 'asociados.read'];
+                const hasConsola = consolaPerms.some(p => window.userAdminPermissions && window.userAdminPermissions.has(p));
+                if (window.userAdminPermissions && !hasConsola) {
+                    if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                    return;
+                }
+            }
+
             blockBtns.forEach(b => {
                 b.classList.remove('active');
                 b.style.background = '#f8fafc';
@@ -3322,6 +3423,8 @@ function initAdminBlocks() {
                 if (targetSubtab === 'admin-finanzas-instituciones') loadFinanzasInstituciones();
                 else if (targetSubtab === 'admin-finanzas-tasas') loadFinanzasTasas();
                 else if (targetSubtab === 'admin-finanzas-estrategias') loadFinanzasEstrategias();
+            } else if (blockId === 'admin-block-contexto') {
+                loadAiContexto();
             }
         });
     });
@@ -4639,6 +4742,15 @@ function filtrarYRenderizarAiContexto() {
 
     if (!tbody) return;
 
+    const canCreate = !window.userAdminPermissions || window.userAdminPermissions.has('contexto.create');
+    const canUpdate = !window.userAdminPermissions || window.userAdminPermissions.has('contexto.update');
+    const canDelete = !window.userAdminPermissions || window.userAdminPermissions.has('contexto.delete');
+
+    const btnNuevo = document.getElementById('btn-nuevo-contexto');
+    if (btnNuevo) {
+        btnNuevo.style.display = canCreate ? 'inline-flex' : 'none';
+    }
+
     const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
     const categoria = catSelect ? catSelect.value : 'todas';
     const estatus = statusSelect ? statusSelect.value : 'todos';
@@ -4755,41 +4867,49 @@ function filtrarYRenderizarAiContexto() {
         tdAcciones.className = 'admin-actions-cell';
         const actionsGroup = createAdminActionsGroup();
 
-        // Botón Editar
-        const editBtn = createAdminActionButton({
-            type: 'edit',
-            icon: 'fas fa-pen',
-            title: 'Editar contexto',
-            srText: 'Editar',
-            onClick: () => abrirModalEditarContexto(item)
-        });
-        actionsGroup.appendChild(editBtn);
+        if (canUpdate) {
+            // Botón Editar
+            const editBtn = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen',
+                title: 'Editar contexto',
+                srText: 'Editar',
+                onClick: () => abrirModalEditarContexto(item)
+            });
+            actionsGroup.appendChild(editBtn);
 
-        // Botón Activar / Desactivar
-        const toggleBtn = createAdminActionButton({
-            type: item.activo ? 'toggle-active' : 'toggle-inactive',
-            icon: item.activo ? 'fas fa-toggle-on' : 'fas fa-toggle-off',
-            title: item.activo ? 'Desactivar contexto' : 'Activar contexto',
-            srText: item.activo ? 'Desactivar' : 'Activar',
-            onClick: async () => {
-                await toggleEstatusContexto(item.id, item.activo ? 0 : 1);
-            }
-        });
-        actionsGroup.appendChild(toggleBtn);
+            // Botón Activar / Desactivar
+            const toggleBtn = createAdminActionButton({
+                type: item.activo ? 'toggle-active' : 'toggle-inactive',
+                icon: item.activo ? 'fas fa-toggle-on' : 'fas fa-toggle-off',
+                title: item.activo ? 'Desactivar contexto' : 'Activar contexto',
+                srText: item.activo ? 'Desactivar' : 'Activar',
+                onClick: async () => {
+                    await toggleEstatusContexto(item.id, item.activo ? 0 : 1);
+                }
+            });
+            actionsGroup.appendChild(toggleBtn);
+        }
 
-        // Botón Eliminar
-        const deleteBtn = createAdminActionButton({
-            type: 'delete',
-            icon: 'fas fa-trash',
-            title: 'Eliminar contexto',
-            srText: 'Eliminar',
-            onClick: async () => {
-                await confirmarEliminarContexto(item);
-            }
-        });
-        actionsGroup.appendChild(deleteBtn);
+        if (canDelete) {
+            // Botón Eliminar
+            const deleteBtn = createAdminActionButton({
+                type: 'delete',
+                icon: 'fas fa-trash',
+                title: 'Eliminar contexto',
+                srText: 'Eliminar',
+                onClick: async () => {
+                    await confirmarEliminarContexto(item);
+                }
+            });
+            actionsGroup.appendChild(deleteBtn);
+        }
 
-        tdAcciones.appendChild(actionsGroup);
+        if (!canUpdate && !canDelete) {
+            tdAcciones.innerHTML = '<span style="color: #94a3b8; font-size: 0.8rem; font-style: italic;">Solo lectura</span>';
+        } else {
+            tdAcciones.appendChild(actionsGroup);
+        }
         tr.appendChild(tdAcciones);
 
         tbody.appendChild(tr);
@@ -4803,6 +4923,10 @@ function filtrarYRenderizarAiContexto() {
  * Abre el modal para crear un nuevo registro de contexto.
  */
 function abrirModalCrearContexto() {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('contexto.create')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
     const modal = document.getElementById('modal-ai-contexto');
     const form = document.getElementById('form-ai-contexto');
     const titulo = document.getElementById('modal-ai-contexto-titulo');
@@ -4830,6 +4954,10 @@ function abrirModalCrearContexto() {
  * Abre el modal para editar un contexto existente.
  */
 function abrirModalEditarContexto(item) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('contexto.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
     const modal = document.getElementById('modal-ai-contexto');
     const form = document.getElementById('form-ai-contexto');
     const titulo = document.getElementById('modal-ai-contexto-titulo');
@@ -4871,6 +4999,10 @@ function cerrarModalAiContexto() {
  * Alterna el estatus activo/inactivo de un contexto.
  */
 async function toggleEstatusContexto(id, nuevoActivo) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('contexto.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
     try {
         const res = await fetch(`/api/admin/contexto/${id}/toggle`, {
             method: 'PATCH',
@@ -4895,6 +5027,10 @@ async function toggleEstatusContexto(id, nuevoActivo) {
  * Solicita confirmación y elimina un registro de contexto.
  */
 async function confirmarEliminarContexto(item) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('contexto.delete')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
     const confirmacion = window.confirm(`¿Estás seguro de que deseas eliminar el contexto "${item.titulo}"?\n\nEsta acción eliminará el conocimiento de la base de datos.`);
     if (!confirmacion) return;
 
@@ -4964,6 +5100,14 @@ function configurarEventosAiContexto() {
             }
 
             const isEdit = !!id;
+            if (isEdit && window.userAdminPermissions && !window.userAdminPermissions.has('contexto.update')) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                return;
+            }
+            if (!isEdit && window.userAdminPermissions && !window.userAdminPermissions.has('contexto.create')) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                return;
+            }
             const url = isEdit ? `/api/admin/contexto/${id}` : '/api/admin/contexto';
             const method = isEdit ? 'PUT' : 'POST';
 
