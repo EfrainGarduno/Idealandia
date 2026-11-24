@@ -231,6 +231,7 @@ const ADMIN_TAB_PERMISSIONS = {
     'admin-menus': 'menus.read',
     'admin-accesos': 'admin.access',
     'admin-asociados': 'asociados.read',
+    'admin-contexto': 'contexto.read',
     'admin-finanzas-instituciones': 'finanzas.read',
     'admin-finanzas-tasas': 'finanzas.read',
     'admin-finanzas-estrategias': 'finanzas.read'
@@ -244,6 +245,7 @@ const ADMIN_TAB_CONFIG = [
     { tabId: 'admin-menus', perm: 'menus.read', loadFn: () => loadMenus() },
     { tabId: 'admin-accesos', perm: 'admin.access', loadFn: () => loadAccesos() },
     { tabId: 'admin-asociados', perm: 'asociados.read', loadFn: () => loadAsociados() },
+    { tabId: 'admin-contexto', perm: 'contexto.read', loadFn: () => loadAiContexto() },
     { tabId: 'admin-finanzas-instituciones', perm: 'finanzas.read', loadFn: () => loadFinanzasInstituciones() },
     { tabId: 'admin-finanzas-tasas', perm: 'finanzas.read', loadFn: () => loadFinanzasTasas() },
     { tabId: 'admin-finanzas-estrategias', perm: 'finanzas.read', loadFn: () => loadFinanzasEstrategias() }
@@ -272,7 +274,7 @@ function clearAllAdminTables() {
     const tableIds = [
         'admin-usuarios-tbody', 'admin-roles-tbody', 'admin-permisos-tbody',
         'admin-funcionalidades-tbody', 'admin-menus-tbody', 'admin-accesos-tbody',
-        'admin-asociados-tbody', 'admin-finanzas-instituciones-tbody',
+        'admin-asociados-tbody', 'admin-contexto-tbody', 'admin-finanzas-instituciones-tbody',
         'admin-finanzas-estrategias-tbody'
     ];
     tableIds.forEach(id => {
@@ -438,6 +440,7 @@ function initAdminTabs() {
             if (targetId === 'admin-accesos') loadAccesos();
             if (targetId === 'admin-menus') loadMenus();
             if (targetId === 'admin-asociados') loadAsociados();
+            if (targetId === 'admin-contexto') loadAiContexto();
             if (targetId === 'admin-finanzas-instituciones') loadFinanzasInstituciones();
             if (targetId === 'admin-finanzas-tasas') loadFinanzasTasas();
         });
@@ -4527,3 +4530,474 @@ window.loadFinanzasInstituciones = loadFinanzasInstituciones;
 window.loadFinanzasTasas = loadFinanzasTasas;
 window.loadFinanzasEstrategias = loadFinanzasEstrategias;
 window.initAdminBlocks = initAdminBlocks;
+
+// =========================================================================
+// MÓDULO: CONTEXTO DE IDEALITA (ai_contexto - FASE 1)
+// =========================================================================
+
+let aiContextoCache = [];
+let aiContextoCategoriasCache = [];
+let aiContextoListenersConfigurados = false;
+
+/**
+ * Devuelve el estilo HTML de la insignia de categoría según su nombre.
+ */
+function getCategoriaBadgeHtml(categoria) {
+    const cat = String(categoria || 'General').toLowerCase().trim();
+    const map = {
+        'idealandia': { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+        'idealita': { bg: '#f5f3ff', color: '#6d28d9', border: '#ddd6fe' },
+        'finanzas': { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' },
+        'pensiones': { bg: '#fef3c7', color: '#b45309', border: '#fde68a' },
+        'reglas': { bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' },
+        'ideas': { bg: '#fdf4ff', color: '#a21caf', border: '#f5d0fe' },
+        'asociados': { bg: '#e0e7ff', color: '#3730a3', border: '#c7d2fe' },
+        'servicios': { bg: '#f0fdf4', color: '#166534', border: '#bbf7d0' },
+        'administración': { bg: '#f1f5f9', color: '#334155', border: '#cbd5e1' },
+        'administracion': { bg: '#f1f5f9', color: '#334155', border: '#cbd5e1' }
+    };
+
+    const style = map[cat] || { bg: '#f8fafc', color: '#475569', border: '#e2e8f0' };
+    return `<span style="font-weight: 700; padding: 2px 8px; border-radius: 4px; background: ${style.bg}; color: ${style.color}; border: 1px solid ${style.border}; font-size: 0.8rem; display: inline-block;">${escapeHTML(categoria || 'General')}</span>`;
+}
+
+/**
+ * Carga los registros de ai_contexto desde la API administrativa.
+ */
+async function loadAiContexto() {
+    const tbody = document.getElementById('admin-contexto-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando contexto de Idealita...</td></tr>';
+
+    try {
+        const res = await fetch('/api/admin/contexto');
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            handleAdminError(res, data, 'Error al cargar el contexto de Idealita.');
+            return;
+        }
+
+        const data = await res.json();
+        aiContextoCache = Array.isArray(data.contextos) ? data.contextos : [];
+        aiContextoCategoriasCache = Array.isArray(data.categorias) ? data.categorias : [];
+
+        actualizarSelectCategoriasContexto();
+        configurarEventosAiContexto();
+        filtrarYRenderizarAiContexto();
+    } catch (err) {
+        console.error('Error in loadAiContexto:', err);
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #dc2626;">Error de red al cargar el contexto.</td></tr>';
+    }
+}
+
+/**
+ * Actualiza el select de categorías y el datalist del formulario.
+ */
+function actualizarSelectCategoriasContexto() {
+    const select = document.getElementById('admin-contexto-filtro-categoria');
+    const datalist = document.getElementById('lista-categorias-contexto');
+
+    // Categorías combinadas
+    const defaults = ['General', 'Idealandia', 'Idealita', 'Reglas', 'Ideas', 'Finanzas', 'Pensiones', 'Asociados', 'Servicios', 'Administración'];
+    const categoriasFromCache = aiContextoCache.map(c => c.categoria).filter(Boolean);
+    const todas = Array.from(new Set([...defaults, ...aiContextoCategoriasCache, ...categoriasFromCache])).sort();
+
+    if (select) {
+        const currentVal = select.value;
+        select.innerHTML = '<option value="todas">Todas las categorías</option>';
+        todas.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            select.appendChild(opt);
+        });
+        if (currentVal && (currentVal === 'todas' || todas.includes(currentVal))) {
+            select.value = currentVal;
+        }
+    }
+
+    if (datalist) {
+        datalist.innerHTML = '';
+        todas.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            datalist.appendChild(opt);
+        });
+    }
+}
+
+/**
+ * Aplica los filtros de búsqueda, categoría y estado sobre el caché y dibuja las filas.
+ */
+function filtrarYRenderizarAiContexto() {
+    const tbody = document.getElementById('admin-contexto-tbody');
+    const counter = document.getElementById('admin-contexto-counter');
+    const searchInput = document.getElementById('admin-contexto-search');
+    const catSelect = document.getElementById('admin-contexto-filtro-categoria');
+    const statusSelect = document.getElementById('admin-contexto-filtro-estatus');
+
+    if (!tbody) return;
+
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const categoria = catSelect ? catSelect.value : 'todas';
+    const estatus = statusSelect ? statusSelect.value : 'todos';
+
+    const filtrados = aiContextoCache.filter(item => {
+        // Filtro por estatus
+        if (estatus !== 'todos') {
+            const esperado = estatus === '1' ? 1 : 0;
+            if (item.activo !== esperado) return false;
+        }
+
+        // Filtro por categoría
+        if (categoria !== 'todas') {
+            if (String(item.categoria || '').toLowerCase() !== categoria.toLowerCase()) return false;
+        }
+
+        // Filtro por texto
+        if (query) {
+            const matchTitulo = String(item.titulo || '').toLowerCase().includes(query);
+            const matchContenido = String(item.contenido || '').toLowerCase().includes(query);
+            const matchCat = String(item.categoria || '').toLowerCase().includes(query);
+            if (!matchTitulo && !matchContenido && !matchCat) return false;
+        }
+
+        return true;
+    });
+
+    if (counter) {
+        counter.textContent = `${filtrados.length} de ${aiContextoCache.length} registros`;
+    }
+
+    tbody.innerHTML = '';
+
+    if (filtrados.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 32px 20px; color: #64748b;">
+                    <i class="fas fa-search" style="font-size: 1.3rem; margin-bottom: 8px; display: block; color: #cbd5e1;"></i>
+                    No se encontraron registros de contexto con los filtros aplicados.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    filtrados.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.dataset.contextoId = item.id;
+
+        // 1. Categoría
+        const tdCat = document.createElement('td');
+        tdCat.innerHTML = getCategoriaBadgeHtml(item.categoria);
+        tr.appendChild(tdCat);
+
+        // 2. Título
+        const tdTitulo = document.createElement('td');
+        tdTitulo.innerHTML = `<strong>${escapeHTML(item.titulo)}</strong>`;
+        tr.appendChild(tdTitulo);
+
+        // 3. Contenido (preview con visualización de texto largo)
+        const tdContenido = document.createElement('td');
+        tdContenido.style.fontSize = '0.86rem';
+        tdContenido.style.color = '#334155';
+        tdContenido.style.lineHeight = '1.45';
+
+        const contenidoStr = String(item.contenido || '');
+        if (contenidoStr.length > 130) {
+            const textoCorto = escapeHTML(contenidoStr.slice(0, 120));
+            tdContenido.innerHTML = `
+                <span>${textoCorto}...</span>
+                <button type="button" class="btn-ver-mas-contexto" style="background: none; border: none; color: #7c3aed; font-weight: 700; cursor: pointer; padding: 0 4px; font-size: 0.8rem;" title="Hacer clic para ver el contenido completo">
+                    [Ver más]
+                </button>
+            `;
+            const btnMas = tdContenido.querySelector('.btn-ver-mas-contexto');
+            if (btnMas) btnMas.onclick = () => abrirModalEditarContexto(item);
+        } else {
+            tdContenido.textContent = contenidoStr;
+        }
+        tr.appendChild(tdContenido);
+
+        // 4. Prioridad
+        const tdPrio = document.createElement('td');
+        tdPrio.style.textAlign = 'center';
+        tdPrio.innerHTML = `<span style="font-weight: 700; color: #1e293b; background: #f8fafc; padding: 2px 8px; border-radius: 4px; border: 1px solid #e2e8f0;">${item.prioridad}</span>`;
+        tr.appendChild(tdPrio);
+
+        // 5. Versión
+        const tdVersion = document.createElement('td');
+        tdVersion.style.textAlign = 'center';
+        tdVersion.innerHTML = `<span style="font-weight: 600; color: #475569; font-size: 0.82rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">v${item.version}</span>`;
+        tr.appendChild(tdVersion);
+
+        // 6. Estatus
+        const tdStatus = document.createElement('td');
+        tdStatus.style.textAlign = 'center';
+        if (item.activo === 1) {
+            tdStatus.innerHTML = '<span style="font-weight: 700; color: #166534; background: #dcfce7; padding: 3px 8px; border-radius: 4px; font-size: 0.78rem;"><i class="fas fa-check-circle"></i> Activo</span>';
+        } else {
+            tdStatus.innerHTML = '<span style="font-weight: 700; color: #64748b; background: #f1f5f9; padding: 3px 8px; border-radius: 4px; font-size: 0.78rem;"><i class="fas fa-ban"></i> Inactivo</span>';
+        }
+        tr.appendChild(tdStatus);
+
+        // 7. Actualizado
+        const tdFecha = document.createElement('td');
+        tdFecha.style.textAlign = 'center';
+        tdFecha.style.fontSize = '0.8rem';
+        tdFecha.style.color = '#64748b';
+        tdFecha.textContent = item.updated_at ? item.updated_at.replace('T', ' ').slice(0, 16) : '—';
+        tr.appendChild(tdFecha);
+
+        // 8. Acciones
+        const tdAcciones = document.createElement('td');
+        tdAcciones.className = 'admin-actions-cell';
+        const actionsGroup = createAdminActionsGroup();
+
+        // Botón Editar
+        const editBtn = createAdminActionButton({
+            type: 'edit',
+            icon: 'fas fa-pen',
+            title: 'Editar contexto',
+            srText: 'Editar',
+            onClick: () => abrirModalEditarContexto(item)
+        });
+        actionsGroup.appendChild(editBtn);
+
+        // Botón Activar / Desactivar
+        const toggleBtn = createAdminActionButton({
+            type: item.activo ? 'toggle-active' : 'toggle-inactive',
+            icon: item.activo ? 'fas fa-toggle-on' : 'fas fa-toggle-off',
+            title: item.activo ? 'Desactivar contexto' : 'Activar contexto',
+            srText: item.activo ? 'Desactivar' : 'Activar',
+            onClick: async () => {
+                await toggleEstatusContexto(item.id, item.activo ? 0 : 1);
+            }
+        });
+        actionsGroup.appendChild(toggleBtn);
+
+        // Botón Eliminar
+        const deleteBtn = createAdminActionButton({
+            type: 'delete',
+            icon: 'fas fa-trash',
+            title: 'Eliminar contexto',
+            srText: 'Eliminar',
+            onClick: async () => {
+                await confirmarEliminarContexto(item);
+            }
+        });
+        actionsGroup.appendChild(deleteBtn);
+
+        tdAcciones.appendChild(actionsGroup);
+        tr.appendChild(tdAcciones);
+
+        tbody.appendChild(tr);
+    });
+
+    const table = document.getElementById('admin-contexto-table');
+    if (table) makeAdminTableSortable(table);
+}
+
+/**
+ * Abre el modal para crear un nuevo registro de contexto.
+ */
+function abrirModalCrearContexto() {
+    const modal = document.getElementById('modal-ai-contexto');
+    const form = document.getElementById('form-ai-contexto');
+    const titulo = document.getElementById('modal-ai-contexto-titulo');
+    const versionBadge = document.getElementById('ai-contexto-version-badge');
+
+    if (!modal || !form) return;
+
+    form.reset();
+    document.getElementById('ai-contexto-id').value = '';
+    document.getElementById('ai-contexto-categoria').value = 'General';
+    document.getElementById('ai-contexto-prioridad').value = '100';
+    document.getElementById('ai-contexto-activo').checked = true;
+
+    if (titulo) {
+        titulo.innerHTML = '<i class="fas fa-brain" style="color: #8b5cf6;"></i> <span>Nuevo Contexto de Idealita</span>';
+    }
+    if (versionBadge) {
+        versionBadge.style.display = 'none';
+    }
+
+    modal.style.display = 'flex';
+}
+
+/**
+ * Abre el modal para editar un contexto existente.
+ */
+function abrirModalEditarContexto(item) {
+    const modal = document.getElementById('modal-ai-contexto');
+    const form = document.getElementById('form-ai-contexto');
+    const titulo = document.getElementById('modal-ai-contexto-titulo');
+    const versionBadge = document.getElementById('ai-contexto-version-badge');
+    const versionVal = document.getElementById('ai-contexto-version-val');
+
+    if (!modal || !form || !item) return;
+
+    form.reset();
+    document.getElementById('ai-contexto-id').value = item.id;
+    document.getElementById('ai-contexto-categoria').value = item.categoria || 'General';
+    document.getElementById('ai-contexto-titulo').value = item.titulo || '';
+    document.getElementById('ai-contexto-contenido').value = item.contenido || '';
+    document.getElementById('ai-contexto-prioridad').value = item.prioridad || 100;
+    document.getElementById('ai-contexto-activo').checked = item.activo === 1;
+
+    if (titulo) {
+        titulo.innerHTML = `<i class="fas fa-pen-fancy" style="color: #8b5cf6;"></i> <span>Editar Contexto: ${escapeHTML(item.titulo)}</span>`;
+    }
+    if (versionVal) {
+        versionVal.textContent = item.version || 1;
+    }
+    if (versionBadge) {
+        versionBadge.style.display = 'inline-block';
+    }
+
+    modal.style.display = 'flex';
+}
+
+/**
+ * Cierra el modal de contexto.
+ */
+function cerrarModalAiContexto() {
+    const modal = document.getElementById('modal-ai-contexto');
+    if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Alterna el estatus activo/inactivo de un contexto.
+ */
+async function toggleEstatusContexto(id, nuevoActivo) {
+    try {
+        const res = await fetch(`/api/admin/contexto/${id}/toggle`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activo: nuevoActivo })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            if (window.showModal) window.showModal(data.message || 'Estatus actualizado.');
+            await loadAiContexto();
+        } else {
+            handleAdminError(res, data, 'Error al cambiar estatus del contexto.');
+        }
+    } catch (err) {
+        console.error('Error toggling contexto:', err);
+        if (window.showModal) window.showModal('Error de red al actualizar estatus.');
+    }
+}
+
+/**
+ * Solicita confirmación y elimina un registro de contexto.
+ */
+async function confirmarEliminarContexto(item) {
+    const confirmacion = window.confirm(`¿Estás seguro de que deseas eliminar el contexto "${item.titulo}"?\n\nEsta acción eliminará el conocimiento de la base de datos.`);
+    if (!confirmacion) return;
+
+    try {
+        const res = await fetch(`/api/admin/contexto/${item.id}`, {
+            method: 'DELETE'
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            if (window.showModal) window.showModal(data.message || 'Contexto eliminado.');
+            await loadAiContexto();
+        } else {
+            handleAdminError(res, data, 'Error al eliminar contexto.');
+        }
+    } catch (err) {
+        console.error('Error deleting contexto:', err);
+        if (window.showModal) window.showModal('Error de red al eliminar contexto.');
+    }
+}
+
+/**
+ * Configura los eventos e interacciones del módulo de contexto.
+ */
+function configurarEventosAiContexto() {
+    if (aiContextoListenersConfigurados) return;
+    aiContextoListenersConfigurados = true;
+
+    // Botón abrir modal nuevo
+    const btnNuevo = document.getElementById('btn-nuevo-contexto');
+    if (btnNuevo) {
+        btnNuevo.addEventListener('click', () => abrirModalCrearContexto());
+    }
+
+    // Botones cerrar modal
+    const btnCerrar = document.getElementById('btn-cerrar-modal-ai-contexto');
+    const btnCancelar = document.getElementById('btn-cancelar-modal-ai-contexto');
+    if (btnCerrar) btnCerrar.addEventListener('click', cerrarModalAiContexto);
+    if (btnCancelar) btnCancelar.addEventListener('click', cerrarModalAiContexto);
+
+    // Filtros interactivos
+    const searchInput = document.getElementById('admin-contexto-search');
+    const catSelect = document.getElementById('admin-contexto-filtro-categoria');
+    const statusSelect = document.getElementById('admin-contexto-filtro-estatus');
+
+    if (searchInput) searchInput.addEventListener('input', () => filtrarYRenderizarAiContexto());
+    if (catSelect) catSelect.addEventListener('change', () => filtrarYRenderizarAiContexto());
+    if (statusSelect) statusSelect.addEventListener('change', () => filtrarYRenderizarAiContexto());
+
+    // Submit del formulario (crear / editar)
+    const form = document.getElementById('form-ai-contexto');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const id = document.getElementById('ai-contexto-id').value;
+            const categoria = document.getElementById('ai-contexto-categoria').value.trim();
+            const titulo = document.getElementById('ai-contexto-titulo').value.trim();
+            const contenido = document.getElementById('ai-contexto-contenido').value.trim();
+            const prioridad = parseInt(document.getElementById('ai-contexto-prioridad').value, 10) || 100;
+            const activo = document.getElementById('ai-contexto-activo').checked ? 1 : 0;
+
+            if (!titulo || !contenido) {
+                if (window.showModal) window.showModal('El título y contenido son obligatorios.');
+                else alert('El título y contenido son obligatorios.');
+                return;
+            }
+
+            const isEdit = !!id;
+            const url = isEdit ? `/api/admin/contexto/${id}` : '/api/admin/contexto';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        categoria: categoria || 'General',
+                        titulo,
+                        contenido,
+                        prioridad,
+                        activo
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    cerrarModalAiContexto();
+                    if (window.showModal) window.showModal(data.message || 'Contexto guardado exitosamente.');
+                    await loadAiContexto();
+                } else {
+                    handleAdminError(res, data, 'Error al guardar contexto.');
+                }
+            } catch (err) {
+                console.error('Error saving contexto:', err);
+                if (window.showModal) window.showModal('Error de red al guardar contexto.');
+            }
+        });
+    }
+}
+
+window.loadAiContexto = loadAiContexto;
+window.abrirModalCrearContexto = abrirModalCrearContexto;
+window.abrirModalEditarContexto = abrirModalEditarContexto;
+window.toggleEstatusContexto = toggleEstatusContexto;
+window.confirmarEliminarContexto = confirmarEliminarContexto;
