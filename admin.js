@@ -88,6 +88,7 @@ function createAdminActionsGroup() {
  */
 function makeAdminTableSortable(table) {
     if (!table) return;
+    if (table.classList.contains('simulador-table') || table.id === 'simulador-main-table' || table.closest('#servicios-financieras-view')) return;
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
     if (!thead || !tbody) return;

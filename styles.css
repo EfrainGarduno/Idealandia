@@ -1372,19 +1372,19 @@
 .admin-tab-content.active {
     display: block;
 }
-.admin-table, .admin-asociados-table {
+.admin-table, .admin-asociados-table, .simulador-table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 20px;
     background-color: white;
 }
-.admin-table th, .admin-table td, .admin-asociados-table th, .admin-asociados-table td {
+.admin-table th, .admin-table td, .admin-asociados-table th, .admin-asociados-table td, .simulador-table th, .simulador-table td {
     padding: 10px;
     border: 1px solid #ddd;
     text-align: left;
     white-space: normal; /* Allow text to wrap by default */
 }
-.admin-table th, .admin-asociados-table th {
+.admin-table th, .admin-asociados-table th, .simulador-table th {
     background-color: #f8f9fa;
     font-weight: bold;
     white-space: nowrap; /* Keep headers from wrapping unnecessarily */
@@ -2712,8 +2712,12 @@ th.sortable-th.sort-desc .sort-indicator {
 }
 
 .sim-input-tasa {
-    max-width: 62px;
+    width: 72px;
+    min-width: 68px;
+    max-width: 80px;
     color: #0f172a;
+    text-align: right;
+    font-weight: 700;
 }
 
 .sim-input-inv1,

@@ -996,6 +996,25 @@
                     .sim-col-toggle-btn.inactive { background: #f1f5f9 !important; color: #94a3b8 !important; border-color: #cbd5e1 !important; text-decoration: line-through; }
                     .simulador-money-container:focus-within { border-color: #eab308 !important; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.25) !important; }
                     .sim-col-chk-label:hover { background: #f1f5f9; }
+                    .simulador-table th {
+                        cursor: pointer;
+                        user-select: none;
+                        position: relative;
+                        transition: background-color 0.15s ease-in-out;
+                    }
+                    .simulador-table th:hover {
+                        background-color: #f1f5f9;
+                    }
+                    .simulador-table th.th-col-sorted {
+                        background-color: #eff6ff !important;
+                        color: #1d4ed8;
+                    }
+                    .sim-sort-indicator {
+                        display: inline-block;
+                        margin-left: 4px;
+                        font-size: 0.75rem;
+                        vertical-align: middle;
+                    }
                 </style>
                 <div class="servicios-back-bar" style="margin-bottom: 20px;">
                     <button type="button" id="btn-volver-catalogo-financieras" class="btn btn-secondary">
@@ -1026,37 +1045,10 @@
 
                     <!-- Selector de Modalidad y Estrategias de Inversión -->
                     <div style="margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                        <div style="margin-bottom: 10px;">
                             <label style="font-weight: 700; color: #1e293b; margin: 0; font-size: 0.95rem;">
                                 <i class="fas fa-chess-knight" style="color: #2563eb;"></i> Modalidad y Estrategia de inversión:
                             </label>
-                            <!-- Controles unificados para visibilidad de columnas -->
-                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                <span style="font-size: 0.8rem; font-weight: 600; color: #64748b;">Columnas:</span>
-                                <button type="button" id="simulador-toggle-col-condiciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.78rem; padding: 4px 10px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Condiciones">
-                                    <i class="fas fa-eye"></i> Condiciones
-                                </button>
-                                <button type="button" id="simulador-toggle-col-restricciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.78rem; padding: 4px 10px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Restricciones">
-                                    <i class="fas fa-eye"></i> Restricciones
-                                </button>
-                                <!-- Selector desplegable de todas las columnas -->
-                                <div class="simulador-dropdown-columnas-wrapper" style="position: relative; display: inline-block;">
-                                    <button type="button" id="simulador-btn-columnas" class="btn btn-sm" style="font-size: 0.78rem; padding: 4px 10px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; cursor: pointer; transition: all 0.2s;" title="Configurar visibilidad individual de todas las columnas">
-                                        <i class="fas fa-columns" style="color: #2563eb;"></i> <span>⚙ Columnas</span>
-                                        <span id="simulador-badge-columnas" style="background: #eff6ff; color: #1d4ed8; font-size: 0.72rem; padding: 1px 6px; border-radius: 10px; font-weight: 700;">14/14</span>
-                                        <i class="fas fa-chevron-down" style="font-size: 0.65rem; color: #64748b;"></i>
-                                    </button>
-                                    <div id="simulador-menu-columnas" class="simulador-columnas-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 5px); background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.12); padding: 12px; z-index: 1050; width: 280px; max-width: 90vw; max-height: 420px; overflow-y: auto;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
-                                            <span style="font-weight: 700; font-size: 0.82rem; color: #334155;">Mostrar / Ocultar</span>
-                                            <button type="button" id="simulador-btn-mostrar-todas-cols" style="background: none; border: none; color: #2563eb; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 0;">Mostrar todas</button>
-                                        </div>
-                                        <div id="simulador-lista-columnas" style="display: flex; flex-direction: column; gap: 4px;">
-                                            <!-- Checkboxes generados dinámicamente -->
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <label class="sim-strategy-option sim-strategy-individual" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #3b82f6; background: #eff6ff; font-weight: 700; font-size: 0.9rem; color: #1d4ed8; transition: all 0.2s;">
@@ -1148,25 +1140,66 @@
                 </div>
                 <div id="simulador-error-msg" style="display: none; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #991b1b; margin-bottom: 20px;"></div>
 
+                <!-- Barra de Herramientas de la Tabla del Simulador -->
+                <div class="simulador-table-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 12px 18px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
+                            <i class="fas fa-table" style="color: #2563eb;"></i> Tabla de Instituciones Financieras
+                        </span>
+                        <span id="simulador-count-seleccionadas" style="font-size: 0.78rem; background: #dbeafe; color: #1e40af; padding: 2px 10px; border-radius: 12px; font-weight: 700;">
+                            9 activas
+                        </span>
+                    </div>
+
+                    <!-- Controles de Visibilidad de Columnas -->
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.82rem; font-weight: 700; color: #475569;">Columnas:</span>
+                        <button type="button" id="simulador-toggle-col-condiciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Condiciones">
+                            <i class="fas fa-eye"></i> Condiciones
+                        </button>
+                        <button type="button" id="simulador-toggle-col-restricciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Restricciones">
+                            <i class="fas fa-eye"></i> Restricciones
+                        </button>
+
+                        <!-- Botón Desplegable ⚙ Columnas -->
+                        <div class="simulador-dropdown-columnas-wrapper" style="position: relative; display: inline-block;">
+                            <button type="button" id="simulador-btn-columnas" class="btn btn-sm" style="font-size: 0.82rem; padding: 6px 14px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: #2563eb; border: 1px solid #1d4ed8; color: #ffffff; cursor: pointer; box-shadow: 0 1px 3px rgba(37,99,235,0.25);" title="Activar / desactivar columnas individualmente">
+                                <i class="fas fa-cog"></i> <span>⚙ Columnas</span>
+                                <span id="simulador-badge-columnas" style="background: rgba(255,255,255,0.28); color: #ffffff; font-size: 0.72rem; padding: 1px 6px; border-radius: 10px; font-weight: 700;">14/14</span>
+                                <i class="fas fa-chevron-down" style="font-size: 0.65rem;"></i>
+                            </button>
+                            <div id="simulador-menu-columnas" class="simulador-columnas-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 6px); background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 14px; z-index: 1050; width: 290px; max-width: 90vw; max-height: 440px; overflow-y: auto;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                                    <span style="font-weight: 700; font-size: 0.85rem; color: #1e293b;"><i class="fas fa-columns" style="color: #2563eb;"></i> Mostrar / Ocultar</span>
+                                    <button type="button" id="simulador-btn-mostrar-todas-cols" style="background: none; border: none; color: #2563eb; font-size: 0.75rem; font-weight: 700; cursor: pointer; padding: 0;">Mostrar todas</button>
+                                </div>
+                                <div id="simulador-lista-columnas" style="display: flex; flex-direction: column; gap: 4px;">
+                                    <!-- Checkboxes generados dinámicamente -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tabla Responsiva del Simulador -->
                 <div id="simulador-table-container" class="table-responsive" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.04); overflow-x: auto;">
-                    <table class="admin-table simulador-table" style="width: 100%; border-collapse: collapse;">
+                    <table class="simulador-table" id="simulador-main-table" style="width: 100%; border-collapse: collapse;">
                         <thead>
                             <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left;">
-                                <th class="sim-col-sel" style="width: 30px; text-align: center;">Sel</th>
-                                <th class="sim-col-institucion" style="min-width: 80px;">Institución</th>
-                                <th class="sim-col-tipo" style="width: 34px; text-align: center;">Tipo</th>
-                                <th class="sim-col-condiciones" style="min-width: 95px;">Condiciones</th>
-                                <th class="sim-col-restricciones" style="min-width: 95px;">Restricciones</th>
-                                <th class="sim-col-inv-base" style="min-width: 75px; text-align: right;">Inversión Base</th>
-                                <th class="sim-col-tasa" style="width: 52px; text-align: right;">Tasa %</th>
-                                <th class="sim-col-inv1" style="min-width: 98px; text-align: right; background: #fef3c7;">Inversión 1</th>
-                                <th class="sim-col-inv2" style="min-width: 98px; text-align: right; background: #fef3c7;">Inversión 2</th>
-                                <th class="sim-col-meses" style="width: 42px; text-align: center;">Meses</th>
-                                <th class="sim-col-rend1" style="min-width: 60px; text-align: right;">Rend1</th>
-                                <th class="sim-col-rend2" style="min-width: 60px; text-align: right;">Rend2</th>
-                                <th class="sim-col-total-mensual" style="min-width: 74px; text-align: right; background: #ecfdf5;">Total mensual</th>
-                                <th class="sim-col-total-periodo" style="min-width: 76px; text-align: right; background: #dcfce7;">Total periodo</th>
+                                <th class="sim-col-sel" style="width: 38px; min-width: 38px; text-align: center;" data-col="sel" title="Ordenar por selección">Sel</th>
+                                <th class="sim-col-institucion" style="min-width: 110px;" data-col="institucion" title="Ordenar por Institución">Institución</th>
+                                <th class="sim-col-tipo" style="width: 55px; min-width: 55px; text-align: center;" data-col="tipo" title="Ordenar por Tipo de Entidad">Tipo</th>
+                                <th class="sim-col-condiciones" style="min-width: 120px;" data-col="condiciones" title="Ordenar por Condiciones">Condiciones</th>
+                                <th class="sim-col-restricciones" style="min-width: 120px;" data-col="restricciones" title="Ordenar por Restricciones">Restricciones</th>
+                                <th class="sim-col-inv-base" style="min-width: 95px; text-align: right;" data-col="inv-base" title="Ordenar por Inversión Base">Inversión Base</th>
+                                <th class="sim-col-tasa" style="min-width: 95px; width: 100px; text-align: right;" data-col="tasa" title="Ordenar por Tasa Anual %">Tasa %</th>
+                                <th class="sim-col-inv1" style="min-width: 110px; text-align: right; background: #fef3c7;" data-col="inv1" title="Ordenar por Inversión 1">Inversión 1</th>
+                                <th class="sim-col-inv2" style="min-width: 110px; text-align: right; background: #fef3c7;" data-col="inv2" title="Ordenar por Inversión 2">Inversión 2</th>
+                                <th class="sim-col-meses" style="width: 55px; min-width: 55px; text-align: center;" data-col="meses" title="Ordenar por Meses">Meses</th>
+                                <th class="sim-col-rend1" style="min-width: 80px; text-align: right;" data-col="rend1" title="Ordenar por Rendimiento 1">Rend1</th>
+                                <th class="sim-col-rend2" style="min-width: 80px; text-align: right;" data-col="rend2" title="Ordenar por Rendimiento 2">Rend2</th>
+                                <th class="sim-col-total-mensual" style="min-width: 95px; text-align: right; background: #ecfdf5;" data-col="total-mensual" title="Ordenar por Total Mensual Estimado">Total mensual</th>
+                                <th class="sim-col-total-periodo" style="min-width: 98px; text-align: right; background: #dcfce7;" data-col="total-periodo" title="Ordenar por Total Periodo">Total periodo</th>
                             </tr>
                         </thead>
                         <tbody id="simulador-tbody">

@@ -52,6 +52,11 @@
     let colCondicionesVisible = true;
     let colRestriccionesVisible = true;
 
+    // Estado de ordenamiento de la tabla
+    let columnaOrdenadaActual = null;
+    let direccionOrdenActual = 'none'; // 'asc' | 'desc' | 'none'
+    let ordenOriginalInstituciones = [];
+
     // Estado reactivo en memoria para simulación personalizada por fila (NO PERSISTE EN BD)
     const valoresOriginalesPorInst = new Map(); // id -> { tasa, inv1, inv2, meses }
     const valoresPersonalizadosPorInst = new Map(); // id -> { tasa, inv1, inv2, meses, isModified }
@@ -364,6 +369,250 @@
     }
 
     /**
+     * Extrae el valor tipado para el ordenamiento de una columna de una institución dada.
+     */
+    function extraerValorOrdenamiento(inst, colId) {
+        const custom = valoresPersonalizadosPorInst.get(inst.id);
+        const orig = valoresOriginalesPorInst.get(inst.id);
+        const res = resultadosCalculadosPorInst.get(inst.id) || {};
+        const tr = document.getElementById(`sim-row-${inst.id}`);
+
+        switch (colId) {
+            case 'sel':
+                return institucionesSeleccionadas.has(inst.id) ? 1 : 0;
+
+            case 'institucion':
+                return String(inst.nombre || '').toLowerCase();
+
+            case 'tipo': {
+                const tipoMap = { 'B': 'Banco', 'S': 'Sofipo', 'F': 'Fintech', 'O': 'Otro' };
+                return String(tipoMap[inst.tipo] || inst.tipo || 'Otro').toLowerCase();
+            }
+
+            case 'condiciones':
+                return String(inst.condiciones_resumen || (inst.esquema ? inst.esquema.nombre_esquema : '') || '').toLowerCase();
+
+            case 'restricciones': {
+                if (Array.isArray(inst.restricciones) && inst.restricciones.length > 0) {
+                    return inst.restricciones.map(r => r.descripcion || '').join(' ').toLowerCase();
+                }
+                return '';
+            }
+
+            case 'inv-base': {
+                const el = tr ? tr.querySelector('.sim-val-inv-base') : null;
+                if (el) {
+                    const num = parseFloat(String(el.textContent).replace(/[^0-9.]/g, ''));
+                    return isNaN(num) ? 0 : num;
+                }
+                return 0;
+            }
+
+            case 'tasa': {
+                const input = tr ? tr.querySelector('.sim-input-tasa') : null;
+                if (input) {
+                    const num = parseFloat(input.value);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.tasa : (orig ? orig.tasa : 0);
+            }
+
+            case 'inv1': {
+                const input = tr ? tr.querySelector('.sim-input-inv1') : null;
+                if (input) {
+                    const num = parseFloat(input.value);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.inv1 : (orig ? orig.inv1 : 0);
+            }
+
+            case 'inv2': {
+                const input = tr ? tr.querySelector('.sim-input-inv2') : null;
+                if (input) {
+                    const num = parseFloat(input.value);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.inv2 : (orig ? orig.inv2 : 0);
+            }
+
+            case 'meses': {
+                const input = tr ? tr.querySelector('.sim-input-meses') : null;
+                if (input) {
+                    const num = parseInt(input.value, 10);
+                    if (!isNaN(num)) return num;
+                }
+                return custom ? custom.meses : (orig ? orig.meses : 1);
+            }
+
+            case 'rend1':
+                return typeof res.rend1 === 'number' ? res.rend1 : 0;
+
+            case 'rend2':
+                return typeof res.rend2 === 'number' ? res.rend2 : 0;
+
+            case 'total-mensual':
+                return typeof res.total_mensual === 'number' ? res.total_mensual : 0;
+
+            case 'total-periodo':
+                return typeof res.total_periodo === 'number' ? res.total_periodo : 0;
+
+            default:
+                return '';
+        }
+    }
+
+    /**
+     * Ejecuta el ordenamiento de la tabla manteniendo cada institución unida estrictamente con sus tramos.
+     */
+    function ejecutarOrdenamientoSimulador(colId, dir) {
+        const tbody = document.getElementById('simulador-tbody');
+        if (!tbody) return;
+
+        // Construir grupos (institución + subfila de tramos)
+        const grupos = [];
+        catalogoInstituciones.forEach(inst => {
+            const row = document.getElementById(`sim-row-${inst.id}`);
+            if (!row) return;
+            const subrow = document.getElementById(`sim-subrow-${inst.id}`);
+            const valor = (dir === 'none' || !colId) ? null : extraerValorOrdenamiento(inst, colId);
+
+            grupos.push({
+                instId: inst.id,
+                row,
+                subrow,
+                valor,
+                ordenOriginal: ordenOriginalInstituciones.indexOf(inst.id)
+            });
+        });
+
+        if (dir === 'none' || !colId) {
+            grupos.sort((a, b) => a.ordenOriginal - b.ordenOriginal);
+        } else {
+            grupos.sort((a, b) => {
+                const valA = a.valor;
+                const valB = b.valor;
+
+                let cmp = 0;
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    cmp = valA - valB;
+                } else {
+                    cmp = String(valA || '').localeCompare(String(valB || ''), 'es', { sensitivity: 'base', numeric: true });
+                }
+
+                if (cmp === 0) {
+                    cmp = a.ordenOriginal - b.ordenOriginal;
+                }
+
+                return dir === 'desc' ? -cmp : cmp;
+            });
+        }
+
+        // Reubicar en el DOM preservando la integridad de cada institución y sus tramos
+        grupos.forEach(g => {
+            tbody.appendChild(g.row);
+            if (g.subrow) {
+                tbody.appendChild(g.subrow);
+            }
+        });
+
+        // La fila vacía siempre queda al final
+        const emptyTr = document.getElementById('sim-row-vacia');
+        if (emptyTr) tbody.appendChild(emptyTr);
+    }
+
+    /**
+     * Alterna la dirección del ordenamiento al hacer clic en un encabezado de columna.
+     */
+    function alternarOrdenColumna(colId) {
+        if (columnaOrdenadaActual === colId) {
+            if (direccionOrdenActual === 'asc') {
+                direccionOrdenActual = 'desc';
+            } else if (direccionOrdenActual === 'desc') {
+                direccionOrdenActual = 'none';
+                columnaOrdenadaActual = null;
+            } else {
+                direccionOrdenActual = 'asc';
+            }
+        } else {
+            columnaOrdenadaActual = colId;
+            direccionOrdenActual = 'asc';
+        }
+
+        actualizarIndicadoresOrdenVisual();
+        ejecutarOrdenamientoSimulador(columnaOrdenadaActual, direccionOrdenActual);
+    }
+
+    /**
+     * Actualiza los iconos visuales ASC/DESC en los encabezados th.
+     */
+    function actualizarIndicadoresOrdenVisual() {
+        const table = document.getElementById('simulador-main-table') || document.querySelector('.simulador-table');
+        if (!table) return;
+
+        const ths = table.querySelectorAll('thead th');
+        ths.forEach(th => {
+            const colClass = Array.from(th.classList).find(c => c.startsWith('sim-col-'));
+            const colId = th.dataset.col || (colClass ? colClass.replace('sim-col-', '') : null);
+            const ind = th.querySelector('.sim-sort-indicator');
+            if (!ind) return;
+
+            if (colId === columnaOrdenadaActual && direccionOrdenActual !== 'none') {
+                th.classList.add('th-col-sorted');
+                if (direccionOrdenActual === 'asc') {
+                    ind.innerHTML = ' <i class="fas fa-sort-up" style="color: #2563eb;"></i>';
+                    th.title = 'Columna ordenada ascendentemente. Clic para ordenar descendente.';
+                } else {
+                    ind.innerHTML = ' <i class="fas fa-sort-down" style="color: #2563eb;"></i>';
+                    th.title = 'Columna ordenada descendentemente. Clic para quitar orden.';
+                }
+            } else {
+                th.classList.remove('th-col-sorted');
+                ind.innerHTML = ' <i class="fas fa-sort" style="color: #cbd5e1;"></i>';
+                th.title = `Hacer clic para ordenar por ${th.textContent.replace(/[▲▼⇅]/g, '').trim()}`;
+            }
+        });
+    }
+
+    /**
+     * Configura los listeners exclusivos en los encabezados <th> de la tabla.
+     */
+    function configurarOrdenamientoTabla() {
+        const table = document.getElementById('simulador-main-table') || document.querySelector('.simulador-table');
+        if (!table) return;
+        const thead = table.querySelector('thead');
+        if (!thead) return;
+
+        const ths = thead.querySelectorAll('th');
+        ths.forEach(th => {
+            const colClass = Array.from(th.classList).find(c => c.startsWith('sim-col-'));
+            const colId = th.dataset.col || (colClass ? colClass.replace('sim-col-', '') : null);
+            if (!colId) return;
+
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+
+            let ind = th.querySelector('.sim-sort-indicator');
+            if (!ind) {
+                ind = document.createElement('span');
+                ind.className = 'sim-sort-indicator';
+                ind.style.cssText = 'margin-left: 5px; font-size: 0.72rem; color: #94a3b8; display: inline-block;';
+                ind.innerHTML = ' <i class="fas fa-sort"></i>';
+                th.appendChild(ind);
+            }
+
+            if (!th.dataset.sortConfigured) {
+                th.dataset.sortConfigured = 'true';
+                th.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                    alternarOrdenColumna(colId);
+                });
+            }
+        });
+
+        actualizarIndicadoresOrdenVisual();
+    }
+
+    /**
      * Configura los listeners de los controles principales.
      */
     function configurarEventosSimulador() {
@@ -468,6 +717,8 @@
         const inputMeses = document.getElementById('simulador-meses-global');
         const capitalGlobal = parseInversionGlobal() || 40000;
         const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+
+        ordenOriginalInstituciones = catalogoInstituciones.map(i => i.id);
 
         catalogoInstituciones.forEach(inst => {
             const tr = document.createElement('tr');
@@ -583,8 +834,8 @@
                     <span class="sim-val-inv-base">${valorInversionBaseCondicion}</span>
                 </td>
                 <!-- Tasa % (Editable por fila) -->
-                <td class="sim-col-tasa" style="text-align: right;">
-                    <input type="number" step="0.01" min="0" max="100" class="sim-row-input sim-input-tasa" data-inst-id="${inst.id}" value="${curTasa.toFixed(2)}">
+                <td class="sim-col-tasa" style="text-align: right; min-width: 95px;">
+                    <input type="number" step="0.01" min="0" max="100" class="sim-row-input sim-input-tasa" data-inst-id="${inst.id}" value="${curTasa.toFixed(2)}" style="width: 72px; min-width: 68px; font-weight: 700; text-align: right;">
                 </td>
                 <!-- Inversión 1 (En lo que era Monto 2 va la inversión base y es editable, ampliado para hasta $10M+) -->
                 <td class="sim-col-inv1 sim-cell-input-highlight" style="background: #fffbeb; text-align: right;">
@@ -717,6 +968,11 @@
 
         actualizarEstiloFilasSeleccionadas();
         aplicarVisibilidadColumnas();
+        configurarOrdenamientoTabla();
+        if (columnaOrdenadaActual && direccionOrdenActual !== 'none') {
+            ejecutarOrdenamientoSimulador(columnaOrdenadaActual, direccionOrdenActual);
+        }
+        actualizarContadorSeleccionadas();
     }
 
     /**
@@ -1196,6 +1452,19 @@
         const emptyTr = document.getElementById('sim-row-vacia');
         if (emptyTr) {
             emptyTr.style.display = (institucionesSeleccionadas.size === 0) ? '' : 'none';
+        }
+        actualizarContadorSeleccionadas();
+    }
+
+    /**
+     * Actualiza el badge indicador de instituciones seleccionadas / activas en la barra de herramientas.
+     */
+    function actualizarContadorSeleccionadas() {
+        const badge = document.getElementById('simulador-count-seleccionadas');
+        if (badge) {
+            const total = catalogoInstituciones.length;
+            const sel = institucionesSeleccionadas.size;
+            badge.textContent = `${sel} de ${total} activas`;
         }
     }
 
@@ -1812,4 +2081,8 @@
     window.mostrarTodasLasColumnas = mostrarTodasLasColumnas;
     window.aplicarVisibilidadColumnas = aplicarVisibilidadColumnas;
     window.getEstadoColumnas = () => ({ ...estadoColumnas });
+    window.alternarOrdenColumna = alternarOrdenColumna;
+    window.ordenarTablaSimulador = alternarOrdenColumna;
+    window.ejecutarOrdenamientoSimulador = ejecutarOrdenamientoSimulador;
+    window.getOrdenSimuladorActual = () => ({ columna: columnaOrdenadaActual, direccion: direccionOrdenActual });
 }());
