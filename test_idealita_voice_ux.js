@@ -53,10 +53,10 @@ window.fetch = async (url) => {
             json: async () => ({ ideas: [] })
         };
     }
-    if (url === '/docs/idealandia_manual.md') {
+    if (url === '/api/ai/contexto-activo') {
         return {
             ok: true,
-            text: async () => "# Manual Idealandia"
+            json: async () => ({ ok: true, contexto: "Contexto Idealandia" })
         };
     }
     if (url === '/api/menu') {

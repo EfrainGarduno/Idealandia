@@ -75,118 +75,6 @@ function loadCapabilitiesJson() {
     }
 }
 
-// =============================================================================
-// MODO PRUEBA CONTROLADA:
-// La lectura directa de idealandia_manual.md está temporalmente desactivada.
-// La fuente activa para searchKnowledge es searchAIContexto (MySQL ai_contexto).
-// =============================================================================
-// Search in Markdown (Inactivo temporalmente - Reversible)
-function searchInManual(query, allowedMenus, userId) {
-    try {
-        const manual = fs.readFileSync(path.join(__dirname, 'docs', 'idealandia_manual.md'), 'utf-8');
-
-        // We need to split the manual into very precise blocks to prevent a user
-        // with "ideas" access from getting "admin" text just because they are in the same H2 section.
-        // We'll split by newlines and create logical blocks.
-
-        const lines = manual.split('\n');
-        let blocks = [];
-        let currentBlock = { header: '', content: '' };
-
-        for (const line of lines) {
-             if (line.startsWith('## ') || line.startsWith('- **') || line.startsWith('### ')) {
-                  if (currentBlock.content.trim() !== '') {
-                      blocks.push({...currentBlock});
-                  }
-                  currentBlock = { header: line, content: line + '\n' };
-             } else {
-                  currentBlock.content += line + '\n';
-             }
-        }
-        if (currentBlock.content.trim() !== '') {
-             blocks.push({...currentBlock});
-        }
-
-        // Normalize terms for better matching
-        const normalizedQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const keywords = normalizedQuery.split(' ').filter(w => w.length > 3 || w === 'lip' || w === 'sync');
-
-        let bestMatch = null;
-
-        // --- PRE-CHECK QUERY FOR SENSITIVE KEYWORDS ---
-        // If the user's query itself is trying to fish for sensitive info, evaluate their permissions before even searching.
-        const adminQueryKeywords = ['administrador', 'roles', 'permisos', 'rbac', 'admin_usuarios', 'funcionalidad_permisos', 'usuario_roles', 'gestionar usuarios', 'quiero ver los roles'];
-        // Ensure "quiero ver los roles" is matched via "roles" if not explicitly listed
-        const isQueryAdmin = adminQueryKeywords.some(kw => normalizedQuery.includes(kw)) || normalizedQuery.includes('roles') || normalizedQuery.includes('permisos') || normalizedQuery.includes('/api/admin');
-
-        const ideaQueryKeywords = ['mis ideas', 'gestionar ideas', 'borrar idea', 'crear idea', 'editar idea'];
-        const isQueryAuth = ideaQueryKeywords.some(kw => normalizedQuery.includes(kw));
-
-        if (isQueryAdmin && !allowedMenus.has('administrador')) {
-             return "La funcionalidad existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.";
-        }
-
-        if (isQueryAuth && !allowedMenus.has('ideas')) {
-             return "La funcionalidad de ideas existe, pero tu usuario no está autorizado (requiere iniciar sesión o permisos).";
-        }
-
-        // --- SEARCH PRECISE BLOCKS ---
-        for (const block of blocks) {
-            const normalizedContent = block.content.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-            // Check relevance
-            let isMatch = normalizedContent.includes(normalizedQuery);
-            if (!isMatch && keywords.length > 0) {
-                isMatch = keywords.some(kw => normalizedContent.includes(kw));
-            }
-
-            if (isMatch) {
-                // Determine the authorization requirement based on EXACT block content
-                let requiredMenu = null;
-
-                // Admin explicit matching
-                if (
-                    normalizedContent.includes('## 5. requisitos') ||
-                    normalizedContent.includes('## 9. modelo') ||
-                    (normalizedContent.includes('- **administrador:**') || normalizedContent.includes('panel administrador:')) ||
-                    (normalizedContent.includes('/api/admin/')) ||
-                    adminQueryKeywords.some(kw => normalizedContent.includes(kw) && kw !== 'roles' && kw !== 'permisos') || // avoid FAQ false positive
-                    normalizedContent.includes('rbac') || normalizedContent.includes('roles')
-                ) {
-                    requiredMenu = 'administrador';
-                }
-
-                // Auth explicit matching (Ideas)
-                // Note: the general 'ideas' mention in introduction (## 1 or ## 3) is public.
-                // But specific management instructions or API definitions are private.
-                if (
-                    (normalizedContent.includes('- **ideas:** crud') || normalizedContent.includes('mis ideas:')) ||
-                    (normalizedContent.includes('/api/ideas')) ||
-                    ideaQueryKeywords.some(kw => normalizedContent.includes(kw))
-                ) {
-                    if (requiredMenu !== 'administrador') { // Don't downgrade an admin block
-                        requiredMenu = 'ideas';
-                    }
-                }
-
-                // Apply the resolved policy
-                if (requiredMenu === 'administrador' && !allowedMenus.has('administrador')) {
-                    continue; // Skip blocks user is not allowed to see
-                } else if (requiredMenu === 'ideas' && !allowedMenus.has('ideas')) {
-                    continue; // Skip blocks user is not allowed to see
-                }
-
-                bestMatch = block.content.substring(0, 1000).trim();
-                break;
-            }
-        }
-        return bestMatch;
-    } catch (e) {
-        console.error("Error loading idealandia_manual.md:", e);
-        return null;
-    }
-}
-
 async function searchKnowledge(pool, userId, query) {
     const q = query.toLowerCase();
     const capabilities = loadCapabilitiesJson();
@@ -229,17 +117,8 @@ async function searchKnowledge(pool, userId, query) {
             return `[Fuente: Catálogo] La funcionalidad "${matchedCap.nombre_visible}" existe, pero tu usuario no tiene permisos o no está autorizado para acceder a ella.`;
         }
 
-        return `[Fuente: Catálogo, Sección Manual: ${matchedCap.referencia_manual}]\nFuncionalidad: ${matchedCap.nombre_visible}\nDescripción: ${matchedCap.descripcion}\nPasos: ${matchedCap.finalidad_pasos}`;
+        return `[Fuente: Catálogo de Funcionalidades]\nFuncionalidad: ${matchedCap.nombre_visible}\nDescripción: ${matchedCap.descripcion}\nPasos: ${matchedCap.finalidad_pasos}`;
     }
-
-    // --- PRUEBA CONTROLADA: Sustituir búsqueda en idealandia_manual.md por ai_contexto ---
-    /*
-    // Fallback anterior a searching Markdown en docs/idealandia_manual.md:
-    const manualSnippet = searchInManual(query, allowedMenus, userId);
-    if (manualSnippet) {
-        return `[Fuente: Manual de Usuario]\n${manualSnippet}`;
-    }
-    */
 
     const contextoSnippet = await searchAIContexto(pool, query, allowedMenus, userId);
     if (contextoSnippet) {

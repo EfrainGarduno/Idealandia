@@ -152,11 +152,11 @@ window.fetch = async (url, options) => {
         };
     }
 
-    if (url === '/docs/idealandia_manual.md') {
+    if (url === '/api/ai/contexto-activo') {
         return {
             ok: true,
             status: 200,
-            text: async () => "# Manual de Idealandia\nPlataforma con asistente Idealita."
+            json: async () => ({ ok: true, contexto: "Plataforma con asistente Idealita." })
         };
     }
 
@@ -283,7 +283,7 @@ setTimeout(async () => {
 
         // - Verificar que el contexto incluye al usuario y manual
         assert.ok(contextText.includes("Arturito Matus"), "El contexto debe identificar al usuario Arturito Matus.");
-        assert.ok(contextText.includes("MANUAL IDEALANDIA"), "El contexto debe incluir el manual.");
+        assert.ok(contextText.includes("CONTEXTO DE IDEALANDIA"), "El contexto debe incluir el contexto de Idealandia.");
 
         // - Verificar que el contexto contiene la instrucción explícita de falta de acceso:
         assert.ok(

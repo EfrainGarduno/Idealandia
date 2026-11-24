@@ -10801,36 +10801,12 @@ ${userMessage}`;
                             isSetupComplete = true;
                             updateLiveStatus(window.isCurrentVoiceMode ? "Escuchando..." : "Conectado");
 
-                            // Send Initial identity, manual and ideas messages once setup is complete
+                            // Send Initial identity, context and ideas messages once setup is complete
                             try {
                                 console.time('LiveContextLoad');
                                 let contextText = "Aquí tienes el contexto de Idealandia y del usuario autenticado, úsalo para responder:\n\n";
 
-                                // 1. MODO PRUEBA CONTROLADA: Contexto desde MySQL ai_contexto (Reversible)
-                                /* --- CÓDIGO ANTERIOR CON MANUAL EN MARKDOWN COMENTADO TEMPORALMENTE ---
-                                try {
-                                    if (!window.cachedManualText) {
-                                        const manualRes = await fetch('/docs/idealandia_manual.md');
-                                        if (manualRes.ok) {
-                                            window.cachedManualText = await manualRes.text();
-                                        } else {
-                                            console.warn("No se pudo obtener el manual (no ok).");
-                                        }
-                                    }
-
-                                    if (window.cachedManualText) {
-                                        contextText += "--- MANUAL IDEALANDIA ---\n" + window.cachedManualText + "\n\n";
-                                        console.log("Manual de Idealandia cargado en el contexto desde caché.");
-                                    } else {
-                                        contextText += "El manual de Idealandia no está disponible actualmente.\n\n";
-                                    }
-                                } catch (e) {
-                                    console.error("Excepción al cargar el manual:", e);
-                                    contextText += "Error al cargar el manual de Idealandia.\n\n";
-                                }
-                                ------------------------------------------------------------------------ */
-
-                                // Nueva obtención desde la base de datos MySQL (ai_contexto)
+                                // 1. Cargar contexto oficial desde la base de datos MySQL (ai_contexto)
                                 try {
                                     const contextoRes = await fetch('/api/ai/contexto-activo');
                                     if (contextoRes.ok) {
