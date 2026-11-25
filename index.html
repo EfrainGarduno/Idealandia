@@ -1112,6 +1112,33 @@
                         </div>
                     </div>
 
+                    <!-- Filtro por Nivel de Riesgo (Elegibilidad) -->
+                    <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
+                        <div style="min-width: 200px; flex: 1;">
+                            <label for="simulador-considerar-riesgo" style="display: block; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                <i class="fas fa-shield-alt" style="color: #2563eb;"></i> Considerar nivel de riesgo:
+                            </label>
+                            <select id="simulador-considerar-riesgo" class="form-control" style="font-weight: 700; border-radius: 8px; width: 100%;">
+                                <option value="no" selected>No</option>
+                                <option value="si">Sí</option>
+                            </select>
+                            <small style="color: #64748b; font-size: 0.78rem;">Por defecto se consideran todas las instituciones.</small>
+                        </div>
+
+                        <div id="simulador-wrapper-nivel-riesgo" style="min-width: 220px; flex: 1; display: none;">
+                            <label for="simulador-nivel-riesgo-max" style="display: block; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                <i class="fas fa-triangle-exclamation" style="color: #ea580c;"></i> Nivel máximo de riesgo aceptado:
+                            </label>
+                            <select id="simulador-nivel-riesgo-max" class="form-control" style="font-weight: 700; border-radius: 8px; width: 100%;">
+                                <option value="Bajo">Bajo</option>
+                                <option value="Medio">Medio</option>
+                                <option value="Alto">Alto</option>
+                                <option value="Muy alto" selected>Muy alto</option>
+                            </select>
+                            <small style="color: #64748b; font-size: 0.78rem;">Instituciones con mayor riesgo serán excluidas.</small>
+                        </div>
+                    </div>
+
                     <!-- Contenedor de estado para parámetros diversificados -->
                     <div id="simulador-params-diversificado" style="display: none; padding: 8px 12px; background: #f0fdf4; border-radius: 6px; font-size: 0.85rem; color: #166534; margin-top: 8px;">
                         <span><i class="fas fa-sliders-h"></i> Parámetros de diversificación configurados dinámicamente según la estrategia elegida.</span>
@@ -1667,9 +1694,11 @@
                                 <tr>
                                     <th style="min-width: 140px;">Institución</th>
                                     <th style="width: 85px; text-align: center;">Tipo</th>
-                                    <th style="min-width: 250px;">Condición Resumen</th>
+                                    <th style="width: 100px; text-align: center;">Riesgo</th>
+                                    <th style="width: 130px; text-align: center;">Monto / Plazo Mín</th>
+                                    <th style="min-width: 230px;">Condición Resumen</th>
                                     <th style="width: 70px; text-align: center;">Orden</th>
-                                    <th style="min-width: 170px;">Vigencia Actual</th>
+                                    <th style="min-width: 160px;">Vigencia Actual</th>
                                     <th style="width: 95px; text-align: center;" data-no-sort="true">Acciones</th>
                                 </tr>
                             </thead>
@@ -1915,6 +1944,36 @@
                     <div class="form-group" style="margin-bottom: 14px;">
                         <label for="finanzas-inst-desc" style="font-weight: 600; display: block; margin-bottom: 4px;">Descripción / Razón Social</label>
                         <input type="text" id="finanzas-inst-desc" class="form-control" placeholder="Información descriptiva adicional..." style="width: 100%;">
+                    </div>
+
+                    <!-- Configuración de Elegibilidad y Riesgo -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 14px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div>
+                            <label for="finanzas-inst-monto-min" style="font-weight: 600; display: block; margin-bottom: 4px; color: #1e293b;">
+                                <i class="fas fa-dollar-sign" style="color: #16a34a;"></i> Monto Mínimo ($)
+                            </label>
+                            <input type="number" id="finanzas-inst-monto-min" class="form-control" min="0" step="100" value="0" placeholder="0" style="width: 100%;">
+                            <small style="color: #64748b; font-size: 0.75rem;">Mínimo requerido para ser elegible</small>
+                        </div>
+                        <div>
+                            <label for="finanzas-inst-plazo-min" style="font-weight: 600; display: block; margin-bottom: 4px; color: #1e293b;">
+                                <i class="fas fa-calendar-alt" style="color: #2563eb;"></i> Plazo Mínimo (Meses)
+                            </label>
+                            <input type="number" id="finanzas-inst-plazo-min" class="form-control" min="1" max="120" value="1" placeholder="1" style="width: 100%;">
+                            <small style="color: #64748b; font-size: 0.75rem;">Plazo mínimo de permanencia</small>
+                        </div>
+                        <div>
+                            <label for="finanzas-inst-nivel-riesgo" style="font-weight: 600; display: block; margin-bottom: 4px; color: #1e293b;">
+                                <i class="fas fa-shield-alt" style="color: #ea580c;"></i> Nivel de Riesgo
+                            </label>
+                            <select id="finanzas-inst-nivel-riesgo" class="form-control" style="width: 100%; font-weight: 600;">
+                                <option value="Bajo">Bajo</option>
+                                <option value="Medio" selected>Medio</option>
+                                <option value="Alto">Alto</option>
+                                <option value="Muy alto">Muy alto</option>
+                            </select>
+                            <small style="color: #64748b; font-size: 0.75rem;">Perfil de riesgo institucional</small>
+                        </div>
                     </div>
 
                     <!-- Resumen de condiciones dinámicas autogenerado -->

@@ -4426,7 +4426,7 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
 
         // Consultar instituciones activas
         const [instituciones] = await pool.query(
-            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo
+            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo
              FROM instituciones_financieras
              WHERE activo = 1
              ORDER BY orden_visual ASC, nombre ASC`
@@ -4492,6 +4492,9 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
                 tipo: inst.tipo,
                 descripcion: inst.descripcion,
                 condiciones_resumen: autoResumen || inst.condiciones_resumen,
+                monto_minimo: parseFloat(inst.monto_minimo) || 0,
+                plazo_minimo: parseInt(inst.plazo_minimo, 10) || 1,
+                nivel_riesgo: inst.nivel_riesgo || 'Medio',
                 orden_visual: inst.orden_visual,
                 esquema: esquema,
                 restricciones: restricciones
@@ -4536,7 +4539,7 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
 app.get('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
     try {
         const [instituciones] = await pool.query(
-            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo, created_at, updated_at
+            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo, created_at, updated_at
              FROM instituciones_financieras
              ORDER BY orden_visual ASC, nombre ASC`
         );
@@ -4605,11 +4608,14 @@ app.get('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requ
 app.post('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requirePermission('finanzas.create'), async (req, res) => {
     let connection;
     try {
-        const { nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo, esquema } = req.body;
+        const { nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo, esquema } = req.body;
         if (!nombre || typeof nombre !== 'string' || !nombre.trim()) {
             return res.status(400).json({ error: 'El nombre de la institución es obligatorio.' });
         }
         const tipoValido = ['B', 'S', 'F', 'O'].includes(tipo) ? tipo : 'B';
+        const montoMin = parseFloat(monto_minimo) >= 0 ? parseFloat(monto_minimo) : 0;
+        const plazoMin = parseInt(plazo_minimo, 10) >= 1 ? parseInt(plazo_minimo, 10) : 1;
+        const riesgoValido = ['Bajo', 'Medio', 'Alto', 'Muy alto'].includes(nivel_riesgo) ? nivel_riesgo : 'Medio';
         const orden = parseInt(orden_visual, 10) || 0;
         const estatus = activo === 0 || activo === false ? 0 : 1;
 
@@ -4627,9 +4633,9 @@ app.post('/api/admin/finanzas/instituciones', requireFunctionality('admin'), req
         }
 
         const [result] = await connection.query(
-            `INSERT INTO instituciones_financieras (nombre, tipo, descripcion, condiciones_resumen, orden_visual, activo)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [nombre.trim(), tipoValido, descripcion || null, resumenFinal, orden, estatus]
+            `INSERT INTO instituciones_financieras (nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [nombre.trim(), tipoValido, descripcion || null, resumenFinal, montoMin, plazoMin, riesgoValido, orden, estatus]
         );
         const nuevaInstId = result.insertId;
 
@@ -4801,14 +4807,17 @@ app.put('/api/admin/finanzas/instituciones/:id', requireFunctionality('admin'), 
         const updateTipo = (tipo && ['B', 'S', 'F', 'O'].includes(tipo)) ? tipo : current.tipo;
         const updateDesc = descripcion !== undefined ? descripcion : current.descripcion;
         const updateCond = autoResumen || (condiciones_resumen !== undefined ? condiciones_resumen : current.condiciones_resumen);
+        const updateMontoMin = req.body.monto_minimo !== undefined ? (parseFloat(req.body.monto_minimo) || 0) : current.monto_minimo;
+        const updatePlazoMin = req.body.plazo_minimo !== undefined ? (parseInt(req.body.plazo_minimo, 10) || 1) : current.plazo_minimo;
+        const updateRiesgo = (req.body.nivel_riesgo && ['Bajo', 'Medio', 'Alto', 'Muy alto'].includes(req.body.nivel_riesgo)) ? req.body.nivel_riesgo : current.nivel_riesgo;
         const updateOrden = orden_visual !== undefined ? parseInt(orden_visual, 10) : current.orden_visual;
         const updateActivo = activo !== undefined ? (activo ? 1 : 0) : current.activo;
 
         await connection.query(
             `UPDATE instituciones_financieras
-             SET nombre = ?, tipo = ?, descripcion = ?, condiciones_resumen = ?, orden_visual = ?, activo = ?
+             SET nombre = ?, tipo = ?, descripcion = ?, condiciones_resumen = ?, monto_minimo = ?, plazo_minimo = ?, nivel_riesgo = ?, orden_visual = ?, activo = ?
              WHERE id = ?`,
-            [updateNombre, updateTipo, updateDesc, updateCond, updateOrden, updateActivo, id]
+            [updateNombre, updateTipo, updateDesc, updateCond, updateMontoMin, updatePlazoMin, updateRiesgo, updateOrden, updateActivo, id]
         );
 
         // Sincronización de restricciones asociadas si fueron enviadas
