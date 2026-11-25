@@ -103,18 +103,22 @@
             };
         });
 
-        // Para la compatibilidad visual con la tabla de 2 tramos:
-        // Tramo 1 (Base):
+        // Para la compatibilidad visual con las columnas resumidas (Inversión 1 e Inversión 2):
+        // Inversión 1 (Base): corresponde al importe del Tramo 1
         const t1 = desgloseTramos[0] || null;
-        // Tramo 2 (Segundo rango / excedente):
-        const t2 = desgloseTramos[1] || null;
-
         const inversionBase = t1 ? t1.monto_en_tramo : capital;
         const tasaBase = t1 ? t1.tasa_anual : 0;
         const monto2 = t1 && t1.limite_superior !== null ? t1.limite_superior : null;
-        const inversion2 = t2 ? t2.monto_en_tramo : 0;
         const rend1 = t1 ? t1.rendimiento_periodo : 0;
-        const rend2 = t2 ? t2.rendimiento_periodo : 0;
+
+        // Inversión 2: suma de TODOS los tramos posteriores al primero (Tramo 2 a N)
+        // Cumple siempre: Inversión 1 + Inversión 2 = Capital total asignado
+        let inversion2 = 0;
+        let rend2 = 0;
+        for (let i = 1; i < desgloseTramos.length; i++) {
+            inversion2 += desgloseTramos[i].monto_en_tramo;
+            rend2 += desgloseTramos[i].rendimiento_periodo;
+        }
 
         return {
             inversion_total: capital,

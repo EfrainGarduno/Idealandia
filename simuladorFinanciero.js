@@ -803,21 +803,24 @@
             const curMeses = isModified ? custom.meses : origMeses;
 
             // Rendimientos calculados
-            const rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
-            const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
-            const rend2 = (curInv2 * (tasa2 / 100) / 12) * curMeses;
+            let rend1 = 0;
+            let rend2 = 0;
+            let totalMensual = 0;
+            let totalPeriodo = 0;
 
-            let rendExtraMensual = 0;
-            let rendExtraPeriodo = 0;
-            if (tramos.length >= 3 && sim && Array.isArray(sim.tramos)) {
-                for (let k = 2; k < sim.tramos.length; k++) {
-                    rendExtraMensual += sim.tramos[k].rendimiento_mensual;
-                    rendExtraPeriodo += (sim.tramos[k].rendimiento_mensual * curMeses);
-                }
+            if (!isModified && sim) {
+                rend1 = sim.rend1;
+                rend2 = sim.rend2;
+                totalMensual = sim.total_mensual;
+                totalPeriodo = sim.total_periodo;
+            } else {
+                rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
+                const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : capitalGlobal;
+                const simTemp = tieneEsquema ? window.MotorFinanciero.simularInversion(cap, curMeses, tramos) : null;
+                rend2 = simTemp ? simTemp.rend2 : 0;
+                totalPeriodo = rend1 + rend2;
+                totalMensual = curMeses > 0 ? totalPeriodo / curMeses : 0;
             }
-
-            const totalMensual = (curInv1 * (curTasa / 100) / 12) + (curInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
-            const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
 
             resultadosCalculadosPorInst.set(inst.id, {
                 total_mensual: totalMensual,
@@ -1110,26 +1113,13 @@
         // Rend1 = Inversión 1 * (Tasa 1 / 100 / 12) * Meses
         const rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
 
-        // Rend2 = Inversión 2 * (Tasa 2 / 100 / 12) * Meses
-        const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
-        const rend2 = (curInv2 * (tasa2 / 100) / 12) * curMeses;
+        // Rend2 = Rendimiento de todos los tramos posteriores al primero (Tramo 2 a N)
+        const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : parseInversionGlobal();
+        const simTemp = (tramos.length > 0) ? window.MotorFinanciero.simularInversion(cap, curMeses, tramos) : null;
+        const rend2 = simTemp ? simTemp.rend2 : 0;
 
-        // Rendimiento de tramos adicionales (si existen tramos >= 3)
-        let rendExtraMensual = 0;
-        let rendExtraPeriodo = 0;
-        if (tramos.length >= 3) {
-            const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : parseInversionGlobal();
-            const simTemp = window.MotorFinanciero.simularInversion(cap, curMeses, tramos);
-            if (simTemp && Array.isArray(simTemp.tramos)) {
-                for (let k = 2; k < simTemp.tramos.length; k++) {
-                    rendExtraMensual += simTemp.tramos[k].rendimiento_mensual;
-                    rendExtraPeriodo += (simTemp.tramos[k].rendimiento_mensual * curMeses);
-                }
-            }
-        }
-
-        const totalMensual = (curInv1 * (curTasa / 100) / 12) + (curInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
-        const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
+        const totalPeriodo = rend1 + rend2;
+        const totalMensual = curMeses > 0 ? totalPeriodo / curMeses : 0;
 
         const elRend1 = tr.querySelector('.sim-val-rend1');
         const elRend2 = tr.querySelector('.sim-val-rend2');
@@ -1147,6 +1137,12 @@
             rend1: rend1,
             rend2: rend2
         });
+
+        // Actualizar subfila de N tramos si existe
+        const subrowTbody = document.getElementById(`sim-subrow-tbody-${instId}`);
+        if (subrowTbody && simTemp) {
+            subrowTbody.innerHTML = renderizarSubTramosHtml(simTemp);
+        }
 
         actualizarResumenComparativo();
     }
@@ -1394,21 +1390,10 @@
                 tr.classList.remove('fila-simulacion-modificada');
                 if (badge) badge.style.display = 'none';
 
-                const rend1 = (newOrigInv1 * (newOrigTasa / 100) / 12) * newOrigMeses;
-                const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
-                const rend2 = (newOrigInv2 * (tasa2 / 100) / 12) * newOrigMeses;
-
-                let rendExtraMensual = 0;
-                let rendExtraPeriodo = 0;
-                if (tramos.length >= 3 && sim && Array.isArray(sim.tramos)) {
-                    for (let k = 2; k < sim.tramos.length; k++) {
-                        rendExtraMensual += sim.tramos[k].rendimiento_mensual;
-                        rendExtraPeriodo += (sim.tramos[k].rendimiento_mensual * newOrigMeses);
-                    }
-                }
-
-                const totalMensual = (newOrigInv1 * (newOrigTasa / 100) / 12) + (newOrigInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
-                const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
+                const rend1 = sim ? sim.rend1 : 0;
+                const rend2 = sim ? sim.rend2 : 0;
+                const totalMensual = sim ? sim.total_mensual : 0;
+                const totalPeriodo = sim ? sim.total_periodo : 0;
 
                 const elRend1 = tr.querySelector('.sim-val-rend1');
                 const elRend2 = tr.querySelector('.sim-val-rend2');
