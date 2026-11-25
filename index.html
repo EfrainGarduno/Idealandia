@@ -3838,27 +3838,25 @@
                 });
             }
 
+            function mostrarSubvistaServicios(subvistaId) {
+                const subvistas = document.querySelectorAll('#servicios .servicios-view-container');
+                subvistas.forEach(view => {
+                    view.style.display = (view.id === subvistaId) ? 'block' : 'none';
+                });
+            }
+            window.mostrarSubvistaServicios = mostrarSubvistaServicios;
+
             function ejecutarEntradaServicio(target) {
                 const sections = document.querySelectorAll('.content-section');
                 if (target === 'asesoria-pensiones') {
                     sections.forEach(s => s.style.display = (s.id === 'servicios') ? 'flex' : 'none');
-                    const catalogoView = document.getElementById('servicios-catalogo-view');
-                    const pensionView = document.getElementById('servicios-pension-view');
-                    const financierasView = document.getElementById('servicios-financieras-view');
-                    if (catalogoView) catalogoView.style.display = 'none';
-                    if (financierasView) financierasView.style.display = 'none';
-                    if (pensionView) pensionView.style.display = 'block';
+                    mostrarSubvistaServicios('servicios-pension-view');
                     const formEstimacionLocal = document.getElementById('form-estimacion');
                     if (formEstimacionLocal) formEstimacionLocal.style.display = 'block';
                     if (typeof syncPensionModalidades === 'function') syncPensionModalidades();
                 } else if (target === 'asesorias-financieras') {
                     sections.forEach(s => s.style.display = (s.id === 'servicios') ? 'flex' : 'none');
-                    const catalogoView = document.getElementById('servicios-catalogo-view');
-                    const pensionView = document.getElementById('servicios-pension-view');
-                    const financierasView = document.getElementById('servicios-financieras-view');
-                    if (catalogoView) catalogoView.style.display = 'none';
-                    if (pensionView) pensionView.style.display = 'none';
-                    if (financierasView) financierasView.style.display = 'block';
+                    mostrarSubvistaServicios('servicios-financieras-view');
                     if (typeof inicializarSimuladorFinanciero === 'function') inicializarSimuladorFinanciero();
                 } else if (target === 'ideas') {
                     sections.forEach(s => s.style.display = (s.id === 'ideas') ? 'flex' : 'none');
@@ -4177,10 +4175,7 @@
                             }
                         });
 
-                        const catalogoView = document.getElementById('servicios-catalogo-view');
-                        const pensionView = document.getElementById('servicios-pension-view');
-                        if (catalogoView) catalogoView.style.display = 'block';
-                        if (pensionView) pensionView.style.display = 'none';
+                        mostrarSubvistaServicios('servicios-catalogo-view');
 
                         if (window.innerWidth <= 768 && sidebar) {
                             sidebar.classList.remove('sidebar-open');
@@ -4194,24 +4189,14 @@
                 const btnVolver = document.getElementById('btn-volver-catalogo');
                 if (btnVolver) {
                     btnVolver.onclick = () => {
-                        const catalogoView = document.getElementById('servicios-catalogo-view');
-                        const pensionView = document.getElementById('servicios-pension-view');
-                        const financierasView = document.getElementById('servicios-financieras-view');
-                        if (catalogoView) catalogoView.style.display = 'block';
-                        if (pensionView) pensionView.style.display = 'none';
-                        if (financierasView) financierasView.style.display = 'none';
+                        mostrarSubvistaServicios('servicios-catalogo-view');
                     };
                 }
 
                 const btnVolverFinancieras = document.getElementById('btn-volver-catalogo-financieras');
                 if (btnVolverFinancieras) {
                     btnVolverFinancieras.onclick = () => {
-                        const catalogoView = document.getElementById('servicios-catalogo-view');
-                        const pensionView = document.getElementById('servicios-pension-view');
-                        const financierasView = document.getElementById('servicios-financieras-view');
-                        if (catalogoView) catalogoView.style.display = 'block';
-                        if (pensionView) pensionView.style.display = 'none';
-                        if (financierasView) financierasView.style.display = 'none';
+                        mostrarSubvistaServicios('servicios-catalogo-view');
                     };
                 }
 
@@ -4236,6 +4221,9 @@
                         sections.forEach(section => {
                             if (section.id === targetId) {
                                 section.style.display = 'flex';
+                                if (targetId === 'servicios') {
+                                    mostrarSubvistaServicios('servicios-catalogo-view');
+                                }
                                 if (targetId === 'chat') {
                                     section.classList.remove('animate-chat');
                                     void section.offsetWidth; // trigger reflow
@@ -4297,10 +4285,7 @@
                                  }
                              });
 
-                             const catalogoView = document.getElementById('servicios-catalogo-view');
-                             const pensionView = document.getElementById('servicios-pension-view');
-                             if (catalogoView) catalogoView.style.display = 'none';
-                             if (pensionView) pensionView.style.display = 'block';
+                             mostrarSubvistaServicios('servicios-pension-view');
 
                              const formEstimacionLocal = document.getElementById('form-estimacion');
                              if (formEstimacionLocal) {
@@ -4316,12 +4301,7 @@
                                  }
                              });
 
-                             const catalogoView = document.getElementById('servicios-catalogo-view');
-                             const pensionView = document.getElementById('servicios-pension-view');
-                             const financierasView = document.getElementById('servicios-financieras-view');
-                             if (catalogoView) catalogoView.style.display = 'none';
-                             if (pensionView) pensionView.style.display = 'none';
-                             if (financierasView) financierasView.style.display = 'block';
+                             mostrarSubvistaServicios('servicios-financieras-view');
                              if (typeof inicializarSimuladorFinanciero === 'function') inicializarSimuladorFinanciero();
                          } else if (submenuId === 'ideas-innovadoras' || submenuId === 'ideas') {
                              sections.forEach(section => {
