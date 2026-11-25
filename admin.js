@@ -3606,7 +3606,8 @@ async function loadFinanzasInstituciones() {
 
             // Columna 1: Institución
             let td = document.createElement('td');
-            const hasInfoAdicional = inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0;
+            const infoAdicionalTexto = inst.informacion_adicional || inst.informacio_adicional;
+            const hasInfoAdicional = infoAdicionalTexto && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
             td.innerHTML = `<strong>${escapeHTML(inst.nombre)}</strong>${hasInfoAdicional ? ' <i class="fas fa-info-circle" style="color: #2563eb; font-size: 0.8rem;" title="Cuenta con información adicional para el simulador"></i>' : ''}`;
             tr.appendChild(td);
 
@@ -3971,7 +3972,7 @@ function abrirModalEditarInstitucion(inst) {
     const inputLimiteUdis = document.getElementById('finanzas-inst-limite-udis');
     if (inputLimiteUdis) inputLimiteUdis.value = inst.limite_proteccion_udis !== undefined && inst.limite_proteccion_udis !== null ? inst.limite_proteccion_udis : 0;
     const inputInfoAdicional = document.getElementById('finanzas-inst-info-adicional');
-    if (inputInfoAdicional) inputInfoAdicional.value = inst.informacio_adicional || '';
+    if (inputInfoAdicional) inputInfoAdicional.value = inst.informacion_adicional || inst.informacio_adicional || '';
     actualizarPreviewPesosProteccionModal();
 
     if (titulo) titulo.textContent = `Editar Institución: ${inst.nombre}`;
@@ -4291,6 +4292,7 @@ async function guardarInstitucionForm() {
         tipo_proteccion,
         limite_proteccion_udis,
         informacio_adicional,
+        informacion_adicional: informacio_adicional,
         restricciones,
         esquema: {
             id: esquemaId ? parseInt(esquemaId, 10) : null,

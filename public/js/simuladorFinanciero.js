@@ -242,7 +242,8 @@
         const inst = catalogoInstituciones.find(i => i.id === instId);
         if (!inst) return;
 
-        const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
+        const infoAdicionalTexto = inst.informacion_adicional || inst.informacio_adicional;
+        const hasInfoAdicional = !!(inst.informacio_adicional || inst.informacion_adicional) && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
         const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
 
         if (!hasInfoAdicional && !hasProteccion) return;
@@ -332,7 +333,7 @@
                         <i class="fas fa-info-circle" style="color: #2563eb;"></i> Información adicional
                     </div>
                     <div style="white-space: pre-wrap; font-size: 0.88rem; line-height: 1.55; color: #334155; max-height: 220px; overflow-y: auto; word-break: break-word;">
-                        ${escapeHTML(inst.informacio_adicional)}
+                        ${escapeHTML(infoAdicionalTexto || inst.informacio_adicional)}
                     </div>
                 </div>
             `;
@@ -444,6 +445,34 @@
         aplicarVisibilidadColumnas();
     }
 
+    function ajustarPosicionMenuColumnas(menuDropdown) {
+        if (!menuDropdown) return;
+        menuDropdown.style.left = '';
+        menuDropdown.style.right = '0';
+        menuDropdown.style.transform = '';
+
+        const rect = menuDropdown.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        if (rect.left < 10) {
+            menuDropdown.style.right = 'auto';
+            menuDropdown.style.left = '0';
+        }
+        if (vw <= 480) {
+            menuDropdown.style.left = '50%';
+            menuDropdown.style.right = 'auto';
+            menuDropdown.style.transform = 'translateX(-50%)';
+            menuDropdown.style.width = 'calc(100vw - 20px)';
+            menuDropdown.style.maxWidth = '320px';
+        }
+        if (vh <= 500) {
+            menuDropdown.style.maxHeight = '65vh';
+        } else {
+            menuDropdown.style.maxHeight = 'min(440px, 75vh)';
+        }
+    }
+
     /**
      * Configura el menú desplegable y los listeners de las columnas.
      */
@@ -479,15 +508,33 @@
             });
         }
 
-        // Toggle menú desplegable
+        // Toggle menú desplegable con auto-ajuste de viewport
         if (btnMenu && !btnMenu.dataset.configured) {
             btnMenu.dataset.configured = 'true';
             btnMenu.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (menuDropdown) {
                     const isVisible = menuDropdown.style.display === 'block';
-                    menuDropdown.style.display = isVisible ? 'none' : 'block';
+                    if (!isVisible) {
+                        menuDropdown.style.display = 'block';
+                        ajustarPosicionMenuColumnas(menuDropdown);
+                    } else {
+                        menuDropdown.style.display = 'none';
+                    }
                 }
+            });
+
+            window.addEventListener('resize', () => {
+                if (menuDropdown && menuDropdown.style.display === 'block') {
+                    ajustarPosicionMenuColumnas(menuDropdown);
+                }
+            });
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    if (menuDropdown && menuDropdown.style.display === 'block') {
+                        ajustarPosicionMenuColumnas(menuDropdown);
+                    }
+                }, 100);
             });
         }
 
@@ -1013,7 +1060,8 @@
             const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' };
 
             // Parámetros de información complementaria (Protección o Información Adicional)
-            const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
+            const infoAdicionalTexto = inst.informacion_adicional || inst.informacio_adicional;
+            const hasInfoAdicional = !!(inst.informacio_adicional || inst.informacion_adicional) && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
             const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
             const mostrarIconoInfo = hasInfoAdicional || hasProteccion;
 
