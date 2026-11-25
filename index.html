@@ -1024,16 +1024,22 @@
                 <h2>Asesorías Financieras — Simulador de Inversiones</h2>
                 <p>Compara las condiciones y rendimientos reales de las principales instituciones financieras en México de forma dinámica y transparente.</p>
 
-                <!-- Barra de Leyenda de Tipos de Institución -->
-                <div style="background: #f1f5f9; border-radius: 8px; padding: 10px 18px; margin-bottom: 20px; font-weight: 700; color: #334155; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; border: 1px solid #e2e8f0;">
-                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                        <span><strong style="color: #1d4ed8;">B</strong> = Banco</span>
-                        <span><strong style="color: #047857;">S</strong> = Sofipo</span>
-                        <span><strong style="color: #7c3aed;">F</strong> = Fintech</span>
-                        <span><strong style="color: #b45309;">O</strong> = Otro</span>
-                    </div>
-                    <div style="font-size: 0.85em; color: #64748b; font-weight: 500;">
-                        <i class="fas fa-database"></i> Tasas y condiciones administradas dinámicamente
+                <!-- Barra de Leyenda de Tipos de Institución y Coberturas de Protección -->
+                <div style="background: #f8fafc; border-radius: 8px; padding: 10px 18px; margin-bottom: 20px; color: #334155; border: 1px solid #e2e8f0; font-size: 0.85rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px;">Tipos:</span>
+                            <span><strong style="color: #1d4ed8;">B</strong> = Banco</span>
+                            <span><strong style="color: #047857;">S</strong> = Sofipo</span>
+                            <span><strong style="color: #7c3aed;">F</strong> = Fintech</span>
+                            <span><strong style="color: #b45309;">O</strong> = Otro</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: #0369a1; font-size: 0.82rem;">
+                            <span style="font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">Protecciones:</span>
+                            <span>🛡️ <strong>IPAB</strong> = hasta 400,000 UDIS</span>
+                            <span>🛡️ <strong>PROSOFIPO</strong> = hasta 25,000 UDIS</span>
+                            <span>🛡️ <strong>FOCOOP</strong> = hasta 25,000 UDIS</span>
+                        </div>
                     </div>
                 </div>
 
@@ -2293,9 +2299,9 @@
             </div>
         </div>
 
-        <!-- Modal Informativo Contextual para Información Adicional de Instituciones Financieras -->
+        <!-- Modal Informativo Contextual para Información Complementaria (Protección e Información Adicional) -->
         <div id="modal-finanzas-info-adicional" class="custom-modal-overlay" style="display: none; z-index: 1060;">
-            <div class="custom-modal-content" style="max-width: 520px; width: 92%; text-align: left; border-radius: 12px; padding: 22px 26px; box-shadow: 0 10px 30px rgba(0,0,0,0.18);">
+            <div class="custom-modal-content" style="max-width: 480px; width: 92%; text-align: left; border-radius: 12px; padding: 22px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); max-height: 88vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-info-circle" style="color: #2563eb; font-size: 1.25rem;"></i>
@@ -2303,11 +2309,11 @@
                     </div>
                     <button type="button" id="btn-cerrar-modal-finanzas-info-adicional" class="btn-close" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; line-height: 1;" aria-label="Cerrar">&times;</button>
                 </div>
-                <div id="modal-info-adicional-cuerpo" style="white-space: pre-wrap; font-size: 0.92rem; line-height: 1.6; color: #334155; margin-bottom: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
-                    <!-- Contenido dinámico de informacio_adicional -->
+                <div id="modal-info-adicional-cuerpo" style="font-size: 0.92rem; color: #334155; margin-bottom: 18px;">
+                    <!-- Contenido dinámico de protección e informacio_adicional -->
                 </div>
                 <div style="display: flex; justify-content: flex-end;">
-                    <button type="button" id="btn-entendido-modal-finanzas-info-adicional" class="btn btn-primary" style="padding: 7px 18px; font-size: 0.88rem; border-radius: 6px;">
+                    <button type="button" id="btn-entendido-modal-finanzas-info-adicional" class="btn btn-primary" style="padding: 7px 20px; font-size: 0.88rem; border-radius: 6px; font-weight: 600;">
                         Entendido
                     </button>
                 </div>

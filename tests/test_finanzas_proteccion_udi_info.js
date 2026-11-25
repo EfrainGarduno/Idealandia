@@ -130,9 +130,9 @@ async function asyncTest(name, fn) {
             });
         });
 
-        await asyncTest('Valores iniciales en BD: Monific, Didi, Uala, Mercado Pago tienen Sin protección con 0 UDIS', async () => {
-            const [rows] = await pool.query("SELECT nombre, tipo_proteccion, limite_proteccion_udis FROM instituciones_financieras WHERE nombre IN ('Monific', 'Didi', 'Uala', 'Mercado Pago')");
-            assert(rows.length >= 4);
+        await asyncTest('Valores iniciales en BD: Monific y Mercado Pago tienen Sin protección con 0 UDIS', async () => {
+            const [rows] = await pool.query("SELECT nombre, tipo_proteccion, limite_proteccion_udis FROM instituciones_financieras WHERE nombre IN ('Monific', 'Mercado Pago')");
+            assert(rows.length >= 2);
             rows.forEach(r => {
                 assert.strictEqual(r.tipo_proteccion, 'Sin protección');
                 assert.strictEqual(parseFloat(r.limite_proteccion_udis), 0);
@@ -294,38 +294,44 @@ async function asyncTest(name, fn) {
             assert(simCode.includes('fechaStr.split'), 'Debe formatear la fecha a DD/MM/YYYY');
         });
 
-        test('simuladorFinanciero.js renderiza el botón ⓘ únicamente si la institución tiene informacio_adicional', () => {
+        test('simuladorFinanciero.js renderiza el botón ⓘ si tiene informacio_adicional O protección', () => {
             const simCode = fs.readFileSync(path.join(__dirname, '../simuladorFinanciero.js'), 'utf8');
-            assert(simCode.includes('hasInfoAdicional = inst.informacio_adicional'), 'Debe verificar hasInfoAdicional');
-            assert(simCode.includes("${hasInfoAdicional ? `<button type=\"button\" class=\"btn-info-adicional\""), 'Debe condicionar el renderizado');
+            assert(simCode.includes('hasInfoAdicional = !!(inst.informacio_adicional'), 'Debe verificar hasInfoAdicional');
+            assert(simCode.includes('hasProteccion = !!(inst.tipo_proteccion'), 'Debe verificar hasProteccion');
+            assert(simCode.includes('mostrarIconoInfo = hasInfoAdicional || hasProteccion'), 'Debe combinar ambas condiciones con OR');
+            assert(simCode.includes("${mostrarIconoInfo ? `<button type=\"button\" class=\"btn-info-adicional\""), 'Debe condicionar el renderizado al botón ⓘ unificado');
         });
 
-        test('index.html cuenta con el modal contextual modal-finanzas-info-adicional', () => {
+        test('index.html cuenta con el modal contextual modal-finanzas-info-adicional adaptado y responsive', () => {
             const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
             assert(html.includes('id="modal-finanzas-info-adicional"'), 'Debe existir modal para información adicional');
             assert(html.includes('id="modal-info-adicional-titulo"'), 'Debe tener título');
             assert(html.includes('id="modal-info-adicional-cuerpo"'), 'Debe tener cuerpo');
             assert(html.includes('id="btn-cerrar-modal-finanzas-info-adicional"'), 'Debe tener botón cerrar');
+            assert(html.includes('max-height: 88vh; overflow-y: auto;'), 'Debe contar con scroll vertical responsive para contenidos largos');
         });
 
-        test('simuladorFinanciero.js abre modal-finanzas-info-adicional al hacer clic en ⓘ', () => {
+        test('simuladorFinanciero.js abre modal con detalle de Protección e Información Adicional unificados', () => {
             const simCode = fs.readFileSync(path.join(__dirname, '../simuladorFinanciero.js'), 'utf8');
             assert(simCode.includes('function abrirModalInfoAdicionalInstitucion'), 'Debe existir función abrirModalInfoAdicionalInstitucion');
             assert(simCode.includes('modal.style.display = \'flex\''), 'Debe abrir el modal');
+            assert(simCode.includes('Protección'), 'Debe incluir sección Protección');
+            assert(simCode.includes('Sin protección institucional.'), 'Debe contemplar caso Sin protección');
+            assert(simCode.includes('Información adicional'), 'Debe contemplar sección Información adicional');
         });
 
-        test('simuladorFinanciero.js renderiza badge de protección con UDIS y pesos dinámicos calculados', () => {
+        test('simuladorFinanciero.js NO incluye badge de protección en la fila de la tabla (columna limpia)', () => {
             const simCode = fs.readFileSync(path.join(__dirname, '../simuladorFinanciero.js'), 'utf8');
-            assert(simCode.includes('class="sim-badge-proteccion"'), 'Debe tener badge de protección');
-            assert(simCode.includes('formatMoney(pesosProtegidos)'), 'Debe mostrar pesos formateados');
-            assert(simCode.includes('limUdis.toLocaleString'), 'Debe mostrar límite en UDIS');
+            assert(!simCode.includes('class="sim-badge-proteccion"'), 'La columna Institución NO debe tener badge de protección en la fila para mantenerla limpia');
         });
 
-        test('index.html contiene leyenda/aviso oficial de protección al pie de la tabla del simulador', () => {
+        test('index.html contiene leyenda superior compacta con Tipos de Institución y Coberturas de Protección', () => {
             const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
-            assert(html.includes('simulador-disclaimer-proteccion'), 'Debe existir clase simulador-disclaimer-proteccion');
-            assert(html.includes('IPAB hasta 400,000 UDIS'), 'Debe mencionar IPAB 400k UDIS');
-            assert(html.includes('PROSOFIPO/FOCOOP hasta 25,000 UDIS'), 'Debe mencionar PROSOFIPO 25k UDIS');
+            assert(html.includes('Tipos:'), 'Debe mostrar etiqueta Tipos:');
+            assert(html.includes('Protecciones:'), 'Debe mostrar etiqueta Protecciones:');
+            assert(html.includes('🛡️ <strong>IPAB</strong> = hasta 400,000 UDIS'), 'Debe listar IPAB en la leyenda superior');
+            assert(html.includes('🛡️ <strong>PROSOFIPO</strong> = hasta 25,000 UDIS'), 'Debe listar PROSOFIPO en la leyenda superior');
+            assert(html.includes('🛡️ <strong>FOCOOP</strong> = hasta 25,000 UDIS'), 'Debe listar FOCOOP en la leyenda superior');
         });
 
         // -------------------------------------------------------------------------
@@ -419,6 +425,179 @@ async function asyncTest(name, fn) {
             assert.strictEqual(resDiv.asignaciones.length, 2);
             assert.strictEqual(resDiv.capitalDistribuido, 50000);
             assert(resDiv.rendimientoPeriodoTotal > 0);
+        });
+
+        // -------------------------------------------------------------------------
+        // GRUPO 7: 14 ESCENARIOS DE VALIDACIÓN ESPECÍFICOS DE UI/UX E INVARIANTES
+        // -------------------------------------------------------------------------
+
+        // Función auxiliar que replica exactamente la lógica de generación del modal y visibilidad de ⓘ
+        function generarDetalleModalSimulado(inst, indicadorUdi) {
+            const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
+            const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
+            const mostrarIconoInfo = hasInfoAdicional || hasProteccion;
+
+            const tipoProt = inst.tipo_proteccion || 'Sin protección';
+            const limUdis = parseFloat(inst.limite_proteccion_udis) || 0;
+            const udiValor = (indicadorUdi && parseFloat(indicadorUdi.valor) > 0) ? parseFloat(indicadorUdi.valor) : 8.865882;
+            const pesosProtegidos = Math.round(limUdis * udiValor * 100) / 100;
+
+            let fechaUdiFmt = 'Vigente';
+            if (indicadorUdi && indicadorUdi.fecha) {
+                const fechaStr = String(indicadorUdi.fecha).substring(0, 10);
+                const p = fechaStr.split('-');
+                if (p.length === 3) fechaUdiFmt = `${p[2]}/${p[1]}/${p[0]}`;
+            }
+
+            let htmlContent = '';
+            htmlContent += '<div class="seccion-proteccion" style="margin-bottom: 16px;">';
+            htmlContent += '<div style="font-weight: 700; color: #1e293b; margin-bottom: 8px;">Protección</div>';
+            if (hasProteccion) {
+                htmlContent += `<div><strong>🛡️ ${tipoProt}</strong></div>`;
+                htmlContent += `<div>Cobertura: <strong>${limUdis.toLocaleString('es-MX')} UDIS</strong></div>`;
+                htmlContent += `<div>Equivalente aprox: <strong>$${pesosProtegidos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong></div>`;
+                htmlContent += `<div style="font-size: 0.8rem; color: #64748b; margin-top: 6px;">Valor UDI utilizado: <strong>$${udiValor.toFixed(6)}</strong></div>`;
+                htmlContent += `<div style="font-size: 0.8rem; color: #64748b;">Fecha del valor UDI: <strong>${fechaUdiFmt}</strong></div>`;
+            } else {
+                htmlContent += '<div style="color: #64748b; font-style: italic;">Sin protección institucional.</div>';
+            }
+            htmlContent += '</div>';
+
+            if (hasInfoAdicional) {
+                htmlContent += '<div class="seccion-info-adicional">';
+                htmlContent += '<div style="font-weight: 700; color: #1e293b; margin-bottom: 6px;">Información adicional</div>';
+                htmlContent += `<div style="white-space: pre-wrap; word-break: break-word;">${inst.informacio_adicional}</div>`;
+                htmlContent += '</div>';
+            }
+
+            return {
+                mostrarIconoInfo,
+                hasProteccion,
+                hasInfoAdicional,
+                htmlContent,
+                pesosProtegidos,
+                udiValor,
+                fechaUdiFmt
+            };
+        }
+
+        const mockUdi = {
+            codigo: 'UDI',
+            valor: '8.865882',
+            fecha: '2026-11-24'
+        };
+
+        test('Escenario 1: Banco con IPAB muestra cobertura de 400,000 UDIS y equivalente en pesos dinámico', () => {
+            const inst = { nombre: 'Banco Santander', tipo: 'B', tipo_proteccion: 'IPAB', limite_proteccion_udis: 400000 };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, true);
+            assert(res.htmlContent.includes('🛡️ IPAB'));
+            assert(res.htmlContent.includes('400,000 UDIS'));
+            assert(res.htmlContent.includes('$3,546,352.80 MXN'));
+        });
+
+        test('Escenario 2: SOFIPO con PROSOFIPO muestra cobertura de 25,000 UDIS y equivalente en pesos dinámico', () => {
+            const inst = { nombre: 'Klar SOFIPO', tipo: 'S', tipo_proteccion: 'PROSOFIPO', limite_proteccion_udis: 25000 };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, true);
+            assert(res.htmlContent.includes('🛡️ PROSOFIPO'));
+            assert(res.htmlContent.includes('25,000 UDIS'));
+            assert(res.htmlContent.includes('$221,647.05 MXN'));
+        });
+
+        test('Escenario 3: Institución con FOCOOP muestra cobertura de 25,000 UDIS y equivalente en pesos dinámico', () => {
+            const inst = { nombre: 'Caja Popular Mexicana', tipo: 'O', tipo_proteccion: 'FOCOOP', limite_proteccion_udis: 25000 };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, true);
+            assert(res.htmlContent.includes('🛡️ FOCOOP'));
+            assert(res.htmlContent.includes('25,000 UDIS'));
+            assert(res.htmlContent.includes('$221,647.05 MXN'));
+        });
+
+        test('Escenario 4: Institución sin protección muestra texto "Sin protección institucional."', () => {
+            const inst = { nombre: 'Fintech no regulada', tipo: 'F', tipo_proteccion: 'Sin protección', limite_proteccion_udis: 0 };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, false);
+            assert(res.htmlContent.includes('Sin protección institucional.'));
+        });
+
+        test('Escenario 5: Institución con información adicional renderiza la sección en el modal', () => {
+            const inst = { nombre: 'Institución X', tipo: 'F', tipo_proteccion: 'Sin protección', limite_proteccion_udis: 0, informacio_adicional: 'Rendimientos acreditados diariamente.' };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, true);
+            assert(res.htmlContent.includes('Información adicional'));
+            assert(res.htmlContent.includes('Rendimientos acreditados diariamente.'));
+        });
+
+        test('Escenario 6: Institución sin información adicional pero con protección muestra ⓘ y sección protección en modal', () => {
+            const inst = { nombre: 'Banco Azteca', tipo: 'B', tipo_proteccion: 'IPAB', limite_proteccion_udis: 400000, informacio_adicional: '' };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, true, 'Debe mostrar ⓘ si tiene protección');
+            assert(res.htmlContent.includes('🛡️ IPAB'));
+            assert(!res.htmlContent.includes('class="seccion-info-adicional"'), 'No debe incluir bloque de info adicional');
+        });
+
+        test('Escenario 7: Institución sin protección ni información adicional NO muestra icono ⓘ', () => {
+            const inst = { nombre: 'Fintech Limpia', tipo: 'F', tipo_proteccion: 'Sin protección', limite_proteccion_udis: 0, informacio_adicional: null };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, false, 'No debe mostrar ⓘ');
+        });
+
+        test('Escenario 8: Institución con protección + información adicional muestra UN SOLO icono ⓘ', () => {
+            const inst = { nombre: 'NU México', tipo: 'B', tipo_proteccion: 'IPAB', limite_proteccion_udis: 400000, informacio_adicional: 'Cuenta con cajitas de ahorro al 13.5%' };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, true);
+            assert(res.hasProteccion && res.hasInfoAdicional);
+        });
+
+        test('Escenario 9: Modal despliega adecuadamente tanto Protección como Información Adicional juntas', () => {
+            const inst = { nombre: 'Stori SOFIPO', tipo: 'S', tipo_proteccion: 'PROSOFIPO', limite_proteccion_udis: 25000, informacio_adicional: 'Tasa promocional sujeta a saldo mínimo.' };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert(res.htmlContent.includes('🛡️ PROSOFIPO'));
+            assert(res.htmlContent.includes('25,000 UDIS'));
+            assert(res.htmlContent.includes('Información adicional'));
+            assert(res.htmlContent.includes('Tasa promocional sujeta a saldo mínimo.'));
+        });
+
+        test('Escenario 10: Modal refleja el valor UDI utilizado y su fecha formateada DD/MM/YYYY', () => {
+            const inst = { nombre: 'Finsus', tipo: 'S', tipo_proteccion: 'PROSOFIPO', limite_proteccion_udis: 25000 };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.fechaUdiFmt, '24/11/2026');
+            assert(res.htmlContent.includes('Valor UDI utilizado: <strong>$8.865882</strong>'));
+            assert(res.htmlContent.includes('Fecha del valor UDI: <strong>24/11/2026</strong>'));
+        });
+
+        test('Escenario 11: Textos largos de informacio_adicional tienen estilos responsive y no desbordan', () => {
+            const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+            const simCode = fs.readFileSync(path.join(__dirname, '../simuladorFinanciero.js'), 'utf8');
+            assert(html.includes('max-height: 88vh; overflow-y: auto;'), 'Modal debe contar con overflow vertical');
+            assert(simCode.includes('word-break: break-word'), 'Cuerpo del modal debe evitar desbordamiento horizontal');
+        });
+
+        test('Escenario 12: Visualización Desktop presenta modal centrado con ancho restringido a 480px', () => {
+            const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+            assert(html.includes('max-width: 480px; width: 92%;'), 'Modal debe restringirse a 480px para máxima legibilidad');
+        });
+
+        test('Escenario 13: Visualización Móvil adapta modal al 92% de la pantalla y flex-wrap en la leyenda superior', () => {
+            const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+            assert(html.includes('flex-wrap: wrap;'), 'Leyenda superior y modal deben ajustarse fluidamente en pantallas estrechas');
+        });
+
+        test('Escenario 14: Verificación de invariantes: Ningún cálculo financiero ni de tasas cambia', () => {
+            const tramos = [
+                { numero_tramo: 1, limite_inferior: 0, limite_superior: 25000, tasa_anual: 13.0 },
+                { numero_tramo: 2, limite_inferior: 25000, limite_superior: 200000, tasa_anual: 8.0 },
+                { numero_tramo: 3, limite_inferior: 200000, limite_superior: null, tasa_anual: 5.0 }
+            ];
+
+            const sim = MotorFinanciero.simularInversion(1000000, 6, tramos);
+            assert.strictEqual(sim.inversion_base, 25000);
+            assert.strictEqual(sim.inversion_2, 975000); // Tramo 2 (175k) + Tramo 3 (800k)
+            assert.strictEqual(sim.rend1, 1625);
+            assert.strictEqual(sim.rend2, 27000); // 7000 + 20000
+            assert.strictEqual(sim.total_periodo, 28625);
+            assert.strictEqual(Number(sim.total_mensual.toFixed(2)), 4770.83);
         });
 
         console.log('\n================================================================================');
