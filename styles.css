@@ -2683,9 +2683,16 @@ th.sortable-th.sort-desc .sort-indicator {
         padding: 0;
     }
 
-    .simulador-controls-card {
-        padding: 16px 12px !important;
+    .simulador-controls-card,
+    .simulador-section-card {
+        padding: 16px 14px !important;
+        margin-bottom: 16px !important;
     }
+}
+
+/* Simulador de Inversiones - Tarjetas delimitadoras de sección */
+.simulador-section-card {
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 /* Simulador de Inversiones - Controles por fila y resaltado de simulación personalizada */

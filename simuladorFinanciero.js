@@ -9,6 +9,7 @@
 
     let catalogoInstituciones = [];
     let catalogoEstrategias = [];
+    let indicadorUdi = null;
     let institucionesSeleccionadas = new Set();
     let fechaConsultaActual = new Date().toISOString().slice(0, 10);
     let estrategiaActual = 'individual'; // 'individual' | 'maximo_rendimiento' | 'equilibrada' | 'conservadora'
@@ -180,6 +181,8 @@
             const data = await res.json();
             catalogoInstituciones = Array.isArray(data.instituciones) ? data.instituciones : [];
             catalogoEstrategias = Array.isArray(data.estrategias) ? data.estrategias : [];
+            indicadorUdi = data.indicador_udi || null;
+            actualizarBannerIndicadorUdi();
 
             // Por defecto, todas las instituciones quedan seleccionadas
             institucionesSeleccionadas.clear();
@@ -201,6 +204,163 @@
         } finally {
             if (loadingEl) loadingEl.style.display = 'none';
             if (tableContainer) tableContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Actualiza el banner del indicador UDI oficial en la cabecera del simulador.
+     */
+    function actualizarBannerIndicadorUdi() {
+        const textoEl = document.getElementById('simulador-udi-texto');
+        const fuenteEl = document.getElementById('simulador-udi-fuente');
+        if (!textoEl) return;
+
+        if (indicadorUdi && indicadorUdi.valor) {
+            const valNum = parseFloat(indicadorUdi.valor);
+            const valFormateado = !isNaN(valNum) ? valNum.toFixed(6) : indicadorUdi.valor;
+            let fechaStr = indicadorUdi.fecha || '';
+            if (fechaStr.includes('-')) {
+                const parts = fechaStr.split('-');
+                if (parts.length === 3) {
+                    fechaStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
+            textoEl.textContent = `Valor UDI utilizado: $${valFormateado} | Fecha: ${fechaStr}`;
+            if (fuenteEl && indicadorUdi.fuente) {
+                fuenteEl.textContent = indicadorUdi.fuente;
+            }
+        } else {
+            textoEl.textContent = `Valor UDI utilizado: $8.865882 | Fecha: 24/11/2026`;
+            if (fuenteEl) fuenteEl.textContent = 'Banco de México / DOF';
+        }
+    }
+
+    /**
+     * Abre el modal contextual de información complementaria (Protección e Información Adicional).
+     */
+    function abrirModalInfoAdicionalInstitucion(instId) {
+        const inst = catalogoInstituciones.find(i => i.id === instId);
+        if (!inst) return;
+
+        const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
+        const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
+
+        if (!hasInfoAdicional && !hasProteccion) return;
+
+        const modal = document.getElementById('modal-finanzas-info-adicional');
+        const tituloEl = document.getElementById('modal-info-adicional-titulo');
+        const cuerpoEl = document.getElementById('modal-info-adicional-cuerpo');
+        if (!modal || !cuerpoEl) return;
+
+        if (tituloEl) tituloEl.textContent = `Información de ${inst.nombre}`;
+
+        const tipoProt = inst.tipo_proteccion || 'Sin protección';
+        const limUdis = parseFloat(inst.limite_proteccion_udis) || 0;
+        const udiValor = (indicadorUdi && parseFloat(indicadorUdi.valor) > 0) ? parseFloat(indicadorUdi.valor) : 8.865882;
+        const pesosProtegidos = (window.MotorFinanciero && typeof window.MotorFinanciero.calcularProteccionPesos === 'function')
+            ? window.MotorFinanciero.calcularProteccionPesos(limUdis, udiValor)
+            : Math.round(limUdis * udiValor * 100) / 100;
+
+        let fechaUdiStr = (indicadorUdi && indicadorUdi.fecha) ? indicadorUdi.fecha : '2026-11-24';
+        if (fechaUdiStr.includes('-')) {
+            const parts = fechaUdiStr.split('-');
+            if (parts.length === 3) fechaUdiStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        const riesgoColorMap = {
+            'Bajo': { color: '#166534', bg: '#dcfce7', border: '#bbf7d0' },
+            'Medio': { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+            'Alto': { color: '#c2410c', bg: '#ffedd5', border: '#fed7aa' },
+            'Muy alto': { color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' }
+        };
+        const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
+        const nivelRiesgoTexto = inst.nivel_riesgo || 'Medio';
+
+        const riesgoHtml = `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                <div style="font-weight: 700; color: #475569; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-chart-line" style="color: ${rInfo.color};"></i> Nivel de riesgo
+                </div>
+                <div>
+                    <span style="font-size: 0.95rem; font-weight: 800; padding: 3px 10px; border-radius: 6px; background: ${rInfo.bg}; color: ${rInfo.color}; border: 1px solid ${rInfo.border}; display: inline-block;">
+                        ${escapeHTML(nivelRiesgoTexto)}
+                    </span>
+                </div>
+            </div>
+        `;
+
+        let proteccionHtml = '';
+        if (hasProteccion) {
+            proteccionHtml = `
+                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px;">
+                    <div style="font-weight: 700; color: #0369a1; font-size: 0.92rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-shield-alt"></i> Protección
+                    </div>
+                    <div style="font-size: 1.05rem; font-weight: 800; color: #0284c7; margin-bottom: 6px;">
+                        🛡️ ${escapeHTML(tipoProt)}
+                    </div>
+                    <div style="font-size: 0.88rem; color: #334155; margin-bottom: 4px;">
+                        <strong>Cobertura:</strong> ${limUdis.toLocaleString('es-MX')} UDIS
+                    </div>
+                    <div style="font-size: 0.95rem; font-weight: 700; color: #166534; margin-bottom: 10px;">
+                        ≈ ${formatMoney(pesosProtegidos)}
+                    </div>
+                    <div style="padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 0.78rem; color: #64748b; line-height: 1.4;">
+                        <div>Valor UDI utilizado: <strong>$${udiValor.toFixed(6)}</strong></div>
+                        <div>Fecha del valor UDI: <strong>${fechaUdiStr}</strong></div>
+                    </div>
+                </div>
+            `;
+        } else {
+            proteccionHtml = `
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                    <div style="font-weight: 700; color: #475569; font-size: 0.9rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-shield-alt"></i> Protección
+                    </div>
+                    <div style="color: #64748b; font-size: 0.85rem; font-style: italic;">
+                        Sin protección institucional.
+                    </div>
+                </div>
+            `;
+        }
+
+        let infoAdicionalHtml = '';
+        if (hasInfoAdicional) {
+            infoAdicionalHtml = `
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+                    <div style="font-weight: 700; color: #1e293b; font-size: 0.92rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-info-circle" style="color: #2563eb;"></i> Información adicional
+                    </div>
+                    <div style="white-space: pre-wrap; font-size: 0.88rem; line-height: 1.55; color: #334155; max-height: 220px; overflow-y: auto; word-break: break-word;">
+                        ${escapeHTML(inst.informacio_adicional)}
+                    </div>
+                </div>
+            `;
+        }
+
+        cuerpoEl.innerHTML = riesgoHtml + proteccionHtml + infoAdicionalHtml;
+        modal.style.display = 'flex';
+    }
+
+    /**
+     * Configura los botones de cierre del modal de información adicional.
+     */
+    function configurarModalInfoAdicional() {
+        const modal = document.getElementById('modal-finanzas-info-adicional');
+        const btnCerrar = document.getElementById('btn-cerrar-modal-finanzas-info-adicional');
+        const btnEntendido = document.getElementById('btn-entendido-modal-finanzas-info-adicional');
+
+        const cerrar = () => {
+            if (modal) modal.style.display = 'none';
+        };
+
+        if (btnCerrar) btnCerrar.onclick = cerrar;
+        if (btnEntendido) btnEntendido.onclick = cerrar;
+        if (modal && !modal.dataset.configured) {
+            modal.dataset.configured = 'true';
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) cerrar();
+            });
         }
     }
 
@@ -719,6 +879,8 @@
                 }
             });
         }
+
+        configurarModalInfoAdicional();
     }
 
     /**
@@ -843,25 +1005,28 @@
                 : { elegible: true };
 
             const riesgoColorMap = {
-                'Bajo': { color: '#166534', bg: '#dcfce7' },
-                'Medio': { color: '#1d4ed8', bg: '#dbeafe' },
-                'Alto': { color: '#c2410c', bg: '#ffedd5' },
-                'Muy alto': { color: '#991b1b', bg: '#fee2e2' }
+                'Bajo': { color: '#166534', bg: '#dcfce7', border: '#bbf7d0' },
+                'Medio': { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+                'Alto': { color: '#c2410c', bg: '#ffedd5', border: '#fed7aa' },
+                'Muy alto': { color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' }
             };
-            const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9' };
+            const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' };
 
-            // HTML de fila principal
+            // Parámetros de información complementaria (Protección o Información Adicional)
+            const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
+            const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
+            const mostrarIconoInfo = hasInfoAdicional || hasProteccion;
+
+            // HTML de fila principal (Presentación limpia y minimalista)
             tr.innerHTML = `
                 <td class="sim-col-sel" style="text-align: center;">
                     <input type="checkbox" class="simulador-check-inst" data-inst-id="${inst.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
-                <td class="sim-col-institucion" style="font-weight: 700; color: #1e293b;">
+                <td class="sim-col-institucion">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span>${inst.nombre}</span>
-                            <span style="font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${rInfo.bg}; color: ${rInfo.color};" title="Nivel de riesgo: ${inst.nivel_riesgo || 'Medio'}">
-                                ${inst.nivel_riesgo || 'Medio'}
-                            </span>
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span class="sim-inst-nombre" style="font-weight: 700; color: ${rInfo.color}; font-size: 0.95rem;" title="Nivel de riesgo: ${escapeHTML(inst.nivel_riesgo || 'Medio')}" aria-label="${escapeHTML(inst.nombre)} (Nivel de riesgo: ${escapeHTML(inst.nivel_riesgo || 'Medio')})">${escapeHTML(inst.nombre)}</span>
+                            ${mostrarIconoInfo ? `<button type="button" class="btn-info-adicional" data-inst-id="${inst.id}" title="Información de ${escapeHTML(inst.nombre)}" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 0 4px; font-size: 0.85rem; line-height: 1; border-radius: 4px; transition: color 0.15s ease;" onmouseover="this.style.color='#2563eb'" onmouseout="this.style.color='#64748b'"><i class="fas fa-info-circle"></i></button>` : ''}
                         </div>
                         <button type="button" class="badge-sim-modificada btn-restablecer-fila" id="sim-badge-${inst.id}" data-inst-id="${inst.id}" style="${isModified ? 'display: inline-flex;' : 'display: none;'}" title="Hacer clic para restablecer los valores originales de la institución">
                             <i class="fas fa-undo-alt" style="font-size: 0.7rem;"></i> <span>Editado</span>
@@ -1019,6 +1184,16 @@
                         ? `<i class="fas fa-layer-group"></i> Ver ${catalogoInstituciones.find(i => i.id == instId)?.esquema?.tramos?.length || 3} tramos`
                         : `<i class="fas fa-chevron-up"></i> Ocultar desglose`;
                 }
+            });
+        });
+
+        // Configurar listener para botones de información adicional (ⓘ)
+        tbody.querySelectorAll('.btn-info-adicional').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const instId = parseInt(e.currentTarget.dataset.instId, 10);
+                abrirModalInfoAdicionalInstitucion(instId);
             });
         });
 

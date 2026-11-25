@@ -3503,6 +3503,31 @@ function initAdminBlocks() {
         });
     }
 
+    const selectTipoProt = document.getElementById('finanzas-inst-tipo-proteccion');
+    const inputLimiteUdis = document.getElementById('finanzas-inst-limite-udis');
+    if (selectTipoProt && !selectTipoProt.dataset.configured) {
+        selectTipoProt.dataset.configured = 'true';
+        selectTipoProt.addEventListener('change', () => {
+            const val = selectTipoProt.value;
+            if (inputLimiteUdis) {
+                if (val === 'IPAB') {
+                    inputLimiteUdis.value = 400000;
+                } else if (val === 'PROSOFIPO' || val === 'FOCOOP') {
+                    inputLimiteUdis.value = 25000;
+                } else if (val === 'Sin protección') {
+                    inputLimiteUdis.value = 0;
+                }
+            }
+            actualizarPreviewPesosProteccionModal();
+        });
+    }
+    if (inputLimiteUdis && !inputLimiteUdis.dataset.configured) {
+        inputLimiteUdis.dataset.configured = 'true';
+        inputLimiteUdis.addEventListener('input', () => {
+            actualizarPreviewPesosProteccionModal();
+        });
+    }
+
     // Modal eventos - Esquema
     const modalEsq = document.getElementById('modal-finanzas-esquema');
     const btnCerrarModalEsq = document.getElementById('btn-cerrar-modal-finanzas-esq');
@@ -3549,7 +3574,7 @@ async function loadFinanzasInstituciones() {
 
         tbody.innerHTML = '';
         if (finanzasInstitucionesCache.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">No hay instituciones registradas.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #64748b;">No hay instituciones registradas.</td></tr>';
             return;
         }
 
@@ -3581,7 +3606,8 @@ async function loadFinanzasInstituciones() {
 
             // Columna 1: Institución
             let td = document.createElement('td');
-            td.innerHTML = `<strong>${escapeHTML(inst.nombre)}</strong>`;
+            const hasInfoAdicional = inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0;
+            td.innerHTML = `<strong>${escapeHTML(inst.nombre)}</strong>${hasInfoAdicional ? ' <i class="fas fa-info-circle" style="color: #2563eb; font-size: 0.8rem;" title="Cuenta con información adicional para el simulador"></i>' : ''}`;
             tr.appendChild(td);
 
             // Columna 2: Tipo
@@ -3605,20 +3631,33 @@ async function loadFinanzasInstituciones() {
             td.innerHTML = `<span>$${mMin.toLocaleString('es-MX')} / <strong>${pMin}m</strong></span>`;
             tr.appendChild(td);
 
-            // Columna 5: Condición Resumen
+            // Columna 5: Protección Institucional
+            td = document.createElement('td');
+            td.style.textAlign = 'center';
+            td.style.fontSize = '0.82rem';
+            const tipoProt = inst.tipo_proteccion || 'Sin protección';
+            const limUdis = parseFloat(inst.limite_proteccion_udis) || 0;
+            if (tipoProt === 'Sin protección' || limUdis <= 0) {
+                td.innerHTML = `<span style="color: #94a3b8; font-size: 0.78rem;">Sin protección</span>`;
+            } else {
+                td.innerHTML = `<span style="font-weight: 700; color: #0369a1;">${escapeHTML(tipoProt)}</span><br><small style="color: #64748b; font-weight: 600;">${limUdis.toLocaleString('es-MX')} UDIS</small>`;
+            }
+            tr.appendChild(td);
+
+            // Columna 6: Condición Resumen
             td = document.createElement('td');
             td.style.fontSize = '0.85rem';
             td.style.color = '#475569';
             td.textContent = inst.condiciones_resumen || '—';
             tr.appendChild(td);
 
-            // Columna 6: Orden
+            // Columna 7: Orden
             td = document.createElement('td');
             td.style.textAlign = 'center';
             td.textContent = inst.orden_visual;
             tr.appendChild(td);
 
-            // Columna 7: Vigencia Actual
+            // Columna 8: Vigencia Actual
             td = document.createElement('td');
             td.style.fontSize = '0.85rem';
             td.innerHTML = vigenciaTexto;
@@ -3878,6 +3917,14 @@ function abrirModalNuevaInstitucion() {
     const selectRiesgoNew = document.getElementById('finanzas-inst-nivel-riesgo');
     if (selectRiesgoNew) selectRiesgoNew.value = 'Medio';
 
+    const selectTipoProtNew = document.getElementById('finanzas-inst-tipo-proteccion');
+    if (selectTipoProtNew) selectTipoProtNew.value = 'Sin protección';
+    const inputLimiteUdisNew = document.getElementById('finanzas-inst-limite-udis');
+    if (inputLimiteUdisNew) inputLimiteUdisNew.value = '0';
+    const inputInfoAdicionalNew = document.getElementById('finanzas-inst-info-adicional');
+    if (inputInfoAdicionalNew) inputInfoAdicionalNew.value = '';
+    actualizarPreviewPesosProteccionModal();
+
     if (wrapperNuevaVigencia) wrapperNuevaVigencia.style.display = 'none';
     if (titulo) titulo.textContent = 'Nueva Institución Financiera y Condiciones';
 
@@ -3918,6 +3965,14 @@ function abrirModalEditarInstitucion(inst) {
     if (inputPlazoMin) inputPlazoMin.value = inst.plazo_minimo !== undefined && inst.plazo_minimo !== null ? inst.plazo_minimo : 1;
     const selectRiesgo = document.getElementById('finanzas-inst-nivel-riesgo');
     if (selectRiesgo) selectRiesgo.value = inst.nivel_riesgo || 'Medio';
+
+    const selectTipoProt = document.getElementById('finanzas-inst-tipo-proteccion');
+    if (selectTipoProt) selectTipoProt.value = inst.tipo_proteccion || 'Sin protección';
+    const inputLimiteUdis = document.getElementById('finanzas-inst-limite-udis');
+    if (inputLimiteUdis) inputLimiteUdis.value = inst.limite_proteccion_udis !== undefined && inst.limite_proteccion_udis !== null ? inst.limite_proteccion_udis : 0;
+    const inputInfoAdicional = document.getElementById('finanzas-inst-info-adicional');
+    if (inputInfoAdicional) inputInfoAdicional.value = inst.informacio_adicional || '';
+    actualizarPreviewPesosProteccionModal();
 
     if (titulo) titulo.textContent = `Editar Institución: ${inst.nombre}`;
 
@@ -4097,6 +4152,17 @@ function agregarFilaTramoInstForm(tramoData = null) {
     recalcularResumenCondicionesInstModal();
 }
 
+let udiValorAdminCache = 8.865882;
+
+function actualizarPreviewPesosProteccionModal() {
+    const limInput = document.getElementById('finanzas-inst-limite-udis');
+    const previewEl = document.getElementById('finanzas-inst-pesos-calculados');
+    if (!previewEl) return;
+    const udis = Math.max(0, parseFloat(limInput ? limInput.value : 0) || 0);
+    const pesos = udis * (udiValorAdminCache || 8.865882);
+    previewEl.textContent = `Equivalente aprox: $${pesos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+}
+
 function recalcularResumenCondicionesInstModal() {
     const tbody = document.getElementById('finanzas-inst-tramos-tbody');
     const previewDiv = document.getElementById('finanzas-inst-condiciones-preview');
@@ -4138,6 +4204,9 @@ async function guardarInstitucionForm() {
     const monto_minimo = Math.max(0, parseFloat(document.getElementById('finanzas-inst-monto-min')?.value) || 0);
     const plazo_minimo = Math.max(1, parseInt(document.getElementById('finanzas-inst-plazo-min')?.value, 10) || 1);
     const nivel_riesgo = document.getElementById('finanzas-inst-nivel-riesgo')?.value || 'Medio';
+    const tipo_proteccion = document.getElementById('finanzas-inst-tipo-proteccion')?.value || 'Sin protección';
+    const limite_proteccion_udis = Math.max(0, parseFloat(document.getElementById('finanzas-inst-limite-udis')?.value) || 0);
+    const informacio_adicional = document.getElementById('finanzas-inst-info-adicional')?.value.trim() || null;
 
     // Datos del esquema
     const esquemaId = document.getElementById('finanzas-inst-esquema-id').value;
@@ -4219,6 +4288,9 @@ async function guardarInstitucionForm() {
         monto_minimo,
         plazo_minimo,
         nivel_riesgo,
+        tipo_proteccion,
+        limite_proteccion_udis,
+        informacio_adicional,
         restricciones,
         esquema: {
             id: esquemaId ? parseInt(esquemaId, 10) : null,

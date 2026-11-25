@@ -1024,50 +1024,61 @@
                 <h2>Asesorías Financieras — Simulador de Inversiones</h2>
                 <p>Compara las condiciones y rendimientos reales de las principales instituciones financieras en México de forma dinámica y transparente.</p>
 
-                <!-- Barra de Leyenda de Tipos de Institución -->
-                <div style="background: #f1f5f9; border-radius: 8px; padding: 10px 18px; margin-bottom: 20px; font-weight: 700; color: #334155; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; border: 1px solid #e2e8f0;">
-                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                        <span><strong style="color: #1d4ed8;">B</strong> = Banco</span>
-                        <span><strong style="color: #047857;">S</strong> = Sofipo</span>
-                        <span><strong style="color: #7c3aed;">F</strong> = Fintech</span>
-                        <span><strong style="color: #b45309;">O</strong> = Otro</span>
+                <!-- Barra de Leyenda de Tipos de Institución y Coberturas de Protección -->
+                <div class="simulador-section-card simulador-legend-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 24px; margin-bottom: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <!-- Fila 1: Grupos de Instituciones -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid #f1f5f9;">
+                        <span style="font-weight: 700; color: #1e293b; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; display: inline-flex; align-items: center; gap: 6px; width: 130px; flex-shrink: 0;">
+                            <i class="fas fa-university" style="color: #2563eb;"></i> Tipos:
+                        </span>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); flex: 1; min-width: 280px; gap: 14px; align-items: center;">
+                            <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; color: #1e293b; font-weight: 600;">
+                                <strong style="color: #1d4ed8; background: #dbeafe; padding: 3px 9px; border-radius: 4px; font-size: 0.82rem; font-weight: 800;">B</strong> Bancos
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; color: #1e293b; font-weight: 600;">
+                                <strong style="color: #047857; background: #d1fae5; padding: 3px 9px; border-radius: 4px; font-size: 0.82rem; font-weight: 800;">S</strong> Sofipos
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; color: #1e293b; font-weight: 600;">
+                                <strong style="color: #b45309; background: #fef3c7; padding: 3px 9px; border-radius: 4px; font-size: 0.82rem; font-weight: 800;">O</strong> Cajas Populares
+                            </span>
+                        </div>
                     </div>
-                    <div style="font-size: 0.85em; color: #64748b; font-weight: 500;">
-                        <i class="fas fa-database"></i> Tasas y condiciones administradas dinámicamente
+
+                    <!-- Fila 2: Coberturas de Protección -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f1f5f9;">
+                        <span style="font-weight: 700; color: #1e293b; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; display: inline-flex; align-items: center; gap: 6px; width: 130px; flex-shrink: 0;">
+                            <i class="fas fa-shield-alt" style="color: #0284c7;"></i> Protecciones:
+                        </span>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); flex: 1; min-width: 280px; gap: 14px; align-items: center; font-size: 0.85rem; color: #0369a1;">
+                            <span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500;">
+                                🛡️ <strong>IPAB</strong> = hasta 400,000 UDIS
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500;">
+                                🛡️ <strong>PROSOFIPO</strong> = hasta 25,000 UDIS
+                            </span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500;">
+                                🛡️ <strong>FOCOOP</strong> = hasta 25,000 UDIS
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Fila 3: Indicador Económico UDI Oficial Integrado -->
+                    <div id="simulador-indicador-udi-banner" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding-top: 14px; font-size: 0.84rem; color: #0369a1; text-align: center;">
+                        <div style="display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-coins" style="color: #0284c7; font-size: 1rem;"></i>
+                            <span id="simulador-udi-texto" style="font-weight: 700;">Valor UDI utilizado: $8.865882 | Fecha: 24/11/2026</span>
+                        </div>
+                        <span style="color: #cbd5e1; display: inline-block; margin: 0 4px;" class="hide-mobile-sep">|</span>
+                        <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #0284c7;">
+                            <i class="fas fa-university"></i> Fuente oficial: <span id="simulador-udi-fuente" style="font-weight: 600;">Banco de México / DOF</span>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Panel de Controles Globales de Simulación -->
-                <div class="simulador-controls-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                    <div style="font-weight: 700; color: #0f172a; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                <div class="simulador-controls-card simulador-section-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <div style="font-weight: 700; color: #0f172a; margin-bottom: 16px; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-sliders" style="color: #2563eb;"></i> Parámetros de Simulación
-                    </div>
-
-                    <!-- Selector de Modalidad y Estrategias de Inversión -->
-                    <div style="margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
-                        <div style="margin-bottom: 10px;">
-                            <label style="font-weight: 700; color: #1e293b; margin: 0; font-size: 0.95rem;">
-                                <i class="fas fa-chess-knight" style="color: #2563eb;"></i> Modalidad y Estrategia de inversión:
-                            </label>
-                        </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <label class="sim-strategy-option sim-strategy-individual" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #3b82f6; background: #eff6ff; font-weight: 700; font-size: 0.9rem; color: #1d4ed8; transition: all 0.2s;">
-                                <input type="radio" name="simulador-estrategia" value="individual" checked style="cursor: pointer; width: 16px; height: 16px;">
-                                <span>🔵 Mayor rendimiento (Individual)</span>
-                            </label>
-                            <label class="sim-strategy-option sim-strategy-maximo sim-strategy-diversificada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
-                                <input type="radio" name="simulador-estrategia" value="maximo_rendimiento" data-alias="diversificada" style="cursor: pointer; width: 16px; height: 16px;">
-                                <span>🟢 Máximo rendimiento</span>
-                            </label>
-                            <label class="sim-strategy-option sim-strategy-equilibrada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
-                                <input type="radio" name="simulador-estrategia" value="equilibrada" style="cursor: pointer; width: 16px; height: 16px;">
-                                <span>🔵 Equilibrada</span>
-                            </label>
-                            <label class="sim-strategy-option sim-strategy-conservadora" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
-                                <input type="radio" name="simulador-estrategia" value="conservadora" style="cursor: pointer; width: 16px; height: 16px;">
-                                <span>🟠 Conservadora</span>
-                            </label>
-                        </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; align-items: flex-end;">
@@ -1100,57 +1111,93 @@
                             <input type="date" id="simulador-fecha-consulta" class="form-control" style="border-radius: 8px; width: 100%;">
                             <small style="color: #64748b; font-size: 0.78rem;">Consulta las condiciones vigentes a esta fecha.</small>
                         </div>
+                    </div>
+                </div>
 
-                        <!-- Botones de Selección -->
-                        <div style="display: flex; gap: 8px;">
-                            <button type="button" id="simulador-btn-seleccionar-todas" class="btn btn-secondary" style="flex: 1; font-size: 0.85rem; padding: 10px 8px;">
-                                <i class="fas fa-check-double"></i> Todas
-                            </button>
-                            <button type="button" id="simulador-btn-deseleccionar-todas" class="btn btn-secondary" style="flex: 1; font-size: 0.85rem; padding: 10px 8px;">
-                                <i class="fas fa-times"></i> Ninguna
-                            </button>
+                <!-- Panel de Estrategia y Control de Riesgo -->
+                <div class="simulador-section-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <div style="font-weight: 700; color: #0f172a; margin-bottom: 16px; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-chess-knight" style="color: #2563eb;"></i> Estrategia y Control de Riesgo
+                    </div>
+
+                    <!-- Selector de Modalidad y Estrategias de Inversión -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;">
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-weight: 700; color: #1e293b; margin: 0; font-size: 0.92rem;">
+                                <i class="fas fa-layer-group" style="color: #2563eb;"></i> Modalidad y Estrategia de inversión:
+                            </label>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <label class="sim-strategy-option sim-strategy-individual" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #3b82f6; background: #eff6ff; font-weight: 700; font-size: 0.9rem; color: #1d4ed8; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="individual" checked style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🔵 Mayor rendimiento (Individual)</span>
+                            </label>
+                            <label class="sim-strategy-option sim-strategy-maximo sim-strategy-diversificada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="maximo_rendimiento" data-alias="diversificada" style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🟢 Máximo rendimiento</span>
+                            </label>
+                            <label class="sim-strategy-option sim-strategy-equilibrada" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="equilibrada" style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🔵 Equilibrada</span>
+                            </label>
+                            <label class="sim-strategy-option sim-strategy-conservadora" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 2px solid #cbd5e1; background: #f8fafc; font-weight: 600; font-size: 0.9rem; color: #475569; transition: all 0.2s;">
+                                <input type="radio" name="simulador-estrategia" value="conservadora" style="cursor: pointer; width: 16px; height: 16px;">
+                                <span>🟠 Conservadora</span>
+                            </label>
                         </div>
                     </div>
 
                     <!-- Filtro por Nivel de Riesgo (Elegibilidad) -->
-                    <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
-                        <div style="min-width: 200px; flex: 1;">
-                            <label for="simulador-considerar-riesgo" style="display: block; font-weight: 600; color: #334155; margin-bottom: 6px;">
-                                <i class="fas fa-shield-alt" style="color: #2563eb;"></i> Considerar nivel de riesgo:
-                            </label>
-                            <select id="simulador-considerar-riesgo" class="form-control" style="font-weight: 700; border-radius: 8px; width: 100%;">
-                                <option value="no" selected>No</option>
-                                <option value="si">Sí</option>
-                            </select>
-                            <small style="color: #64748b; font-size: 0.78rem;">Por defecto se consideran todas las instituciones.</small>
-                        </div>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+                        <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+                            <div style="min-width: 200px; flex: 1;">
+                                <label for="simulador-considerar-riesgo" style="display: block; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                    <i class="fas fa-shield-alt" style="color: #2563eb;"></i> Considerar nivel de riesgo:
+                                </label>
+                                <select id="simulador-considerar-riesgo" class="form-control" style="font-weight: 700; border-radius: 8px; width: 100%;">
+                                    <option value="no" selected>No</option>
+                                    <option value="si">Sí</option>
+                                </select>
+                                <small style="color: #64748b; font-size: 0.78rem;">Por defecto se consideran todas las instituciones.</small>
+                            </div>
 
-                        <div id="simulador-wrapper-nivel-riesgo" style="min-width: 220px; flex: 1; display: none;">
-                            <label for="simulador-nivel-riesgo-max" style="display: block; font-weight: 600; color: #334155; margin-bottom: 6px;">
-                                <i class="fas fa-triangle-exclamation" style="color: #ea580c;"></i> Nivel máximo de riesgo aceptado:
-                            </label>
-                            <select id="simulador-nivel-riesgo-max" class="form-control" style="font-weight: 700; border-radius: 8px; width: 100%;">
-                                <option value="Bajo">Bajo</option>
-                                <option value="Medio">Medio</option>
-                                <option value="Alto">Alto</option>
-                                <option value="Muy alto" selected>Muy alto</option>
-                            </select>
-                            <small style="color: #64748b; font-size: 0.78rem;">Instituciones con mayor riesgo serán excluidas.</small>
+                            <div id="simulador-wrapper-nivel-riesgo" style="min-width: 220px; flex: 1; display: none;">
+                                <label for="simulador-nivel-riesgo-max" style="display: block; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                    <i class="fas fa-triangle-exclamation" style="color: #ea580c;"></i> Nivel máximo de riesgo aceptado:
+                                </label>
+                                <select id="simulador-nivel-riesgo-max" class="form-control" style="font-weight: 700; border-radius: 8px; width: 100%;">
+                                    <option value="Bajo">Bajo</option>
+                                    <option value="Medio">Medio</option>
+                                    <option value="Alto">Alto</option>
+                                    <option value="Muy alto" selected>Muy alto</option>
+                                </select>
+                                <small style="color: #64748b; font-size: 0.78rem;">Instituciones con mayor riesgo serán excluidas.</small>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Contenedor de estado para parámetros diversificados -->
-                    <div id="simulador-params-diversificado" style="display: none; padding: 8px 12px; background: #f0fdf4; border-radius: 6px; font-size: 0.85rem; color: #166534; margin-top: 8px;">
+                    <div id="simulador-params-diversificado" style="display: none; padding: 10px 14px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 0.85rem; color: #166534; margin-top: 14px;">
                         <span><i class="fas fa-sliders-h"></i> Parámetros de diversificación configurados dinámicamente según la estrategia elegida.</span>
+                    </div>
+                </div>
+
+                <!-- Panel de Resumen y Resultados Financieros -->
+                <div class="simulador-section-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <div style="font-weight: 700; color: #0f172a; margin-bottom: 14px; font-size: 1.05rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-chart-line" style="color: #166534;"></i>
+                            <span>Resumen de Rendimientos y Resultados</span>
+                        </div>
                     </div>
 
                     <!-- Resumen comparativo dinámico (Modo: Mayor rendimiento) -->
-                    <div id="simulador-resumen-comparativo" style="margin-top: 18px; padding: 12px 18px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                    <div id="simulador-resumen-comparativo" style="padding: 14px 18px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
                         <!-- Se llena dinámicamente -->
                     </div>
 
                     <!-- Panel Destacado de Mejor Inversión Diversificada (Modo: Diversificado) -->
-                    <div id="simulador-panel-diversificado" style="display: none; margin-top: 18px; background: #ffffff; border: 2px solid #86efac; border-radius: 10px; padding: 20px; box-shadow: 0 4px 14px rgba(22, 101, 52, 0.08);">
+                    <div id="simulador-panel-diversificado" style="display: none; background: #ffffff; border: 2px solid #86efac; border-radius: 10px; padding: 20px; box-shadow: 0 4px 14px rgba(22, 101, 52, 0.08);">
                         <!-- Se llena dinámicamente -->
                     </div>
 
@@ -1167,72 +1214,90 @@
                 </div>
                 <div id="simulador-error-msg" style="display: none; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #991b1b; margin-bottom: 20px;"></div>
 
-                <!-- Barra de Herramientas de la Tabla del Simulador -->
-                <div class="simulador-table-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 12px 18px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
-                            <i class="fas fa-table" style="color: #2563eb;"></i> Tabla de Instituciones Financieras
-                        </span>
-                        <span id="simulador-count-seleccionadas" style="font-size: 0.78rem; background: #dbeafe; color: #1e40af; padding: 2px 10px; border-radius: 12px; font-weight: 700;">
-                            9 activas
-                        </span>
-                    </div>
+                <!-- Tabla de Instituciones Financieras y Desglose -->
+                <div class="simulador-section-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <!-- Barra de Herramientas de la Tabla del Simulador -->
+                    <div class="simulador-table-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 12px 18px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
+                                <i class="fas fa-table" style="color: #2563eb;"></i> Tabla de Instituciones Financieras
+                            </span>
+                            <span id="simulador-count-seleccionadas" style="font-size: 0.78rem; background: #dbeafe; color: #1e40af; padding: 2px 10px; border-radius: 12px; font-weight: 700;">
+                                9 activas
+                            </span>
+                        </div>
 
-                    <!-- Controles de Visibilidad de Columnas -->
-                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                        <span style="font-size: 0.82rem; font-weight: 700; color: #475569;">Columnas:</span>
-                        <button type="button" id="simulador-toggle-col-condiciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Condiciones">
-                            <i class="fas fa-eye"></i> Condiciones
-                        </button>
-                        <button type="button" id="simulador-toggle-col-restricciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Restricciones">
-                            <i class="fas fa-eye"></i> Restricciones
-                        </button>
-
-                        <!-- Botón Desplegable ⚙ Columnas -->
-                        <div class="simulador-dropdown-columnas-wrapper" style="position: relative; display: inline-block;">
-                            <button type="button" id="simulador-btn-columnas" class="btn btn-sm" style="font-size: 0.82rem; padding: 6px 14px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: #2563eb; border: 1px solid #1d4ed8; color: #ffffff; cursor: pointer; box-shadow: 0 1px 3px rgba(37,99,235,0.25);" title="Activar / desactivar columnas individualmente">
-                                <i class="fas fa-cog"></i> <span>⚙ Columnas</span>
-                                <span id="simulador-badge-columnas" style="background: rgba(255,255,255,0.28); color: #ffffff; font-size: 0.72rem; padding: 1px 6px; border-radius: 10px; font-weight: 700;">14/14</span>
-                                <i class="fas fa-chevron-down" style="font-size: 0.65rem;"></i>
+                        <!-- Controles de Visibilidad de Columnas y Selección -->
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" id="simulador-btn-seleccionar-todas" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Seleccionar todas las instituciones">
+                                <i class="fas fa-check-double"></i> Todas
                             </button>
-                            <div id="simulador-menu-columnas" class="simulador-columnas-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 6px); background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 14px; z-index: 1050; width: 290px; max-width: 90vw; max-height: 440px; overflow-y: auto;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
-                                    <span style="font-weight: 700; font-size: 0.85rem; color: #1e293b;"><i class="fas fa-columns" style="color: #2563eb;"></i> Mostrar / Ocultar</span>
-                                    <button type="button" id="simulador-btn-mostrar-todas-cols" style="background: none; border: none; color: #2563eb; font-size: 0.75rem; font-weight: 700; cursor: pointer; padding: 0;">Mostrar todas</button>
-                                </div>
-                                <div id="simulador-lista-columnas" style="display: flex; flex-direction: column; gap: 4px;">
-                                    <!-- Checkboxes generados dinámicamente -->
+                            <button type="button" id="simulador-btn-deseleccionar-todas" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Deseleccionar todas las instituciones">
+                                <i class="fas fa-times"></i> Ninguna
+                            </button>
+
+                            <span style="color: #cbd5e1; margin: 0 4px;" class="hide-mobile-sep">|</span>
+
+                            <span style="font-size: 0.82rem; font-weight: 700; color: #475569;">Columnas:</span>
+                            <button type="button" id="simulador-toggle-col-condiciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Condiciones">
+                                <i class="fas fa-eye"></i> Condiciones
+                            </button>
+                            <button type="button" id="simulador-toggle-col-restricciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Restricciones">
+                                <i class="fas fa-eye"></i> Restricciones
+                            </button>
+
+                            <!-- Botón Desplegable ⚙ Columnas -->
+                            <div class="simulador-dropdown-columnas-wrapper" style="position: relative; display: inline-block;">
+                                <button type="button" id="simulador-btn-columnas" class="btn btn-sm" style="font-size: 0.82rem; padding: 6px 14px; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: #2563eb; border: 1px solid #1d4ed8; color: #ffffff; cursor: pointer; box-shadow: 0 1px 3px rgba(37,99,235,0.25);" title="Activar / desactivar columnas individualmente">
+                                    <i class="fas fa-cog"></i> <span>⚙ Columnas</span>
+                                    <span id="simulador-badge-columnas" style="background: rgba(255,255,255,0.28); color: #ffffff; font-size: 0.72rem; padding: 1px 6px; border-radius: 10px; font-weight: 700;">14/14</span>
+                                    <i class="fas fa-chevron-down" style="font-size: 0.65rem;"></i>
+                                </button>
+                                <div id="simulador-menu-columnas" class="simulador-columnas-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 6px); background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 14px; z-index: 1050; width: 290px; max-width: 90vw; max-height: 440px; overflow-y: auto;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                                        <span style="font-weight: 700; font-size: 0.85rem; color: #1e293b;"><i class="fas fa-columns" style="color: #2563eb;"></i> Mostrar / Ocultar</span>
+                                        <button type="button" id="simulador-btn-mostrar-todas-cols" style="background: none; border: none; color: #2563eb; font-size: 0.75rem; font-weight: 700; cursor: pointer; padding: 0;">Mostrar todas</button>
+                                    </div>
+                                    <div id="simulador-lista-columnas" style="display: flex; flex-direction: column; gap: 4px;">
+                                        <!-- Checkboxes generados dinámicamente -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Tabla Responsiva del Simulador -->
-                <div id="simulador-table-container" class="table-responsive" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.04); overflow-x: auto;">
-                    <table class="simulador-table" id="simulador-main-table" style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left;">
-                                <th class="sim-col-sel" style="width: 38px; min-width: 38px; text-align: center;" data-col="sel" title="Ordenar por selección">Sel</th>
-                                <th class="sim-col-institucion" style="min-width: 110px;" data-col="institucion" title="Ordenar por Institución">Institución</th>
-                                <th class="sim-col-tipo" style="width: 55px; min-width: 55px; text-align: center;" data-col="tipo" title="Ordenar por Tipo de Entidad">Tipo</th>
-                                <th class="sim-col-condiciones" style="min-width: 120px;" data-col="condiciones" title="Ordenar por Condiciones">Condiciones</th>
-                                <th class="sim-col-restricciones" style="min-width: 120px;" data-col="restricciones" title="Ordenar por Restricciones">Restricciones</th>
-                                <th class="sim-col-inv-base" style="min-width: 95px; text-align: right;" data-col="inv-base" title="Ordenar por Inversión Base">Inversión Base</th>
-                                <th class="sim-col-tasa" style="min-width: 95px; width: 100px; text-align: right;" data-col="tasa" title="Ordenar por Tasa Anual %">Tasa %</th>
-                                <th class="sim-col-inv1" style="min-width: 110px; text-align: right; background: #fef3c7;" data-col="inv1" title="Ordenar por Inversión 1">Inversión 1</th>
-                                <th class="sim-col-inv2" style="min-width: 110px; text-align: right; background: #fef3c7;" data-col="inv2" title="Ordenar por Inversión 2">Inversión 2</th>
-                                <th class="sim-col-meses" style="width: 55px; min-width: 55px; text-align: center;" data-col="meses" title="Ordenar por Meses">Meses</th>
-                                <th class="sim-col-rend1" style="min-width: 80px; text-align: right;" data-col="rend1" title="Ordenar por Rendimiento 1">Rend1</th>
-                                <th class="sim-col-rend2" style="min-width: 80px; text-align: right;" data-col="rend2" title="Ordenar por Rendimiento 2">Rend2</th>
-                                <th class="sim-col-total-mensual" style="min-width: 95px; text-align: right; background: #ecfdf5;" data-col="total-mensual" title="Ordenar por Total Mensual Estimado">Total mensual</th>
-                                <th class="sim-col-total-periodo" style="min-width: 98px; text-align: right; background: #dcfce7;" data-col="total-periodo" title="Ordenar por Total Periodo">Total periodo</th>
-                            </tr>
-                        </thead>
-                        <tbody id="simulador-tbody">
-                            <!-- Filas dinámicas generadas por simuladorFinanciero.js -->
-                        </tbody>
-                    </table>
+                    <!-- Tabla Responsiva del Simulador -->
+                    <div id="simulador-table-container" class="table-responsive" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; overflow-x: auto;">
+                        <table class="simulador-table" id="simulador-main-table" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left;">
+                                    <th class="sim-col-sel" style="width: 38px; min-width: 38px; text-align: center;" data-col="sel" title="Ordenar por selección">Sel</th>
+                                    <th class="sim-col-institucion" style="min-width: 110px;" data-col="institucion" title="Ordenar por Institución">Institución</th>
+                                    <th class="sim-col-tipo" style="width: 55px; min-width: 55px; text-align: center;" data-col="tipo" title="Ordenar por Tipo de Entidad">Tipo</th>
+                                    <th class="sim-col-condiciones" style="min-width: 120px;" data-col="condiciones" title="Ordenar por Condiciones">Condiciones</th>
+                                    <th class="sim-col-restricciones" style="min-width: 120px;" data-col="restricciones" title="Ordenar por Restricciones">Restricciones</th>
+                                    <th class="sim-col-inv-base" style="min-width: 95px; text-align: right;" data-col="inv-base" title="Ordenar por Inversión Base">Inversión Base</th>
+                                    <th class="sim-col-tasa" style="min-width: 95px; width: 100px; text-align: right;" data-col="tasa" title="Ordenar por Tasa Anual %">Tasa %</th>
+                                    <th class="sim-col-inv1" style="min-width: 110px; text-align: right; background: #fef3c7;" data-col="inv1" title="Ordenar por Inversión 1">Inversión 1</th>
+                                    <th class="sim-col-inv2" style="min-width: 110px; text-align: right; background: #fef3c7;" data-col="inv2" title="Ordenar por Inversión 2">Inversión 2</th>
+                                    <th class="sim-col-meses" style="width: 55px; min-width: 55px; text-align: center;" data-col="meses" title="Ordenar por Meses">Meses</th>
+                                    <th class="sim-col-rend1" style="min-width: 80px; text-align: right;" data-col="rend1" title="Ordenar por Rendimiento 1">Rend1</th>
+                                    <th class="sim-col-rend2" style="min-width: 80px; text-align: right;" data-col="rend2" title="Ordenar por Rendimiento 2">Rend2</th>
+                                    <th class="sim-col-total-mensual" style="min-width: 95px; text-align: right; background: #ecfdf5;" data-col="total-mensual" title="Ordenar por Total Mensual Estimado">Total mensual</th>
+                                    <th class="sim-col-total-periodo" style="min-width: 98px; text-align: right; background: #dcfce7;" data-col="total-periodo" title="Ordenar por Total Periodo">Total periodo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="simulador-tbody">
+                                <!-- Filas dinámicas generadas por simuladorFinanciero.js -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Leyenda / Aviso Oficial sobre Protección al Ahorro -->
+                    <div class="simulador-disclaimer-proteccion" style="margin-top: 14px; font-size: 0.78rem; color: #64748b; line-height: 1.4; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <i class="fas fa-info-circle" style="color: #0284c7;"></i>
+                        <strong>Aviso sobre Protección al Ahorro:</strong> Las coberturas de protección institucional (IPAB hasta 400,000 UDIS en Bancos; PROSOFIPO/FOCOOP hasta 25,000 UDIS en Sociedades Financieras Populares y Cooperativas) se calculan con el valor oficial vigente de la UDI por persona e institución. La cobertura aplica a las obligaciones y productos elegibles conforme a la regulación vigente. Verifique las condiciones aplicables al producto.
+                    </div>
                 </div>
             </div> <!-- /#servicios-financieras-view -->
         </section>
@@ -1696,6 +1761,7 @@
                                     <th style="width: 85px; text-align: center;">Tipo</th>
                                     <th style="width: 100px; text-align: center;">Riesgo</th>
                                     <th style="width: 130px; text-align: center;">Monto / Plazo Mín</th>
+                                    <th style="width: 140px; text-align: center;">Protección</th>
                                     <th style="min-width: 230px;">Condición Resumen</th>
                                     <th style="width: 70px; text-align: center;">Orden</th>
                                     <th style="min-width: 160px;">Vigencia Actual</th>
@@ -1976,6 +2042,39 @@
                         </div>
                     </div>
 
+                    <!-- Configuración de Protección Institucional -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px; background: #f0fdf4; padding: 12px; border-radius: 8px; border: 1px solid #bbf7d0;">
+                        <div>
+                            <label for="finanzas-inst-tipo-proteccion" style="font-weight: 600; display: block; margin-bottom: 4px; color: #166534;">
+                                <i class="fas fa-shield-virus" style="color: #16a34a;"></i> Tipo de Protección *
+                            </label>
+                            <select id="finanzas-inst-tipo-proteccion" class="form-control" style="width: 100%; font-weight: 600;">
+                                <option value="Sin protección">Sin protección</option>
+                                <option value="IPAB">IPAB (Bancos)</option>
+                                <option value="PROSOFIPO">PROSOFIPO (Sofipos)</option>
+                                <option value="FOCOOP">FOCOOP (Socaps / Cooperativas)</option>
+                                <option value="Otra">Otra</option>
+                            </select>
+                            <small style="color: #64748b; font-size: 0.75rem;">Organismo de cobertura regulatoria</small>
+                        </div>
+                        <div>
+                            <label for="finanzas-inst-limite-udis" style="font-weight: 600; display: block; margin-bottom: 4px; color: #166534;">
+                                <i class="fas fa-coins" style="color: #0284c7;"></i> Límite en UDIS
+                            </label>
+                            <input type="number" id="finanzas-inst-limite-udis" class="form-control" min="0" step="1000" value="0" placeholder="0" style="width: 100%; font-weight: 700;">
+                            <small id="finanzas-inst-pesos-calculados" style="color: #0369a1; font-size: 0.75rem; font-weight: 600; display: block; margin-top: 2px;">Equivalente aprox: $0.00 MXN</small>
+                        </div>
+                    </div>
+
+                    <!-- Información Adicional -->
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="finanzas-inst-info-adicional" style="font-weight: 600; display: block; margin-bottom: 4px; color: #334155;">
+                            <i class="fas fa-info-circle" style="color: #2563eb;"></i> Información Adicional (Aparece en el simulador mediante el botón ⓘ)
+                        </label>
+                        <textarea id="finanzas-inst-info-adicional" class="form-control" rows="3" placeholder="Aclaraciones sobre regulación, seguro de depósito, requisitos o notas operativas..." style="width: 100%; border-radius: 6px;"></textarea>
+                        <small style="color: #64748b; font-size: 0.75rem;">Si este campo contiene información, en el simulador aparecerá un ícono ⓘ junto a la institución para consultar este detalle.</small>
+                    </div>
+
                     <!-- Resumen de condiciones dinámicas autogenerado -->
                     <div class="form-group" style="margin-bottom: 18px;">
                         <label style="font-weight: 600; display: block; margin-bottom: 4px; color: #334155;">
@@ -2239,6 +2338,27 @@
                         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar Cambios</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Modal Informativo Contextual para Información Complementaria (Protección e Información Adicional) -->
+        <div id="modal-finanzas-info-adicional" class="custom-modal-overlay" style="display: none; z-index: 1060;">
+            <div class="custom-modal-content" style="max-width: 480px; width: 92%; text-align: left; border-radius: 12px; padding: 22px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); max-height: 88vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-info-circle" style="color: #2563eb; font-size: 1.25rem;"></i>
+                        <h3 id="modal-info-adicional-titulo" style="margin: 0; color: #1e293b; font-size: 1.1rem; font-weight: 700;">Información de la Institución</h3>
+                    </div>
+                    <button type="button" id="btn-cerrar-modal-finanzas-info-adicional" class="btn-close" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; line-height: 1;" aria-label="Cerrar">&times;</button>
+                </div>
+                <div id="modal-info-adicional-cuerpo" style="font-size: 0.92rem; color: #334155; margin-bottom: 18px;">
+                    <!-- Contenido dinámico de protección e informacio_adicional -->
+                </div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <button type="button" id="btn-entendido-modal-finanzas-info-adicional" class="btn btn-primary" style="padding: 7px 20px; font-size: 0.88rem; border-radius: 6px; font-weight: 600;">
+                        Entendido
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -3718,27 +3838,25 @@
                 });
             }
 
+            function mostrarSubvistaServicios(subvistaId) {
+                const subvistas = document.querySelectorAll('#servicios .servicios-view-container');
+                subvistas.forEach(view => {
+                    view.style.display = (view.id === subvistaId) ? 'block' : 'none';
+                });
+            }
+            window.mostrarSubvistaServicios = mostrarSubvistaServicios;
+
             function ejecutarEntradaServicio(target) {
                 const sections = document.querySelectorAll('.content-section');
                 if (target === 'asesoria-pensiones') {
                     sections.forEach(s => s.style.display = (s.id === 'servicios') ? 'flex' : 'none');
-                    const catalogoView = document.getElementById('servicios-catalogo-view');
-                    const pensionView = document.getElementById('servicios-pension-view');
-                    const financierasView = document.getElementById('servicios-financieras-view');
-                    if (catalogoView) catalogoView.style.display = 'none';
-                    if (financierasView) financierasView.style.display = 'none';
-                    if (pensionView) pensionView.style.display = 'block';
+                    mostrarSubvistaServicios('servicios-pension-view');
                     const formEstimacionLocal = document.getElementById('form-estimacion');
                     if (formEstimacionLocal) formEstimacionLocal.style.display = 'block';
                     if (typeof syncPensionModalidades === 'function') syncPensionModalidades();
                 } else if (target === 'asesorias-financieras') {
                     sections.forEach(s => s.style.display = (s.id === 'servicios') ? 'flex' : 'none');
-                    const catalogoView = document.getElementById('servicios-catalogo-view');
-                    const pensionView = document.getElementById('servicios-pension-view');
-                    const financierasView = document.getElementById('servicios-financieras-view');
-                    if (catalogoView) catalogoView.style.display = 'none';
-                    if (pensionView) pensionView.style.display = 'none';
-                    if (financierasView) financierasView.style.display = 'block';
+                    mostrarSubvistaServicios('servicios-financieras-view');
                     if (typeof inicializarSimuladorFinanciero === 'function') inicializarSimuladorFinanciero();
                 } else if (target === 'ideas') {
                     sections.forEach(s => s.style.display = (s.id === 'ideas') ? 'flex' : 'none');
@@ -4057,10 +4175,7 @@
                             }
                         });
 
-                        const catalogoView = document.getElementById('servicios-catalogo-view');
-                        const pensionView = document.getElementById('servicios-pension-view');
-                        if (catalogoView) catalogoView.style.display = 'block';
-                        if (pensionView) pensionView.style.display = 'none';
+                        mostrarSubvistaServicios('servicios-catalogo-view');
 
                         if (window.innerWidth <= 768 && sidebar) {
                             sidebar.classList.remove('sidebar-open');
@@ -4074,24 +4189,14 @@
                 const btnVolver = document.getElementById('btn-volver-catalogo');
                 if (btnVolver) {
                     btnVolver.onclick = () => {
-                        const catalogoView = document.getElementById('servicios-catalogo-view');
-                        const pensionView = document.getElementById('servicios-pension-view');
-                        const financierasView = document.getElementById('servicios-financieras-view');
-                        if (catalogoView) catalogoView.style.display = 'block';
-                        if (pensionView) pensionView.style.display = 'none';
-                        if (financierasView) financierasView.style.display = 'none';
+                        mostrarSubvistaServicios('servicios-catalogo-view');
                     };
                 }
 
                 const btnVolverFinancieras = document.getElementById('btn-volver-catalogo-financieras');
                 if (btnVolverFinancieras) {
                     btnVolverFinancieras.onclick = () => {
-                        const catalogoView = document.getElementById('servicios-catalogo-view');
-                        const pensionView = document.getElementById('servicios-pension-view');
-                        const financierasView = document.getElementById('servicios-financieras-view');
-                        if (catalogoView) catalogoView.style.display = 'block';
-                        if (pensionView) pensionView.style.display = 'none';
-                        if (financierasView) financierasView.style.display = 'none';
+                        mostrarSubvistaServicios('servicios-catalogo-view');
                     };
                 }
 
@@ -4116,6 +4221,9 @@
                         sections.forEach(section => {
                             if (section.id === targetId) {
                                 section.style.display = 'flex';
+                                if (targetId === 'servicios') {
+                                    mostrarSubvistaServicios('servicios-catalogo-view');
+                                }
                                 if (targetId === 'chat') {
                                     section.classList.remove('animate-chat');
                                     void section.offsetWidth; // trigger reflow
@@ -4177,10 +4285,7 @@
                                  }
                              });
 
-                             const catalogoView = document.getElementById('servicios-catalogo-view');
-                             const pensionView = document.getElementById('servicios-pension-view');
-                             if (catalogoView) catalogoView.style.display = 'none';
-                             if (pensionView) pensionView.style.display = 'block';
+                             mostrarSubvistaServicios('servicios-pension-view');
 
                              const formEstimacionLocal = document.getElementById('form-estimacion');
                              if (formEstimacionLocal) {
@@ -4196,12 +4301,7 @@
                                  }
                              });
 
-                             const catalogoView = document.getElementById('servicios-catalogo-view');
-                             const pensionView = document.getElementById('servicios-pension-view');
-                             const financierasView = document.getElementById('servicios-financieras-view');
-                             if (catalogoView) catalogoView.style.display = 'none';
-                             if (pensionView) pensionView.style.display = 'none';
-                             if (financierasView) financierasView.style.display = 'block';
+                             mostrarSubvistaServicios('servicios-financieras-view');
                              if (typeof inicializarSimuladorFinanciero === 'function') inicializarSimuladorFinanciero();
                          } else if (submenuId === 'ideas-innovadoras' || submenuId === 'ideas') {
                              sections.forEach(section => {
