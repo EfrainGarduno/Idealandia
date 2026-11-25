@@ -9,6 +9,7 @@
 
     let catalogoInstituciones = [];
     let catalogoEstrategias = [];
+    let indicadorUdi = null;
     let institucionesSeleccionadas = new Set();
     let fechaConsultaActual = new Date().toISOString().slice(0, 10);
     let estrategiaActual = 'individual'; // 'individual' | 'maximo_rendimiento' | 'equilibrada' | 'conservadora'
@@ -180,6 +181,8 @@
             const data = await res.json();
             catalogoInstituciones = Array.isArray(data.instituciones) ? data.instituciones : [];
             catalogoEstrategias = Array.isArray(data.estrategias) ? data.estrategias : [];
+            indicadorUdi = data.indicador_udi || null;
+            actualizarBannerIndicadorUdi();
 
             // Por defecto, todas las instituciones quedan seleccionadas
             institucionesSeleccionadas.clear();
@@ -201,6 +204,73 @@
         } finally {
             if (loadingEl) loadingEl.style.display = 'none';
             if (tableContainer) tableContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Actualiza el banner del indicador UDI oficial en la cabecera del simulador.
+     */
+    function actualizarBannerIndicadorUdi() {
+        const textoEl = document.getElementById('simulador-udi-texto');
+        const fuenteEl = document.getElementById('simulador-udi-fuente');
+        if (!textoEl) return;
+
+        if (indicadorUdi && indicadorUdi.valor) {
+            const valNum = parseFloat(indicadorUdi.valor);
+            const valFormateado = !isNaN(valNum) ? valNum.toFixed(6) : indicadorUdi.valor;
+            let fechaStr = indicadorUdi.fecha || '';
+            if (fechaStr.includes('-')) {
+                const parts = fechaStr.split('-');
+                if (parts.length === 3) {
+                    fechaStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
+            textoEl.textContent = `Valor UDI utilizado: $${valFormateado} | Fecha: ${fechaStr}`;
+            if (fuenteEl && indicadorUdi.fuente) {
+                fuenteEl.textContent = indicadorUdi.fuente;
+            }
+        } else {
+            textoEl.textContent = `Valor UDI utilizado: $8.865882 | Fecha: 24/11/2026`;
+            if (fuenteEl) fuenteEl.textContent = 'Banco de México / DOF';
+        }
+    }
+
+    /**
+     * Abre el modal contextual de información adicional para la institución seleccionada.
+     */
+    function abrirModalInfoAdicionalInstitucion(instId) {
+        const inst = catalogoInstituciones.find(i => i.id === instId);
+        if (!inst || !inst.informacio_adicional) return;
+
+        const modal = document.getElementById('modal-finanzas-info-adicional');
+        const tituloEl = document.getElementById('modal-info-adicional-titulo');
+        const cuerpoEl = document.getElementById('modal-info-adicional-cuerpo');
+
+        if (tituloEl) tituloEl.textContent = `Información: ${inst.nombre}`;
+        if (cuerpoEl) cuerpoEl.textContent = inst.informacio_adicional;
+
+        if (modal) modal.style.display = 'flex';
+    }
+
+    /**
+     * Configura los botones de cierre del modal de información adicional.
+     */
+    function configurarModalInfoAdicional() {
+        const modal = document.getElementById('modal-finanzas-info-adicional');
+        const btnCerrar = document.getElementById('btn-cerrar-modal-finanzas-info-adicional');
+        const btnEntendido = document.getElementById('btn-entendido-modal-finanzas-info-adicional');
+
+        const cerrar = () => {
+            if (modal) modal.style.display = 'none';
+        };
+
+        if (btnCerrar) btnCerrar.onclick = cerrar;
+        if (btnEntendido) btnEntendido.onclick = cerrar;
+        if (modal && !modal.dataset.configured) {
+            modal.dataset.configured = 'true';
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) cerrar();
+            });
         }
     }
 
@@ -719,6 +789,8 @@
                 }
             });
         }
+
+        configurarModalInfoAdicional();
     }
 
     /**
@@ -850,6 +922,15 @@
             };
             const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9' };
 
+            // Parámetros de protección institucional y notas adicionales
+            const hasInfoAdicional = inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0;
+            const tipoProt = inst.tipo_proteccion || 'Sin protección';
+            const limUdis = parseFloat(inst.limite_proteccion_udis) || 0;
+            const udiValor = (indicadorUdi && parseFloat(indicadorUdi.valor) > 0) ? parseFloat(indicadorUdi.valor) : 8.865882;
+            const pesosProtegidos = (window.MotorFinanciero && typeof window.MotorFinanciero.calcularProteccionPesos === 'function')
+                ? window.MotorFinanciero.calcularProteccionPesos(limUdis, udiValor)
+                : Math.round(limUdis * udiValor * 100) / 100;
+
             // HTML de fila principal
             tr.innerHTML = `
                 <td class="sim-col-sel" style="text-align: center;">
@@ -857,15 +938,19 @@
                 </td>
                 <td class="sim-col-institucion" style="font-weight: 700; color: #1e293b;">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             <span>${inst.nombre}</span>
                             <span style="font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${rInfo.bg}; color: ${rInfo.color};" title="Nivel de riesgo: ${inst.nivel_riesgo || 'Medio'}">
                                 ${inst.nivel_riesgo || 'Medio'}
                             </span>
+                            ${hasInfoAdicional ? `<button type="button" class="btn-info-adicional" data-inst-id="${inst.id}" title="Información adicional de ${escapeHTML(inst.nombre)}" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 0 4px; font-size: 0.85rem; line-height: 1; border-radius: 4px;" onmouseover="this.style.color='#2563eb'" onmouseout="this.style.color='#64748b'"><i class="fas fa-info-circle"></i></button>` : ''}
                         </div>
                         <button type="button" class="badge-sim-modificada btn-restablecer-fila" id="sim-badge-${inst.id}" data-inst-id="${inst.id}" style="${isModified ? 'display: inline-flex;' : 'display: none;'}" title="Hacer clic para restablecer los valores originales de la institución">
                             <i class="fas fa-undo-alt" style="font-size: 0.7rem;"></i> <span>Editado</span>
                         </button>
+                    </div>
+                    <div class="sim-badge-proteccion" style="margin-top: 3px; font-size: 0.72rem; color: ${tipoProt === 'Sin protección' || limUdis <= 0 ? '#64748b' : '#0369a1'}; display: flex; align-items: center; gap: 4px;" title="${tipoProt === 'Sin protección' || limUdis <= 0 ? 'Sin cobertura de seguro de depósito institucional' : 'Cobertura de protección institucional calculada con valor oficial de la UDI vigente por persona e institución. Aplica conforme a regulación vigente'}">
+                        <span>🛡️ ${tipoProt === 'Sin protección' || limUdis <= 0 ? 'Sin protección' : `<strong>${escapeHTML(tipoProt)}:</strong> ${limUdis.toLocaleString('es-MX')} UDIS (≈ ${formatMoney(pesosProtegidos)})`}</span>
                     </div>
                     <div id="sim-ineligible-${inst.id}" class="badge-no-elegible" style="display: ${evalRes.elegible ? 'none' : 'block'}; margin-top: 4px; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; font-weight: 600;" title="${escapeHTML(evalRes.motivo || '')}">
                         <i class="fas fa-exclamation-triangle"></i> ${escapeHTML(evalRes.motivo || 'No elegible')}
@@ -1019,6 +1104,16 @@
                         ? `<i class="fas fa-layer-group"></i> Ver ${catalogoInstituciones.find(i => i.id == instId)?.esquema?.tramos?.length || 3} tramos`
                         : `<i class="fas fa-chevron-up"></i> Ocultar desglose`;
                 }
+            });
+        });
+
+        // Configurar listener para botones de información adicional (ⓘ)
+        tbody.querySelectorAll('.btn-info-adicional').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const instId = parseInt(e.currentTarget.dataset.instId, 10);
+                abrirModalInfoAdicionalInstitucion(instId);
             });
         });
 

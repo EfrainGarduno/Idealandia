@@ -985,6 +985,19 @@
         };
     }
 
+    /**
+     * Calcula dinámicamente el equivalente en pesos mexicanos para un límite de protección en UDIS.
+     * 
+     * @param {number|string} limiteUdis Límite de cobertura en UDIS
+     * @param {number|string} valorUdi Valor oficial vigente de la UDI
+     * @returns {number} Equivalente en pesos redondeado a 2 decimales
+     */
+    function calcularProteccionPesos(limiteUdis, valorUdi) {
+        const udis = parseFloat(limiteUdis) || 0;
+        const udi = parseFloat(valorUdi) || 0;
+        return Math.round((udis * udi) * 100) / 100;
+    }
+
     return {
         distribuirInversionEnTramos,
         simularInversion,
@@ -993,6 +1006,7 @@
         calcularMejorInversionDiversificada,
         determinarPlazoAplicable,
         evaluarElegibilidadInstitucion,
+        calcularProteccionPesos,
         ESTRATEGIAS_DEFAULT,
         obtenerDescripcionTipoInstitucion
     };

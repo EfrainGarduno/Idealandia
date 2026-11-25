@@ -4426,7 +4426,7 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
 
         // Consultar instituciones activas
         const [instituciones] = await pool.query(
-            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo
+            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, tipo_proteccion, limite_proteccion_udis, informacio_adicional, orden_visual, activo
              FROM instituciones_financieras
              WHERE activo = 1
              ORDER BY orden_visual ASC, nombre ASC`
@@ -4495,6 +4495,9 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
                 monto_minimo: parseFloat(inst.monto_minimo) || 0,
                 plazo_minimo: parseInt(inst.plazo_minimo, 10) || 1,
                 nivel_riesgo: inst.nivel_riesgo || 'Medio',
+                tipo_proteccion: inst.tipo_proteccion || 'Sin protección',
+                limite_proteccion_udis: parseFloat(inst.limite_proteccion_udis) || 0,
+                informacio_adicional: inst.informacio_adicional || null,
                 orden_visual: inst.orden_visual,
                 esquema: esquema,
                 restricciones: restricciones
@@ -4522,11 +4525,28 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
             console.warn('Advertencia al consultar finanzas_estrategias_config:', errEst.message);
         }
 
+        // Consultar indicador económico UDI oficial vigente
+        let indicadorUdi = null;
+        try {
+            const [rowsUdi] = await pool.query(
+                `SELECT codigo, nombre, CAST(valor AS DOUBLE) AS valor, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, fuente, updated_at
+                 FROM finanzas_indicadores_economicos
+                 WHERE codigo = 'UDI'
+                 LIMIT 1`
+            );
+            if (rowsUdi.length > 0) {
+                indicadorUdi = rowsUdi[0];
+            }
+        } catch (errUdi) {
+            console.warn('Advertencia al consultar finanzas_indicadores_economicos UDI:', errUdi.message);
+        }
+
         res.json({
             success: true,
             fecha: fecha,
             instituciones: resultado,
-            estrategias: estrategias
+            estrategias: estrategias,
+            indicador_udi: indicadorUdi
         });
     } catch (error) {
         console.error('Error in GET /api/finanzas/simulador:', error);
@@ -4539,7 +4559,7 @@ app.get('/api/finanzas/simulador', authMiddleware, async (req, res) => {
 app.get('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
     try {
         const [instituciones] = await pool.query(
-            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo, created_at, updated_at
+            `SELECT id, nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, tipo_proteccion, limite_proteccion_udis, informacio_adicional, orden_visual, activo, created_at, updated_at
              FROM instituciones_financieras
              ORDER BY orden_visual ASC, nombre ASC`
         );
@@ -4608,7 +4628,7 @@ app.get('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requ
 app.post('/api/admin/finanzas/instituciones', requireFunctionality('admin'), requirePermission('finanzas.create'), async (req, res) => {
     let connection;
     try {
-        const { nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo, esquema } = req.body;
+        const { nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, tipo_proteccion, limite_proteccion_udis, informacio_adicional, orden_visual, activo, esquema } = req.body;
         if (!nombre || typeof nombre !== 'string' || !nombre.trim()) {
             return res.status(400).json({ error: 'El nombre de la institución es obligatorio.' });
         }
@@ -4616,6 +4636,9 @@ app.post('/api/admin/finanzas/instituciones', requireFunctionality('admin'), req
         const montoMin = parseFloat(monto_minimo) >= 0 ? parseFloat(monto_minimo) : 0;
         const plazoMin = parseInt(plazo_minimo, 10) >= 1 ? parseInt(plazo_minimo, 10) : 1;
         const riesgoValido = ['Bajo', 'Medio', 'Alto', 'Muy alto'].includes(nivel_riesgo) ? nivel_riesgo : 'Medio';
+        const tipoProtValido = ['IPAB', 'PROSOFIPO', 'FOCOOP', 'Sin protección', 'Otra'].includes(tipo_proteccion) ? tipo_proteccion : 'Sin protección';
+        const limiteUdisValido = parseFloat(limite_proteccion_udis) >= 0 ? parseFloat(limite_proteccion_udis) : 0;
+        const infoAdicionalValida = (typeof informacio_adicional === 'string' && informacio_adicional.trim()) ? informacio_adicional.trim() : null;
         const orden = parseInt(orden_visual, 10) || 0;
         const estatus = activo === 0 || activo === false ? 0 : 1;
 
@@ -4633,9 +4656,9 @@ app.post('/api/admin/finanzas/instituciones', requireFunctionality('admin'), req
         }
 
         const [result] = await connection.query(
-            `INSERT INTO instituciones_financieras (nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, orden_visual, activo)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [nombre.trim(), tipoValido, descripcion || null, resumenFinal, montoMin, plazoMin, riesgoValido, orden, estatus]
+            `INSERT INTO instituciones_financieras (nombre, tipo, descripcion, condiciones_resumen, monto_minimo, plazo_minimo, nivel_riesgo, tipo_proteccion, limite_proteccion_udis, informacio_adicional, orden_visual, activo)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [nombre.trim(), tipoValido, descripcion || null, resumenFinal, montoMin, plazoMin, riesgoValido, tipoProtValido, limiteUdisValido, infoAdicionalValida, orden, estatus]
         );
         const nuevaInstId = result.insertId;
 
@@ -4810,14 +4833,17 @@ app.put('/api/admin/finanzas/instituciones/:id', requireFunctionality('admin'), 
         const updateMontoMin = req.body.monto_minimo !== undefined ? (parseFloat(req.body.monto_minimo) || 0) : current.monto_minimo;
         const updatePlazoMin = req.body.plazo_minimo !== undefined ? (parseInt(req.body.plazo_minimo, 10) || 1) : current.plazo_minimo;
         const updateRiesgo = (req.body.nivel_riesgo && ['Bajo', 'Medio', 'Alto', 'Muy alto'].includes(req.body.nivel_riesgo)) ? req.body.nivel_riesgo : current.nivel_riesgo;
+        const updateTipoProt = (req.body.tipo_proteccion && ['IPAB', 'PROSOFIPO', 'FOCOOP', 'Sin protección', 'Otra'].includes(req.body.tipo_proteccion)) ? req.body.tipo_proteccion : current.tipo_proteccion;
+        const updateLimiteUdis = req.body.limite_proteccion_udis !== undefined ? (parseFloat(req.body.limite_proteccion_udis) >= 0 ? parseFloat(req.body.limite_proteccion_udis) : 0) : current.limite_proteccion_udis;
+        const updateInfoAdicional = req.body.informacio_adicional !== undefined ? ((typeof req.body.informacio_adicional === 'string' && req.body.informacio_adicional.trim()) ? req.body.informacio_adicional.trim() : null) : current.informacio_adicional;
         const updateOrden = orden_visual !== undefined ? parseInt(orden_visual, 10) : current.orden_visual;
         const updateActivo = activo !== undefined ? (activo ? 1 : 0) : current.activo;
 
         await connection.query(
             `UPDATE instituciones_financieras
-             SET nombre = ?, tipo = ?, descripcion = ?, condiciones_resumen = ?, monto_minimo = ?, plazo_minimo = ?, nivel_riesgo = ?, orden_visual = ?, activo = ?
+             SET nombre = ?, tipo = ?, descripcion = ?, condiciones_resumen = ?, monto_minimo = ?, plazo_minimo = ?, nivel_riesgo = ?, tipo_proteccion = ?, limite_proteccion_udis = ?, informacio_adicional = ?, orden_visual = ?, activo = ?
              WHERE id = ?`,
-            [updateNombre, updateTipo, updateDesc, updateCond, updateMontoMin, updatePlazoMin, updateRiesgo, updateOrden, updateActivo, id]
+            [updateNombre, updateTipo, updateDesc, updateCond, updateMontoMin, updatePlazoMin, updateRiesgo, updateTipoProt, updateLimiteUdis, updateInfoAdicional, updateOrden, updateActivo, id]
         );
 
         // Sincronización de restricciones asociadas si fueron enviadas
@@ -5297,6 +5323,53 @@ app.put('/api/admin/finanzas/estrategias/:id', requireFunctionality('admin'), re
     } catch (error) {
         console.error('Error in PUT /api/admin/finanzas/estrategias/:id:', error);
         res.status(500).json({ error: 'Error al actualizar la estrategia de inversión.' });
+    }
+});
+
+// Indicadores Económicos (UDI, etc.)
+app.get('/api/admin/finanzas/indicadores', requireFunctionality('admin'), requirePermission('finanzas.read'), async (req, res) => {
+    try {
+        const [indicadores] = await pool.query(
+            `SELECT codigo, nombre, CAST(valor AS DOUBLE) AS valor, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha, fuente, updated_at
+             FROM finanzas_indicadores_economicos
+             ORDER BY codigo ASC`
+        );
+        res.json({ success: true, indicadores });
+    } catch (error) {
+        console.error('Error in GET /api/admin/finanzas/indicadores:', error);
+        res.status(500).json({ error: 'Error al consultar indicadores económicos.' });
+    }
+});
+
+app.put('/api/admin/finanzas/indicadores/:codigo', requireFunctionality('admin'), requirePermission('finanzas.update'), async (req, res) => {
+    try {
+        const codigo = (req.params.codigo || '').trim().toUpperCase();
+        const { valor, fecha, fuente } = req.body;
+
+        const valorNum = parseFloat(valor);
+        if (isNaN(valorNum) || valorNum <= 0) {
+            return res.status(400).json({ error: 'El valor del indicador debe ser un número positivo.' });
+        }
+        if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+            return res.status(400).json({ error: 'La fecha debe tener el formato YYYY-MM-DD.' });
+        }
+        const fuenteStr = typeof fuente === 'string' && fuente.trim() ? fuente.trim() : 'Banco de México / DOF';
+
+        const [result] = await pool.query(
+            `UPDATE finanzas_indicadores_economicos
+             SET valor = ?, fecha = ?, fuente = ?
+             WHERE codigo = ?`,
+            [valorNum, fecha, fuenteStr, codigo]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: `Indicador ${codigo} no encontrado.` });
+        }
+
+        res.json({ success: true, message: `Indicador ${codigo} actualizado exitosamente.` });
+    } catch (error) {
+        console.error('Error in PUT /api/admin/finanzas/indicadores/:codigo:', error);
+        res.status(500).json({ error: 'Error al actualizar indicador económico.' });
     }
 });
 
