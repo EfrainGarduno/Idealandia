@@ -1028,10 +1028,10 @@
                 <div class="simulador-section-card simulador-legend-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 24px; margin-bottom: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
                     <!-- Fila 1: Grupos de Instituciones -->
                     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid #f1f5f9;">
-                        <span style="font-weight: 700; color: #1e293b; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; display: inline-flex; align-items: center; gap: 6px;">
+                        <span style="font-weight: 700; color: #1e293b; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; display: inline-flex; align-items: center; gap: 6px; width: 130px; flex-shrink: 0;">
                             <i class="fas fa-university" style="color: #2563eb;"></i> Tipos:
                         </span>
-                        <div style="display: flex; align-items: center; justify-content: space-around; flex: 1; min-width: 280px; flex-wrap: wrap; gap: 16px;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); flex: 1; min-width: 280px; gap: 14px; align-items: center;">
                             <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; color: #1e293b; font-weight: 600;">
                                 <strong style="color: #1d4ed8; background: #dbeafe; padding: 3px 9px; border-radius: 4px; font-size: 0.82rem; font-weight: 800;">B</strong> Bancos
                             </span>
@@ -1045,11 +1045,11 @@
                     </div>
 
                     <!-- Fila 2: Coberturas de Protección -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-top: 14px;">
-                        <span style="font-weight: 700; color: #1e293b; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; display: inline-flex; align-items: center; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f1f5f9;">
+                        <span style="font-weight: 700; color: #1e293b; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.6px; display: inline-flex; align-items: center; gap: 6px; width: 130px; flex-shrink: 0;">
                             <i class="fas fa-shield-alt" style="color: #0284c7;"></i> Protecciones:
                         </span>
-                        <div style="display: flex; align-items: center; justify-content: space-around; flex: 1; min-width: 280px; flex-wrap: wrap; gap: 14px; font-size: 0.85rem; color: #0369a1;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); flex: 1; min-width: 280px; gap: 14px; align-items: center; font-size: 0.85rem; color: #0369a1;">
                             <span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500;">
                                 🛡️ <strong>IPAB</strong> = hasta 400,000 UDIS
                             </span>
@@ -1061,23 +1061,24 @@
                             </span>
                         </div>
                     </div>
+
+                    <!-- Fila 3: Indicador Económico UDI Oficial Integrado -->
+                    <div id="simulador-indicador-udi-banner" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding-top: 14px; font-size: 0.84rem; color: #0369a1; text-align: center;">
+                        <div style="display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-coins" style="color: #0284c7; font-size: 1rem;"></i>
+                            <span id="simulador-udi-texto" style="font-weight: 700;">Valor UDI utilizado: $8.865882 | Fecha: 24/11/2026</span>
+                        </div>
+                        <span style="color: #cbd5e1; display: inline-block; margin: 0 4px;" class="hide-mobile-sep">|</span>
+                        <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #0284c7;">
+                            <i class="fas fa-university"></i> Fuente oficial: <span id="simulador-udi-fuente" style="font-weight: 600;">Banco de México / DOF</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Panel de Controles Globales de Simulación -->
                 <div class="simulador-controls-card simulador-section-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
                     <div style="font-weight: 700; color: #0f172a; margin-bottom: 16px; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-sliders" style="color: #2563eb;"></i> Parámetros de Simulación
-                    </div>
-
-                    <!-- Banner Informativo del Indicador Económico UDI Oficial -->
-                    <div id="simulador-indicador-udi-banner" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; font-size: 0.84rem; color: #0369a1;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <i class="fas fa-coins" style="color: #0284c7; font-size: 1.1rem;"></i>
-                            <span id="simulador-udi-texto" style="font-weight: 700;">Valor UDI utilizado: $8.865882 | Fecha: 24/11/2026</span>
-                        </div>
-                        <div style="font-size: 0.78rem; color: #0284c7;">
-                            <i class="fas fa-university"></i> Fuente oficial: <span id="simulador-udi-fuente" style="font-weight: 600;">Banco de México / DOF</span>
-                        </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; align-items: flex-end;">
@@ -1109,16 +1110,6 @@
                             </label>
                             <input type="date" id="simulador-fecha-consulta" class="form-control" style="border-radius: 8px; width: 100%;">
                             <small style="color: #64748b; font-size: 0.78rem;">Consulta las condiciones vigentes a esta fecha.</small>
-                        </div>
-
-                        <!-- Botones de Selección -->
-                        <div style="display: flex; gap: 8px;">
-                            <button type="button" id="simulador-btn-seleccionar-todas" class="btn btn-secondary" style="flex: 1; font-size: 0.85rem; padding: 10px 8px;">
-                                <i class="fas fa-check-double"></i> Todas
-                            </button>
-                            <button type="button" id="simulador-btn-deseleccionar-todas" class="btn btn-secondary" style="flex: 1; font-size: 0.85rem; padding: 10px 8px;">
-                                <i class="fas fa-times"></i> Ninguna
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -1236,8 +1227,17 @@
                             </span>
                         </div>
 
-                        <!-- Controles de Visibilidad de Columnas -->
+                        <!-- Controles de Visibilidad de Columnas y Selección -->
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" id="simulador-btn-seleccionar-todas" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Seleccionar todas las instituciones">
+                                <i class="fas fa-check-double"></i> Todas
+                            </button>
+                            <button type="button" id="simulador-btn-deseleccionar-todas" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Deseleccionar todas las instituciones">
+                                <i class="fas fa-times"></i> Ninguna
+                            </button>
+
+                            <span style="color: #cbd5e1; margin: 0 4px;" class="hide-mobile-sep">|</span>
+
                             <span style="font-size: 0.82rem; font-weight: 700; color: #475569;">Columnas:</span>
                             <button type="button" id="simulador-toggle-col-condiciones" class="btn btn-sm btn-outline-secondary sim-col-toggle-btn active" style="font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="Ocultar o mostrar columna Condiciones">
                                 <i class="fas fa-eye"></i> Condiciones
