@@ -267,6 +267,28 @@
             if (parts.length === 3) fechaUdiStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
 
+        const riesgoColorMap = {
+            'Bajo': { color: '#166534', bg: '#dcfce7', border: '#bbf7d0' },
+            'Medio': { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+            'Alto': { color: '#c2410c', bg: '#ffedd5', border: '#fed7aa' },
+            'Muy alto': { color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' }
+        };
+        const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
+        const nivelRiesgoTexto = inst.nivel_riesgo || 'Medio';
+
+        const riesgoHtml = `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                <div style="font-weight: 700; color: #475569; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-chart-line" style="color: ${rInfo.color};"></i> Nivel de riesgo
+                </div>
+                <div>
+                    <span style="font-size: 0.95rem; font-weight: 800; padding: 3px 10px; border-radius: 6px; background: ${rInfo.bg}; color: ${rInfo.color}; border: 1px solid ${rInfo.border}; display: inline-block;">
+                        ${escapeHTML(nivelRiesgoTexto)}
+                    </span>
+                </div>
+            </div>
+        `;
+
         let proteccionHtml = '';
         if (hasProteccion) {
             proteccionHtml = `
@@ -316,7 +338,7 @@
             `;
         }
 
-        cuerpoEl.innerHTML = proteccionHtml + infoAdicionalHtml;
+        cuerpoEl.innerHTML = riesgoHtml + proteccionHtml + infoAdicionalHtml;
         modal.style.display = 'flex';
     }
 
@@ -983,12 +1005,12 @@
                 : { elegible: true };
 
             const riesgoColorMap = {
-                'Bajo': { color: '#166534', bg: '#dcfce7' },
-                'Medio': { color: '#1d4ed8', bg: '#dbeafe' },
-                'Alto': { color: '#c2410c', bg: '#ffedd5' },
-                'Muy alto': { color: '#991b1b', bg: '#fee2e2' }
+                'Bajo': { color: '#166534', bg: '#dcfce7', border: '#bbf7d0' },
+                'Medio': { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+                'Alto': { color: '#c2410c', bg: '#ffedd5', border: '#fed7aa' },
+                'Muy alto': { color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' }
             };
-            const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9' };
+            const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' };
 
             // Parámetros de información complementaria (Protección o Información Adicional)
             const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
@@ -1000,14 +1022,11 @@
                 <td class="sim-col-sel" style="text-align: center;">
                     <input type="checkbox" class="simulador-check-inst" data-inst-id="${inst.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
-                <td class="sim-col-institucion" style="font-weight: 700; color: #1e293b;">
+                <td class="sim-col-institucion">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                            <span>${inst.nombre}</span>
-                            <span style="font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${rInfo.bg}; color: ${rInfo.color};" title="Nivel de riesgo: ${inst.nivel_riesgo || 'Medio'}">
-                                ${inst.nivel_riesgo || 'Medio'}
-                            </span>
-                            ${mostrarIconoInfo ? `<button type="button" class="btn-info-adicional" data-inst-id="${inst.id}" title="Información complementaria de ${escapeHTML(inst.nombre)}" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 0 4px; font-size: 0.85rem; line-height: 1; border-radius: 4px; transition: color 0.15s ease;" onmouseover="this.style.color='#2563eb'" onmouseout="this.style.color='#64748b'"><i class="fas fa-info-circle"></i></button>` : ''}
+                            <span class="sim-inst-nombre" style="font-weight: 700; color: ${rInfo.color}; font-size: 0.95rem;" title="Nivel de riesgo: ${escapeHTML(inst.nivel_riesgo || 'Medio')}" aria-label="${escapeHTML(inst.nombre)} (Nivel de riesgo: ${escapeHTML(inst.nivel_riesgo || 'Medio')})">${escapeHTML(inst.nombre)}</span>
+                            ${mostrarIconoInfo ? `<button type="button" class="btn-info-adicional" data-inst-id="${inst.id}" title="Información de ${escapeHTML(inst.nombre)}" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 0 4px; font-size: 0.85rem; line-height: 1; border-radius: 4px; transition: color 0.15s ease;" onmouseover="this.style.color='#2563eb'" onmouseout="this.style.color='#64748b'"><i class="fas fa-info-circle"></i></button>` : ''}
                         </div>
                         <button type="button" class="badge-sim-modificada btn-restablecer-fila" id="sim-badge-${inst.id}" data-inst-id="${inst.id}" style="${isModified ? 'display: inline-flex;' : 'display: none;'}" title="Hacer clic para restablecer los valores originales de la institución">
                             <i class="fas fa-undo-alt" style="font-size: 0.7rem;"></i> <span>Editado</span>

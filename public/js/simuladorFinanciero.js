@@ -9,6 +9,7 @@
 
     let catalogoInstituciones = [];
     let catalogoEstrategias = [];
+    let indicadorUdi = null;
     let institucionesSeleccionadas = new Set();
     let fechaConsultaActual = new Date().toISOString().slice(0, 10);
     let estrategiaActual = 'individual'; // 'individual' | 'maximo_rendimiento' | 'equilibrada' | 'conservadora'
@@ -180,6 +181,8 @@
             const data = await res.json();
             catalogoInstituciones = Array.isArray(data.instituciones) ? data.instituciones : [];
             catalogoEstrategias = Array.isArray(data.estrategias) ? data.estrategias : [];
+            indicadorUdi = data.indicador_udi || null;
+            actualizarBannerIndicadorUdi();
 
             // Por defecto, todas las instituciones quedan seleccionadas
             institucionesSeleccionadas.clear();
@@ -201,6 +204,163 @@
         } finally {
             if (loadingEl) loadingEl.style.display = 'none';
             if (tableContainer) tableContainer.style.display = 'block';
+        }
+    }
+
+    /**
+     * Actualiza el banner del indicador UDI oficial en la cabecera del simulador.
+     */
+    function actualizarBannerIndicadorUdi() {
+        const textoEl = document.getElementById('simulador-udi-texto');
+        const fuenteEl = document.getElementById('simulador-udi-fuente');
+        if (!textoEl) return;
+
+        if (indicadorUdi && indicadorUdi.valor) {
+            const valNum = parseFloat(indicadorUdi.valor);
+            const valFormateado = !isNaN(valNum) ? valNum.toFixed(6) : indicadorUdi.valor;
+            let fechaStr = indicadorUdi.fecha || '';
+            if (fechaStr.includes('-')) {
+                const parts = fechaStr.split('-');
+                if (parts.length === 3) {
+                    fechaStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
+            textoEl.textContent = `Valor UDI utilizado: $${valFormateado} | Fecha: ${fechaStr}`;
+            if (fuenteEl && indicadorUdi.fuente) {
+                fuenteEl.textContent = indicadorUdi.fuente;
+            }
+        } else {
+            textoEl.textContent = `Valor UDI utilizado: $8.865882 | Fecha: 24/11/2026`;
+            if (fuenteEl) fuenteEl.textContent = 'Banco de México / DOF';
+        }
+    }
+
+    /**
+     * Abre el modal contextual de información complementaria (Protección e Información Adicional).
+     */
+    function abrirModalInfoAdicionalInstitucion(instId) {
+        const inst = catalogoInstituciones.find(i => i.id === instId);
+        if (!inst) return;
+
+        const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
+        const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
+
+        if (!hasInfoAdicional && !hasProteccion) return;
+
+        const modal = document.getElementById('modal-finanzas-info-adicional');
+        const tituloEl = document.getElementById('modal-info-adicional-titulo');
+        const cuerpoEl = document.getElementById('modal-info-adicional-cuerpo');
+        if (!modal || !cuerpoEl) return;
+
+        if (tituloEl) tituloEl.textContent = `Información de ${inst.nombre}`;
+
+        const tipoProt = inst.tipo_proteccion || 'Sin protección';
+        const limUdis = parseFloat(inst.limite_proteccion_udis) || 0;
+        const udiValor = (indicadorUdi && parseFloat(indicadorUdi.valor) > 0) ? parseFloat(indicadorUdi.valor) : 8.865882;
+        const pesosProtegidos = (window.MotorFinanciero && typeof window.MotorFinanciero.calcularProteccionPesos === 'function')
+            ? window.MotorFinanciero.calcularProteccionPesos(limUdis, udiValor)
+            : Math.round(limUdis * udiValor * 100) / 100;
+
+        let fechaUdiStr = (indicadorUdi && indicadorUdi.fecha) ? indicadorUdi.fecha : '2026-11-24';
+        if (fechaUdiStr.includes('-')) {
+            const parts = fechaUdiStr.split('-');
+            if (parts.length === 3) fechaUdiStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        const riesgoColorMap = {
+            'Bajo': { color: '#166534', bg: '#dcfce7', border: '#bbf7d0' },
+            'Medio': { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+            'Alto': { color: '#c2410c', bg: '#ffedd5', border: '#fed7aa' },
+            'Muy alto': { color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' }
+        };
+        const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
+        const nivelRiesgoTexto = inst.nivel_riesgo || 'Medio';
+
+        const riesgoHtml = `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                <div style="font-weight: 700; color: #475569; font-size: 0.88rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-chart-line" style="color: ${rInfo.color};"></i> Nivel de riesgo
+                </div>
+                <div>
+                    <span style="font-size: 0.95rem; font-weight: 800; padding: 3px 10px; border-radius: 6px; background: ${rInfo.bg}; color: ${rInfo.color}; border: 1px solid ${rInfo.border}; display: inline-block;">
+                        ${escapeHTML(nivelRiesgoTexto)}
+                    </span>
+                </div>
+            </div>
+        `;
+
+        let proteccionHtml = '';
+        if (hasProteccion) {
+            proteccionHtml = `
+                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px;">
+                    <div style="font-weight: 700; color: #0369a1; font-size: 0.92rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-shield-alt"></i> Protección
+                    </div>
+                    <div style="font-size: 1.05rem; font-weight: 800; color: #0284c7; margin-bottom: 6px;">
+                        🛡️ ${escapeHTML(tipoProt)}
+                    </div>
+                    <div style="font-size: 0.88rem; color: #334155; margin-bottom: 4px;">
+                        <strong>Cobertura:</strong> ${limUdis.toLocaleString('es-MX')} UDIS
+                    </div>
+                    <div style="font-size: 0.95rem; font-weight: 700; color: #166534; margin-bottom: 10px;">
+                        ≈ ${formatMoney(pesosProtegidos)}
+                    </div>
+                    <div style="padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 0.78rem; color: #64748b; line-height: 1.4;">
+                        <div>Valor UDI utilizado: <strong>$${udiValor.toFixed(6)}</strong></div>
+                        <div>Fecha del valor UDI: <strong>${fechaUdiStr}</strong></div>
+                    </div>
+                </div>
+            `;
+        } else {
+            proteccionHtml = `
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                    <div style="font-weight: 700; color: #475569; font-size: 0.9rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-shield-alt"></i> Protección
+                    </div>
+                    <div style="color: #64748b; font-size: 0.85rem; font-style: italic;">
+                        Sin protección institucional.
+                    </div>
+                </div>
+            `;
+        }
+
+        let infoAdicionalHtml = '';
+        if (hasInfoAdicional) {
+            infoAdicionalHtml = `
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+                    <div style="font-weight: 700; color: #1e293b; font-size: 0.92rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-info-circle" style="color: #2563eb;"></i> Información adicional
+                    </div>
+                    <div style="white-space: pre-wrap; font-size: 0.88rem; line-height: 1.55; color: #334155; max-height: 220px; overflow-y: auto; word-break: break-word;">
+                        ${escapeHTML(inst.informacio_adicional)}
+                    </div>
+                </div>
+            `;
+        }
+
+        cuerpoEl.innerHTML = riesgoHtml + proteccionHtml + infoAdicionalHtml;
+        modal.style.display = 'flex';
+    }
+
+    /**
+     * Configura los botones de cierre del modal de información adicional.
+     */
+    function configurarModalInfoAdicional() {
+        const modal = document.getElementById('modal-finanzas-info-adicional');
+        const btnCerrar = document.getElementById('btn-cerrar-modal-finanzas-info-adicional');
+        const btnEntendido = document.getElementById('btn-entendido-modal-finanzas-info-adicional');
+
+        const cerrar = () => {
+            if (modal) modal.style.display = 'none';
+        };
+
+        if (btnCerrar) btnCerrar.onclick = cerrar;
+        if (btnEntendido) btnEntendido.onclick = cerrar;
+        if (modal && !modal.dataset.configured) {
+            modal.dataset.configured = 'true';
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) cerrar();
+            });
         }
     }
 
@@ -663,6 +823,31 @@
             });
         }
 
+        // Filtro de riesgo y elegibilidad
+        const selectConsiderarRiesgo = document.getElementById('simulador-considerar-riesgo');
+        const selectNivelRiesgoMax = document.getElementById('simulador-nivel-riesgo-max');
+        const wrapperNivelRiesgo = document.getElementById('simulador-wrapper-nivel-riesgo');
+
+        if (selectConsiderarRiesgo && !selectConsiderarRiesgo.dataset.configured) {
+            selectConsiderarRiesgo.dataset.configured = 'true';
+            selectConsiderarRiesgo.addEventListener('change', (e) => {
+                const activo = e.target.value === 'si';
+                if (wrapperNivelRiesgo) {
+                    wrapperNivelRiesgo.style.display = activo ? 'block' : 'none';
+                }
+                recalcularSimulacion();
+                actualizarResumenSegunEstrategia();
+            });
+        }
+
+        if (selectNivelRiesgoMax && !selectNivelRiesgoMax.dataset.configured) {
+            selectNivelRiesgoMax.dataset.configured = 'true';
+            selectNivelRiesgoMax.addEventListener('change', () => {
+                recalcularSimulacion();
+                actualizarResumenSegunEstrategia();
+            });
+        }
+
         // Selector de estrategia (Mayor rendimiento vs Mejor inversión diversificada)
         const radiosEstrategia = document.querySelectorAll('input[name="simulador-estrategia"]');
         radiosEstrategia.forEach(radio => {
@@ -694,6 +879,8 @@
                 }
             });
         }
+
+        configurarModalInfoAdicional();
     }
 
     /**
@@ -721,6 +908,9 @@
         const inputMeses = document.getElementById('simulador-meses-global');
         const capitalGlobal = parseInversionGlobal() || 40000;
         const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+        const considerarRiesgo = document.getElementById('simulador-considerar-riesgo')?.value === 'si';
+        const nivelMaximoRiesgo = document.getElementById('simulador-nivel-riesgo-max')?.value || 'Muy alto';
+        const fechaConsulta = document.getElementById('simulador-fecha-consulta')?.value || null;
 
         ordenOriginalInstituciones = catalogoInstituciones.map(i => i.id);
 
@@ -775,21 +965,24 @@
             const curMeses = isModified ? custom.meses : origMeses;
 
             // Rendimientos calculados
-            const rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
-            const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
-            const rend2 = (curInv2 * (tasa2 / 100) / 12) * curMeses;
+            let rend1 = 0;
+            let rend2 = 0;
+            let totalMensual = 0;
+            let totalPeriodo = 0;
 
-            let rendExtraMensual = 0;
-            let rendExtraPeriodo = 0;
-            if (tramos.length >= 3 && sim && Array.isArray(sim.tramos)) {
-                for (let k = 2; k < sim.tramos.length; k++) {
-                    rendExtraMensual += sim.tramos[k].rendimiento_mensual;
-                    rendExtraPeriodo += (sim.tramos[k].rendimiento_mensual * curMeses);
-                }
+            if (!isModified && sim) {
+                rend1 = sim.rend1;
+                rend2 = sim.rend2;
+                totalMensual = sim.total_mensual;
+                totalPeriodo = sim.total_periodo;
+            } else {
+                rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
+                const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : capitalGlobal;
+                const simTemp = tieneEsquema ? window.MotorFinanciero.simularInversion(cap, curMeses, tramos) : null;
+                rend2 = simTemp ? simTemp.rend2 : 0;
+                totalPeriodo = rend1 + rend2;
+                totalMensual = curMeses > 0 ? totalPeriodo / curMeses : 0;
             }
-
-            const totalMensual = (curInv1 * (curTasa / 100) / 12) + (curInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
-            const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
 
             resultadosCalculadosPorInst.set(inst.id, {
                 total_mensual: totalMensual,
@@ -806,17 +999,41 @@
             // Inversión Base muestra el límite base de condición de la institución (lo que antes era Monto 2)
             const valorInversionBaseCondicion = (sim && sim.monto_2 !== null) ? formatMoney(sim.monto_2) : '—';
 
-            // HTML de fila principal
+            // Evaluar elegibilidad para la institución
+            const evalRes = (window.MotorFinanciero && typeof window.MotorFinanciero.evaluarElegibilidadInstitucion === 'function')
+                ? window.MotorFinanciero.evaluarElegibilidadInstitucion(inst, capitalGlobal, mesesGlobal, { considerarRiesgo, nivelMaximoRiesgo, fechaConsulta })
+                : { elegible: true };
+
+            const riesgoColorMap = {
+                'Bajo': { color: '#166534', bg: '#dcfce7', border: '#bbf7d0' },
+                'Medio': { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+                'Alto': { color: '#c2410c', bg: '#ffedd5', border: '#fed7aa' },
+                'Muy alto': { color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' }
+            };
+            const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' };
+
+            // Parámetros de información complementaria (Protección o Información Adicional)
+            const hasInfoAdicional = !!(inst.informacio_adicional && typeof inst.informacio_adicional === 'string' && inst.informacio_adicional.trim().length > 0);
+            const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
+            const mostrarIconoInfo = hasInfoAdicional || hasProteccion;
+
+            // HTML de fila principal (Presentación limpia y minimalista)
             tr.innerHTML = `
                 <td class="sim-col-sel" style="text-align: center;">
                     <input type="checkbox" class="simulador-check-inst" data-inst-id="${inst.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px;">
                 </td>
-                <td class="sim-col-institucion" style="font-weight: 700; color: #1e293b;">
+                <td class="sim-col-institucion">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-                        <span>${inst.nombre}</span>
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span class="sim-inst-nombre" style="font-weight: 700; color: ${rInfo.color}; font-size: 0.95rem;" title="Nivel de riesgo: ${escapeHTML(inst.nivel_riesgo || 'Medio')}" aria-label="${escapeHTML(inst.nombre)} (Nivel de riesgo: ${escapeHTML(inst.nivel_riesgo || 'Medio')})">${escapeHTML(inst.nombre)}</span>
+                            ${mostrarIconoInfo ? `<button type="button" class="btn-info-adicional" data-inst-id="${inst.id}" title="Información de ${escapeHTML(inst.nombre)}" style="background: none; border: none; color: #64748b; cursor: pointer; padding: 0 4px; font-size: 0.85rem; line-height: 1; border-radius: 4px; transition: color 0.15s ease;" onmouseover="this.style.color='#2563eb'" onmouseout="this.style.color='#64748b'"><i class="fas fa-info-circle"></i></button>` : ''}
+                        </div>
                         <button type="button" class="badge-sim-modificada btn-restablecer-fila" id="sim-badge-${inst.id}" data-inst-id="${inst.id}" style="${isModified ? 'display: inline-flex;' : 'display: none;'}" title="Hacer clic para restablecer los valores originales de la institución">
                             <i class="fas fa-undo-alt" style="font-size: 0.7rem;"></i> <span>Editado</span>
                         </button>
+                    </div>
+                    <div id="sim-ineligible-${inst.id}" class="badge-no-elegible" style="display: ${evalRes.elegible ? 'none' : 'block'}; margin-top: 4px; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; font-weight: 600;" title="${escapeHTML(evalRes.motivo || '')}">
+                        <i class="fas fa-exclamation-triangle"></i> ${escapeHTML(evalRes.motivo || 'No elegible')}
                     </div>
                     ${tramos.length >= 3 ? `<button type="button" class="btn-toggle-tramos" data-inst-id="${inst.id}" style="display: block; margin-top: 4px; font-size: 0.72rem; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; color: #2563eb; cursor: pointer;"><i class="fas fa-layer-group"></i> Ver ${tramos.length} tramos</button>` : ''}
                 </td>
@@ -970,6 +1187,16 @@
             });
         });
 
+        // Configurar listener para botones de información adicional (ⓘ)
+        tbody.querySelectorAll('.btn-info-adicional').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const instId = parseInt(e.currentTarget.dataset.instId, 10);
+                abrirModalInfoAdicionalInstitucion(instId);
+            });
+        });
+
         actualizarEstiloFilasSeleccionadas();
         aplicarVisibilidadColumnas();
         configurarOrdenamientoTabla();
@@ -1061,26 +1288,13 @@
         // Rend1 = Inversión 1 * (Tasa 1 / 100 / 12) * Meses
         const rend1 = (curInv1 * (curTasa / 100) / 12) * curMeses;
 
-        // Rend2 = Inversión 2 * (Tasa 2 / 100 / 12) * Meses
-        const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
-        const rend2 = (curInv2 * (tasa2 / 100) / 12) * curMeses;
+        // Rend2 = Rendimiento de todos los tramos posteriores al primero (Tramo 2 a N)
+        const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : parseInversionGlobal();
+        const simTemp = (tramos.length > 0) ? window.MotorFinanciero.simularInversion(cap, curMeses, tramos) : null;
+        const rend2 = simTemp ? simTemp.rend2 : 0;
 
-        // Rendimiento de tramos adicionales (si existen tramos >= 3)
-        let rendExtraMensual = 0;
-        let rendExtraPeriodo = 0;
-        if (tramos.length >= 3) {
-            const cap = (curInv1 + curInv2) > 0 ? (curInv1 + curInv2) : parseInversionGlobal();
-            const simTemp = window.MotorFinanciero.simularInversion(cap, curMeses, tramos);
-            if (simTemp && Array.isArray(simTemp.tramos)) {
-                for (let k = 2; k < simTemp.tramos.length; k++) {
-                    rendExtraMensual += simTemp.tramos[k].rendimiento_mensual;
-                    rendExtraPeriodo += (simTemp.tramos[k].rendimiento_mensual * curMeses);
-                }
-            }
-        }
-
-        const totalMensual = (curInv1 * (curTasa / 100) / 12) + (curInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
-        const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
+        const totalPeriodo = rend1 + rend2;
+        const totalMensual = curMeses > 0 ? totalPeriodo / curMeses : 0;
 
         const elRend1 = tr.querySelector('.sim-val-rend1');
         const elRend2 = tr.querySelector('.sim-val-rend2');
@@ -1098,6 +1312,12 @@
             rend1: rend1,
             rend2: rend2
         });
+
+        // Actualizar subfila de N tramos si existe
+        const subrowTbody = document.getElementById(`sim-subrow-tbody-${instId}`);
+        if (subrowTbody && simTemp) {
+            subrowTbody.innerHTML = renderizarSubTramosHtml(simTemp);
+        }
 
         actualizarResumenComparativo();
     }
@@ -1125,10 +1345,29 @@
         const inputMeses = document.getElementById('simulador-meses-global');
         const capitalGlobal = parseInversionGlobal();
         const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+        const considerarRiesgo = document.getElementById('simulador-considerar-riesgo')?.value === 'si';
+        const nivelMaximoRiesgo = document.getElementById('simulador-nivel-riesgo-max')?.value || 'Muy alto';
+        const fechaConsulta = document.getElementById('simulador-fecha-consulta')?.value || null;
 
         catalogoInstituciones.forEach(inst => {
             const tr = document.getElementById(`sim-row-${inst.id}`);
             if (!tr) return;
+
+            // Actualizar estado de elegibilidad en tiempo real
+            const evalRes = (window.MotorFinanciero && typeof window.MotorFinanciero.evaluarElegibilidadInstitucion === 'function')
+                ? window.MotorFinanciero.evaluarElegibilidadInstitucion(inst, capitalGlobal, mesesGlobal, { considerarRiesgo, nivelMaximoRiesgo, fechaConsulta })
+                : { elegible: true };
+
+            const badgeInel = tr.querySelector(`#sim-ineligible-${inst.id}`) || tr.querySelector('.badge-no-elegible');
+            if (badgeInel) {
+                if (!evalRes.elegible) {
+                    badgeInel.style.display = 'block';
+                    badgeInel.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${escapeHTML(evalRes.motivo || 'No elegible')}`;
+                    badgeInel.title = evalRes.motivo || 'No elegible';
+                } else {
+                    badgeInel.style.display = 'none';
+                }
+            }
 
             const tramos = (inst.esquema && Array.isArray(inst.esquema.tramos)) ? inst.esquema.tramos : [];
             if (tramos.length === 0) return;
@@ -1326,21 +1565,10 @@
                 tr.classList.remove('fila-simulacion-modificada');
                 if (badge) badge.style.display = 'none';
 
-                const rend1 = (newOrigInv1 * (newOrigTasa / 100) / 12) * newOrigMeses;
-                const tasa2 = tramos.length >= 2 ? (parseFloat(tramos[1].tasa_anual) || 0) : 0;
-                const rend2 = (newOrigInv2 * (tasa2 / 100) / 12) * newOrigMeses;
-
-                let rendExtraMensual = 0;
-                let rendExtraPeriodo = 0;
-                if (tramos.length >= 3 && sim && Array.isArray(sim.tramos)) {
-                    for (let k = 2; k < sim.tramos.length; k++) {
-                        rendExtraMensual += sim.tramos[k].rendimiento_mensual;
-                        rendExtraPeriodo += (sim.tramos[k].rendimiento_mensual * newOrigMeses);
-                    }
-                }
-
-                const totalMensual = (newOrigInv1 * (newOrigTasa / 100) / 12) + (newOrigInv2 * (tasa2 / 100) / 12) + rendExtraMensual;
-                const totalPeriodo = rend1 + rend2 + rendExtraPeriodo;
+                const rend1 = sim ? sim.rend1 : 0;
+                const rend2 = sim ? sim.rend2 : 0;
+                const totalMensual = sim ? sim.total_mensual : 0;
+                const totalPeriodo = sim ? sim.total_periodo : 0;
 
                 const elRend1 = tr.querySelector('.sim-val-rend1');
                 const elRend2 = tr.querySelector('.sim-val-rend2');
@@ -1591,12 +1819,25 @@
             return;
         }
 
-        // Encontrar la mejor opción de rendimiento del periodo exclusivamente entre las seleccionadas
+        const capitalGlobal = parseInversionGlobal() || 40000;
+        const inputMeses = document.getElementById('simulador-meses-global');
+        const mesesGlobal = parseInt(inputMeses ? inputMeses.value : 1, 10) || 1;
+        const considerarRiesgo = document.getElementById('simulador-considerar-riesgo')?.value === 'si';
+        const nivelMaximoRiesgo = document.getElementById('simulador-nivel-riesgo-max')?.value || 'Muy alto';
+        const fechaConsulta = document.getElementById('simulador-fecha-consulta')?.value || null;
+
+        // Encontrar la mejor opción de rendimiento del periodo exclusivamente entre las seleccionadas elegibles
         let mejorInst = null;
         let mejorPeriodo = -1;
         let mejorMensual = -1;
 
         seleccionadas.forEach(inst => {
+            const evalRes = (window.MotorFinanciero && typeof window.MotorFinanciero.evaluarElegibilidadInstitucion === 'function')
+                ? window.MotorFinanciero.evaluarElegibilidadInstitucion(inst, capitalGlobal, mesesGlobal, { considerarRiesgo, nivelMaximoRiesgo, fechaConsulta })
+                : { elegible: true };
+
+            if (!evalRes.elegible) return;
+
             const res = resultadosCalculadosPorInst.get(inst.id);
             if (res && res.total_periodo > mejorPeriodo) {
                 mejorPeriodo = res.total_periodo;
@@ -1605,28 +1846,36 @@
             }
         });
 
-        if (mejorInst) {
-            const tr = document.getElementById(`sim-row-${mejorInst.id}`);
-            const curMeses = tr ? (parseInt(tr.querySelector('.sim-input-meses')?.value, 10) || 1) : 1;
-            const curInv1 = tr ? (parseFloat(tr.querySelector('.sim-input-inv1')?.value) || 0) : 0;
-            const curInv2 = tr ? (parseFloat(tr.querySelector('.sim-input-inv2')?.value) || 0) : 0;
-            const capitalMostrado = curInv1 + curInv2;
-
+        if (!mejorInst) {
             resumenBox.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <div>
-                        <span style="font-weight: 700; color: #047857;"><i class="fas fa-trophy"></i> Mayor Rendimiento entre seleccionadas:</span>
-                        <strong style="color: #0f172a; margin-left: 6px;">${mejorInst.nombre}</strong>
-                        <span style="color: #64748b; margin-left: 8px;">(${formatMoney(capitalMostrado)} a ${curMeses} ${curMeses === 1 ? 'mes' : 'meses'})</span>
-                    </div>
-                    <div>
-                        <span style="font-weight: 600; color: #334155;">Ganancia Periodo:</span>
-                        <strong style="color: #166534; font-size: 1.1em; margin-left: 6px;">${formatMoney(mejorPeriodo)}</strong>
-                        <span style="color: #64748b; margin-left: 10px;">(${formatMoney(mejorMensual)}/mes)</span>
-                    </div>
+                <div style="color: #991b1b; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i>
+                    <em>Ninguna de las instituciones seleccionadas cumple con los criterios de elegibilidad (plazo, monto o nivel de riesgo).</em>
                 </div>
             `;
+            return;
         }
+
+        const tr = document.getElementById(`sim-row-${mejorInst.id}`);
+        const curMeses = tr ? (parseInt(tr.querySelector('.sim-input-meses')?.value, 10) || 1) : 1;
+        const curInv1 = tr ? (parseFloat(tr.querySelector('.sim-input-inv1')?.value) || 0) : 0;
+        const curInv2 = tr ? (parseFloat(tr.querySelector('.sim-input-inv2')?.value) || 0) : 0;
+        const capitalMostrado = curInv1 + curInv2;
+
+        resumenBox.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <span style="font-weight: 700; color: #047857;"><i class="fas fa-trophy"></i> Mayor Rendimiento entre seleccionadas:</span>
+                    <strong style="color: #0f172a; margin-left: 6px;">${mejorInst.nombre}</strong>
+                    <span style="color: #64748b; margin-left: 8px;">(${formatMoney(capitalMostrado)} a ${curMeses} ${curMeses === 1 ? 'mes' : 'meses'})</span>
+                </div>
+                <div>
+                    <span style="font-weight: 600; color: #334155;">Ganancia Periodo:</span>
+                    <strong style="color: #166534; font-size: 1.1em; margin-left: 6px;">${formatMoney(mejorPeriodo)}</strong>
+                    <span style="color: #64748b; margin-left: 10px;">(${formatMoney(mejorMensual)}/mes)</span>
+                </div>
+            </div>
+        `;
     }
 
     /**
@@ -1745,13 +1994,20 @@
             return;
         }
 
+        const considerarRiesgo = document.getElementById('simulador-considerar-riesgo')?.value === 'si';
+        const nivelMaximoRiesgo = document.getElementById('simulador-nivel-riesgo-max')?.value || 'Muy alto';
+        const fechaConsulta = document.getElementById('simulador-fecha-consulta')?.value || null;
+
         const resultado = window.MotorFinanciero.calcularMejorInversionDiversificada({
             inversionTotal: capital,
             meses: meses,
             instituciones: seleccionadas,
             estrategia: estrategiaActual,
             estrategiasConfig: catalogoEstrategias,
-            personalizaciones: valoresPersonalizadosPorInst
+            personalizaciones: valoresPersonalizadosPorInst,
+            considerarRiesgo: Boolean(considerarRiesgo),
+            nivelMaximoRiesgo,
+            fechaConsulta
         });
 
         ultimaEstrategiaDiversificada = resultado;

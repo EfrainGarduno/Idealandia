@@ -449,7 +449,24 @@ async function asyncTest(name, fn) {
                 if (p.length === 3) fechaUdiFmt = `${p[2]}/${p[1]}/${p[0]}`;
             }
 
+            const riesgoColorMap = {
+                'Bajo': { color: '#166534', bg: '#dcfce7', border: '#bbf7d0' },
+                'Medio': { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+                'Alto': { color: '#c2410c', bg: '#ffedd5', border: '#fed7aa' },
+                'Muy alto': { color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' }
+            };
+            const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
+            const nivelRiesgoTexto = inst.nivel_riesgo || 'Medio';
+
             let htmlContent = '';
+
+            // Sección 1: Nivel de riesgo
+            htmlContent += '<div class="seccion-riesgo" style="margin-bottom: 14px;">';
+            htmlContent += '<div style="font-weight: 700; color: #475569; margin-bottom: 6px;">Nivel de riesgo</div>';
+            htmlContent += `<div><span style="color: ${rInfo.color}; background: ${rInfo.bg}; font-weight: 800;">${nivelRiesgoTexto}</span></div>`;
+            htmlContent += '</div>';
+
+            // Sección 2: Protección
             htmlContent += '<div class="seccion-proteccion" style="margin-bottom: 16px;">';
             htmlContent += '<div style="font-weight: 700; color: #1e293b; margin-bottom: 8px;">Protección</div>';
             if (hasProteccion) {
@@ -477,7 +494,8 @@ async function asyncTest(name, fn) {
                 htmlContent,
                 pesosProtegidos,
                 udiValor,
-                fechaUdiFmt
+                fechaUdiFmt,
+                colorRiesgo: rInfo.color
             };
         }
 
@@ -598,6 +616,79 @@ async function asyncTest(name, fn) {
             assert.strictEqual(sim.rend2, 27000); // 7000 + 20000
             assert.strictEqual(sim.total_periodo, 28625);
             assert.strictEqual(Number(sim.total_mensual.toFixed(2)), 4770.83);
+        });
+
+        // -------------------------------------------------------------------------
+        // GRUPO 8: AJUSTE VISUAL COLUMNA INSTITUCIÓN Y DETALLE DE RIESGO EN ⓘ (Casos 49 - 58)
+        // -------------------------------------------------------------------------
+
+        test('Caso 49: Institución con nivel Bajo asigna color verde (#166534) al nombre', () => {
+            const instBajo = { id: 1, nombre: 'NU', nivel_riesgo: 'Bajo' };
+            const res = generarDetalleModalSimulado(instBajo, mockUdi);
+            assert.strictEqual(res.colorRiesgo, '#166534', 'Institución Bajo debe tener color verde #166534');
+        });
+
+        test('Caso 50: Institución con nivel Medio asigna color azul (#1d4ed8) al nombre', () => {
+            const instMedio = { id: 2, nombre: 'Revolut', nivel_riesgo: 'Medio' };
+            const res = generarDetalleModalSimulado(instMedio, mockUdi);
+            assert.strictEqual(res.colorRiesgo, '#1d4ed8', 'Institución Medio debe tener color azul #1d4ed8');
+        });
+
+        test('Caso 51: Institución con nivel Alto asigna color naranja (#c2410c) al nombre', () => {
+            const instAlto = { id: 3, nombre: 'Didi', nivel_riesgo: 'Alto' };
+            const res = generarDetalleModalSimulado(instAlto, mockUdi);
+            assert.strictEqual(res.colorRiesgo, '#c2410c', 'Institución Alto debe tener color naranja #c2410c');
+        });
+
+        test('Caso 52: Institución con nivel Muy alto asigna color rojo (#b91c1c) al nombre', () => {
+            const instMuyAlto = { id: 4, nombre: 'Ualá', nivel_riesgo: 'Muy alto' };
+            const res = generarDetalleModalSimulado(instMuyAlto, mockUdi);
+            assert.strictEqual(res.colorRiesgo, '#b91c1c', 'Institución Muy alto debe tener color rojo #b91c1c');
+        });
+
+        test('Caso 53: La primera columna NO contiene badge de texto con el calificativo de riesgo en simuladorFinanciero.js', () => {
+            const simCode = fs.readFileSync(path.join(__dirname, '../simuladorFinanciero.js'), 'utf8');
+            assert(!simCode.includes('Nivel de riesgo: ${inst.nivel_riesgo || \'Medio\'}'), 'No debe tener badge textual de nivel de riesgo en la fila');
+            assert(simCode.includes('class="sim-inst-nombre"'), 'El nombre debe tener clase sim-inst-nombre con color asignado');
+        });
+
+        test('Caso 54: El modal ⓘ de información complementaria incluye la sección Nivel de riesgo', () => {
+            const inst = { nombre: 'NU', nivel_riesgo: 'Bajo', tipo_proteccion: 'IPAB', limite_proteccion_udis: 400000 };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert(res.htmlContent.includes('Nivel de riesgo'), 'Modal debe contener encabezado Nivel de riesgo');
+            assert(res.htmlContent.includes('Bajo'), 'Modal debe mostrar el nivel de riesgo correspondiente');
+        });
+
+        test('Caso 55: Modal ⓘ de institución sin protección (ej. Didi) muestra Nivel de riesgo y Sin protección institucional', () => {
+            const inst = { nombre: 'Didi', nivel_riesgo: 'Alto', tipo_proteccion: 'Sin protección', limite_proteccion_udis: 0, informacio_adicional: 'Cuenta Didi' };
+            const res = generarDetalleModalSimulado(inst, mockUdi);
+            assert.strictEqual(res.mostrarIconoInfo, true);
+            assert(res.htmlContent.includes('Nivel de riesgo'));
+            assert(res.htmlContent.includes('Alto'));
+            assert(res.htmlContent.includes('Sin protección institucional.'));
+            assert(res.htmlContent.includes('Cuenta Didi'));
+        });
+
+        test('Caso 56: Institución no elegible (ej. Monific) mantiene su color de riesgo y su mensaje de no elegibilidad', () => {
+            const simCode = fs.readFileSync(path.join(__dirname, '../simuladorFinanciero.js'), 'utf8');
+            assert(simCode.includes('badge-no-elegible'), 'Fila debe mantener contenedor para mensaje de no elegible');
+            assert(simCode.includes('sim-ineligible-'), 'Debe conservar id para selector de no elegibilidad');
+        });
+
+        test('Caso 57: Accesibilidad: El elemento del nombre incluye atributos title y aria-label con su nivel de riesgo', () => {
+            const simCode = fs.readFileSync(path.join(__dirname, '../simuladorFinanciero.js'), 'utf8');
+            assert(simCode.includes('title="Nivel de riesgo:'), 'Nombre debe tener title accesible');
+            assert(simCode.includes('aria-label="'), 'Nombre debe tener aria-label accesible');
+        });
+
+        test('Caso 58: La leyenda superior en index.html se mantiene limpia con Tipos y Protecciones sin duplicar niveles de riesgo', () => {
+            const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+            const legendMatch = html.match(/<!-- Barra de Leyenda de Tipos de Institución y Coberturas de Protección -->([\s\S]*?)<!-- Panel de Controles/);
+            assert(legendMatch, 'Debe existir bloque de leyenda superior');
+            const legendHtml = legendMatch[1];
+            assert(legendHtml.includes('Tipos:'));
+            assert(legendHtml.includes('Protecciones:'));
+            assert(!legendHtml.includes('Riesgos:') && !legendHtml.includes('Nivel de riesgo'), 'No se deben duplicar niveles de riesgo en la leyenda superior');
         });
 
         console.log('\n================================================================================');
