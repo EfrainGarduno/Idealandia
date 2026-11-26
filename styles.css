@@ -2807,5 +2807,28 @@ th.sortable-th.sort-desc .sort-indicator {
     margin-top: 1px;
 }
 
+/* ==========================================================================
+   DROPDOWN DE COLUMNAS DEL SIMULADOR (CONTROL RESPONSIVE & OVERFLOW)
+   ========================================================================== */
+.simulador-dropdown-columnas-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.simulador-columnas-menu {
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    max-width: calc(100vw - 20px) !important;
+}
+
+@media (max-width: 640px) {
+    .simulador-columnas-menu {
+        max-width: calc(100vw - 20px) !important;
+        font-size: 0.82rem;
+    }
+}
+
+
 
 
