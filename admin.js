@@ -3606,7 +3606,7 @@ async function loadFinanzasInstituciones() {
 
             // Columna 1: Institución
             let td = document.createElement('td');
-            const infoAdicionalTexto = inst.informacion_adicional || inst.informacio_adicional;
+            const infoAdicionalTexto = inst.informacion_adicional;
             const hasInfoAdicional = infoAdicionalTexto && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
             td.innerHTML = `<strong>${escapeHTML(inst.nombre)}</strong>${hasInfoAdicional ? ' <i class="fas fa-info-circle" style="color: #2563eb; font-size: 0.8rem;" title="Cuenta con información adicional para el simulador"></i>' : ''}`;
             tr.appendChild(td);
@@ -3972,7 +3972,7 @@ function abrirModalEditarInstitucion(inst) {
     const inputLimiteUdis = document.getElementById('finanzas-inst-limite-udis');
     if (inputLimiteUdis) inputLimiteUdis.value = inst.limite_proteccion_udis !== undefined && inst.limite_proteccion_udis !== null ? inst.limite_proteccion_udis : 0;
     const inputInfoAdicional = document.getElementById('finanzas-inst-info-adicional');
-    if (inputInfoAdicional) inputInfoAdicional.value = inst.informacion_adicional || inst.informacio_adicional || '';
+    if (inputInfoAdicional) inputInfoAdicional.value = inst.informacion_adicional || '';
     actualizarPreviewPesosProteccionModal();
 
     if (titulo) titulo.textContent = `Editar Institución: ${inst.nombre}`;
@@ -4207,7 +4207,7 @@ async function guardarInstitucionForm() {
     const nivel_riesgo = document.getElementById('finanzas-inst-nivel-riesgo')?.value || 'Medio';
     const tipo_proteccion = document.getElementById('finanzas-inst-tipo-proteccion')?.value || 'Sin protección';
     const limite_proteccion_udis = Math.max(0, parseFloat(document.getElementById('finanzas-inst-limite-udis')?.value) || 0);
-    const informacio_adicional = document.getElementById('finanzas-inst-info-adicional')?.value.trim() || null;
+    const informacion_adicional = document.getElementById('finanzas-inst-info-adicional')?.value.trim() || null;
 
     // Datos del esquema
     const esquemaId = document.getElementById('finanzas-inst-esquema-id').value;
@@ -4291,8 +4291,7 @@ async function guardarInstitucionForm() {
         nivel_riesgo,
         tipo_proteccion,
         limite_proteccion_udis,
-        informacio_adicional,
-        informacion_adicional: informacio_adicional,
+        informacion_adicional,
         restricciones,
         esquema: {
             id: esquemaId ? parseInt(esquemaId, 10) : null,
