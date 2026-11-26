@@ -447,30 +447,70 @@
 
     function ajustarPosicionMenuColumnas(menuDropdown) {
         if (!menuDropdown) return;
-        menuDropdown.style.left = '';
-        menuDropdown.style.right = '0';
-        menuDropdown.style.transform = '';
+        const btnMenu = document.getElementById('simulador-btn-columnas');
+        const wrapper = menuDropdown.closest('.simulador-dropdown-columnas-wrapper') || menuDropdown.parentElement;
+        if (!wrapper || !btnMenu) return;
 
-        const rect = menuDropdown.getBoundingClientRect();
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
+        // Limpiar estilos temporales para cálculo preciso
+        menuDropdown.style.transform = 'none';
+        menuDropdown.style.webkitOverflowScrolling = 'touch';
+        menuDropdown.style.overscrollBehavior = 'contain';
 
-        if (rect.left < 10) {
-            menuDropdown.style.right = 'auto';
-            menuDropdown.style.left = '0';
+        const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+        const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+        const safetyMargin = 10; // Margen mínimo respecto a los bordes de la pantalla
+
+        // Ancho adaptable sin exceder el viewport ni 290px
+        const maxPermittedWidth = Math.max(200, vw - (safetyMargin * 2));
+        const targetWidth = Math.min(290, maxPermittedWidth);
+
+        menuDropdown.style.boxSizing = 'border-box';
+        menuDropdown.style.width = `${targetWidth}px`;
+        menuDropdown.style.maxWidth = `calc(100vw - ${safetyMargin * 2}px)`;
+
+        // Dimensiones del wrapper y del botón
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const btnRect = btnMenu.getBoundingClientRect();
+
+        // 1. CÁLCULO HORIZONTAL (LEFT / RIGHT DENTRO DEL VIEWPORT)
+        // Preferencia por defecto: alinear el borde derecho del menú con el borde derecho del botón
+        let desiredViewportLeft = btnRect.right - targetWidth;
+
+        // Si se saldría por la izquierda, intentamos alinear al borde izquierdo del botón
+        if (desiredViewportLeft < safetyMargin) {
+            desiredViewportLeft = btnRect.left;
         }
-        if (vw <= 480) {
-            menuDropdown.style.left = '50%';
-            menuDropdown.style.right = 'auto';
-            menuDropdown.style.transform = 'translateX(-50%)';
-            menuDropdown.style.width = 'calc(100vw - 20px)';
-            menuDropdown.style.maxWidth = '320px';
+
+        // Si aún se sale por la derecha o por la izquierda, clampeamos estrictamente dentro del viewport
+        if (desiredViewportLeft + targetWidth > vw - safetyMargin) {
+            desiredViewportLeft = vw - safetyMargin - targetWidth;
         }
-        if (vh <= 500) {
-            menuDropdown.style.maxHeight = '65vh';
+        if (desiredViewportLeft < safetyMargin) {
+            desiredViewportLeft = safetyMargin;
+        }
+
+        // Convertir la coordenada absoluta del viewport a 'left' relativo al wrapper
+        const relativeLeft = desiredViewportLeft - wrapperRect.left;
+        menuDropdown.style.left = `${Math.round(relativeLeft)}px`;
+        menuDropdown.style.right = 'auto';
+
+        // 2. CÁLCULO VERTICAL (APERTURA ARRIBA O ABAJO SEGÚN ESPACIO DISPONIBLE)
+        const spaceBelow = vh - btnRect.bottom - safetyMargin;
+        const spaceAbove = btnRect.top - safetyMargin;
+
+        if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+            menuDropdown.style.top = 'auto';
+            menuDropdown.style.bottom = 'calc(100% + 6px)';
+            const maxH = Math.max(160, Math.min(420, spaceAbove - 12));
+            menuDropdown.style.maxHeight = `${maxH}px`;
         } else {
-            menuDropdown.style.maxHeight = 'min(440px, 75vh)';
+            menuDropdown.style.top = 'calc(100% + 6px)';
+            menuDropdown.style.bottom = 'auto';
+            const maxH = Math.max(160, Math.min(420, spaceBelow - 12));
+            menuDropdown.style.maxHeight = `${maxH}px`;
         }
+
+        menuDropdown.style.overflowY = 'auto';
     }
 
     /**
@@ -515,11 +555,14 @@
                 e.stopPropagation();
                 if (menuDropdown) {
                     const isVisible = menuDropdown.style.display === 'block';
+                    const wrapper = btnMenu.closest('.simulador-dropdown-columnas-wrapper') || btnMenu.parentElement;
                     if (!isVisible) {
                         menuDropdown.style.display = 'block';
+                        if (wrapper) wrapper.style.zIndex = '1060';
                         ajustarPosicionMenuColumnas(menuDropdown);
                     } else {
                         menuDropdown.style.display = 'none';
+                        if (wrapper) wrapper.style.zIndex = '';
                     }
                 }
             });
@@ -536,6 +579,11 @@
                     }
                 }, 100);
             });
+            window.addEventListener('scroll', () => {
+                if (menuDropdown && menuDropdown.style.display === 'block') {
+                    ajustarPosicionMenuColumnas(menuDropdown);
+                }
+            }, { passive: true });
         }
 
         // Botón mostrar todas
@@ -571,6 +619,8 @@
                 if (menu && menu.style.display === 'block') {
                     if (!menu.contains(e.target) && (!btn || !btn.contains(e.target))) {
                         menu.style.display = 'none';
+                        const wrapper = btn ? (btn.closest('.simulador-dropdown-columnas-wrapper') || btn.parentElement) : null;
+                        if (wrapper) wrapper.style.zIndex = '';
                     }
                 }
             });

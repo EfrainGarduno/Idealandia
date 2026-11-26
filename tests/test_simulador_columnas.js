@@ -190,22 +190,205 @@ async function runTests() {
         assert.strictEqual(badgeRestaurado, '14/14', `Se esperaba 14/14 tras mostrar todas, obtenido: ${badgeRestaurado}`);
         console.log('✓ Todas las 14 columnas restauradas a estado visible con un solo clic.');
 
-        // 9. Prueba Responsive Móvil (360px)
-        console.log('\n[Paso 9: Prueba Responsive Móvil (360px)]');
+        // 9. Prueba Responsive Móvil Vertical (360px)
+        console.log('\n[Paso 9: Prueba Responsive Móvil Vertical (360px)]');
         await page.setViewportSize({ width: 360, height: 740 });
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(200);
 
-        // Abrir menú de columnas en móvil
-        await page.evaluate(() => {
-            document.getElementById('simulador-menu-columnas').style.display = 'block';
+        // Asegurar que el menú esté abierto
+        const isMenuOpen9 = await page.$eval('#simulador-menu-columnas', el => el.style.display === 'block');
+        if (!isMenuOpen9) {
+            await page.click('#simulador-btn-columnas');
+            await page.waitForTimeout(150);
+        }
+
+        const vMetrics360 = await page.evaluate(() => {
+            const menu = document.getElementById('simulador-menu-columnas');
+            const r = menu.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const docScrollW = document.documentElement.scrollWidth;
+            return {
+                left: r.left,
+                right: r.right,
+                width: r.width,
+                vw: vw,
+                docScrollW: docScrollW,
+                overflowX: docScrollW > vw
+            };
         });
-        await page.waitForTimeout(100);
-        const menuRect = await page.$eval('#simulador-menu-columnas', el => {
-            const r = el.getBoundingClientRect();
-            return { width: r.width, right: r.right, left: r.left };
+
+        assert(vMetrics360.width > 0, 'El menú debe estar visible con width > 0');
+        assert(vMetrics360.left >= 0, `El menú debe empezar dentro del viewport (left: ${vMetrics360.left}px >= 0)`);
+        assert(vMetrics360.right <= vMetrics360.vw + 1, `El menú debe terminar dentro del viewport (right: ${vMetrics360.right}px <= ${vMetrics360.vw}px)`);
+        assert(!vMetrics360.overflowX, `La página no debe tener scroll horizontal (scrollWidth: ${vMetrics360.docScrollW}px, vw: ${vMetrics360.vw}px)`);
+        console.log(`✓ Menú móvil vertical verificado: left=${vMetrics360.left.toFixed(0)}px, right=${vMetrics360.right.toFixed(0)}px en pantalla de ${vMetrics360.vw}px (sin overflow horizontal).`);
+
+        // 10. Prueba Responsive Móvil Horizontal (667px x 375px)
+        console.log('\n[Paso 10: Prueba Responsive Móvil Horizontal (667px x 375px)]');
+        await page.setViewportSize({ width: 667, height: 375 });
+        await page.waitForTimeout(200);
+
+        const isMenuOpen10 = await page.$eval('#simulador-menu-columnas', el => el.style.display === 'block');
+        if (!isMenuOpen10) {
+            await page.click('#simulador-btn-columnas');
+            await page.waitForTimeout(150);
+        }
+
+        const hMetrics667 = await page.evaluate(() => {
+            const menu = document.getElementById('simulador-menu-columnas');
+            const r = menu.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const docScrollW = document.documentElement.scrollWidth;
+            return {
+                left: r.left,
+                right: r.right,
+                bottom: r.bottom,
+                top: r.top,
+                width: r.width,
+                vw: vw,
+                vh: vh,
+                docScrollW: docScrollW,
+                overflowX: docScrollW > vw,
+                maxHeight: window.getComputedStyle(menu).maxHeight,
+                overflowY: window.getComputedStyle(menu).overflowY
+            };
         });
-        assert(menuRect.width > 0 && menuRect.width <= 360, `El menú debe ser visible y no exceder 360px (ancho: ${menuRect.width}px)`);
-        console.log(`✓ Menú móvil verificado sin desbordamiento horizontal (ancho menú: ${menuRect.width.toFixed(0)}px en pantalla de 360px).`);
+
+        assert(hMetrics667.width > 0, 'El menú debe estar visible en horizontal');
+        assert(hMetrics667.left >= 0, `En horizontal el menú debe quedar dentro a la izquierda (left: ${hMetrics667.left}px >= 0)`);
+        assert(hMetrics667.right <= hMetrics667.vw + 1, `En horizontal el menú debe quedar dentro a la derecha (right: ${hMetrics667.right}px <= ${hMetrics667.vw}px)`);
+        assert(!hMetrics667.overflowX, 'No debe haber overflow horizontal en orientación horizontal');
+        assert.strictEqual(hMetrics667.overflowY, 'auto', 'El menú debe conservar scroll vertical interno');
+        console.log(`✓ Menú móvil horizontal verificado: left=${hMetrics667.left.toFixed(0)}px, right=${hMetrics667.right.toFixed(0)}px en pantalla de ${hMetrics667.vw}px.`);
+
+        // 11. Prueba Ancho Reducido (320px x 568px - iPhone SE)
+        console.log('\n[Paso 11: Prueba Ancho Reducido (320px x 568px)]');
+        await page.setViewportSize({ width: 320, height: 568 });
+        await page.waitForTimeout(200);
+
+        const isMenuOpen11 = await page.$eval('#simulador-menu-columnas', el => el.style.display === 'block');
+        if (!isMenuOpen11) {
+            await page.click('#simulador-btn-columnas');
+            await page.waitForTimeout(150);
+        }
+
+        const metrics320 = await page.evaluate(() => {
+            const menu = document.getElementById('simulador-menu-columnas');
+            const r = menu.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const docScrollW = document.documentElement.scrollWidth;
+            return {
+                left: r.left,
+                right: r.right,
+                width: r.width,
+                vw: vw,
+                docScrollW: docScrollW,
+                overflowX: docScrollW > vw
+            };
+        });
+
+        assert(metrics320.width > 0, 'El menú debe estar visible en 320px');
+        assert(metrics320.left >= 0, `En 320px el menú debe tener left >= 0 (obtenido: ${metrics320.left}px)`);
+        assert(metrics320.right <= metrics320.vw + 1, `En 320px el menú no debe exceder el viewport (right: ${metrics320.right}px <= 320px)`);
+        assert(!metrics320.overflowX, 'En 320px no debe generarse scroll horizontal en el documento');
+        console.log(`✓ Ancho reducido 320px verificado: left=${metrics320.left.toFixed(0)}px, right=${metrics320.right.toFixed(0)}px.`);
+
+        // 12. Prueba de anclaje dinámico: botón cerca del borde izquierdo vs cerca del borde derecho
+        console.log('\n[Paso 12: Prueba de posicionamiento dinámico en bordes extremos]');
+        const borderTests = await page.evaluate(() => {
+            const wrapper = document.querySelector('.simulador-dropdown-columnas-wrapper');
+            const menu = document.getElementById('simulador-menu-columnas');
+            const vw = window.innerWidth;
+
+            // Simular botón pegado al borde izquierdo (x = 5px)
+            wrapper.style.position = 'fixed';
+            wrapper.style.left = '5px';
+            wrapper.style.top = '100px';
+            window.dispatchEvent(new Event('resize'));
+            const rectLeft = menu.getBoundingClientRect();
+
+            // Simular botón pegado al borde derecho (x = vw - 80px)
+            wrapper.style.left = `${vw - 80}px`;
+            window.dispatchEvent(new Event('resize'));
+            const rectRight = menu.getBoundingClientRect();
+
+            // Restaurar estilo normal
+            wrapper.style.position = 'relative';
+            wrapper.style.left = '';
+            wrapper.style.top = '';
+            window.dispatchEvent(new Event('resize'));
+
+            return {
+                leftCase: { left: rectLeft.left, right: rectLeft.right, width: rectLeft.width },
+                rightCase: { left: rectRight.left, right: rectRight.right, width: rectRight.width },
+                vw: vw
+            };
+        });
+
+        assert(borderTests.leftCase.width > 0, 'El menú debe tener ancho positivo');
+        assert(borderTests.leftCase.left >= 0, `Con botón a la izquierda, el menú no debe tener left negativo (${borderTests.leftCase.left}px)`);
+        assert(borderTests.leftCase.right <= borderTests.vw + 1, `Con botón a la izquierda, el menú no debe salir a la derecha (${borderTests.leftCase.right}px <= ${borderTests.vw}px)`);
+        assert(borderTests.rightCase.left >= 0, `Con botón a la derecha, el menú no debe salirse a la izquierda (${borderTests.rightCase.left}px)`);
+        assert(borderTests.rightCase.right <= borderTests.vw + 1, `Con botón a la derecha, el menú no debe salirse a la derecha (${borderTests.rightCase.right}px <= ${borderTests.vw}px)`);
+        console.log('✓ Posicionamiento geométrico en bordes extremos superado (menú 100% contenido en viewport).');
+
+        // 13. Prueba de Scroll Vertical Interno dentro del menú
+        console.log('\n[Paso 13: Scroll Vertical Interno]');
+        const isMenuOpen13 = await page.$eval('#simulador-menu-columnas', el => el.style.display === 'block');
+        if (!isMenuOpen13) {
+            await page.click('#simulador-btn-columnas');
+            await page.waitForTimeout(150);
+        }
+
+        const scrollResult = await page.evaluate(() => {
+            const menu = document.getElementById('simulador-menu-columnas');
+            const initialScrollTop = menu.scrollTop;
+            menu.scrollTop = 120;
+            const newScrollTop = menu.scrollTop;
+            return {
+                initialScrollTop,
+                newScrollTop,
+                scrollHeight: menu.scrollHeight,
+                clientHeight: menu.clientHeight,
+                hasScrollableContent: menu.scrollHeight > menu.clientHeight
+            };
+        });
+        assert(scrollResult.hasScrollableContent, `El menú debe tener contenido desplazable verticalmente (scrollHeight: ${scrollResult.scrollHeight}px, clientHeight: ${scrollResult.clientHeight}px)`);
+        assert(scrollResult.newScrollTop > 0, 'El scroll dentro del menú debe funcionar correctamente');
+        console.log(`✓ Scroll vertical interno verificado: scrollHeight (${scrollResult.scrollHeight}px) > clientHeight (${scrollResult.clientHeight}px) y scrollTop=${scrollResult.newScrollTop}px.`);
+
+        // 14. Cerrar al pulsar fuera y volver a abrir
+        console.log('\n[Paso 14: Ciclo de Cierre y Re-apertura]');
+        await page.click('body', { position: { x: 5, y: 5 } });
+        await page.waitForTimeout(150);
+        const isClosed = await page.$eval('#simulador-menu-columnas', el => el.style.display === 'none');
+        assert(isClosed, 'El menú debe cerrarse al hacer clic fuera');
+
+        await page.click('#simulador-btn-columnas');
+        await page.waitForTimeout(150);
+        const isReopened = await page.$eval('#simulador-menu-columnas', el => el.style.display === 'block');
+        assert(isReopened, 'El menú debe volver a abrirse al pulsar el botón');
+        console.log('✓ Ciclo de cierre y reapertura verificado correctamente.');
+
+        // 15. Comprobación final de no desbordamiento en desktop (1280px)
+        console.log('\n[Paso 15: Comprobación Final en Escritorio (1280px)]');
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.waitForTimeout(200);
+        const deskMetrics = await page.evaluate(() => {
+            const menu = document.getElementById('simulador-menu-columnas');
+            const r = menu.getBoundingClientRect();
+            const vw = window.innerWidth;
+            return {
+                left: r.left,
+                right: r.right,
+                vw: vw,
+                docScrollW: document.documentElement.scrollWidth
+            };
+        });
+        assert(deskMetrics.left >= 0 && deskMetrics.right <= deskMetrics.vw, 'En escritorio el menú debe permanecer dentro del viewport');
+        assert(deskMetrics.docScrollW <= deskMetrics.vw, 'En escritorio no debe existir overflow horizontal');
+        console.log(`✓ Escritorio verificado: left=${deskMetrics.left.toFixed(0)}px, right=${deskMetrics.right.toFixed(0)}px en ${deskMetrics.vw}px.`);
 
         console.log('\n============================================================');
         console.log('¡TODAS LAS PRUEBAS DE CONTROL DE COLUMNAS PASARON CON ÉXITO!');
