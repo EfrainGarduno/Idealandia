@@ -20,6 +20,7 @@ const {
     calculateIMSSLey73Pension,
     extractBirthDateFromCurp,
     calcularEdadPensionaria,
+    calcularEdadCronologicaDetallada,
     reconstructDeterministicPeriods,
     determinarUltimoPeriodoCronologico,
     validarSalarioProyectadoVsUltimoPeriodo,

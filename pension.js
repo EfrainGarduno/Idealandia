@@ -670,6 +670,51 @@ function calcularEdadExacta(fechaNacimientoStr, fechaFinalStr) {
 }
 
 /**
+ * Calcula la edad cronológica detallada (años, meses y días exactos) entre la fecha de nacimiento
+ * y la fecha final, preservando la exactitud de días y meses naturales.
+ *
+ * @param {string} fechaNacimientoStr - Fecha de nacimiento en formato YYYY-MM-DD o DD/MM/YYYY
+ * @param {string} fechaFinalStr - Fecha de corte o final de proyección en formato YYYY-MM-DD o DD/MM/YYYY
+ * @returns {object|null} { anios, meses, dias, texto }
+ */
+function calcularEdadCronologicaDetallada(fechaNacimientoStr, fechaFinalStr) {
+    const fNac = parseDateToIso(fechaNacimientoStr);
+    const fFin = parseDateToIso(fechaFinalStr);
+    if (!fNac || !fFin) return null;
+
+    const [yNac, mNac, dNac] = fNac.split('-').map(Number);
+    const [yFin, mFin, dFin] = fFin.split('-').map(Number);
+
+    let anios = yFin - yNac;
+    let meses = mFin - mNac;
+    let dias = dFin - dNac;
+
+    if (dias < 0) {
+        meses--;
+        // Días en el mes previo a la fecha final
+        const diasMesPrevio = new Date(Date.UTC(yFin, mFin - 1, 0)).getUTCDate();
+        dias += diasMesPrevio;
+    }
+
+    if (meses < 0) {
+        anios--;
+        meses += 12;
+    }
+
+    let texto = `${anios} años`;
+    if (meses > 0) {
+        texto += `, ${meses} mes${meses > 1 ? 'es' : ''}`;
+    }
+
+    return {
+        anios,
+        meses,
+        dias,
+        texto
+    };
+}
+
+/**
  * Evalúa determinísticamente la edad pensionaria resultante y el porcentaje aplicable según la Ley 73.
  * Aplica la regla general de Cumpleaños + 6 meses + 1 día para todas las edades de 60 a 65:
  * 60 -> 61 (75% -> 80%), 61 -> 62 (80% -> 85%), 62 -> 63 (85% -> 90%),
@@ -682,6 +727,7 @@ function calcularEdadPensionaria(fechaNacimientoStr, fechaBajaStr) {
 
     const [yNac, mNac, dNac] = fNac.split('-').map(Number);
     let edadCalendario = calcularEdadExacta(fNac, fBaja);
+    const detalleCronologico = calcularEdadCronologicaDetallada(fNac, fBaja);
 
     if (edadCalendario < 60) {
         return {
@@ -691,7 +737,9 @@ function calcularEdadPensionaria(fechaNacimientoStr, fechaBajaStr) {
             edadPensionaria: edadCalendario,
             porcentajeLey73: 0,
             aplicaFraccion6Meses1Dia: false,
-            umbralSiguienteEdad: null
+            umbralSiguienteEdad: null,
+            edadCronologicaDetallada: detalleCronologico,
+            edadCronologicaTexto: detalleCronologico ? detalleCronologico.texto : `${edadCalendario} años`
         };
     }
 
@@ -703,7 +751,9 @@ function calcularEdadPensionaria(fechaNacimientoStr, fechaBajaStr) {
             edadPensionaria: 65,
             porcentajeLey73: 1.00,
             aplicaFraccion6Meses1Dia: false,
-            umbralSiguienteEdad: null
+            umbralSiguienteEdad: null,
+            edadCronologicaDetallada: detalleCronologico,
+            edadCronologicaTexto: detalleCronologico ? detalleCronologico.texto : `${edadCalendario} años`
         };
     }
 
@@ -726,7 +776,9 @@ function calcularEdadPensionaria(fechaNacimientoStr, fechaBajaStr) {
         edadCalendario,
         edadPensionaria,
         porcentajeLey73: TABLA_EDAD[edadPensionaria] || 0.75,
-        aplicaFraccion6Meses1Dia: aplicaFraccion
+        aplicaFraccion6Meses1Dia: aplicaFraccion,
+        edadCronologicaDetallada: detalleCronologico,
+        edadCronologicaTexto: detalleCronologico ? detalleCronologico.texto : `${edadCalendario} años`
     };
 }
 
@@ -1308,7 +1360,13 @@ function calculatePensionProjection(params) {
             salarioMinimoEstimado: salMinProj,
             salarioDiarioProyectado: salProj,
             edadProyectada: edadProy,
+            edadPensionaria: edadProy,
             edadCronologica: edadCronologica !== null ? edadCronologica : edadProy,
+            edadCronologicaTexto: (edadPensionariaInfo && edadPensionariaInfo.edadCronologicaTexto)
+                ? edadPensionariaInfo.edadCronologicaTexto
+                : (edadCronologica !== null ? `${edadCronologica} años` : `${edadProy} años`),
+            porcentajeLey73: TABLA_EDAD[Math.min(Math.max(edadProy, 60), 65)] || 0.75,
+            porcentajeLey73Texto: `${Math.round((TABLA_EDAD[Math.min(Math.max(edadProy, 60), 65)] || 0.75) * 100)}%`,
             fechaNacimiento: birthDate,
             edadPensionariaInfo,
             pensionMensual: pensionProyectada.pensionFinalMensual,
@@ -1335,6 +1393,7 @@ if (typeof window !== 'undefined') {
     window.calcularUmbralMas6Meses1Dia = calcularUmbralMas6Meses1Dia;
     window.calcularEdadPensionaria = calcularEdadPensionaria;
     window.calcularEdadExacta = calcularEdadExacta;
+    window.calcularEdadCronologicaDetallada = calcularEdadCronologicaDetallada;
     window.reconstructDeterministicPeriods = reconstructDeterministicPeriods;
     window.calculateInclusiveDays = calculateInclusiveDays;
     window.parseDateToIso = parseDateToIso;
@@ -1358,6 +1417,7 @@ if (typeof module !== 'undefined' && module.exports) {
         calcularUmbralMas6Meses1Dia,
         calcularEdadPensionaria,
         calcularEdadExacta,
+        calcularEdadCronologicaDetallada,
         reconstructDeterministicPeriods,
         calculateInclusiveDays,
         parseDateToIso,

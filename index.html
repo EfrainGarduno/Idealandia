@@ -5041,7 +5041,16 @@
                                     <li><strong>Total semanas cotizadas:</strong> <strong>${proy.totalSemanasCotizadas}</strong></li>
                                     <li><strong>Nuevo salario promedio (250 sem):</strong> <strong>${formatter.format(proy.nuevoSalarioPromedio)}</strong></li>
                                     <li><strong>Salario mínimo estimado:</strong> ${formatter.format(proy.salarioMinimoEstimado)}</li>
-                                    <li><strong>Edad al término:</strong> <strong>${(typeof proy.edadCronologica === 'number' ? proy.edadCronologica : proy.edadProyectada)} años</strong></li>
+                                    <li><strong>Edad cronológica al término:</strong> <strong>${proy.edadCronologicaTexto || ((typeof proy.edadCronologica === 'number' ? proy.edadCronologica : proy.edadProyectada) + ' años')}</strong></li>
+                                    <li style="margin-top: 4px; background: #dbeafe; padding: 6px 10px; border-radius: 6px; border: 1px solid #bfdbfe;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
+                                            <strong style="color: #1e40af;">Edad para efectos de pensión IMSS:</strong>
+                                            <strong style="color: #1d4ed8; font-size: 1.05em;">${proy.edadPensionaria || proy.edadProyectada} años (${proy.porcentajeLey73Texto || (Math.round((proy.porcentajeLey73 || 0.75) * 100) + '%')})</strong>
+                                        </div>
+                                        <small style="display: block; color: #475569; font-size: 0.78em; line-height: 1.25; margin-top: 2px;">
+                                            Edad utilizada por IMSS para determinar el porcentaje de pensión.
+                                        </small>
+                                    </li>
                                     <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #93c5fd; font-size: 1.05em; color: #1e3a8a;">
                                         <strong>Pensión mensual proyectada:</strong><br>
                                         <span style="font-size: 1.3em; font-weight: 800; color: #16a34a;">${formatter.format(proy.pensionMensual)}</span>
@@ -5104,13 +5113,23 @@
                                 || (proy && (proy.fechaNacimiento || (proy.edadPensionariaInfo && proy.edadPensionariaInfo.fechaNacimiento)))
                                 || null;
 
+                            // Transferir la Edad para efectos de pensión IMSS al formulario principal
                             let nuevaEdad = null;
-                            if (fechaNac && fechaFinProy && typeof calcularEdadExacta === 'function') {
+                            if (proy && typeof proy.edadPensionaria === 'number') {
+                                nuevaEdad = proy.edadPensionaria;
+                            } else if (proy && proy.edadPensionariaInfo && typeof proy.edadPensionariaInfo.edadPensionaria === 'number') {
+                                nuevaEdad = proy.edadPensionariaInfo.edadPensionaria;
+                            } else if (fechaNac && fechaFinProy && typeof calcularEdadPensionaria === 'function') {
+                                const infoPensionaria = calcularEdadPensionaria(fechaNac, fechaFinProy);
+                                if (infoPensionaria && typeof infoPensionaria.edadPensionaria === 'number') {
+                                    nuevaEdad = infoPensionaria.edadPensionaria;
+                                }
+                            } else if (proy && typeof proy.edadProyectada === 'number') {
+                                nuevaEdad = proy.edadProyectada;
+                            } else if (fechaNac && fechaFinProy && typeof calcularEdadExacta === 'function') {
                                 nuevaEdad = calcularEdadExacta(fechaNac, fechaFinProy);
                             } else if (proy && typeof proy.edadCronologica === 'number') {
                                 nuevaEdad = proy.edadCronologica;
-                            } else if (proy && typeof proy.edadProyectada === 'number') {
-                                nuevaEdad = proy.edadProyectada;
                             }
 
                             if (edadInputPrincipal && nuevaEdad !== null && !isNaN(nuevaEdad)) {
