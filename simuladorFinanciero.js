@@ -242,8 +242,8 @@
         const inst = catalogoInstituciones.find(i => i.id === instId);
         if (!inst) return;
 
-        const infoAdicionalTexto = inst.informacion_adicional || inst.informacio_adicional;
-        const hasInfoAdicional = !!(inst.informacio_adicional || inst.informacion_adicional) && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
+        const infoAdicionalTexto = inst.informacion_adicional;
+        const hasInfoAdicional = !!inst.informacion_adicional && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
         const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
 
         if (!hasInfoAdicional && !hasProteccion) return;
@@ -333,7 +333,7 @@
                         <i class="fas fa-info-circle" style="color: #2563eb;"></i> Información adicional
                     </div>
                     <div style="white-space: pre-wrap; font-size: 0.88rem; line-height: 1.55; color: #334155; max-height: 220px; overflow-y: auto; word-break: break-word;">
-                        ${escapeHTML(infoAdicionalTexto || inst.informacio_adicional)}
+                        ${escapeHTML(infoAdicionalTexto || '')}
                     </div>
                 </div>
             `;
@@ -1060,8 +1060,8 @@
             const rInfo = riesgoColorMap[inst.nivel_riesgo] || { color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' };
 
             // Parámetros de información complementaria (Protección o Información Adicional)
-            const infoAdicionalTexto = inst.informacion_adicional || inst.informacio_adicional;
-            const hasInfoAdicional = !!(inst.informacio_adicional || inst.informacion_adicional) && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
+            const infoAdicionalTexto = inst.informacion_adicional;
+            const hasInfoAdicional = !!inst.informacion_adicional && typeof infoAdicionalTexto === 'string' && infoAdicionalTexto.trim().length > 0;
             const hasProteccion = !!(inst.tipo_proteccion && inst.tipo_proteccion !== 'Sin protección' && parseFloat(inst.limite_proteccion_udis) > 0);
             const mostrarIconoInfo = hasInfoAdicional || hasProteccion;
 
