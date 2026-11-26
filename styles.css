@@ -925,6 +925,8 @@
 }
 .custom-modal-btn.primary { background-color: #6c40f7; color: white; }
 .custom-modal-btn.primary:hover { background-color: #5833cc; }
+.custom-modal-btn.warning { background-color: #ea580c; color: white; }
+.custom-modal-btn.warning:hover { background-color: #c2410c; }
 .custom-modal-btn.secondary { background-color: #e0e0e0; color: #333; }
 .custom-modal-btn.secondary:hover { background-color: #ccc; }
 /* TABLET RESPONSIVE (max-width: 1024px) */
@@ -1476,12 +1478,14 @@
     border-color: #fdba74;
     color: #c2410c;
 }
-.admin-action-btn--toggle-active {
+.admin-action-btn--toggle-active,
+.admin-action-btn--activate {
     background-color: #f0fdf4;
     border-color: #bbf7d0;
     color: #16a34a;
 }
-.admin-action-btn--toggle-active:hover:not(:disabled):not(.disabled) {
+.admin-action-btn--toggle-active:hover:not(:disabled):not(.disabled),
+.admin-action-btn--activate:hover:not(:disabled):not(.disabled) {
     background-color: #dcfce7;
     border-color: #86efac;
     color: #15803d;
@@ -1495,6 +1499,16 @@
     background-color: #f1f5f9;
     border-color: #cbd5e1;
     color: #334155;
+}
+.admin-action-btn--inactivate {
+    background-color: #fff7ed;
+    border-color: #fed7aa;
+    color: #ea580c;
+}
+.admin-action-btn--inactivate:hover:not(:disabled):not(.disabled) {
+    background-color: #ffedd5;
+    border-color: #fdba74;
+    color: #c2410c;
 }
 .admin-action-btn--perms,
 .admin-action-btn--manage {

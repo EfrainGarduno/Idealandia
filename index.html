@@ -3498,7 +3498,14 @@
 
                 overlay.style.removeProperty('display');
 
-                textElement.textContent = message;
+                const safeEscape = (str) => String(str || '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+                if (options.subtext) {
+                    textElement.innerHTML = `<div style="font-size: 1.05rem; font-weight: 700; color: #1e293b; margin-bottom: 8px;">${safeEscape(message)}</div><div style="font-size: 0.9rem; color: #64748b; line-height: 1.4;">${safeEscape(options.subtext)}</div>`;
+                } else if (options.html) {
+                    textElement.innerHTML = message;
+                } else {
+                    textElement.textContent = message;
+                }
                 buttonsContainer.innerHTML = '';
 
                 let confirmText = options.confirmText;
