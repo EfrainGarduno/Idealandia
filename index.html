@@ -1500,6 +1500,13 @@
                         <a href="#" class="acerca-btn" onclick="document.querySelector('[data-section=\'gratis\']').click(); return false;">Explorar recursos gratuitos</a>
                     </div>
                 </div>
+
+                <div class="acerca-atribucion-card">
+                    <h3 class="acerca-atribucion-titulo">Idealandia fue creada por</h3>
+                    <div class="acerca-atribucion-qr-wrapper">
+                        <img src="img/idealandia-creador-qr.png" alt="Código QR del creador de Idealandia" class="acerca-atribucion-qr">
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -3498,7 +3505,14 @@
 
                 overlay.style.removeProperty('display');
 
-                textElement.textContent = message;
+                const safeEscape = (str) => String(str || '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+                if (options.subtext) {
+                    textElement.innerHTML = `<div style="font-size: 1.05rem; font-weight: 700; color: #1e293b; margin-bottom: 8px;">${safeEscape(message)}</div><div style="font-size: 0.9rem; color: #64748b; line-height: 1.4;">${safeEscape(options.subtext)}</div>`;
+                } else if (options.html) {
+                    textElement.innerHTML = message;
+                } else {
+                    textElement.textContent = message;
+                }
                 buttonsContainer.innerHTML = '';
 
                 let confirmText = options.confirmText;

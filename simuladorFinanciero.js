@@ -2113,6 +2113,178 @@
     }
 
     /**
+     * Renderiza las filas principales y las subfilas colapsables de tramos utilizados en la tabla de distribución.
+     */
+    function renderizarFilasDistribucionHtml(asignaciones, plazoMeses) {
+        if (!Array.isArray(asignaciones) || asignaciones.length === 0) return '';
+
+        return asignaciones.map((a, idx) => {
+            const tramosUtilizados = a.tramosUtilizados || (Array.isArray(a.tramosDetalle) ? a.tramosDetalle.filter(t => t.monto_en_tramo > 0.0001) : []);
+            const tieneMultiplesTramos = tramosUtilizados.length > 1;
+
+            let html = `
+                <tr style="border-bottom: 1px solid #e2e8f0;"
+                    class="sim-row-distribucion"
+                    data-orig-index="${idx}"
+                    data-inst-id="${a.institucionId}"
+                    data-nombre="${escapeHTML(a.nombre || '')}"
+                    data-tipo="${escapeHTML(a.tipoDescripcion || a.tipo || '')}"
+                    data-inversion="${a.inversionAsignada || 0}"
+                    data-porcentaje="${a.porcentajeDelCapital || 0}"
+                    data-tasa="${a.tasaPonderada || 0}"
+                    data-rend-mensual="${a.rendimientoMensual || 0}"
+                    data-rend-periodo="${a.rendimientoPeriodo || 0}">
+                    <td style="padding: 8px 12px; font-weight: 700; color: #0f172a;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            ${tieneMultiplesTramos ? `
+                                <button type="button" 
+                                        class="btn-toggle-tramos-distribucion" 
+                                        data-inst-id="${a.institucionId}" 
+                                        aria-expanded="false" 
+                                        title="Expandir desglose de tramos utilizados"
+                                        style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #2563eb; font-weight: 800; font-size: 0.95rem; line-height: 1; cursor: pointer; padding: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); user-select: none; transition: all 0.15s ease;">
+                                    +
+                                </button>
+                            ` : ''}
+                            <span>${escapeHTML(a.nombre)}</span>
+                        </div>
+                    </td>
+                    <td style="padding: 8px 12px; text-align: center;">
+                        <span style="font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #334155;">
+                            ${escapeHTML(a.tipoDescripcion || a.tipo)}
+                        </span>
+                    </td>
+                    <td style="padding: 8px 12px; text-align: right; font-weight: 700; background: #fffbeb; color: #92400e;">${formatMoney(a.inversionAsignada)}</td>
+                    <td style="padding: 8px 12px; text-align: center; font-weight: 600; color: #475569;">${formatPercent(a.porcentajeDelCapital)}</td>
+                    <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #1e40af;">${formatPercent(a.tasaPonderada)}</td>
+                    <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #047857;">${formatMoney(a.rendimientoMensual)}</td>
+                    <td style="padding: 8px 12px; text-align: right; font-weight: 800; color: #166534; background: #f0fdf4;">${formatMoney(a.rendimientoPeriodo)}</td>
+                </tr>
+            `;
+
+            if (tieneMultiplesTramos) {
+                html += `
+                    <tr id="sim-subrow-dist-${a.institucionId}" 
+                        class="sim-subrow-distribucion" 
+                        data-parent-id="${a.institucionId}" 
+                        data-orig-index="${idx}"
+                        style="display: none; background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                        <td colspan="7" style="padding: 10px 14px;">
+                            <div class="sim-detalle-tramos-container" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                                    <span style="font-weight: 700; font-size: 0.85rem; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-layer-group" style="color: #2563eb;"></i> Tramos utilizados para <strong>${escapeHTML(a.nombre)}</strong>:
+                                    </span>
+                                    <span style="font-size: 0.78rem; color: #64748b; font-weight: 600;">
+                                        ${tramosUtilizados.length} tramos con saldo asignado
+                                    </span>
+                                </div>
+                                <div class="table-responsive" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                                    <table class="sim-tabla-desglose-tramos" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                                        <thead>
+                                            <tr style="background: #f1f5f9; color: #475569; border-bottom: 1px solid #cbd5e1; text-align: left;">
+                                                <th style="padding: 6px 10px;">Tramo</th>
+                                                <th style="padding: 6px 10px;">Rango de Saldo</th>
+                                                <th style="padding: 6px 10px; text-align: right;">Monto Asignado</th>
+                                                <th style="padding: 6px 10px; text-align: right;">Tasa Anual</th>
+                                                <th style="padding: 6px 10px; text-align: right;">Rend. Mensual</th>
+                                                <th style="padding: 6px 10px; text-align: right;">Rend. Período (${plazoMeses} ${plazoMeses === 1 ? 'mes' : 'meses'})</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${tramosUtilizados.map(t => {
+                                                const rangoStr = t.rango_texto || (t.limite_superior !== null ? `$${Number(t.limite_inferior).toLocaleString('es-MX')} a $${Number(t.limite_superior).toLocaleString('es-MX')}` : `Más de $${Number(t.limite_inferior).toLocaleString('es-MX')}`);
+                                                return `
+                                                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                        <td style="padding: 6px 10px; font-weight: 600; color: #334155;">
+                                                            Tramo ${t.numero_tramo}
+                                                        </td>
+                                                        <td style="padding: 6px 10px; color: #64748b;">
+                                                            ${rangoStr}
+                                                        </td>
+                                                        <td style="padding: 6px 10px; text-align: right; font-weight: 700; color: #0f172a;">
+                                                            ${formatMoney(t.monto_en_tramo)}
+                                                        </td>
+                                                        <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #1e40af;">
+                                                            ${formatPercent(t.tasa_anual)}
+                                                        </td>
+                                                        <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #047857;">
+                                                            ${formatMoney(t.rendimiento_mensual)}
+                                                        </td>
+                                                        <td style="padding: 6px 10px; text-align: right; font-weight: 700; color: #166534;">
+                                                            ${formatMoney(t.rendimiento_periodo)}
+                                                        </td>
+                                                    </tr>
+                                                `;
+                                            }).join('')}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr style="background: #f8fafc; font-weight: 800; border-top: 1px solid #cbd5e1;">
+                                                <td colspan="2" style="padding: 6px 10px; color: #1e293b;">Total Institución</td>
+                                                <td style="padding: 6px 10px; text-align: right; color: #92400e; background: #fffbeb;">
+                                                    ${formatMoney(a.inversionAsignada)}
+                                                </td>
+                                                <td style="padding: 6px 10px; text-align: right; color: #1e40af;">
+                                                    ${formatPercent(a.tasaPonderada)} <span style="font-size: 0.72rem; font-weight: 500; color: #64748b;">(ponderada)</span>
+                                                </td>
+                                                <td style="padding: 6px 10px; text-align: right; color: #047857; background: #ecfdf5;">
+                                                    ${formatMoney(a.rendimientoMensual)}
+                                                </td>
+                                                <td style="padding: 6px 10px; text-align: right; color: #166534; background: #dcfce7;">
+                                                    ${formatMoney(a.rendimientoPeriodo)}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            return html;
+        }).join('');
+    }
+
+    /**
+     * Conecta los listeners para expandir / contraer el detalle de tramos en la tabla de distribución.
+     */
+    function configurarToggleTramosDistribucion() {
+        const table = document.getElementById('simulador-tabla-distribucion');
+        if (!table) return;
+
+        const btns = table.querySelectorAll('.btn-toggle-tramos-distribucion');
+        btns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const instId = btn.dataset.instId;
+                const subRow = table.querySelector(`tr.sim-subrow-distribucion[data-parent-id="${instId}"]`);
+                if (!subRow) return;
+
+                const isExpanded = subRow.style.display !== 'none';
+                if (isExpanded) {
+                    subRow.style.display = 'none';
+                    btn.textContent = '+';
+                    btn.setAttribute('aria-expanded', 'false');
+                    btn.title = 'Expandir desglose de tramos utilizados';
+                    btn.style.background = '#ffffff';
+                    btn.style.color = '#2563eb';
+                    btn.style.borderColor = '#cbd5e1';
+                } else {
+                    subRow.style.display = 'table-row';
+                    btn.textContent = '−';
+                    btn.setAttribute('aria-expanded', 'true');
+                    btn.title = 'Contraer desglose de tramos';
+                    btn.style.background = '#2563eb';
+                    btn.style.color = '#ffffff';
+                    btn.style.borderColor = '#1d4ed8';
+                }
+            });
+        });
+    }
+
+    /**
      * Renderiza el panel visual completo de la propuesta diversificada.
      */
     function renderizarPanelDiversificado(res) {
@@ -2234,30 +2406,7 @@
                                 </tr>
                             </thead>
                             <tbody id="simulador-tbody-distribucion">
-                                ${res.asignaciones.map((a, idx) => `
-                                    <tr style="border-bottom: 1px solid #e2e8f0;"
-                                        class="sim-row-distribucion"
-                                        data-orig-index="${idx}"
-                                        data-nombre="${escapeHTML(a.nombre || '')}"
-                                        data-tipo="${escapeHTML(a.tipoDescripcion || a.tipo || '')}"
-                                        data-inversion="${a.inversionAsignada || 0}"
-                                        data-porcentaje="${a.porcentajeDelCapital || 0}"
-                                        data-tasa="${a.tasaPonderada || 0}"
-                                        data-rend-mensual="${a.rendimientoMensual || 0}"
-                                        data-rend-periodo="${a.rendimientoPeriodo || 0}">
-                                        <td style="padding: 8px 12px; font-weight: 700; color: #0f172a;">${escapeHTML(a.nombre)}</td>
-                                        <td style="padding: 8px 12px; text-align: center;">
-                                            <span style="font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #334155;">
-                                                ${escapeHTML(a.tipoDescripcion || a.tipo)}
-                                            </span>
-                                        </td>
-                                        <td style="padding: 8px 12px; text-align: right; font-weight: 700; background: #fffbeb; color: #92400e;">${formatMoney(a.inversionAsignada)}</td>
-                                        <td style="padding: 8px 12px; text-align: center; font-weight: 600; color: #475569;">${formatPercent(a.porcentajeDelCapital)}</td>
-                                        <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #1e40af;">${formatPercent(a.tasaPonderada)}</td>
-                                        <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: #047857;">${formatMoney(a.rendimientoMensual)}</td>
-                                        <td style="padding: 8px 12px; text-align: right; font-weight: 800; color: #166534; background: #f0fdf4;">${formatMoney(a.rendimientoPeriodo)}</td>
-                                    </tr>
-                                `).join('')}
+                                ${renderizarFilasDistribucionHtml(res.asignaciones, res.meses)}
                             </tbody>
                             <tfoot>
                                 <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #cbd5e1;">
@@ -2383,6 +2532,9 @@
             });
         }
 
+        // Configurar botones de expansión / contracción de tramos (+) / (-)
+        configurarToggleTramosDistribucion();
+
         // Configurar ordenamiento interactivo de columnas en la tabla de distribución
         configurarOrdenamientoTablaDistribucion();
         if (columnaOrdenadaDistribucion && direccionOrdenDistribucion !== 'none') {
@@ -2449,16 +2601,25 @@
 
     /**
      * Ejecuta el ordenamiento de las filas de la tabla de distribución recomendada.
+     * Mantiene unidas de forma indestructible cada fila principal con su subfila de desglose de tramos.
      */
     function ejecutarOrdenamientoDistribucion(colId, dir) {
         const tbody = document.getElementById('simulador-tbody-distribucion');
         if (!tbody) return;
 
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-        if (rows.length === 0) return;
+        // Filtrar estrictamente las filas principales
+        const mainRows = Array.from(tbody.querySelectorAll('tr.sim-row-distribucion'));
+        if (mainRows.length === 0) return;
+
+        // Mapear cada subfila asociada por institucionId
+        const subRowMap = new Map();
+        const subRows = Array.from(tbody.querySelectorAll('tr.sim-subrow-distribucion'));
+        subRows.forEach(sr => {
+            subRowMap.set(String(sr.dataset.parentId), sr);
+        });
 
         if (dir === 'none' || !colId) {
-            rows.sort((a, b) => {
+            mainRows.sort((a, b) => {
                 const idxA = parseInt(a.dataset.origIndex, 10) || 0;
                 const idxB = parseInt(b.dataset.origIndex, 10) || 0;
                 return idxA - idxB;
@@ -2466,7 +2627,7 @@
         } else {
             const esNumerico = ['inversion', 'porcentaje', 'tasa', 'rend-mensual', 'rend-periodo'].includes(colId);
 
-            rows.sort((a, b) => {
+            mainRows.sort((a, b) => {
                 let valA, valB;
                 if (esNumerico) {
                     valA = parseFloat(
@@ -2505,7 +2666,15 @@
             });
         }
 
-        rows.forEach(r => tbody.appendChild(r));
+        // Reinsertar las filas en el DOM asegurando que cada subfila viaje unida inmediatamente debajo de su fila principal
+        mainRows.forEach(mainRow => {
+            tbody.appendChild(mainRow);
+            const instId = String(mainRow.dataset.instId);
+            const subRow = subRowMap.get(instId);
+            if (subRow) {
+                tbody.appendChild(subRow);
+            }
+        });
     }
 
     /**

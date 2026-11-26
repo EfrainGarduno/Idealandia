@@ -3306,6 +3306,101 @@ app.put('/api/admin/usuarios/:id', requireFunctionality('admin'), requirePermiss
     }
 });
 
+app.patch('/api/admin/usuarios/:id/estado', requireFunctionality('admin'), requirePermission('usuarios.update'), async (req, res) => {
+    try {
+        const userIdToToggle = Number(req.params.id);
+        const requestingUserId = req.userId;
+        const { activo } = req.body;
+
+        if (!Number.isSafeInteger(userIdToToggle) || userIdToToggle <= 0) {
+            return res.status(400).json({ error: 'ID de usuario inválido.' });
+        }
+
+        if (activo === undefined || activo === null) {
+            return res.status(400).json({ error: 'El campo activo es requerido.' });
+        }
+
+        const nuevoActivo = (activo === 1 || activo === true || activo === '1' || activo === 'true') ? 1 : 0;
+
+        const [userCheck] = await pool.execute('SELECT id, usuario, activo, jwt_version FROM usuarios WHERE id = ?', [userIdToToggle]);
+        if (userCheck.length === 0) {
+            return res.status(404).json({ error: 'El usuario proporcionado no existe.' });
+        }
+
+        if (nuevoActivo === 0) {
+            // Protección contra auto-inactivación
+            if (requestingUserId === userIdToToggle) {
+                return res.status(400).json({ error: 'No puedes inactivar tu propio usuario mientras tienes una sesión activa.' });
+            }
+
+            const connection = await pool.getConnection();
+            let lockAcquired = false;
+            try {
+                // Serializar para prevenir condiciones de carrera al inactivar administradores
+                const [lockResult] = await connection.execute("SELECT GET_LOCK('admin_auth_update', 10) AS acquired");
+                if (!lockResult[0].acquired) {
+                    return res.status(503).json({ error: 'El sistema está procesando otra actualización. Intenta de nuevo.' });
+                }
+                lockAcquired = true;
+
+                // Verificar si el usuario a inactivar tiene privilegios administrativos
+                const isAdmin = await checkUserPermission(connection, userIdToToggle, 'admin.access');
+                if (isAdmin) {
+                    const [adminCheck] = await connection.execute(`
+                        SELECT COUNT(DISTINCT u.id) as count
+                        FROM usuarios u
+                        JOIN usuario_roles ur ON u.id = ur.usuario_id
+                        JOIN roles r ON ur.rol_id = r.id AND r.activo = TRUE
+                        JOIN rol_permisos rp ON r.id = rp.rol_id
+                        JOIN permisos p ON rp.permiso_id = p.id AND p.activo = TRUE
+                        WHERE p.codigo = 'admin.access'
+                          AND u.activo = 1
+                          AND u.id != ?
+                    `, [userIdToToggle]);
+
+                    if (parseInt(adminCheck[0].count, 10) === 0) {
+                        return res.status(400).json({ error: 'Esta operación dejaría al sistema sin administradores activos.' });
+                    }
+                }
+
+                // Inactivar al usuario e incrementar jwt_version para invalidar sesiones existentes
+                await connection.execute(
+                    'UPDATE usuarios SET activo = 0, jwt_version = COALESCE(jwt_version, 1) + 1 WHERE id = ?',
+                    [userIdToToggle]
+                );
+
+                return res.status(200).json({
+                    message: 'Usuario inactivado exitosamente.',
+                    id: userIdToToggle,
+                    activo: 0
+                });
+            } finally {
+                if (lockAcquired) {
+                    try {
+                        await connection.execute("SELECT RELEASE_LOCK('admin_auth_update')");
+                    } catch (_) {}
+                }
+                connection.release();
+            }
+        } else {
+            // Activar usuario
+            await pool.execute(
+                'UPDATE usuarios SET activo = 1 WHERE id = ?',
+                [userIdToToggle]
+            );
+
+            return res.status(200).json({
+                message: 'Usuario activado exitosamente.',
+                id: userIdToToggle,
+                activo: 1
+            });
+        }
+    } catch (error) {
+        console.error('Error in PATCH /api/admin/usuarios/:id/estado:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 app.delete('/api/admin/usuarios/:id', requireFunctionality('admin'), requirePermission('usuarios.delete'), async (req, res) => {
     try {
         const userIdToDelete = Number(req.params.id);

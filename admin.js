@@ -632,20 +632,43 @@ async function loadUsuarios() {
             td.className = 'admin-actions-cell';
             const actionsGroup = createAdminActionsGroup();
 
+            const canUpdateUser = !window.userAdminPermissions || window.userAdminPermissions.has('usuarios.update');
+            const canDeleteUser = !window.userAdminPermissions || window.userAdminPermissions.has('usuarios.delete');
+            const isSelf = (window.currentUser && window.currentUser.id === u.id);
+
             const editBtn = createAdminActionButton({
                 type: 'edit',
                 icon: 'fas fa-pen',
                 title: 'Editar usuario',
                 srText: 'Editar',
+                disabled: !canUpdateUser,
+                disabledTitle: 'No tienes permiso para modificar usuarios.',
                 onClick: () => showEditUsuarioModal(u)
             });
             actionsGroup.appendChild(editBtn);
+
+            // Botón dinámico Activar / Inactivar
+            const isActivo = Boolean(u.activo);
+            const toggleBtn = createAdminActionButton({
+                type: isActivo ? 'inactivate' : 'activate',
+                icon: isActivo ? 'fas fa-user-slash' : 'fas fa-user-check',
+                title: isActivo ? 'Inactivar usuario' : 'Activar usuario',
+                srText: isActivo ? 'Inactivar' : 'Activar',
+                disabled: !canUpdateUser || (isActivo && isSelf),
+                disabledTitle: (isActivo && isSelf)
+                    ? 'No puedes inactivar tu propia cuenta mientras mantienes la sesión activa.'
+                    : (!canUpdateUser ? 'No tienes permiso para modificar usuarios.' : undefined),
+                onClick: () => toggleUsuarioEstado(u)
+            });
+            actionsGroup.appendChild(toggleBtn);
 
             const deleteBtn = createAdminActionButton({
                 type: 'delete',
                 icon: 'fas fa-trash-can',
                 title: 'Eliminar usuario',
                 srText: 'Eliminar',
+                disabled: !canDeleteUser || isSelf,
+                disabledTitle: isSelf ? 'No puedes eliminar tu propio usuario.' : (!canDeleteUser ? 'No tienes permiso para eliminar usuarios.' : undefined),
                 onClick: async () => {
                     const confirmed = await window.showConfirm(`¿Estás seguro de que deseas eliminar al usuario ${u.usuario}?`);
                     if (confirmed) {
@@ -1575,6 +1598,58 @@ async function showEditUsuarioModal(u) {
             window.showModal('Error al actualizar usuario.');
         }
     };
+}
+
+/**
+ * Alterna el estado activo/inactivo de un usuario solicitando confirmación modal.
+ * @param {Object} u - Datos del usuario
+ */
+async function toggleUsuarioEstado(u) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('usuarios.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    const isActivo = Boolean(u.activo);
+    const targetUsuario = u.usuario || 'este usuario';
+
+    let confirmed = false;
+    if (isActivo) {
+        confirmed = await window.showConfirm(`¿Deseas inactivar al usuario ${targetUsuario}?`, {
+            subtext: 'El usuario no podrá iniciar sesión mientras permanezca inactivo.',
+            confirmText: 'Inactivar',
+            cancelText: 'Cancelar',
+            confirmClass: 'custom-modal-btn warning'
+        });
+    } else {
+        confirmed = await window.showConfirm(`¿Deseas activar al usuario ${targetUsuario}?`, {
+            confirmText: 'Activar',
+            cancelText: 'Cancelar',
+            confirmClass: 'custom-modal-btn primary'
+        });
+    }
+
+    if (!confirmed) return;
+
+    try {
+        const nuevoActivo = isActivo ? 0 : 1;
+        const res = await fetch(`/api/admin/usuarios/${u.id}/estado`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activo: nuevoActivo })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            const mensajeExito = isActivo ? 'Usuario inactivado exitosamente.' : 'Usuario activado exitosamente.';
+            if (window.showModal) window.showModal(mensajeExito);
+            await loadUsuarios();
+        } else {
+            handleAdminError(res, data, isActivo ? 'Error al inactivar usuario.' : 'Error al activar usuario.');
+        }
+    } catch (e) {
+        console.error('Error in toggleUsuarioEstado:', e);
+        if (window.showModal) window.showModal(isActivo ? 'Error al inactivar usuario.' : 'Error al activar usuario.');
+    }
 }
 
 async function showEditRolesModal(userId, username) {
