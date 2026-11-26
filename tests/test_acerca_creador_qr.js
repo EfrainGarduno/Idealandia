@@ -39,7 +39,7 @@ async function run() {
 
     try {
         // 1. Verificación de integridad física del archivo estático
-        const originalPath = 'C:/Users/ASUS/.gemini/antigravity/brain/581be5b5-1e11-4627-a8f4-d7a7d3ec4c42/.user_uploaded/media_1795715297958_3f13119f.png';
+        const originalPath = 'C:/Users/ASUS/.gemini/antigravity/brain/581be5b5-1e11-4627-a8f4-d7a7d3ec4c42/.user_uploaded/media_1795715750158_54c06da7.png';
         const projectAssetPath = path.join(__dirname, '../img/idealandia-creador-qr.png');
 
         const originalBytes = fs.readFileSync(originalPath);
