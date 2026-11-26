@@ -1708,6 +1708,94 @@
     }
 }
 
+/* ==========================================================================
+   ATRIBUCIÓN "IDEALANDIA FUE CREADA POR" Y CÓDIGO QR
+   ========================================================================== */
+.acerca-atribucion-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    padding: 36px 30px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    margin-top: 10px;
+}
+
+.acerca-atribucion-titulo {
+    margin-top: 0;
+    margin-bottom: 22px;
+    color: #1e293b;
+    font-size: 1.4em;
+    font-weight: 700;
+    font-family: 'Poppins', sans-serif;
+    letter-spacing: -0.3px;
+}
+
+.acerca-atribucion-qr-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.acerca-atribucion-qr-wrapper:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.acerca-atribucion-qr {
+    display: block;
+    width: 220px;
+    height: 220px;
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    border-radius: 4px;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+@media (max-width: 768px) {
+    .acerca-atribucion-card {
+        padding: 24px 16px;
+    }
+    .acerca-atribucion-titulo {
+        font-size: 1.25em;
+        margin-bottom: 18px;
+    }
+    .acerca-atribucion-qr-wrapper {
+        padding: 10px;
+    }
+    .acerca-atribucion-qr {
+        width: 190px;
+        height: 190px;
+        max-width: calc(100vw - 80px);
+    }
+}
+
+@media (max-width: 480px) {
+    .acerca-atribucion-card {
+        padding: 20px 12px;
+    }
+    .acerca-atribucion-titulo {
+        font-size: 1.15em;
+        margin-bottom: 16px;
+    }
+    .acerca-atribucion-qr {
+        width: 170px;
+        height: 170px;
+        max-width: calc(100vw - 60px);
+    }
+}
+
 
 /* ==========================================================================
    CLASES DE INGLÉS SCREEN STYLES
