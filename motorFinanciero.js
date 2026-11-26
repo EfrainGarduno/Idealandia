@@ -95,8 +95,18 @@
             totalMensual += rendMensual;
             totalPeriodo += rendPeriodo;
 
+            let rangoTexto = '';
+            if (t.limite_inferior === 0 && t.limite_superior !== null) {
+                rangoTexto = `Hasta $${Number(t.limite_superior).toLocaleString('es-MX')}`;
+            } else if (t.limite_superior === null) {
+                rangoTexto = `Más de $${Number(t.limite_inferior).toLocaleString('es-MX')}`;
+            } else {
+                rangoTexto = `$${Number(t.limite_inferior).toLocaleString('es-MX')} a $${Number(t.limite_superior).toLocaleString('es-MX')}`;
+            }
+
             return {
                 ...t,
+                rango_texto: rangoTexto,
                 tasa_mensual: tasaMensual,
                 rendimiento_mensual: rendMensual,
                 rendimiento_periodo: rendPeriodo
@@ -120,6 +130,8 @@
             rend2 += desgloseTramos[i].rendimiento_periodo;
         }
 
+        const tramosUtilizados = desgloseTramos.filter(t => t.monto_en_tramo > 0.0001);
+
         return {
             inversion_total: capital,
             meses: plazoMeses,
@@ -132,9 +144,11 @@
             inversion_2: inversion2,
             rend1: rend1,
             rend2: rend2,
-            // Soporte dinámico para N tramos:
+            // Soporte dinámico para N tramos y transparencia de tramos utilizados:
             num_tramos: desgloseTramos.length,
-            tramos: desgloseTramos
+            tramos: desgloseTramos,
+            tramos_utilizados: tramosUtilizados,
+            tiene_multiples_tramos: tramosUtilizados.length > 1
         };
     }
 
@@ -761,6 +775,9 @@
 
                     const tasaPond = montoInst > 0 ? (sim.total_mensual * 12 / montoInst) * 100 : 0;
 
+                    const tramosEfectivos = sim.tramos_utilizados || (Array.isArray(sim.tramos) ? sim.tramos.filter(t => t.monto_en_tramo > 0.0001) : []);
+                    const tieneMultiples = tramosEfectivos.length > 1;
+
                     asignaciones.push({
                         institucionId: inst.id,
                         nombre: inst.nombre,
@@ -779,6 +796,8 @@
                         inversion2: sim.inversion_2,
                         montoInversionBase: sim.monto_2,
                         tramosDetalle: sim.tramos,
+                        tramosUtilizados: tramosEfectivos,
+                        tieneMultiplesTramos: tieneMultiples,
                         restricciones: Array.isArray(inst.restricciones) ? inst.restricciones : []
                     });
                 }
