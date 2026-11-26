@@ -177,15 +177,15 @@ async function runSuite() {
         });
         await page.waitForTimeout(300);
 
-        await testAsync('3.1: Aplicar valores con fechaHasta 21/11/2027 asigna exactamente 61 años a #edad-jubilacion', async () => {
+        await testAsync('3.1: Aplicar valores con fechaHasta 21/03/2027 (< 6 meses) asigna exactamente 61 años a #edad-jubilacion', async () => {
             // Abrir modal de proyección
             await page.click('#btn-abrir-proyeccion');
             await page.waitForTimeout(200);
 
-            // Asignar parámetros: desde 2026-11-21 hasta 2027-11-21
+            // Asignar parámetros: desde 2026-11-21 hasta 2027-03-21 (61 años, 3 meses -> IMSS 61)
             await page.evaluate(() => {
                 document.getElementById('proy-fecha-desde').value = '2026-11-21';
-                document.getElementById('proy-fecha-hasta').value = '2027-11-21';
+                document.getElementById('proy-fecha-hasta').value = '2027-03-21';
                 document.getElementById('proy-fecha-hasta').dispatchEvent(new Event('change', { bubbles: true }));
                 document.getElementById('proy-salario-diario-nuevo').value = '2714.25';
             });
