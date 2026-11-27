@@ -9,8 +9,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const {
-    calculatePensionProjection,
-    SALARIO_MINIMO_GENERAL_VIGENTE
+    calculatePensionProjection
 } = require('./pension');
 
 const AUTH_SECRET = process.env.JWT_SECRET || 'idealandia_dev_secret_key_12345';
@@ -93,6 +92,7 @@ async function runTests() {
             semanasActuales: 1000,
             salarioPromedioActual: 800,
             salarioDiarioProyectado: 1500,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-06-01',
             fechaHasta: '2026-01-01',
             periodosHistoricos: periodosMockHist
@@ -107,6 +107,7 @@ async function runTests() {
             semanasActuales: 1000,
             salarioPromedioActual: 800,
             salarioDiarioProyectado: 1500,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2025-06-01',
             fechaHasta: '2026-05-31',
             periodosHistoricos: periodosMockHist
@@ -121,6 +122,7 @@ async function runTests() {
             semanasActuales: 1000,
             salarioPromedioActual: 800,
             salarioDiarioProyectado: 1500,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2020-01-01',
             fechaHasta: '2020-12-31',
             periodosHistoricos: periodosMockHist
@@ -139,6 +141,7 @@ async function runTests() {
             semanasActuales: 1000,
             salarioPromedioActual: 800,
             salarioDiarioProyectado: 2000,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-01-01',
             fechaHasta: '2026-12-31',
             periodosHistoricos: periodosMockHist
@@ -159,6 +162,7 @@ async function runTests() {
             semanasActuales: 1000,
             salarioPromedioActual: 1000,
             salarioDiarioProyectado: 2000,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-01-01',
             fechaHasta: '2026-12-31',
             periodosHistoricos: null

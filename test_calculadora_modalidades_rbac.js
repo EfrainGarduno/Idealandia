@@ -2,8 +2,17 @@ const assert = require('assert');
 const path = require('path');
 const { chromium } = require('playwright');
 const jwt = require('jsonwebtoken');
+const mysql = require('mysql2/promise');
+require('dotenv').config();
 const { calculatePensionProjection, calculateIMSSLey73Pension } = require('./pension.js');
 const { app } = require('./server.js');
+
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'idealandia'
+});
 
 const AUTH_SECRET = process.env.AUTH_SECRET || '745c912f72133a7e80a9e86969f6712171b0908c02fb4a776cd9119deaa167a5';
 
@@ -68,6 +77,7 @@ async function runTests() {
             semanasActuales: 800,
             salarioPromedioActual: 450,
             salarioDiarioProyectado: 2500,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-01-01',
             fechaHasta: '2030-12-31' // 5 años = 1,826 días
         });
@@ -82,6 +92,7 @@ async function runTests() {
             semanasActuales: 800,
             salarioPromedioActual: 400,
             salarioDiarioProyectado: 1800,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2027-01-01',
             fechaHasta: '2026-01-01'
         });
@@ -94,6 +105,7 @@ async function runTests() {
             semanasActuales: 800,
             salarioPromedioActual: -50,
             salarioDiarioProyectado: 1000,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-01-01',
             fechaHasta: '2026-12-31'
         });
@@ -104,6 +116,7 @@ async function runTests() {
             semanasActuales: 800,
             salarioPromedioActual: 500,
             salarioDiarioProyectado: -100,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-01-01',
             fechaHasta: '2026-12-31'
         });
@@ -261,7 +274,10 @@ async function runTests() {
     await testAsync('Interacción: Persistencia de datos al alternar modalidades permitidas', async () => {
         await page.evaluate(async () => {
             await window.syncPensionModalidades(['calculadora.basica', 'calculadora.intermedia', 'calculadora.avanzada']);
-            document.getElementById('salario-minimo').value = '315.04';
+            const salMinInput = document.getElementById('salario-minimo');
+            salMinInput.value = '315.04';
+            salMinInput.dataset.manualEdited = 'true';
+            salMinInput.dataset.origen = 'MANUAL';
             document.getElementById('salario-promedio').value = '750.00';
             document.getElementById('semanas-cotizadas').value = '1200';
             document.getElementById('edad-jubilacion').value = '63';
@@ -296,6 +312,7 @@ async function runTests() {
             document.getElementById('proy-fecha-hasta').value = '2026-12-31';
             document.getElementById('proy-fecha-hasta').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('proy-salario-diario-nuevo').value = '2000.00';
+            document.getElementById('proy-salario-minimo-estimado').value = '315.04';
         });
         await page.waitForTimeout(100);
 
@@ -320,8 +337,11 @@ async function runTests() {
 
     console.log('\n--- FASE 3: Escenario G — Protección de Endpoints Backend Directos (API) ---');
 
+    const [artRows] = await pool.query('SELECT jwt_version FROM usuarios WHERE id = 7');
+    const arturitoJwtVersion = artRows.length > 0 ? (artRows[0].jwt_version || 1) : 1;
+
     await testAsync('Escenario G.1: Intento directo a PDF sin permiso retorna 403 estándar', async () => {
-        const tokenArturito = jwt.sign({ id: 7, usuario: 'Arturito', jwt_version: 4 }, AUTH_SECRET, { expiresIn: '1h' });
+        const tokenArturito = jwt.sign({ id: 7, usuario: 'Arturito', jwt_version: arturitoJwtVersion }, AUTH_SECRET, { expiresIn: '1h' });
         const res = await fetch('http://127.0.0.1:3000/api/pension/calcular-salario-pdf', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + tokenArturito, 'Content-Type': 'application/json' },
@@ -334,7 +354,7 @@ async function runTests() {
     });
 
     await testAsync('Escenario G.2: Intento directo a Proyectar sin permiso retorna 403 estándar', async () => {
-        const tokenArturito = jwt.sign({ id: 7, usuario: 'Arturito', jwt_version: 4 }, AUTH_SECRET, { expiresIn: '1h' });
+        const tokenArturito = jwt.sign({ id: 7, usuario: 'Arturito', jwt_version: arturitoJwtVersion }, AUTH_SECRET, { expiresIn: '1h' });
         const res = await fetch('http://127.0.0.1:3000/api/pension/proyectar', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + tokenArturito, 'Content-Type': 'application/json' },
@@ -347,7 +367,7 @@ async function runTests() {
     });
 
     await testAsync('Escenario G.3: Intento directo a Calcular con calculadora.basica retorna 200 OK', async () => {
-        const tokenArturito = jwt.sign({ id: 7, usuario: 'Arturito', jwt_version: 4 }, AUTH_SECRET, { expiresIn: '1h' });
+        const tokenArturito = jwt.sign({ id: 7, usuario: 'Arturito', jwt_version: arturitoJwtVersion }, AUTH_SECRET, { expiresIn: '1h' });
         const res = await fetch('http://127.0.0.1:3000/api/pension/calcular', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + tokenArturito, 'Content-Type': 'application/json' },
@@ -362,6 +382,7 @@ async function runTests() {
     console.log('\n================================================================================');
     console.log(`RESUMEN DE PRUEBAS: ${passed} PASADAS, ${failed} FALLADAS`);
     console.log('================================================================================');
+    await pool.end();
     if (failed > 0) process.exit(1);
     process.exit(0);
 }

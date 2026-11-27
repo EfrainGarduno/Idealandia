@@ -101,6 +101,7 @@ async function runSuite() {
             semanasActuales: 1615,
             salarioPromedioActual: 2585.94,
             salarioDiarioProyectado: 2714.25,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-11-21',
             fechaHasta: '2027-11-21',
             fechaNacimiento: '1965-12-07'
@@ -116,6 +117,7 @@ async function runSuite() {
             semanasActuales: 1615,
             salarioPromedioActual: 2585.94,
             salarioDiarioProyectado: 2714.25,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-11-21',
             fechaHasta: '2027-12-07',
             fechaNacimiento: '1965-12-07'
@@ -130,6 +132,7 @@ async function runSuite() {
             semanasActuales: 1615,
             salarioPromedioActual: 2585.94,
             salarioDiarioProyectado: 2714.25,
+            salarioMinimoActual: 315.04,
             fechaDesde: '2026-11-21',
             fechaHasta: '2027-11-21',
             curp: 'GAFE651207HQTRLF02'
@@ -188,6 +191,8 @@ async function runSuite() {
                 document.getElementById('proy-fecha-hasta').value = '2027-03-21';
                 document.getElementById('proy-fecha-hasta').dispatchEvent(new Event('change', { bubbles: true }));
                 document.getElementById('proy-salario-diario-nuevo').value = '2714.25';
+                document.getElementById('proy-salario-minimo-estimado').value = '315.04';
+                document.getElementById('proy-salario-minimo-estimado').value = '315.04';
             });
             await page.waitForTimeout(100);
 
@@ -237,6 +242,7 @@ async function runSuite() {
                 document.getElementById('proy-fecha-hasta').value = '2027-12-07';
                 document.getElementById('proy-fecha-hasta').dispatchEvent(new Event('change', { bubbles: true }));
                 document.getElementById('proy-salario-diario-nuevo').value = '2714.25';
+                document.getElementById('proy-salario-minimo-estimado').value = '315.04';
             });
             await page.waitForTimeout(100);
 

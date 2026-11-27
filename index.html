@@ -725,9 +725,10 @@
                 <div id="form-estimacion" style="display: none;" class="pension-form">
                 <fieldset>
                     <legend>Datos generales</legend>
-                    <div class="form-group">
+                    <div class="form-group" id="salario-minimo-container">
                         <label for="salario-minimo">Salario mínimo general vigente:</label>
-                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo" value="315.04">
+                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo" placeholder="Cargando indicador...">
+                        <div id="salario-minimo-status" style="margin-top: 4px; font-size: 0.82em;"></div>
                     </div>
                     <div class="form-group">
                         <label for="salario-promedio">Salario diario promedio últimas 250 semanas:</label>
@@ -896,7 +897,8 @@
                                 </div>
                                 <div>
                                     <label for="proy-salario-minimo-estimado" style="font-size: 0.85em; color: #1e3a8a; font-weight: 600; display: block; margin-bottom: 4px;">Salario Mínimo General estimado al terminar la proyección: <span style="color:red;">*</span></label>
-                                    <input type="number" step="0.01" min="1" id="proy-salario-minimo-estimado" value="315.04" required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+                                    <input type="number" step="0.01" min="1" id="proy-salario-minimo-estimado" placeholder="Cargando o capture manual..." required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+                                    <div id="proy-salario-minimo-status" style="margin-top: 4px; font-size: 0.82em;"></div>
                                 </div>
                             </div>
 
@@ -970,6 +972,26 @@
                         </button>
                         <button type="button" id="btn-continuar-advertencia-salario" class="btn btn-primary" style="padding: 10px 24px; border-radius: 6px; cursor: pointer; border: none; background: #2563eb; color: #fff; font-weight: 600; font-size: 0.92em; min-width: 105px;">
                             Continuar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODAL: Transparencia Pensión Mínima Aplicable (Fase 3) -->
+            <div id="modal-info-pension-minima" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 10000; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                <div class="modal-info-minima-dialog" style="background: #ffffff; width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); padding: 24px; position: relative; font-family: 'Poppins', sans-serif; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                        <h3 style="margin: 0; color: #1e293b; font-size: 1.18em; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-shield-halved" style="color: #2563eb;"></i> Transparencia: Pensión Mínima Legal
+                        </h3>
+                        <button type="button" id="btn-cerrar-modal-info-minima" style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: #64748b; line-height: 1;" title="Cerrar ventana">&times;</button>
+                    </div>
+                    <div id="modal-info-minima-contenido" style="font-size: 0.9em; color: #334155; line-height: 1.6;">
+                        <!-- Contenido dinámico inyectado por JS -->
+                    </div>
+                    <div style="margin-top: 20px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+                        <button type="button" id="btn-entendido-modal-info-minima" class="btn btn-primary" style="padding: 8px 20px; border-radius: 6px; cursor: pointer; border: none; background: #2563eb; color: #fff; font-weight: 600; font-size: 0.9em;">
+                            Entendido
                         </button>
                     </div>
                 </div>
@@ -1527,6 +1549,9 @@
                 <button type="button" class="admin-nav-block-btn" data-block="admin-block-contexto" style="padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; border: 1px solid #cbd5e1; cursor: pointer; transition: all 0.2s; background: #f8fafc; color: #475569; display: inline-flex; align-items: center; gap: 8px;">
                     <i class="fas fa-brain"></i> Contexto de Idealita
                 </button>
+                <button type="button" class="admin-nav-block-btn" data-block="admin-block-pensiones" style="padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; border: 1px solid #cbd5e1; cursor: pointer; transition: all 0.2s; background: #f8fafc; color: #475569; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-scale-balanced"></i> Indicadores de Pensiones
+                </button>
             </div>
 
             <!-- BLOQUE 1: CONSOLA (Módulos existentes 100% preservados) -->
@@ -1884,6 +1909,359 @@
                     </div>
                 </div>
             </div> <!-- /#admin-block-contexto -->
+
+            <!-- BLOQUE 5: INDICADORES DE PENSIONES (Fase 4) -->
+            <div id="admin-block-pensiones" class="admin-main-block" style="display: none; width: 100%;">
+                <!-- Sub-tabs: Catálogo, Historial, Sincronizaciones -->
+                <div class="admin-tabs" style="margin-bottom: 20px;">
+                    <button type="button" class="admin-tab-btn admin-pensiones-subtab-btn active" data-pensionestab="admin-pensiones-catalogo">
+                        <i class="fas fa-list-check"></i> Indicadores de Pensiones
+                    </button>
+                    <button type="button" class="admin-tab-btn admin-pensiones-subtab-btn" data-pensionestab="admin-pensiones-historial">
+                        <i class="fas fa-history"></i> Historial de Cambios
+                    </button>
+                    <button type="button" class="admin-tab-btn admin-pensiones-subtab-btn" data-pensionestab="admin-pensiones-syncs">
+                        <i class="fas fa-satellite-dish"></i> Sincronizaciones
+                    </button>
+                </div>
+
+                <!-- Sub-tab 1: Catálogo de Indicadores -->
+                <div id="admin-pensiones-catalogo" class="admin-pensiones-content" style="display: block;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-scale-balanced" style="color: #2563eb;"></i> Indicadores de Pensiones
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9em;">
+                                Catálogo oficial y estimado de Salario Mínimo General, Pensión Mínima Ley 73, Ley 97 e INPC.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button type="button" id="admin-pensiones-btn-sync" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fas fa-rotate"></i> Sincronizar Indicadores
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filtros Combinables -->
+                    <div class="admin-pensiones-filters" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;">
+                        <div style="flex: 1; min-width: 140px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Régimen</label>
+                            <select id="admin-pensiones-filtro-regimen" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="ley73">Ley 73</option>
+                                <option value="ley97">Ley 97</option>
+                                <option value="general">General</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 120px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Año</label>
+                            <select id="admin-pensiones-filtro-anio" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos los años</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 130px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Tipo</label>
+                            <select id="admin-pensiones-filtro-tipo" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="OFICIAL">OFICIAL</option>
+                                <option value="ESTIMADO">ESTIMADO</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 140px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Método</label>
+                            <select id="admin-pensiones-filtro-metodo" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="AUTOMATICA">AUTOMÁTICA</option>
+                                <option value="MANUAL">MANUAL</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 120px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Estado</label>
+                            <select id="admin-pensiones-filtro-estado" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="1">Activo</option>
+                                <option value="0">Inactivo</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button type="button" id="admin-pensiones-btn-reset-filtros" class="btn" style="background: #e2e8f0; color: #334155; padding: 7px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; border: none; cursor: pointer;">
+                                <i class="fas fa-filter-circle-xmark"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <span id="admin-pensiones-counter" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">Cargando indicadores...</span>
+                        <div style="font-size: 0.8rem; color: #64748b; display: flex; gap: 14px;">
+                            <span>🔒 = Auto-sync bloqueada</span>
+                            <span>🔄 = Auto-sync permitida</span>
+                        </div>
+                    </div>
+
+                    <!-- Tabla Principal -->
+                    <div class="table-responsive">
+                        <table class="admin-table" id="admin-pensiones-tabla">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 170px;">Indicador</th>
+                                    <th style="width: 140px;">Código</th>
+                                    <th style="width: 85px; text-align: center;">Régimen</th>
+                                    <th style="width: 65px; text-align: center;">Año</th>
+                                    <th style="min-width: 110px; text-align: right;">Valor</th>
+                                    <th style="width: 95px; text-align: center;">Unidad</th>
+                                    <th style="width: 95px; text-align: center;">Tipo</th>
+                                    <th style="min-width: 170px; text-align: center;">Vigencia</th>
+                                    <th style="min-width: 150px;">Fuente</th>
+                                    <th style="width: 100px; text-align: center;">Método</th>
+                                    <th style="width: 105px; text-align: center;">Estado</th>
+                                    <th style="width: 140px; text-align: center;" data-no-sort="true">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-pensiones-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 2: Historial de Cambios -->
+                <div id="admin-pensiones-historial" class="admin-pensiones-content" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-history" style="color: #6366f1;"></i> Historial de Cambios
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9em;">
+                                Auditoría inmutable de modificaciones manuales y automáticas con trazabilidad de usuario y fuente.
+                            </p>
+                        </div>
+                        <button type="button" id="admin-pensiones-btn-refresh-historial" class="btn" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 7px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-arrows-rotate"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 150px;">Fecha del cambio</th>
+                                    <th style="min-width: 170px;">Indicador</th>
+                                    <th style="width: 110px; text-align: right;">Valor anterior</th>
+                                    <th style="width: 110px; text-align: right;">Valor nuevo</th>
+                                    <th style="width: 90px; text-align: center;">Tipo de valor</th>
+                                    <th style="min-width: 200px;">Motivo</th>
+                                    <th style="min-width: 150px;">Fuente</th>
+                                    <th style="width: 100px;">URL de fuente</th>
+                                    <th style="width: 120px;">Usuario</th>
+                                    <th style="width: 110px; text-align: center;">Método de actualización</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-pensiones-historial-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 3: Sincronizaciones -->
+                <div id="admin-pensiones-syncs" class="admin-pensiones-content" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-satellite-dish" style="color: #0ea5e9;"></i> Sincronizaciones
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9em;">
+                                Registro de sincronizaciones automáticas y simulaciones (telemetría oficial).
+                            </p>
+                        </div>
+                        <button type="button" id="admin-pensiones-btn-refresh-syncs" class="btn" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 7px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-arrows-rotate"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 145px;">Fecha/hora</th>
+                                    <th style="width: 115px;">Fuente</th>
+                                    <th style="width: 145px;">Indicador</th>
+                                    <th style="width: 65px; text-align: center;">Ejercicio fiscal</th>
+                                    <th style="width: 135px; text-align: center;">Estado</th>
+                                    <th style="width: 105px; text-align: right;">Valor anterior</th>
+                                    <th style="width: 105px; text-align: right;">Valor candidato</th>
+                                    <th style="width: 75px; text-align: center;">Dry-run</th>
+                                    <th style="width: 75px; text-align: right;">Duración</th>
+                                    <th style="width: 110px;">Usuario</th>
+                                    <th style="min-width: 250px;">Detalles</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-pensiones-syncs-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div> <!-- /#admin-block-pensiones -->
+        </section>
+
+        <!-- Modal 1: Ver Detalle del Indicador de Pensiones -->
+        <div id="modal-pension-detalle" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 760px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 id="modal-pension-detalle-titulo" style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-circle-info" style="color: #2563eb;"></i> <span>Detalle del Indicador</span>
+                    </h3>
+                    <button type="button" id="btn-cerrar-modal-pension-detalle" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;" aria-label="Cerrar">&times;</button>
+                </div>
+                <div id="modal-pension-detalle-body">
+                    <!-- Rellenado dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal 2: Editar Indicador de Pensiones -->
+        <div id="modal-pension-editar" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 700px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 id="modal-pension-editar-titulo" style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-pen-to-square" style="color: #f59e0b;"></i> <span>Editar Indicador de Pensiones</span>
+                    </h3>
+                    <button type="button" id="btn-cerrar-modal-pension-editar" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;" aria-label="Cerrar">&times;</button>
+                </div>
+                <form id="form-pension-editar">
+                    <input type="hidden" id="edit-pension-id">
+                    
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #64748b; display: block;">INDICADOR</span>
+                            <span id="edit-pension-nombre-display" style="font-weight: 700; color: #1e293b; font-size: 1rem;"></span>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #64748b; display: block;">CÓDIGO</span>
+                            <span id="edit-pension-codigo-display" class="admin-pensiones-badge" style="background: #f1f5f9; color: #475569;"></span>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #64748b; display: block;">AÑO</span>
+                            <span id="edit-pension-anio-display" style="font-weight: 700; color: #1e293b;"></span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Valor Numérico *</label>
+                            <input type="number" step="0.0001" id="edit-pension-valor" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Tipo de Valor *</label>
+                            <select id="edit-pension-tipo" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                                <option value="OFICIAL">OFICIAL</option>
+                                <option value="ESTIMADO">ESTIMADO</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Inicio de Vigencia *</label>
+                            <input type="date" id="edit-pension-vigencia-inicio" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fin de Vigencia</label>
+                            <input type="date" id="edit-pension-vigencia-fin" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fuente Oficial *</label>
+                            <input type="text" id="edit-pension-fuente" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">URL de la Fuente</label>
+                            <input type="url" id="edit-pension-fuente-url" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fundamento Legal *</label>
+                        <textarea id="edit-pension-fundamento" class="form-control" rows="2" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;"></textarea>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fórmula de Cálculo</label>
+                        <input type="text" id="edit-pension-formula" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                    </div>
+
+                    <div style="margin-bottom: 14px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: #92400e; font-size: 0.9rem;">
+                            <input type="checkbox" id="edit-pension-bloqueo" style="width: 18px; height: 18px;">
+                            <span>🔒 Bloquear actualización automática (proteger contra sobreescritura de auto-sync)</span>
+                        </label>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Motivo del Cambio (Obligatorio para auditoría) *</label>
+                        <input type="text" id="edit-pension-motivo" class="form-control" required placeholder="Ej. Actualización conforme a publicación DOF del 28 de diciembre..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+                        <button type="button" id="btn-cancelar-edit-pension" class="btn" style="background: #e2e8f0; color: #334155; padding: 8px 16px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">Cancelar</button>
+                        <button type="submit" id="btn-guardar-edit-pension" class="btn btn-primary" style="padding: 8px 18px; font-weight: 600;">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal 3: Sincronizar Indicadores (con Dry-Run) -->
+        <div id="modal-pension-sync" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 680px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-rotate" style="color: #2563eb;"></i> <span>Sincronización de Indicadores Oficiales</span>
+                    </h3>
+                    <button type="button" id="btn-cerrar-modal-pension-sync" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;" aria-label="Cerrar">&times;</button>
+                </div>
+
+                <div style="background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 0.9rem; color: #1e40af;">
+                    <p style="margin: 0; font-weight: 600;">La sincronización consultará las fuentes oficiales configuradas (Banco de México SIE / INEGI BIE).</p>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85rem;">Se recomienda ejecutar primero una <strong>simulación (Dry Run)</strong> para previsualizar los datos obtenidos sin realizar modificaciones en la base de datos.</p>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 8px;">Fuente a Consultar:</label>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+                            <input type="radio" name="sync-pension-fuente" value="BANXICO_SIE" checked>
+                            <div>
+                                <span style="font-weight: 700; color: #1e293b; display: block;">Banco de México (SIE API) / CONASAMI</span>
+                                <span style="font-size: 0.8rem; color: #64748b;">Salario Mínimo General (Serie SL11298) y derivación atómica a Pensión Mínima Ley 73</span>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+                            <input type="radio" name="sync-pension-fuente" value="INEGI_BIE">
+                            <div>
+                                <span style="font-weight: 700; color: #1e293b; display: block;">INEGI (BIE API)</span>
+                                <span style="font-size: 0.8rem; color: #64748b;">Índice Nacional de Precios al Consumidor (Indicador 910392 - INPC General)</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; color: #334155; font-size: 0.9rem;">
+                        <input type="checkbox" id="sync-pension-dryrun" checked style="width: 18px; height: 18px;">
+                        <span>Ejecutar simulación (Dry Run) — Consulta y valida sin modificar la BD</span>
+                    </label>
+                </div>
+
+                <!-- Contenedor dinámico de resultados de simulación -->
+                <div id="sync-pension-resultado" style="display: none; margin-bottom: 18px; border-radius: 8px; padding: 14px; font-size: 0.9rem;"></div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; flex-wrap: wrap;">
+                    <button type="button" id="btn-cancelar-sync-pension" class="btn" style="background: #e2e8f0; color: #334155; padding: 8px 16px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">Cerrar</button>
+                    <button type="button" id="btn-ejecutar-sync-simulacion" class="btn btn-primary" style="padding: 8px 18px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-play"></i> <span id="btn-sync-action-text">Ejecutar Simulación (Dry Run)</span>
+                    </button>
+                    <button type="button" id="btn-ejecutar-sync-real" class="btn" style="display: none; background: #dc2626; color: #ffffff; padding: 8px 18px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">
+                        <i class="fas fa-triangle-exclamation"></i> Confirmar y Aplicar Sincronización Real
+                    </button>
+                </div>
+            </div>
+        </div>
         </section>
 
         <!-- Modal Detalle de Asociado -->
@@ -3506,12 +3884,22 @@
                 overlay.style.removeProperty('display');
 
                 const safeEscape = (str) => String(str || '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+                let contentHtml = '';
+                if (options.title) {
+                    contentHtml += `<div style="font-size: 1.15rem; font-weight: 700; color: #1e293b; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-question" style="color: #4f46e5;"></i><span>${safeEscape(options.title)}</span></div>`;
+                }
                 if (options.subtext) {
-                    textElement.innerHTML = `<div style="font-size: 1.05rem; font-weight: 700; color: #1e293b; margin-bottom: 8px;">${safeEscape(message)}</div><div style="font-size: 0.9rem; color: #64748b; line-height: 1.4;">${safeEscape(options.subtext)}</div>`;
+                    contentHtml += `<div style="font-size: 1.0rem; font-weight: 600; color: #334155; margin-bottom: 8px;">${safeEscape(message)}</div><div style="font-size: 0.88rem; color: #64748b; line-height: 1.45;">${safeEscape(options.subtext)}</div>`;
+                    textElement.innerHTML = contentHtml;
                 } else if (options.html) {
-                    textElement.innerHTML = message;
+                    textElement.innerHTML = contentHtml + message;
                 } else {
-                    textElement.textContent = message;
+                    if (options.title) {
+                        contentHtml += `<div style="font-size: 0.95rem; color: #334155; line-height: 1.45;">${safeEscape(message)}</div>`;
+                        textElement.innerHTML = contentHtml;
+                    } else {
+                        textElement.textContent = message;
+                    }
                 }
                 buttonsContainer.innerHTML = '';
 
@@ -4454,33 +4842,73 @@
             }
 
             const salarioMinimoInput = document.getElementById('salario-minimo');
-            const defaultSalarioMinimo = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
-            if (salarioMinimoInput && !salarioMinimoInput.value) {
-                salarioMinimoInput.value = defaultSalarioMinimo;
-            }
+            const statusSmgElem = document.getElementById('salario-minimo-status');
 
-            // Recuperación dinámica del Salario Mínimo General Vigente
-            async function fetchSalarioMinimoVigente() {
+            // Recuperación dinámica del Salario Mínimo General Vigente desde BD (Cero Hardcodeo)
+            async function fetchSalarioMinimoVigente(fecha = null) {
+                const url = fecha ? `/api/pension/salario-minimo-vigente?fecha=${encodeURIComponent(fecha)}` : '/api/pension/salario-minimo-vigente';
                 try {
-                    const res = await fetch('/api/pension/salario-minimo-vigente', { cache: 'no-store' });
+                    const res = await fetch(url, { cache: 'no-store' });
                     if (res.ok) {
                         const data = await res.json();
-                        if (data && typeof data.salarioMinimo === 'number') {
-                            if (salarioMinimoInput) {
+                        if (data && data.success && typeof data.salarioMinimo === 'number') {
+                            if (salarioMinimoInput && !salarioMinimoInput.dataset.manualEdited) {
                                 salarioMinimoInput.value = data.salarioMinimo;
+                                salarioMinimoInput.dataset.origen = 'OFICIAL';
+                            }
+                            if (statusSmgElem && (!salarioMinimoInput || !salarioMinimoInput.dataset.manualEdited)) {
+                                statusSmgElem.innerHTML = `<span style="color: #15803d; font-weight: 600;"><i class="fas fa-check-circle"></i> Origen: Indicadores de Pensiones (OFICIAL)</span>`;
                             }
                             return data.salarioMinimo;
+                        } else {
+                            // Indicador no encontrado en BD: permitir captura manual obligatoria
+                            if (salarioMinimoInput && !salarioMinimoInput.dataset.manualEdited) {
+                                salarioMinimoInput.value = '';
+                                salarioMinimoInput.dataset.origen = 'MANUAL';
+                            }
+                            if (statusSmgElem) {
+                                statusSmgElem.innerHTML = `
+                                    <div style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 6px 10px; border-radius: 4px; line-height: 1.35; margin-top: 4px;">
+                                        <i class="fas fa-info-circle"></i> No se encontró un indicador vigente para la fecha seleccionada. Capture manualmente el salario mínimo para continuar.<br>
+                                        <strong style="color: #b45309;">Origen: Captura manual (MANUAL)</strong>
+                                    </div>
+                                `;
+                            }
+                            return null;
                         }
                     }
                 } catch (e) {
-                    // Fallback a valor centralizado
+                    console.warn('Error al consultar salario mínimo:', e);
                 }
-                const fallback = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
-                if (salarioMinimoInput && !salarioMinimoInput.value) {
-                    salarioMinimoInput.value = fallback;
+
+                // Error de conexión a BD: solicitar captura manual
+                if (salarioMinimoInput && !salarioMinimoInput.dataset.manualEdited) {
+                    salarioMinimoInput.value = '';
+                    salarioMinimoInput.dataset.origen = 'MANUAL';
                 }
-                return fallback;
+                if (statusSmgElem) {
+                    statusSmgElem.innerHTML = `
+                        <div style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 6px 10px; border-radius: 4px; line-height: 1.35; margin-top: 4px;">
+                            <i class="fas fa-info-circle"></i> No se encontró un indicador vigente para la fecha seleccionada. Capture manualmente el salario mínimo para continuar.<br>
+                            <strong style="color: #b45309;">Origen: Captura manual (MANUAL)</strong>
+                        </div>
+                    `;
+                }
+                return null;
             }
+
+            if (salarioMinimoInput) {
+                salarioMinimoInput.addEventListener('input', () => {
+                    salarioMinimoInput.dataset.manualEdited = 'true';
+                    salarioMinimoInput.dataset.origen = 'MANUAL';
+                    if (statusSmgElem) {
+                        statusSmgElem.innerHTML = `<span style="color: #b45309; font-weight: 600;"><i class="fas fa-pen"></i> Origen: Captura manual (MANUAL)</span>`;
+                    }
+                });
+            }
+
+            // Iniciar consulta de salario mínimo al cargar la interfaz
+            fetchSalarioMinimoVigente();
 
             // Sincronización de Modalidades basada en el modelo RBAC Dinámico
             async function syncPensionModalidades(overridePerms = null) {
@@ -4708,11 +5136,11 @@
 
                 const semVal = semInput ? parseInt(semInput.value, 10) || 0 : 0;
                 const salVal = salInput ? parseFloat(salInput.value) || 0 : 0;
-                const salMinVal = salMinInput ? parseFloat(salMinInput.value) || defaultSalarioMinimo : defaultSalarioMinimo;
+                const salMinVal = salMinInput && salMinInput.value ? parseFloat(salMinInput.value) : null;
 
                 if (proySemAct) proySemAct.value = semVal;
                 if (proySalAct) proySalAct.value = salVal.toFixed(2);
-                if (proySalMinEst && !proySalMinEst.value) proySalMinEst.value = salMinVal.toFixed(2);
+                if (proySalMinEst && !proySalMinEst.value && salMinVal) proySalMinEst.value = salMinVal.toFixed(2);
                 if (proySalNuevo && !proySalNuevo.value && salVal > 0) {
                     proySalNuevo.value = salVal.toFixed(2);
                 }
@@ -4827,7 +5255,18 @@
                     const semAct = parseInt(document.getElementById('proy-semanas-actuales').value, 10) || 0;
                     const salAct = parseFloat(document.getElementById('proy-salario-promedio-actual').value) || 0;
                     const salProj = parseFloat(document.getElementById('proy-salario-diario-nuevo').value) || 0;
-                    const salMinProj = parseFloat(document.getElementById('proy-salario-minimo-estimado').value) || defaultSalarioMinimo;
+                    const salMinProj = parseFloat(document.getElementById('proy-salario-minimo-estimado').value);
+
+                    if (isNaN(salMinProj) || salMinProj <= 0) {
+                        if (msgVal) {
+                            msgVal.style.display = 'block';
+                            msgVal.style.background = '#fef2f2';
+                            msgVal.style.color = '#991b1b';
+                            msgVal.style.border = '1px solid #fecaca';
+                            msgVal.textContent = 'Por favor capture el Salario Mínimo General estimado al terminar la proyección.';
+                        }
+                        return;
+                    }
                     const fechaDesde = proyFechaDesdeInput ? proyFechaDesdeInput.value : '';
                     const fechaHasta = proyFechaHastaInput ? proyFechaHastaInput.value : '';
 
@@ -4943,7 +5382,7 @@
                     const params = {
                         semanasActuales: semAct,
                         salarioPromedioActual: salAct > 0 ? salAct : salProj,
-                        salarioMinimoActual: parseFloat(salarioMinimoInput.value) || defaultSalarioMinimo,
+                        salarioMinimoActual: parseFloat(salarioMinimoInput && salarioMinimoInput.value) || salMinProj,
                         salarioMinimoProyectado: salMinProj,
                         salarioDiarioProyectado: salProj,
                         fechaDesde,
@@ -5037,9 +5476,24 @@
                                     <li><strong>Semanas cotizadas:</strong> ${act.semanasCotizadas}</li>
                                     <li><strong>Salario promedio actual:</strong> ${formatter.format(act.salarioPromedio)}</li>
                                     <li><strong>Salario mínimo utilizado:</strong> ${formatter.format(act.salarioMinimoUtilizado)}</li>
-                                    <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 1.05em; color: #1e293b;">
-                                        <strong>Pensión mensual estimada:</strong><br>
-                                        <span style="font-size: 1.25em; font-weight: 700; color: #0284c7;">${formatter.format(act.pensionMensual)}</span>
+                                    <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 0.95em; color: #1e293b;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="color: #64748b;">Pensión calculada:</span>
+                                            <strong style="color: #334155;">${formatter.format(act.pensionCalculada || act.pensionMensual)}</strong>
+                                        </div>
+                                        ${act.pensionMinimaAplicable ? `
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                                <span style="color: #64748b; display: inline-flex; align-items: center; gap: 4px;">
+                                                    Pensión mínima:
+                                                    <button type="button" class="btn-info-minima-modal" data-scope="act" style="background: none; border: none; color: #2563eb; cursor: pointer; padding: 0; font-size: 0.9em; font-weight: 700;">ⓘ</button>
+                                                </span>
+                                                <strong style="color: #0284c7;">${formatter.format(act.pensionMinimaAplicable)}</strong>
+                                            </div>
+                                        ` : ''}
+                                        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0;">
+                                            <strong style="color: #0284c7; font-size: 0.88em; text-transform: uppercase;">Pensión que aplicará:</strong><br>
+                                            <span style="font-size: 1.25em; font-weight: 700; color: #0284c7;">${formatter.format(act.pensionQueAplicara || act.pensionMensual)}</span>
+                                        </div>
                                     </li>
                                 </ul>
                             </div>
@@ -5065,9 +5519,29 @@
                                             Edad utilizada por IMSS para determinar el porcentaje de pensión.
                                         </small>
                                     </li>
-                                    <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #93c5fd; font-size: 1.05em; color: #1e3a8a;">
-                                        <strong>Pensión mensual proyectada:</strong><br>
-                                        <span style="font-size: 1.3em; font-weight: 800; color: #16a34a;">${formatter.format(proy.pensionMensual)}</span>
+                                    <li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #93c5fd; font-size: 0.95em; color: #1e3a8a;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="color: #475569;">Pensión calculada:</span>
+                                            <strong style="color: #1e3a8a;">${formatter.format(proy.pensionCalculada || proy.pensionMensual)}</strong>
+                                        </div>
+                                        ${proy.pensionMinimaAplicable ? `
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                                <span style="color: #475569; display: inline-flex; align-items: center; gap: 4px;">
+                                                    Pensión mínima:
+                                                    <button type="button" class="btn-info-minima-modal" data-scope="proy" style="background: none; border: none; color: #2563eb; cursor: pointer; padding: 0; font-size: 0.9em; font-weight: 700;">ⓘ</button>
+                                                </span>
+                                                <div style="text-align: right;">
+                                                    <strong style="color: #0284c7;">${formatter.format(proy.pensionMinimaAplicable)}</strong>
+                                                    <span style="display: block; font-size: 0.72em; font-weight: 700; color: ${proy.minimoLegal && proy.minimoLegal.tipoValor === 'OFICIAL' ? '#166534' : '#b45309'};">
+                                                        ${proy.minimoLegal && proy.minimoLegal.tipoValor === 'OFICIAL' ? 'VALOR OFICIAL' : 'VALOR ESTIMADO'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #bfdbfe;">
+                                            <strong style="color: #15803d; font-size: 0.88em; text-transform: uppercase;">Pensión que aplicará:</strong><br>
+                                            <span style="font-size: 1.3em; font-weight: 800; color: #16a34a;">${formatter.format(proy.pensionQueAplicara || proy.pensionMensual)}</span>
+                                        </div>
                                     </li>
                                 </ul>
                             </div>
@@ -5090,6 +5564,17 @@
                             <strong>Supuesto del cálculo:</strong> ${resData.supuestoUtilizado}
                         </div>
                     `;
+
+                    // Conectar botones de info de mínimo legal dentro de la comparativa
+                    resultadoContainer.querySelectorAll('.btn-info-minima-modal').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const scope = btn.getAttribute('data-scope');
+                            const indModal = scope === 'act' ? act.minimoLegal : proy.minimoLegal;
+                            if (typeof abrirModalInfoMinima === 'function') {
+                                abrirModalInfoMinima(indModal);
+                            }
+                        });
+                    });
 
                     // Acción para transferir valores calculados al formulario principal
                     const btnAplicar = document.getElementById('btn-aplicar-valores-calculadora');
@@ -5170,7 +5655,7 @@
                         formEstimacion.style.display = 'block';
                         syncPensionModalidades();
                         if (salarioMinimoInput && !salarioMinimoInput.value) {
-                            salarioMinimoInput.value = defaultSalarioMinimo;
+                            fetchSalarioMinimoVigente();
                         }
                     } else {
                         formEstimacion.style.display = 'none';
@@ -5234,8 +5719,96 @@
                 });
             }
 
+            // =========================================================================
+            // GESTIÓN DEL MODAL DE TRANSPARENCIA: PENSIÓN MÍNIMA LEGAL (FASE 3)
+            // =========================================================================
+            window.ultimoIndicadorPensionMinima = null;
+
+            function abrirModalInfoMinima(indicador) {
+                const ind = indicador || window.ultimoIndicadorPensionMinima;
+                if (!ind) return;
+
+                const modal = document.getElementById('modal-info-pension-minima');
+                const contenedor = document.getElementById('modal-info-minima-contenido');
+                if (!modal || !contenedor) return;
+
+                const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+                const esOficial = ind.esOficial === true || ind.tipoValor === 'OFICIAL';
+
+                contenedor.innerHTML = `
+                    <div style="background: ${esOficial ? '#f0fdf4' : '#fffbeb'}; border: 1px solid ${esOficial ? '#bbf7d0' : '#fde68a'}; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <span style="font-size: 0.8em; font-weight: 700; color: ${esOficial ? '#166534' : '#92400e'}; text-transform: uppercase;">Estado de Publicación:</span>
+                            <div style="font-size: 1.1em; font-weight: 800; color: ${esOficial ? '#15803d' : '#b45309'};">${esOficial ? 'VALOR OFICIAL' : 'VALOR ESTIMADO'}</div>
+                        </div>
+                        <span style="font-size: 0.78em; font-weight: 700; padding: 4px 10px; border-radius: 12px; background: ${esOficial ? '#dcfce7' : '#fef3c7'}; color: ${esOficial ? '#14532d' : '#78350f'}; border: 1px solid ${esOficial ? '#86efac' : '#fcd34d'};">
+                            Régimen: ${(ind.regimen || 'Ley 73').toUpperCase()}
+                        </span>
+                    </div>
+
+                    ${!esOficial ? `
+                        <div style="background: #fff3cd; border-left: 4px solid #f59e0b; padding: 10px 14px; border-radius: 4px; margin-bottom: 16px; font-size: 0.85em; color: #78350f;">
+                            <strong>Aviso de Transparencia:</strong> ${ind.advertencia || 'Este valor es una estimación para ejercicios futuros y se actualizará automáticamente cuando exista publicación oficial en el Diario Oficial de la Federación.'}
+                        </div>
+                    ` : ''}
+
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em; line-height: 1.6;">
+                            <tbody>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 6px 0; font-weight: 600; color: #475569; width: 38%;">Monto Mensual:</td>
+                                    <td style="padding: 6px 0; font-weight: 800; color: #0284c7; font-size: 1.15em;">${formatter.format(ind.pensionMinima || ind.valor || 0)}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 6px 0; font-weight: 600; color: #475569;">Indicador Legal:</td>
+                                    <td style="padding: 6px 0; color: #1e293b;">${ind.nombre || ind.codigo}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 6px 0; font-weight: 600; color: #475569;">Año de Referencia:</td>
+                                    <td style="padding: 6px 0; color: #1e293b;">${ind.anioReferencia || ind.anio || 'N/A'}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 6px 0; font-weight: 600; color: #475569;">Periodo de Vigencia:</td>
+                                    <td style="padding: 6px 0; color: #1e293b;">${ind.fechaVigenciaInicio || '01/01'} al ${ind.fechaVigenciaFin || '31/12'}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 6px 0; font-weight: 600; color: #475569;">Fuente Oficial:</td>
+                                    <td style="padding: 6px 0; color: #1e293b;">${ind.fuente || 'CONASAMI / DOF'}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 6px 0; font-weight: 600; color: #475569;">Fundamento Legal:</td>
+                                    <td style="padding: 6px 0; color: #334155; font-size: 0.88em;">${ind.fundamentoLegal || 'Artículo 168 LSS 1973 y Decreto DOF 20/12/2001'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 6px 0; font-weight: 600; color: #475569;">Fórmula Legal:</td>
+                                    <td style="padding: 6px 0; color: #334155; font-family: monospace; font-size: 0.9em;">${ind.formulaCalculo || 'SMG Diario * (365 / 12) * 1.11'}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                modal.style.display = 'flex';
+            }
+
+            function cerrarModalInfoMinima() {
+                const modal = document.getElementById('modal-info-pension-minima');
+                if (modal) modal.style.display = 'none';
+            }
+
+            const btnCerrarModalMinima = document.getElementById('btn-cerrar-modal-info-minima');
+            const btnEntendidoModalMinima = document.getElementById('btn-entendido-modal-info-minima');
+            if (btnCerrarModalMinima) btnCerrarModalMinima.addEventListener('click', cerrarModalInfoMinima);
+            if (btnEntendidoModalMinima) btnEntendidoModalMinima.addEventListener('click', cerrarModalInfoMinima);
+            const modalMinimaOverlay = document.getElementById('modal-info-pension-minima');
+            if (modalMinimaOverlay) {
+                modalMinimaOverlay.addEventListener('click', (e) => {
+                    if (e.target === modalMinimaOverlay) cerrarModalInfoMinima();
+                });
+            }
+
             if(btnCalcularPension) {
-                btnCalcularPension.addEventListener('click', (e) => {
+                btnCalcularPension.addEventListener('click', async (e) => {
                     e.preventDefault();
 
                     const salarioMinimo = parseFloat(document.getElementById('salario-minimo').value);
@@ -5266,7 +5839,53 @@
                         tieneIncapacidad
                     };
 
-                    const result = calculateIMSSLey73Pension(data);
+                    const rawResult = calculateIMSSLey73Pension(data);
+
+                    // Consultar indicador de pensión mínima legal aplicable
+                    let infoMinimo = null;
+                    try {
+                        const resMin = await fetch('/api/pension/minimo-aplicable?regimen=ley73');
+                        if (resMin.ok) {
+                            const dataMin = await resMin.json();
+                            if (dataMin.success) infoMinimo = dataMin;
+                        }
+                    } catch (netErr) {
+                        console.warn('Uso de contingencia para mínimo legal:', netErr.message);
+                    }
+
+                    if (!infoMinimo) {
+                        infoMinimo = {
+                            codigo: 'PENSION_MINIMA_LEY_73',
+                            regimen: 'ley73',
+                            nombre: 'Pensión Mínima Garantizada Ley 73',
+                            pensionMinima: 10636.54,
+                            valor: 10636.54,
+                            unidad: 'MXN_MENSUAL',
+                            tipoValor: 'OFICIAL',
+                            esOficial: true,
+                            anioReferencia: 2026,
+                            fechaVigenciaInicio: '2026-01-01',
+                            fechaVigenciaFin: '2026-12-31',
+                            fuente: 'DOF / IMSS / CONASAMI',
+                            fundamentoLegal: 'Artículo 168 de la Ley del Seguro Social de 1973 y Decreto DOF 20/12/2001 (factor 1.11)',
+                            formulaCalculo: 'SMG * (365 / 12) * 1.11'
+                        };
+                    }
+
+                    window.ultimoIndicadorPensionMinima = infoMinimo;
+                    const result = (typeof aplicarCapaPensionMinima === 'function')
+                        ? aplicarCapaPensionMinima(rawResult, infoMinimo)
+                        : {
+                            ...rawResult,
+                            pensionCalculada: rawResult.pensionFinalMensual,
+                            pensionMinimaAplicable: infoMinimo.pensionMinima,
+                            pensionQueAplicara: Math.max(rawResult.pensionFinalMensual, infoMinimo.pensionMinima),
+                            aplicaMinimoLegal: infoMinimo.pensionMinima > rawResult.pensionFinalMensual,
+                            explicacionMinimo: infoMinimo.pensionMinima > rawResult.pensionFinalMensual
+                                ? 'Se aplica la pensión mínima legal porque es superior a la pensión calculada.'
+                                : 'La pensión calculada es superior a la pensión mínima legal, por lo que se toma como referencia la pensión calculada.',
+                            minimoLegal: infoMinimo
+                        };
 
                     const formatter = new Intl.NumberFormat('es-MX', {
                         style: 'currency',
@@ -5274,31 +5893,86 @@
                     });
 
                     const formatPorcentaje = (val) => (val * 100).toFixed(0) + ' %';
+                    const esOficial = result.minimoLegal && (result.minimoLegal.esOficial === true || result.minimoLegal.tipoValor === 'OFICIAL');
 
                     const resultContainer = document.getElementById('resultado-pension');
                     resultContainer.style.display = 'block';
                     resultContainer.innerHTML = `
-                        <h3 style="text-align: center; color: #004085;">Pensión mensual estimada: ${formatter.format(result.pensionFinalMensual)}</h3>
+                        <!-- Tres Conceptos Visuales de Pensión (Fase 3) -->
+                        <div class="pension-tres-conceptos-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px;">
+                            <!-- 1. Pensión Calculada -->
+                            <div class="pension-concepto-card" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px 16px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+                                <span style="font-size: 0.82em; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Pensión calculada</span>
+                                <div style="font-size: 1.45em; font-weight: 700; color: #1e293b;">${formatter.format(result.pensionCalculada)}</div>
+                                <small style="display: block; color: #64748b; font-size: 0.76em; margin-top: 4px;">Resultado puro del motor actuarial</small>
+                            </div>
+
+                            <!-- 2. Pensión Mínima Aplicable -->
+                            <div class="pension-concepto-card" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px 16px; text-align: center; position: relative; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+                                <div style="display: flex; justify-content: center; align-items: center; gap: 6px; margin-bottom: 6px;">
+                                    <span style="font-size: 0.82em; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Pensión mínima aplicable</span>
+                                    <button type="button" class="btn-info-pension-minima" id="btn-info-minima-principal" title="Ver detalles de transparencia legal" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #2563eb; width: 22px; height: 22px; border-radius: 50%; font-size: 0.82em; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0;">ⓘ</button>
+                                </div>
+                                <div style="font-size: 1.45em; font-weight: 700; color: #0284c7;">${formatter.format(result.pensionMinimaAplicable)}</div>
+                                <div style="margin-top: 6px;">
+                                    <span style="display: inline-block; font-size: 0.72em; font-weight: 700; padding: 2px 8px; border-radius: 10px; ${esOficial ? 'background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;' : 'background: #fef3c7; color: #92400e; border: 1px solid #fde68a;'}">
+                                        ${esOficial ? 'VALOR OFICIAL' : 'VALOR ESTIMADO'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- 3. Pensión que Aplicará -->
+                            <div class="pension-concepto-card pension-concepto-card--principal" style="background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 14px 16px; text-align: center; box-shadow: 0 4px 12px rgba(34,197,94,0.12);">
+                                <span style="font-size: 0.82em; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Pensión que aplicará</span>
+                                <div style="font-size: 1.6em; font-weight: 900; color: #166534;">${formatter.format(result.pensionQueAplicara)}</div>
+                                <small style="display: block; color: #15803d; font-size: 0.78em; margin-top: 4px; font-weight: 600;">Mayor entre calculada y mínima</small>
+                            </div>
+                        </div>
+
+                        <!-- Banner Explicativo de Prevalencia -->
+                        <div class="pension-explicacion-banner" style="background: ${result.aplicaMinimoLegal ? '#eff6ff' : '#f8fafc'}; border: 1px solid ${result.aplicaMinimoLegal ? '#bfdbfe' : '#e2e8f0'}; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 0.9em; color: ${result.aplicaMinimoLegal ? '#1e40af' : '#334155'}; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas ${result.aplicaMinimoLegal ? 'fa-scale-unbalanced-flip' : 'fa-circle-check'}" style="font-size: 1.25em; color: ${result.aplicaMinimoLegal ? '#2563eb' : '#16a34a'}; flex-shrink: 0;"></i>
+                            <div>
+                                <strong>${result.aplicaMinimoLegal ? 'Garantía Mínima Legal Aplicada:' : 'Cálculo Actuarial Prevaleciente:'}</strong> ${result.explicacionMinimo}
+                            </div>
+                        </div>
+
                         <hr style="margin: 15px 0;">
-                        <h4>Desglose:</h4>
-                        <ul style="list-style-type: none; padding-left: 0; line-height: 1.6;">
-                            <li><strong>Salario diario promedio:</strong> ${formatter.format(result.salarioDiario)}</li>
-                            <li><strong>Salario mensual considerado:</strong> ${formatter.format(result.salarioMensual)}</li>
-                            <li><strong>Veces salario mínimo:</strong> ${result.vecesSalarioMinimo}</li>
-                            <li><strong>Grupo salarial:</strong> ${result.grupoSalarial}</li>
-                            <li><strong>Cuantía básica:</strong> ${(result.cuantiaBasica * 100).toFixed(2)} %</li>
-                            <li><strong>Incrementos completos:</strong> ${result.incrementosCompletos}</li>
-                            <li><strong>Semanas pendientes:</strong> ${result.semanasPendientes}</li>
-                            <li><strong>Incremento adicional:</strong> ${result.incrementoAdicional}</li>
-                            <li><strong>Incrementos totales:</strong> ${result.incrementosTotales}</li>
-                            <li><strong>Porcentaje por edad:</strong> ${formatPorcentaje(result.porcentajeEdad)}</li>
-                            <li><strong>Pensión base mensual:</strong> ${formatter.format(result.pensionBaseMensual)}</li>
-                            <li><strong>Asignaciones familiares (mensual):</strong> ${formatter.format(result.asignacionesFamiliaresAnuales / 12)}</li>
-                            <li><strong>Ayuda asistencial (mensual):</strong> ${formatter.format(result.ayudaAsistencialAnual / 12)}</li>
-                            <li><strong>Factor adicional:</strong> ${result.factorAdicional}</li>
-                            <li><strong>Pensión mensual final:</strong> ${formatter.format(result.pensionFinalMensual)}</li>
-                        </ul>
+                        <details open style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                            <summary style="font-weight: 700; color: #1e293b; cursor: pointer; outline: none; user-select: none;">
+                                <i class="fas fa-list-ol" style="color: #2563eb; margin-right: 6px;"></i> Desglose actuarial detallado (cuantía e incrementos)
+                            </summary>
+                            <ul style="list-style-type: none; padding-left: 0; line-height: 1.7; margin-top: 14px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                                <li><strong>Salario diario promedio:</strong> ${formatter.format(result.salarioDiario)}</li>
+                                <li><strong>Salario mensual considerado:</strong> ${formatter.format(result.salarioMensual)}</li>
+                                <li><strong>Veces salario mínimo:</strong> ${result.vecesSalarioMinimo}</li>
+                                <li><strong>Grupo salarial:</strong> ${result.grupoSalarial}</li>
+                                <li><strong>Cuantía básica:</strong> ${(result.cuantiaBasica * 100).toFixed(2)} %</li>
+                                <li><strong>Incrementos completos:</strong> ${result.incrementosCompletos}</li>
+                                <li><strong>Semanas pendientes:</strong> ${result.semanasPendientes}</li>
+                                <li><strong>Incremento adicional:</strong> ${result.incrementoAdicional}</li>
+                                <li><strong>Incrementos totales:</strong> ${result.incrementosTotales}</li>
+                                <li><strong>Porcentaje por edad:</strong> ${formatPorcentaje(result.porcentajeEdad)}</li>
+                                <li><strong>Pensión base mensual:</strong> ${formatter.format(result.pensionBaseMensual)}</li>
+                                <li><strong>Asignaciones familiares (mensual):</strong> ${formatter.format(result.asignacionesFamiliaresAnuales / 12)}</li>
+                                <li><strong>Ayuda asistencial (mensual):</strong> ${formatter.format(result.ayudaAsistencialAnual / 12)}</li>
+                                <li><strong>Factor adicional:</strong> ${result.factorAdicional}</li>
+                                <li><strong>Pensión mensual final:</strong> ${formatter.format(result.pensionFinalMensual)}</li>
+                                <li><strong>Pensión calculada:</strong> ${formatter.format(result.pensionCalculada)}</li>
+                                <li style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; color: #166534; font-weight: 700;">
+                                    <strong>Pensión mensual que aplicará:</strong> ${formatter.format(result.pensionQueAplicara)}
+                                </li>
+                            </ul>
+                        </details>
                     `;
+
+                    // Conectar botón info del resultado principal
+                    const btnInfoPrincipal = document.getElementById('btn-info-minima-principal');
+                    if (btnInfoPrincipal) {
+                        btnInfoPrincipal.addEventListener('click', () => {
+                            abrirModalInfoMinima(result.minimoLegal || window.ultimoIndicadorPensionMinima);
+                        });
+                    }
                 });
             }
 
@@ -5334,13 +6008,14 @@
                         labelSemanasReset.textContent = 'Semanas cotizadas:';
                     }
 
-                    // Restablecer y recalcular el Salario Mínimo General Vigente oficial sin conservar valores previos
+                    // Restablecer y recalcular el Salario Mínimo General Vigente oficial desde BD
+                    const salMinInput = document.getElementById('salario-minimo');
+                    if (salMinInput) {
+                        delete salMinInput.dataset.manualEdited;
+                        salMinInput.value = '';
+                    }
                     if (typeof fetchSalarioMinimoVigente === 'function') {
                         fetchSalarioMinimoVigente();
-                    } else {
-                        const fallback = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
-                        const salMinInput = document.getElementById('salario-minimo');
-                        if (salMinInput) salMinInput.value = fallback;
                     }
                 });
             }

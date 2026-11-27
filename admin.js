@@ -280,7 +280,8 @@ function clearAllAdminTables() {
         'admin-usuarios-tbody', 'admin-roles-tbody', 'admin-permisos-tbody',
         'admin-funcionalidades-tbody', 'admin-menus-tbody', 'admin-accesos-tbody',
         'admin-asociados-tbody', 'admin-contexto-tbody', 'admin-finanzas-instituciones-tbody',
-        'admin-finanzas-estrategias-tbody'
+        'admin-finanzas-estrategias-tbody',
+        'admin-pensiones-tbody', 'admin-pensiones-historial-tbody', 'admin-pensiones-syncs-tbody'
     ];
     tableIds.forEach(id => {
         const el = document.getElementById(id);
@@ -322,11 +323,13 @@ async function syncAdminTabsAndPermissions() {
         const hasConsolaAccess = consolaPerms.some(p => window.userAdminPermissions.has(p));
         const hasFinanzasAccess = window.userAdminPermissions.has('finanzas.read');
         const hasContextoAccess = window.userAdminPermissions.has('contexto.read');
+        const hasPensionesAccess = window.userAdminPermissions.has('asesoria_pensiones.read') || window.userAdminPermissions.has('asesoria_pensiones.update');
 
         const btnConsola = document.querySelector('.admin-nav-block-btn[data-block="admin-block-consola"]');
         const btnPlanes = document.querySelector('.admin-nav-block-btn[data-block="admin-block-planes"]');
         const btnFinanzas = document.querySelector('.admin-nav-block-btn[data-block="admin-block-finanzas"]');
         const btnContexto = document.querySelector('.admin-nav-block-btn[data-block="admin-block-contexto"]');
+        const btnPensiones = document.querySelector('.admin-nav-block-btn[data-block="admin-block-pensiones"]');
 
         if (btnConsola) {
             btnConsola.style.display = hasConsolaAccess ? 'inline-flex' : 'none';
@@ -343,9 +346,13 @@ async function syncAdminTabsAndPermissions() {
             btnContexto.style.display = hasContextoAccess ? 'inline-flex' : 'none';
             if (!hasContextoAccess) btnContexto.classList.remove('active');
         }
+        if (btnPensiones) {
+            btnPensiones.style.display = hasPensionesAccess ? 'inline-flex' : 'none';
+            if (!hasPensionesAccess) btnPensiones.classList.remove('active');
+        }
 
         // Si el usuario no tiene permisos para ningún módulo administrativo:
-        if (!hasConsolaAccess && !hasFinanzasAccess && !hasContextoAccess) {
+        if (!hasConsolaAccess && !hasFinanzasAccess && !hasContextoAccess && !hasPensionesAccess) {
             const adminSection = document.getElementById('admin');
             if (adminSection) adminSection.style.display = 'none';
             if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
@@ -363,6 +370,7 @@ async function syncAdminTabsAndPermissions() {
 
         if (!activeBlockBtn) {
             if (hasConsolaAccess && btnConsola) activeBlockBtn = btnConsola;
+            else if (hasPensionesAccess && btnPensiones) activeBlockBtn = btnPensiones;
             else if (hasContextoAccess && btnContexto) activeBlockBtn = btnContexto;
             else if (hasFinanzasAccess && btnFinanzas) activeBlockBtn = btnFinanzas;
         }
@@ -395,6 +403,12 @@ async function syncAdminTabsAndPermissions() {
                 if (targetSubtab === 'admin-finanzas-instituciones') await loadFinanzasInstituciones();
                 else if (targetSubtab === 'admin-finanzas-tasas') await loadFinanzasTasas();
                 else if (targetSubtab === 'admin-finanzas-estrategias') await loadFinanzasEstrategias();
+            } else if (activeBlockId === 'admin-block-pensiones') {
+                const subtabActiva = document.querySelector('.admin-pensiones-subtab-btn.active');
+                const targetSubtab = subtabActiva ? subtabActiva.getAttribute('data-pensionestab') : 'admin-pensiones-catalogo';
+                if (targetSubtab === 'admin-pensiones-catalogo') await loadPensionesIndicadores();
+                else if (targetSubtab === 'admin-pensiones-historial') await loadPensionesHistorial();
+                else if (targetSubtab === 'admin-pensiones-syncs') await loadPensionesSyncs();
             }
         }
 
@@ -3472,6 +3486,12 @@ function initAdminBlocks() {
                     if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
                     return;
                 }
+            } else if (blockId === 'admin-block-pensiones') {
+                const hasPensiones = window.userAdminPermissions && (window.userAdminPermissions.has('asesoria_pensiones.read') || window.userAdminPermissions.has('asesoria_pensiones.update'));
+                if (!hasPensiones) {
+                    if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                    return;
+                }
             }
 
             blockBtns.forEach(b => {
@@ -3500,9 +3520,39 @@ function initAdminBlocks() {
                 else if (targetSubtab === 'admin-finanzas-estrategias') loadFinanzasEstrategias();
             } else if (blockId === 'admin-block-contexto') {
                 loadAiContexto();
+            } else if (blockId === 'admin-block-pensiones') {
+                const subtabActiva = document.querySelector('.admin-pensiones-subtab-btn.active');
+                const targetSubtab = subtabActiva ? subtabActiva.getAttribute('data-pensionestab') : 'admin-pensiones-catalogo';
+                if (targetSubtab === 'admin-pensiones-catalogo') loadPensionesIndicadores();
+                else if (targetSubtab === 'admin-pensiones-historial') loadPensionesHistorial();
+                else if (targetSubtab === 'admin-pensiones-syncs') loadPensionesSyncs();
             }
         });
     });
+
+    // Subtabs de Pensiones
+    const pensionesSubtabBtns = document.querySelectorAll('.admin-pensiones-subtab-btn');
+    pensionesSubtabBtns.forEach(btn => {
+        if (btn.dataset.configured) return;
+        btn.dataset.configured = 'true';
+        btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-pensionestab');
+            pensionesSubtabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.querySelectorAll('.admin-pensiones-content').forEach(c => c.style.display = 'none');
+            const targetContent = document.getElementById(target);
+            if (targetContent) targetContent.style.display = 'block';
+
+            if (target === 'admin-pensiones-catalogo') loadPensionesIndicadores();
+            else if (target === 'admin-pensiones-historial') loadPensionesHistorial();
+            else if (target === 'admin-pensiones-syncs') loadPensionesSyncs();
+        });
+    });
+
+    if (typeof initPensionesAdmin === 'function') {
+        initPensionesAdmin();
+    }
 
     // Subtabs de Finanzas
     const finanzasSubtabBtns = document.querySelectorAll('.admin-finanzas-subtab-btn');
@@ -5336,3 +5386,993 @@ window.abrirModalCrearContexto = abrirModalCrearContexto;
 window.abrirModalEditarContexto = abrirModalEditarContexto;
 window.toggleEstatusContexto = toggleEstatusContexto;
 window.confirmarEliminarContexto = confirmarEliminarContexto;
+
+// =========================================================================
+// GESTIÓN DE INDICADORES DE PENSIONES (FASE 4 - ADMIN UI)
+// =========================================================================
+
+let pensionesIndicadoresData = [];
+let pensionesHistorialData = [];
+let pensionesSyncsData = [];
+
+function formatPensionCurrency(num) {
+    if (num === null || num === undefined || isNaN(num)) return '-';
+    return new Intl.NumberFormat('es-MX', {
+        style: 'currency',
+        currency: 'MXN',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4
+    }).format(num);
+}
+
+function formatPensionValor(val, unidad) {
+    if (val === null || val === undefined || isNaN(val)) return '-';
+    if (unidad === 'PESOS_DIARIOS' || unidad === 'PESOS_MENSUALES') {
+        return formatPensionCurrency(val);
+    }
+    return Number(val).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function renderPensionRegimenBadge(regimen) {
+    const reg = (regimen || '').toLowerCase();
+    if (reg === 'ley73') {
+        return '<span class="admin-pensiones-badge admin-pensiones-badge--ley73">Ley 73</span>';
+    } else if (reg === 'ley97') {
+        return '<span class="admin-pensiones-badge admin-pensiones-badge--ley97">Ley 97</span>';
+    }
+    return '<span class="admin-pensiones-badge admin-pensiones-badge--general">General</span>';
+}
+
+function renderPensionTipoBadge(tipo) {
+    if (tipo === 'OFICIAL') {
+        return '<span class="admin-pensiones-badge admin-pensiones-badge--oficial"><i class="fas fa-certificate"></i> OFICIAL</span>';
+    }
+    return '<span class="admin-pensiones-badge admin-pensiones-badge--estimado"><i class="fas fa-hourglass-half"></i> ESTIMADO</span>';
+}
+
+function renderPensionMetodoBadge(metodo) {
+    if (metodo === 'AUTOMATICA') {
+        return '<span class="admin-pensiones-badge admin-pensiones-badge--auto"><i class="fas fa-bolt"></i> AUTO</span>';
+    }
+    return '<span class="admin-pensiones-badge admin-pensiones-badge--manual"><i class="fas fa-hand"></i> MANUAL</span>';
+}
+
+function renderPensionEstadoBadge(activo) {
+    if (activo) {
+        return '<span class="badge" style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px; font-weight: 600; font-size: 0.75rem;"><i class="fas fa-check-circle"></i> Activo</span>';
+    }
+    return '<span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 9999px; font-weight: 600; font-size: 0.75rem;"><i class="fas fa-ban"></i> Inactivo</span>';
+}
+
+function renderPensionBloqueoBadge(bloqueado) {
+    if (bloqueado) {
+        return '<span class="admin-pensiones-badge admin-pensiones-badge--locked" title="Auto-sync bloqueada: no será sobreescrito automáticamente"><i class="fas fa-lock"></i> 🔒</span>';
+    }
+    return '<span class="admin-pensiones-badge admin-pensiones-badge--unlocked" title="Auto-sync permitida"><i class="fas fa-rotate"></i> 🔄</span>';
+}
+
+async function loadPensionesIndicadores() {
+    try {
+        const res = await fetch('/api/admin/pensiones/indicadores');
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            handleAdminError(res, data, 'Error al cargar los indicadores de pensiones.');
+            return;
+        }
+        const data = await res.json();
+        pensionesIndicadoresData = (data && data.indicadores) ? data.indicadores : [];
+
+        // Poblar dinámicamente el selector de año
+        const anioSelect = document.getElementById('admin-pensiones-filtro-anio');
+        if (anioSelect) {
+            const currentSelected = anioSelect.value;
+            const years = Array.from(new Set(pensionesIndicadoresData.map(i => i.anio_referencia).filter(Boolean))).sort((a, b) => b - a);
+            anioSelect.innerHTML = '<option value="todos">Todos los años</option>' + 
+                years.map(y => `<option value="${y}">${y}</option>`).join('');
+            if (currentSelected && (currentSelected === 'todos' || years.includes(parseInt(currentSelected, 10)))) {
+                anioSelect.value = currentSelected;
+            }
+        }
+
+        // Visibilidad del botón de sincronizar según asesoria_pensiones.update
+        const btnSync = document.getElementById('admin-pensiones-btn-sync');
+        if (btnSync) {
+            const canUpdate = window.userAdminPermissions && window.userAdminPermissions.has('asesoria_pensiones.update');
+            btnSync.style.display = canUpdate ? 'inline-flex' : 'none';
+        }
+
+        renderPensionesIndicadoresTabla();
+    } catch (err) {
+        console.error('Error in loadPensionesIndicadores:', err);
+        const counter = document.getElementById('admin-pensiones-counter');
+        if (counter) counter.textContent = 'Error al cargar indicadores.';
+    }
+}
+
+function renderPensionesIndicadoresTabla() {
+    const tbody = document.getElementById('admin-pensiones-tbody');
+    const counter = document.getElementById('admin-pensiones-counter');
+    if (!tbody) return;
+
+    const fRegimen = (document.getElementById('admin-pensiones-filtro-regimen')?.value || 'todos').toLowerCase();
+    const fAnio = document.getElementById('admin-pensiones-filtro-anio')?.value || 'todos';
+    const fTipo = document.getElementById('admin-pensiones-filtro-tipo')?.value || 'todos';
+    const fMetodo = document.getElementById('admin-pensiones-filtro-metodo')?.value || 'todos';
+    const fEstado = document.getElementById('admin-pensiones-filtro-estado')?.value || 'todos';
+
+    const filtered = pensionesIndicadoresData.filter(item => {
+        if (fRegimen !== 'todos' && (item.regimen || '').toLowerCase() !== fRegimen) return false;
+        if (fAnio !== 'todos' && String(item.anio_referencia) !== String(fAnio)) return false;
+        if (fTipo !== 'todos' && item.tipo_valor !== fTipo) return false;
+        if (fMetodo !== 'todos' && item.metodo_obtencion !== fMetodo) return false;
+        if (fEstado !== 'todos' && String(item.activo) !== String(fEstado)) return false;
+        return true;
+    });
+
+    if (counter) {
+        counter.textContent = `Mostrando ${filtered.length} de ${pensionesIndicadoresData.length} indicadores`;
+    }
+
+    tbody.innerHTML = '';
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: #64748b; padding: 24px;">No se encontraron indicadores con los filtros seleccionados.</td></tr>';
+        return;
+    }
+
+    const canUpdate = window.userAdminPermissions && window.userAdminPermissions.has('asesoria_pensiones.update');
+
+    filtered.forEach(ind => {
+        const tr = document.createElement('tr');
+        
+        // Indicador
+        const tdNombre = document.createElement('td');
+        tdNombre.innerHTML = `<strong>${escapeHTML(ind.nombre)}</strong>`;
+
+        // Código
+        const tdCodigo = document.createElement('td');
+        tdCodigo.innerHTML = `<span class="admin-pensiones-badge" style="background: #f1f5f9; color: #334155; font-family: monospace;">${escapeHTML(ind.codigo)}</span>`;
+
+        // Régimen
+        const tdRegimen = document.createElement('td');
+        tdRegimen.style.textAlign = 'center';
+        tdRegimen.innerHTML = renderPensionRegimenBadge(ind.regimen);
+
+        // Año
+        const tdAnio = document.createElement('td');
+        tdAnio.style.textAlign = 'center';
+        tdAnio.innerHTML = `<strong>${escapeHTML(ind.anio_referencia)}</strong>`;
+
+        // Valor
+        const tdValor = document.createElement('td');
+        tdValor.style.textAlign = 'right';
+        tdValor.style.fontWeight = '700';
+        tdValor.innerHTML = formatPensionValor(ind.valor, ind.unidad);
+
+        // Unidad
+        const tdUnidad = document.createElement('td');
+        tdUnidad.style.textAlign = 'center';
+        tdUnidad.innerHTML = `<span style="font-size: 0.8rem; color: #64748b;">${escapeHTML(ind.unidad)}</span>`;
+
+        // Tipo
+        const tdTipo = document.createElement('td');
+        tdTipo.style.textAlign = 'center';
+        tdTipo.innerHTML = renderPensionTipoBadge(ind.tipo_valor);
+
+        // Vigencia
+        const tdVigencia = document.createElement('td');
+        tdVigencia.style.textAlign = 'center';
+        tdVigencia.style.fontSize = '0.82rem';
+        const finStr = ind.fecha_vigencia_fin || 'Indefinida';
+        tdVigencia.innerHTML = `<span>${escapeHTML(ind.fecha_vigencia_inicio)}</span><br><span style="color: #94a3b8;">a</span><br><span>${escapeHTML(finStr)}</span>`;
+
+        // Fuente
+        const tdFuente = document.createElement('td');
+        tdFuente.style.fontSize = '0.85rem';
+        if (ind.fuente_url) {
+            tdFuente.innerHTML = `<a href="${escapeHTML(ind.fuente_url)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;" title="${escapeHTML(ind.fuente_url)}">${escapeHTML(ind.fuente)} <i class="fas fa-external-link-alt" style="font-size: 0.75rem;"></i></a>`;
+        } else {
+            tdFuente.textContent = ind.fuente || '-';
+        }
+
+        // Método
+        const tdMetodo = document.createElement('td');
+        tdMetodo.style.textAlign = 'center';
+        tdMetodo.innerHTML = renderPensionMetodoBadge(ind.metodo_obtencion);
+
+        // Estado (con bloqueo auto-sync)
+        const tdEstado = document.createElement('td');
+        tdEstado.style.textAlign = 'center';
+        tdEstado.innerHTML = `<div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+            ${renderPensionEstadoBadge(ind.activo)}
+            ${renderPensionBloqueoBadge(ind.bloqueo_actualizacion_automatica)}
+        </div>`;
+
+        // Acciones
+        const tdAcciones = document.createElement('td');
+        tdAcciones.className = 'admin-actions-cell';
+        tdAcciones.style.textAlign = 'center';
+        const group = createAdminActionsGroup();
+
+        // 1. Ver Detalle (siempre accesible para asesoria_pensiones.read)
+        const btnDetalle = createAdminActionButton({
+            type: 'detail',
+            icon: 'fas fa-circle-info',
+            title: `Ver detalle completo de ${ind.nombre} (${ind.anio_referencia})`,
+            srText: 'Ver detalle',
+            onClick: () => abrirModalDetalleIndicador(ind.id)
+        });
+        group.appendChild(btnDetalle);
+
+        // 2. Acciones mutadoras (sólo si tiene asesoria_pensiones.update)
+        if (canUpdate) {
+            // Editar
+            const btnEdit = createAdminActionButton({
+                type: 'edit',
+                icon: 'fas fa-pen-to-square',
+                title: `Editar indicador ${ind.nombre}`,
+                srText: 'Editar',
+                onClick: () => abrirModalEditarIndicador(ind.id)
+            });
+            group.appendChild(btnEdit);
+
+            // Toggle Activo/Inactivo
+            const btnToggleEstado = createAdminActionButton({
+                type: ind.activo ? 'toggle-active' : 'toggle-inactive',
+                icon: ind.activo ? 'fas fa-toggle-on' : 'fas fa-toggle-off',
+                title: ind.activo ? 'Desactivar indicador' : 'Activar indicador',
+                srText: ind.activo ? 'Desactivar' : 'Activar',
+                onClick: () => toggleEstadoIndicador(ind.id, ind.activo ? 0 : 1)
+            });
+            group.appendChild(btnToggleEstado);
+
+            // Toggle Bloqueo auto-sync
+            const btnToggleBloqueo = createAdminActionButton({
+                type: ind.bloqueo_actualizacion_automatica ? 'lock' : 'unlock',
+                icon: ind.bloqueo_actualizacion_automatica ? 'fas fa-lock' : 'fas fa-lock-open',
+                title: ind.bloqueo_actualizacion_automatica ? 'Desbloquear auto-sync (permitir actualización automática)' : 'Bloquear auto-sync (proteger contra actualización automática)',
+                srText: ind.bloqueo_actualizacion_automatica ? 'Desbloquear auto-sync' : 'Bloquear auto-sync',
+                onClick: () => toggleBloqueoIndicador(ind.id, ind.bloqueo_actualizacion_automatica ? 0 : 1)
+            });
+            group.appendChild(btnToggleBloqueo);
+        }
+
+        tdAcciones.appendChild(group);
+
+        tr.appendChild(tdNombre);
+        tr.appendChild(tdCodigo);
+        tr.appendChild(tdRegimen);
+        tr.appendChild(tdAnio);
+        tr.appendChild(tdValor);
+        tr.appendChild(tdUnidad);
+        tr.appendChild(tdTipo);
+        tr.appendChild(tdVigencia);
+        tr.appendChild(tdFuente);
+        tr.appendChild(tdMetodo);
+        tr.appendChild(tdEstado);
+        tr.appendChild(tdAcciones);
+
+        tbody.appendChild(tr);
+    });
+
+    const tabla = document.getElementById('admin-pensiones-tabla');
+    if (tabla) makeAdminTableSortable(tabla);
+}
+
+async function abrirModalDetalleIndicador(id) {
+    let ind = pensionesIndicadoresData.find(i => i.id === id);
+    if (!ind) {
+        try {
+            const res = await fetch(`/api/admin/pensiones/indicadores/${id}`);
+            if (res.ok) {
+                const data = await res.json();
+                ind = data.indicador;
+            }
+        } catch (e) {
+            console.error('Error fetching indicator details:', e);
+        }
+    }
+    if (!ind) {
+        if (window.showModal) window.showModal('No se pudo encontrar el detalle del indicador.');
+        return;
+    }
+
+    const modal = document.getElementById('modal-pension-detalle');
+    const modalBody = document.getElementById('modal-pension-detalle-body');
+    const modalTitulo = document.getElementById('modal-pension-detalle-titulo');
+    if (!modal || !modalBody) return;
+
+    if (modalTitulo) {
+        modalTitulo.innerHTML = `<i class="fas fa-circle-info" style="color: #2563eb;"></i> <span>Detalle: ${escapeHTML(ind.nombre)} (${escapeHTML(ind.anio_referencia)})</span>`;
+    }
+
+    // Determinación de fecha de observación de fuente para transparencia
+    let fechaObservacionStr = ind.fecha_vigencia_inicio;
+    if (ind.codigo === 'SALARIO_MINIMO_GENERAL' && ind.anio_referencia === 2026) {
+        fechaObservacionStr = '01/10/2026 (publicado por Banxico / CONASAMI)';
+    } else if (ind.codigo === 'PENSION_MINIMA_LEY_73' && ind.anio_referencia === 2026) {
+        fechaObservacionStr = 'Derivada atómicamente de SMG 2026 (observación 01/10/2026)';
+    }
+
+    modalBody.innerHTML = `
+        <!-- TRANSPARENCIA DE FECHAS (Requisito clave de auditoría) -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
+            <div style="font-weight: 700; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-calendar-check"></i> Transparencia de Fechas y Vigencia Legal
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 0.85rem;">
+                <div>
+                    <span style="color: #64748b; display: block; font-weight: 600;">Fecha Observación Fuente:</span>
+                    <strong style="color: #1e293b;">${escapeHTML(fechaObservacionStr)}</strong>
+                </div>
+                <div>
+                    <span style="color: #64748b; display: block; font-weight: 600;">Inicio de Vigencia Legal:</span>
+                    <strong style="color: #1e293b;">${escapeHTML(ind.fecha_vigencia_inicio)}</strong>
+                </div>
+                <div>
+                    <span style="color: #64748b; display: block; font-weight: 600;">Fin de Vigencia Legal:</span>
+                    <strong style="color: #1e293b;">${escapeHTML(ind.fecha_vigencia_fin || 'Indefinida / En vigor')}</strong>
+                </div>
+                <div>
+                    <span style="color: #64748b; display: block; font-weight: 600;">Ejercicio Fiscal Aplicable:</span>
+                    <strong style="color: #1e293b;">${escapeHTML(ind.anio_referencia)}</strong>
+                </div>
+            </div>
+            <div style="margin-top: 8px; font-size: 0.78rem; color: #3b82f6; border-top: 1px dashed #bfdbfe; padding-top: 6px;">
+                <i class="fas fa-circle-exclamation"></i> <em>Nota Institucional:</em> La fecha de observación de la fuente corresponde a la publicación de la serie oficial por la autoridad emisora. La vigencia legal surte efectos jurídicos en Idealandia durante todo el ejercicio fiscal indicado (1 de enero al 31 de diciembre).
+            </div>
+        </div>
+
+        <!-- 18 CAMPOS COMPLETOS -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.88rem; margin-bottom: 16px;">
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">1. ID DE REGISTRO</span>
+                <span style="font-weight: 600; color: #1e293b;">${escapeHTML(ind.id)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">2. CÓDIGO</span>
+                <span style="font-weight: 600; font-family: monospace; color: #1e293b;">${escapeHTML(ind.codigo)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">3. RÉGIMEN</span>
+                <span>${renderPensionRegimenBadge(ind.regimen)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">4. NOMBRE DEL INDICADOR</span>
+                <span style="font-weight: 600; color: #1e293b;">${escapeHTML(ind.nombre)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">5. VALOR NUMÉRICO</span>
+                <span style="font-weight: 700; color: #0f172a; font-size: 1.05rem;">${formatPensionValor(ind.valor, ind.unidad)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">6. UNIDAD DE MEDIDA</span>
+                <span style="font-weight: 600; color: #475569;">${escapeHTML(ind.unidad)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">7. TIPO DE VALOR</span>
+                <span>${renderPensionTipoBadge(ind.tipo_valor)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">8. AÑO DE REFERENCIA</span>
+                <span style="font-weight: 700; color: #1e293b;">${escapeHTML(ind.anio_referencia)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">9. INICIO DE VIGENCIA</span>
+                <span style="font-weight: 600; color: #1e293b;">${escapeHTML(ind.fecha_vigencia_inicio)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">10. FIN DE VIGENCIA</span>
+                <span style="font-weight: 600; color: #1e293b;">${escapeHTML(ind.fecha_vigencia_fin || 'Indefinida')}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">11. FUENTE OFICIAL</span>
+                <span style="font-weight: 600; color: #1e293b;">${escapeHTML(ind.fuente)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">12. MÉTODO DE OBTENCIÓN</span>
+                <span>${renderPensionMetodoBadge(ind.metodo_obtencion)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">13. BLOQUEO AUTO-SYNC</span>
+                <span>${renderPensionBloqueoBadge(ind.bloqueo_actualizacion_automatica)} ${ind.bloqueo_actualizacion_automatica ? 'Protegido contra auto-sync' : 'Auto-sync habilitado'}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">14. ESTADO OPERATIVO</span>
+                <span>${renderPensionEstadoBadge(ind.activo)}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">15. FECHA DE CREACIÓN</span>
+                <span style="color: #64748b;">${escapeHTML(ind.created_at || '-')}</span>
+            </div>
+            <div style="padding: 8px 12px; background: #f8fafc; border-radius: 6px;">
+                <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">16. ÚLTIMA ACTUALIZACIÓN</span>
+                <span style="color: #64748b;">${escapeHTML(ind.updated_at || '-')}</span>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 12px; padding: 10px 14px; background: #f8fafc; border-radius: 6px; font-size: 0.88rem;">
+            <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">17. FUNDAMENTO LEGAL</span>
+            <div style="color: #1e293b; margin-top: 4px; line-height: 1.4;">${escapeHTML(ind.fundamento_legal || 'No especificado')}</div>
+        </div>
+
+        <div style="margin-bottom: 16px; padding: 10px 14px; background: #f8fafc; border-radius: 6px; font-size: 0.88rem;">
+            <span style="color: #64748b; display: block; font-size: 0.75rem; font-weight: 700;">18. FÓRMULA DE CÁLCULO / DERIVACIÓN</span>
+            <div style="color: #1e293b; margin-top: 4px; font-family: monospace;">${escapeHTML(ind.formula_calculo || 'Directo / No aplica fórmula')}</div>
+        </div>
+
+        ${ind.fuente_url ? `
+        <div style="margin-bottom: 16px; font-size: 0.85rem;">
+            <span style="color: #64748b; font-weight: 600;">Enlace a fuente oficial: </span>
+            <a href="${escapeHTML(ind.fuente_url)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">
+                ${escapeHTML(ind.fuente_url)} <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.75rem;"></i>
+            </a>
+        </div>` : ''}
+
+        <div style="display: flex; justify-content: flex-end; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+            <button type="button" class="btn" onclick="document.getElementById('modal-pension-detalle').style.display='none'" style="background: #e2e8f0; color: #334155; padding: 8px 18px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">Cerrar</button>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+}
+
+async function abrirModalEditarIndicador(id) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    let ind = pensionesIndicadoresData.find(i => i.id === id);
+    if (!ind) {
+        try {
+            const res = await fetch(`/api/admin/pensiones/indicadores/${id}`);
+            if (res.ok) {
+                const data = await res.json();
+                ind = data.indicador;
+            }
+        } catch (e) {
+            console.error('Error fetching indicator for edit:', e);
+        }
+    }
+    if (!ind) {
+        if (window.showModal) window.showModal('No se pudo encontrar el indicador.');
+        return;
+    }
+
+    document.getElementById('edit-pension-id').value = ind.id;
+    document.getElementById('edit-pension-nombre-display').textContent = ind.nombre;
+    document.getElementById('edit-pension-codigo-display').textContent = ind.codigo;
+    document.getElementById('edit-pension-anio-display').textContent = ind.anio_referencia;
+
+    document.getElementById('edit-pension-valor').value = ind.valor;
+    document.getElementById('edit-pension-tipo').value = ind.tipo_valor || 'OFICIAL';
+    document.getElementById('edit-pension-vigencia-inicio').value = ind.fecha_vigencia_inicio || '';
+    document.getElementById('edit-pension-vigencia-fin').value = ind.fecha_vigencia_fin || '';
+    document.getElementById('edit-pension-fuente').value = ind.fuente || '';
+    document.getElementById('edit-pension-fuente-url').value = ind.fuente_url || '';
+    document.getElementById('edit-pension-fundamento').value = ind.fundamento_legal || '';
+    document.getElementById('edit-pension-formula').value = ind.formula_calculo || '';
+    document.getElementById('edit-pension-bloqueo').checked = !!ind.bloqueo_actualizacion_automatica;
+    document.getElementById('edit-pension-motivo').value = '';
+
+    const modal = document.getElementById('modal-pension-editar');
+    if (modal) modal.style.display = 'flex';
+}
+
+async function toggleEstadoIndicador(id, nuevoEstado) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    const accion = nuevoEstado ? 'activar' : 'desactivar';
+    const motivo = prompt(`Motivo para ${accion} este indicador:`, `Cambio administrativo de estado a ${nuevoEstado ? 'Activo' : 'Inactivo'}`);
+    if (motivo === null) return;
+
+    try {
+        const res = await fetch(`/api/admin/pensiones/indicadores/${id}/estado`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activo: nuevoEstado, motivo: motivo.trim() || undefined })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            if (window.showModal) window.showModal(data.message || `Indicador ${accion}do exitosamente.`);
+            await loadPensionesIndicadores();
+            await loadPensionesHistorial();
+        } else {
+            handleAdminError(res, data, `Error al ${accion} el indicador.`);
+        }
+    } catch (e) {
+        console.error('Error toggling estado indicador:', e);
+        if (window.showModal) window.showModal('Error de conexión al actualizar estado.');
+    }
+}
+
+async function toggleBloqueoIndicador(id, nuevoBloqueo) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    const accion = nuevoBloqueo ? 'bloquear' : 'desbloquear';
+    const motivo = prompt(`Motivo para ${accion} la actualización automática de este indicador:`, `${nuevoBloqueo ? 'Protección contra sobreescritura automática' : 'Habilitación de sincronización automática'}`);
+    if (motivo === null) return;
+
+    try {
+        const res = await fetch(`/api/admin/pensiones/indicadores/${id}/bloqueo`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bloqueo: nuevoBloqueo, motivo: motivo.trim() || undefined })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            if (window.showModal) window.showModal(data.message || `Bloqueo de auto-sync actualizado exitosamente.`);
+            await loadPensionesIndicadores();
+            await loadPensionesHistorial();
+        } else {
+            handleAdminError(res, data, 'Error al actualizar el bloqueo de auto-sync.');
+        }
+    } catch (e) {
+        console.error('Error toggling bloqueo indicador:', e);
+        if (window.showModal) window.showModal('Error de conexión al actualizar bloqueo.');
+    }
+}
+
+function abrirModalSincronizarIndicadores() {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    const modal = document.getElementById('modal-pension-sync');
+    const dryRunCheck = document.getElementById('sync-pension-dryrun');
+    const resultadoDiv = document.getElementById('sync-pension-resultado');
+    const btnReal = document.getElementById('btn-ejecutar-sync-real');
+    const actionText = document.getElementById('btn-sync-action-text');
+
+    if (dryRunCheck) dryRunCheck.checked = true;
+    if (resultadoDiv) {
+        resultadoDiv.style.display = 'none';
+        resultadoDiv.innerHTML = '';
+    }
+    if (btnReal) btnReal.style.display = 'none';
+    if (actionText) actionText.textContent = 'Ejecutar Simulación (Dry Run)';
+
+    if (modal) modal.style.display = 'flex';
+}
+
+async function ejecutarSincronizacionIndicadores(isReal = false) {
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    const fuenteRadio = document.querySelector('input[name="sync-pension-fuente"]:checked');
+    const fuente = fuenteRadio ? fuenteRadio.value : 'BANXICO_SIE';
+    const dryRun = !isReal;
+
+    const btnSim = document.getElementById('btn-ejecutar-sync-simulacion');
+    const btnReal = document.getElementById('btn-ejecutar-sync-real');
+    const resultadoDiv = document.getElementById('sync-pension-resultado');
+
+    if (btnSim) btnSim.disabled = true;
+    if (btnReal) btnReal.disabled = true;
+
+    if (resultadoDiv) {
+        resultadoDiv.style.display = 'block';
+        resultadoDiv.style.background = '#f8fafc';
+        resultadoDiv.style.border = '1px solid #cbd5e1';
+        resultadoDiv.innerHTML = `<div style="display: flex; align-items: center; gap: 10px; color: #475569;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Consultando ${escapeHTML(fuente)} en modo ${dryRun ? 'SIMULACIÓN (Dry Run)' : 'SINCRONIZACIÓN REAL'}...</span>
+        </div>`;
+    }
+
+    try {
+        const res = await fetch('/api/admin/pensiones/indicadores/sincronizar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fuente, dryRun })
+        });
+        const data = await res.json();
+
+        if (btnSim) btnSim.disabled = false;
+        if (btnReal) btnReal.disabled = false;
+
+        const resObj = data.resultado || data;
+        const estado = resObj.estado || data.estado || data.error || 'ERROR_DESCONOCIDO';
+        const isSuccess = data.success && (estado === 'EXITO_ACTUALIZADO' || estado === 'EXITO_SIN_CAMBIOS' || estado === 'EXITO_DRY_RUN');
+
+        let bg = '#eff6ff';
+        let borderColor = '#93c5fd';
+        let textColor = '#1e3a8a';
+
+        if (estado === 'EXITO_ACTUALIZADO' || estado === 'EXITO_DRY_RUN') {
+            bg = '#f0fdf4';
+            borderColor = '#86efac';
+            textColor = '#14532d';
+        } else if (estado.startsWith('ERROR_') || estado.startsWith('RECHAZADO_')) {
+            bg = '#fef2f2';
+            borderColor = '#fca5a5';
+            textColor = '#7f1d1d';
+        }
+
+        if (resultadoDiv) {
+            resultadoDiv.style.background = bg;
+            resultadoDiv.style.border = `1px solid ${borderColor}`;
+            resultadoDiv.style.color = textColor;
+
+            let cambiosHtml = '';
+            if (Array.isArray(resObj.cambiosPropuestos) && resObj.cambiosPropuestos.length > 0) {
+                cambiosHtml = '<div style="margin-top: 8px; border-top: 1px dashed #cbd5e1; padding-top: 6px;"><strong>Cambios calculados:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">' +
+                    resObj.cambiosPropuestos.map(c => `<li><strong>${escapeHTML(c.codigo)} (${c.ejercicioFiscal}):</strong> Actual $${c.valorAnterior || '-'} ➔ Candidato $${c.valorCandidato}</li>`).join('') +
+                    '</ul></div>';
+            }
+
+            resultadoDiv.innerHTML = `
+                <div style="font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                    <i class="${isSuccess ? 'fas fa-circle-check' : 'fas fa-circle-exclamation'}"></i>
+                    <span>Resultado: ${escapeHTML(estado)} ${dryRun ? '(SIMULACIÓN)' : '(APLICADO EN BD)'}</span>
+                </div>
+                <div style="font-size: 0.85rem; line-height: 1.5;">
+                    <div><strong>Mensaje:</strong> ${escapeHTML(data.mensaje || resObj.mensaje || 'Proceso finalizado.')}</div>
+                    ${resObj.indicador ? `<div><strong>Indicador:</strong> ${escapeHTML(resObj.indicador)} (Año: ${escapeHTML(resObj.anio)})</div>` : ''}
+                    ${resObj.valorCandidato ? `<div><strong>Valor obtenido:</strong> ${formatPensionValor(resObj.valorCandidato, 'PESOS_DIARIOS')}</div>` : ''}
+                    ${resObj.valorAnterior ? `<div><strong>Valor anterior:</strong> ${formatPensionValor(resObj.valorAnterior, 'PESOS_DIARIOS')}</div>` : ''}
+                    ${resObj.duracionMs ? `<div><strong>Tiempo de respuesta de fuente:</strong> ${resObj.duracionMs} ms</div>` : ''}
+                    ${resObj.fechaObservacionFuente ? `<div><strong>Fecha observación de fuente:</strong> ${escapeHTML(resObj.fechaObservacionFuente)}</div>` : ''}
+                    ${cambiosHtml}
+                </div>
+            `;
+        }
+
+        if (dryRun && isSuccess && btnReal) {
+            btnReal.style.display = 'inline-flex';
+        }
+
+        if (!dryRun && isSuccess) {
+            await loadPensionesIndicadores();
+            await loadPensionesHistorial();
+            await loadPensionesSyncs();
+            if (window.showModal) window.showModal('Sincronización real aplicada exitosamente.');
+        }
+    } catch (err) {
+        console.error('Error during synchronization:', err);
+        if (btnSim) btnSim.disabled = false;
+        if (btnReal) btnReal.disabled = false;
+        if (resultadoDiv) {
+            resultadoDiv.style.background = '#fef2f2';
+            resultadoDiv.style.border = '1px solid #fca5a5';
+            resultadoDiv.style.color = '#7f1d1d';
+            resultadoDiv.innerHTML = `<i class="fas fa-circle-xmark"></i> Error de conexión al sincronizar indicadores.`;
+        }
+    }
+}
+
+async function loadPensionesHistorial() {
+    const tbody = document.getElementById('admin-pensiones-historial-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #64748b; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando historial de cambios...</td></tr>';
+
+    try {
+        const res = await fetch('/api/admin/pensiones/historial?limit=100');
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            handleAdminError(res, data, 'Error al cargar historial.');
+            return;
+        }
+        const data = await res.json();
+        pensionesHistorialData = (data && data.historial) ? data.historial : [];
+
+        tbody.innerHTML = '';
+        if (pensionesHistorialData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #64748b; padding: 24px;">No hay registros de cambios en el historial.</td></tr>';
+            return;
+        }
+
+        pensionesHistorialData.forEach(h => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-size: 0.85rem; color: #475569;">${escapeHTML(h.fecha_cambio || h.created_at)}</td>
+                <td>
+                    <strong>${escapeHTML(h.indicador_nombre || h.codigo)}</strong>
+                    <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;">${escapeHTML(h.codigo)} (${escapeHTML(h.anio_referencia)})</div>
+                </td>
+                <td style="text-align: right; font-size: 0.88rem; color: #64748b;">${formatPensionValor(h.valor_anterior, 'PESOS_DIARIOS')}</td>
+                <td style="text-align: right; font-size: 0.88rem; font-weight: 700; color: #0f172a;">${formatPensionValor(h.valor_nuevo, 'PESOS_DIARIOS')}</td>
+                <td style="text-align: center;">${renderPensionTipoBadge(h.tipo_valor)}</td>
+                <td style="font-size: 0.85rem; max-width: 250px;">${escapeHTML(h.motivo || '-')}</td>
+                <td style="font-size: 0.85rem;">${escapeHTML(h.fuente || '-')}</td>
+                <td style="font-size: 0.8rem;">
+                    ${h.fuente_url ? `<a href="${escapeHTML(h.fuente_url)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;" title="${escapeHTML(h.fuente_url)}">Enlace <i class="fas fa-external-link-alt" style="font-size: 0.7rem;"></i></a>` : '-'}
+                </td>
+                <td style="font-size: 0.85rem; color: #334155;">
+                    <i class="fas fa-user-circle" style="color: #94a3b8;"></i> ${escapeHTML(h.usuario_nombre || (h.usuario_id ? `ID #${h.usuario_id}` : 'Sistema Automático'))}
+                </td>
+                <td style="text-align: center;">${renderPensionMetodoBadge(h.metodo_actualizacion)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('Error in loadPensionesHistorial:', err);
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #dc2626; padding: 20px;">Error al cargar historial.</td></tr>';
+    }
+}
+
+async function loadPensionesSyncs() {
+    const tbody = document.getElementById('admin-pensiones-syncs-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #64748b; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando registro de sincronizaciones...</td></tr>';
+
+    try {
+        const res = await fetch('/api/admin/pensiones/sincronizaciones?limit=100');
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            handleAdminError(res, data, 'Error al consultar sincronizaciones.');
+            return;
+        }
+        const data = await res.json();
+        pensionesSyncsData = (data && data.sincronizaciones) ? data.sincronizaciones : [];
+
+        tbody.innerHTML = '';
+        if (pensionesSyncsData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #64748b; padding: 24px;">No hay registros de sincronizaciones.</td></tr>';
+            return;
+        }
+
+        pensionesSyncsData.forEach(s => {
+            const tr = document.createElement('tr');
+            
+            let estadoBadgeClass = 'admin-pensiones-badge';
+            let estadoIcon = 'fa-info-circle';
+            const est = s.estado || '';
+            if (est === 'EXITO_ACTUALIZADO') {
+                estadoBadgeClass += ' admin-pensiones-badge--sync-success';
+                estadoIcon = 'fa-check-circle';
+            } else if (est === 'EXITO_SIN_CAMBIOS') {
+                estadoBadgeClass += ' admin-pensiones-badge--sync-unchanged';
+                estadoIcon = 'fa-equals';
+            } else if (est.startsWith('ERROR_')) {
+                estadoBadgeClass += ' admin-pensiones-badge--sync-error';
+                estadoIcon = 'fa-triangle-exclamation';
+            } else if (est.startsWith('RECHAZADO_')) {
+                estadoBadgeClass += ' admin-pensiones-badge--sync-rejected';
+                estadoIcon = 'fa-shield-halved';
+            }
+
+            const dryRunBadge = s.dry_run ? 
+                '<span class="admin-pensiones-badge admin-pensiones-badge--estimado"><i class="fas fa-flask"></i> SÍ</span>' : 
+                '<span class="admin-pensiones-badge admin-pensiones-badge--oficial"><i class="fas fa-database"></i> NO</span>';
+
+            tr.innerHTML = `
+                <td style="font-size: 0.85rem; color: #475569;">${escapeHTML(s.created_at || s.fecha_ejecucion)}</td>
+                <td><strong style="color: #1e293b;">${escapeHTML(s.fuente)}</strong></td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${escapeHTML(s.codigo_indicador || '-')}</td>
+                <td style="text-align: center; font-weight: 600;">${escapeHTML(s.ejercicio_fiscal || '-')}</td>
+                <td style="text-align: center;">
+                    <span class="${estadoBadgeClass}">
+                        <i class="fas ${estadoIcon}"></i> ${escapeHTML(est)}
+                    </span>
+                </td>
+                <td style="text-align: right; font-size: 0.85rem;">${formatPensionValor(s.valor_anterior, 'PESOS_DIARIOS')}</td>
+                <td style="text-align: right; font-size: 0.85rem; font-weight: 700;">${formatPensionValor(s.valor_candidato, 'PESOS_DIARIOS')}</td>
+                <td style="text-align: center;">${dryRunBadge}</td>
+                <td style="text-align: right; font-size: 0.85rem; color: #64748b;">${s.duracion_ms ? `${s.duracion_ms} ms` : '-'}</td>
+                <td style="font-size: 0.85rem;">${escapeHTML(s.usuario_nombre || (s.usuario_id ? `ID #${s.usuario_id}` : (s.tipo_ejecucion === 'CRON' ? 'CRON Automático' : 'Sistema')))}</td>
+                <td style="font-size: 0.82rem; color: #475569; max-width: 300px; word-break: break-word;">${escapeHTML(s.detalles || s.mensaje || '-')}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('Error in loadPensionesSyncs:', err);
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #dc2626; padding: 20px;">Error al consultar sincronizaciones.</td></tr>';
+    }
+}
+
+function initPensionesAdmin() {
+    // 1. Filtros
+    const filtros = [
+        'admin-pensiones-filtro-regimen',
+        'admin-pensiones-filtro-anio',
+        'admin-pensiones-filtro-tipo',
+        'admin-pensiones-filtro-metodo',
+        'admin-pensiones-filtro-estado'
+    ];
+    filtros.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.configured) {
+            el.dataset.configured = 'true';
+            el.addEventListener('change', () => renderPensionesIndicadoresTabla());
+        }
+    });
+
+    const btnResetFiltros = document.getElementById('admin-pensiones-btn-reset-filtros');
+    if (btnResetFiltros && !btnResetFiltros.dataset.configured) {
+        btnResetFiltros.dataset.configured = 'true';
+        btnResetFiltros.addEventListener('click', () => {
+            filtros.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = 'todos';
+            });
+            renderPensionesIndicadoresTabla();
+        });
+    }
+
+    // 2. Botón Sincronizar Indicadores
+    const btnSync = document.getElementById('admin-pensiones-btn-sync');
+    if (btnSync && !btnSync.dataset.configured) {
+        btnSync.dataset.configured = 'true';
+        btnSync.addEventListener('click', () => abrirModalSincronizarIndicadores());
+    }
+
+    // 3. Botones de Actualizar Historial y Sincronizaciones
+    const btnRefHist = document.getElementById('admin-pensiones-btn-refresh-historial');
+    if (btnRefHist && !btnRefHist.dataset.configured) {
+        btnRefHist.dataset.configured = 'true';
+        btnRefHist.addEventListener('click', () => loadPensionesHistorial());
+    }
+
+    const btnRefSyncs = document.getElementById('admin-pensiones-btn-refresh-syncs');
+    if (btnRefSyncs && !btnRefSyncs.dataset.configured) {
+        btnRefSyncs.dataset.configured = 'true';
+        btnRefSyncs.addEventListener('click', () => loadPensionesSyncs());
+    }
+
+    // 4. Modales - Cierre
+    const closeButtons = [
+        { btnId: 'btn-cerrar-modal-pension-detalle', modalId: 'modal-pension-detalle' },
+        { btnId: 'btn-cerrar-modal-pension-editar', modalId: 'modal-pension-editar' },
+        { btnId: 'btn-cancelar-edit-pension', modalId: 'modal-pension-editar' },
+        { btnId: 'btn-cerrar-modal-pension-sync', modalId: 'modal-pension-sync' },
+        { btnId: 'btn-cancelar-sync-pension', modalId: 'modal-pension-sync' }
+    ];
+    closeButtons.forEach(({ btnId, modalId }) => {
+        const btn = document.getElementById(btnId);
+        const modal = document.getElementById(modalId);
+        if (btn && modal && !btn.dataset.configured) {
+            btn.dataset.configured = 'true';
+            btn.addEventListener('click', () => { modal.style.display = 'none'; });
+        }
+    });
+
+    // Cierre al hacer clic fuera del contenido del modal
+    ['modal-pension-detalle', 'modal-pension-editar', 'modal-pension-sync'].forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (modal && !modal.dataset.configuredOverlay) {
+            modal.dataset.configuredOverlay = 'true';
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.style.display = 'none';
+            });
+        }
+    });
+
+    // 5. Formulario de Edición
+    const formEdit = document.getElementById('form-pension-editar');
+    if (formEdit && !formEdit.dataset.configured) {
+        formEdit.dataset.configured = 'true';
+        formEdit.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+                if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+                return;
+            }
+
+            const id = document.getElementById('edit-pension-id').value;
+            const valor = parseFloat(document.getElementById('edit-pension-valor').value);
+            const tipo_valor = document.getElementById('edit-pension-tipo').value;
+            const fecha_vigencia_inicio = document.getElementById('edit-pension-vigencia-inicio').value;
+            const fecha_vigencia_fin = document.getElementById('edit-pension-vigencia-fin').value || null;
+            const fuente = document.getElementById('edit-pension-fuente').value.trim();
+            const fuente_url = document.getElementById('edit-pension-fuente-url').value.trim() || null;
+            const fundamento_legal = document.getElementById('edit-pension-fundamento').value.trim();
+            const formula_calculo = document.getElementById('edit-pension-formula').value.trim() || null;
+            const bloqueo_actualizacion_automatica = document.getElementById('edit-pension-bloqueo').checked ? 1 : 0;
+            const motivo = document.getElementById('edit-pension-motivo').value.trim();
+
+            if (isNaN(valor) || valor <= 0) {
+                if (window.showModal) window.showModal('El valor numérico debe ser mayor a 0.');
+                return;
+            }
+            if (!fecha_vigencia_inicio) {
+                if (window.showModal) window.showModal('La fecha de inicio de vigencia es obligatoria.');
+                return;
+            }
+            if (!fuente) {
+                if (window.showModal) window.showModal('La fuente oficial es obligatoria.');
+                return;
+            }
+            if (!fundamento_legal) {
+                if (window.showModal) window.showModal('El fundamento legal es obligatorio.');
+                return;
+            }
+            if (!motivo) {
+                if (window.showModal) window.showModal('El motivo del cambio es obligatorio para auditoría.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/admin/pensiones/indicadores/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        valor,
+                        tipo_valor,
+                        fecha_vigencia_inicio,
+                        fecha_vigencia_fin,
+                        fuente,
+                        fuente_url,
+                        fundamento_legal,
+                        formula_calculo,
+                        bloqueo_actualizacion_automatica,
+                        motivo
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('modal-pension-editar').style.display = 'none';
+                    if (window.showModal) window.showModal(data.message || 'Indicador actualizado correctamente.');
+                    await loadPensionesIndicadores();
+                    await loadPensionesHistorial();
+                } else {
+                    handleAdminError(res, data, 'Error al actualizar el indicador.');
+                }
+            } catch (err) {
+                console.error('Error saving pension indicator:', err);
+                if (window.showModal) window.showModal('Error de red al guardar indicador.');
+            }
+        });
+    }
+
+    // 6. Botones de Sincronización
+    const dryRunCheck = document.getElementById('sync-pension-dryrun');
+    const actionText = document.getElementById('btn-sync-action-text');
+    if (dryRunCheck && actionText && !dryRunCheck.dataset.configured) {
+        dryRunCheck.dataset.configured = 'true';
+        dryRunCheck.addEventListener('change', () => {
+            actionText.textContent = dryRunCheck.checked ? 'Ejecutar Simulación (Dry Run)' : 'Ejecutar Sincronización';
+        });
+    }
+
+    const btnSim = document.getElementById('btn-ejecutar-sync-simulacion');
+    if (btnSim && !btnSim.dataset.configured) {
+        btnSim.dataset.configured = 'true';
+        btnSim.addEventListener('click', () => {
+            const isDryRun = document.getElementById('sync-pension-dryrun')?.checked ?? true;
+            ejecutarSincronizacionIndicadores(!isDryRun);
+        });
+    }
+
+    const btnReal = document.getElementById('btn-ejecutar-sync-real');
+    if (btnReal && !btnReal.dataset.configured) {
+        btnReal.dataset.configured = 'true';
+        btnReal.addEventListener('click', async () => {
+            const confirmed = await window.showConfirm(
+                '¿Está seguro de aplicar la sincronización real de los indicadores en la base de datos?',
+                {
+                    title: 'Confirmar sincronización',
+                    subtext: 'Esta acción actualizará los valores oficiales de Idealandia y quedará registrada en el historial de auditoría.',
+                    confirmText: 'Confirmar sincronización',
+                    cancelText: 'Cancelar',
+                    confirmClass: 'custom-modal-btn primary'
+                }
+            );
+            if (confirmed) {
+                ejecutarSincronizacionIndicadores(true);
+            }
+        });
+    }
+}
+
+window.loadPensionesIndicadores = loadPensionesIndicadores;
+window.loadPensionesHistorial = loadPensionesHistorial;
+window.loadPensionesSyncs = loadPensionesSyncs;
+window.abrirModalDetalleIndicador = abrirModalDetalleIndicador;
+window.abrirModalEditarIndicador = abrirModalEditarIndicador;
+window.toggleEstadoIndicador = toggleEstadoIndicador;
+window.toggleBloqueoIndicador = toggleBloqueoIndicador;
+window.abrirModalSincronizarIndicadores = abrirModalSincronizarIndicadores;
+window.ejecutarSincronizacionIndicadores = ejecutarSincronizacionIndicadores;
+window.initPensionesAdmin = initPensionesAdmin;

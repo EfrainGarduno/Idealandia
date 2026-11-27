@@ -1,11 +1,7 @@
-// Salario Mínimo General Vigente en México (pesos diarios)
-// Preparado para fácil actualización anual
-const SALARIO_MINIMO_GENERAL_VIGENTE = 315.04;
-const SALARIOS_MINIMOS_GENERALES = {
-    2024: 248.93,
-    2025: 278.80,
-    2026: 315.04
-};
+// pension.js - Motor actuarial de cálculo de pensiones Ley 73 y proyecciones
+// REGLA DE ARQUITECTURA: La única fuente automática del Salario Mínimo General (SMG)
+// es la base de datos (pensiones_indicadores). Si el indicador no existe en BD,
+// el cálculo requiere captura manual por el usuario. CERO constantes y CERO fallbacks en código.
 
 const TABLA_GRUPOS_SALARIALES = [
     { max: 1.00, cuantia: 0.8000, incremento: 0.00563 },
@@ -178,6 +174,54 @@ function calculateIMSSLey73Pension(data) {
         factorAdicional: FACTOR_ADICIONAL,
         pensionFinalAnual,
         pensionFinalMensual
+    };
+}
+
+/**
+ * Capa posterior para determinar la pensión aplicable según el mínimo legal garantizado.
+ * Regla: PENSIÓN QUE APLICARÁ = MAX(Pensión calculada, Pensión mínima aplicable)
+ * 
+ * NO modifica la matemática existente de calculateIMSSLey73Pension.
+ * 
+ * @param {object} pensionCalculadaResult Resultado retornado por calculateIMSSLey73Pension
+ * @param {object} infoMinimoLegal Objeto con información del indicador mínimo legal (de pensionIndicadoresService)
+ * @returns {object} Objeto enriquecido con los 3 conceptos y metadatos de transparencia
+ */
+function aplicarCapaPensionMinima(pensionCalculadaResult, infoMinimoLegal) {
+    if (!pensionCalculadaResult) return null;
+    const calculada = typeof pensionCalculadaResult.pensionFinalMensual === 'number'
+        ? pensionCalculadaResult.pensionFinalMensual
+        : 0;
+
+    let minima = 0;
+    if (infoMinimoLegal) {
+        if (typeof infoMinimoLegal.pensionMinima === 'number') {
+            minima = infoMinimoLegal.pensionMinima;
+        } else if (typeof infoMinimoLegal.valor === 'number') {
+            minima = infoMinimoLegal.valor;
+        }
+    }
+
+    const pensionQueAplicara = Math.max(calculada, minima);
+    const aplicaMinimoLegal = minima > calculada;
+
+    let explicacionMinimo = '';
+    if (aplicaMinimoLegal) {
+        explicacionMinimo = 'Se aplica la pensión mínima legal porque es superior a la pensión calculada.';
+    } else if (calculada > minima) {
+        explicacionMinimo = 'La pensión calculada es superior a la pensión mínima legal, por lo que se toma como referencia la pensión calculada.';
+    } else {
+        explicacionMinimo = 'La pensión calculada coincide con la pensión mínima legal aplicable.';
+    }
+
+    return {
+        ...pensionCalculadaResult,
+        pensionCalculada: calculada,
+        pensionMinimaAplicable: minima,
+        pensionQueAplicara,
+        aplicaMinimoLegal,
+        explicacionMinimo,
+        minimoLegal: infoMinimoLegal || null
     };
 }
 
@@ -1110,8 +1154,8 @@ function calculatePensionProjection(params) {
     const {
         semanasActuales,
         salarioPromedioActual,
-        salarioMinimoActual = SALARIO_MINIMO_GENERAL_VIGENTE,
-        salarioMinimoProyectado = SALARIO_MINIMO_GENERAL_VIGENTE,
+        salarioMinimoActual = null,
+        salarioMinimoProyectado = null,
         salarioDiarioProyectado,
         fechaDesde,
         fechaHasta,
@@ -1138,10 +1182,25 @@ function calculatePensionProjection(params) {
         return { success: false, error: 'INVALID_CURRENT_SALARY', message: 'El salario promedio actual debe ser mayor a cero.' };
     }
 
-    const salMinAct = parseFloat(salarioMinimoActual) || SALARIO_MINIMO_GENERAL_VIGENTE;
+    // Salario mínimo: debe provenir de BD o ser capturado manualmente por el usuario. CERO fallbacks a constantes.
+    const salMinAct = parseFloat(salarioMinimoActual) || parseFloat(salarioMinimoProyectado);
+    if (isNaN(salMinAct) || salMinAct <= 0) {
+        return {
+            success: false,
+            error: 'MISSING_MINIMUM_WAGE',
+            requiereCapturaManual: true,
+            message: 'No se proporcionó un Salario Mínimo General válido. Se requiere indicador de BD o captura manual.'
+        };
+    }
+
     const salMinProj = parseFloat(salarioMinimoProyectado) || salMinAct;
     if (isNaN(salMinProj) || salMinProj <= 0) {
-        return { success: false, error: 'INVALID_MIN_SALARY', message: 'El salario mínimo estimado debe ser un número mayor a cero.' };
+        return {
+            success: false,
+            error: 'MISSING_PROJECTED_MINIMUM_WAGE',
+            requiereCapturaManual: true,
+            message: 'No se proporcionó un Salario Mínimo General proyectado válido. Se requiere captura manual.'
+        };
     }
 
     const salProj = parseFloat(salarioDiarioProyectado);
@@ -1381,8 +1440,6 @@ function calculatePensionProjection(params) {
 }
 
 if (typeof window !== 'undefined') {
-    window.SALARIO_MINIMO_GENERAL_VIGENTE = SALARIO_MINIMO_GENERAL_VIGENTE;
-    window.SALARIOS_MINIMOS_GENERALES = SALARIOS_MINIMOS_GENERALES;
     window.calculateIMSSLey73Pension = calculateIMSSLey73Pension;
     window.calculateAverageSalaryLast250Weeks = calculateAverageSalaryLast250Weeks;
     window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
@@ -1400,14 +1457,14 @@ if (typeof window !== 'undefined') {
     window.addDaysToIso = addDaysToIso;
     window.determinarUltimoPeriodoCronologico = determinarUltimoPeriodoCronologico;
     window.validarSalarioProyectadoVsUltimoPeriodo = validarSalarioProyectadoVsUltimoPeriodo;
+    window.aplicarCapaPensionMinima = aplicarCapaPensionMinima;
     window.TABLA_PORCENTAJES_LEY73 = TABLA_EDAD;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        SALARIO_MINIMO_GENERAL_VIGENTE,
-        SALARIOS_MINIMOS_GENERALES,
         calculateIMSSLey73Pension,
+        aplicarCapaPensionMinima,
         calculateAverageSalaryLast250Weeks,
         extractPeriodsFromIMSSDocumentText,
         extractMovementsFromIMSSDocumentText,
