@@ -1,0 +1,26 @@
+[Unit]
+Description=Idealandia - Sincronizacion Automatica de Indicadores Oficiales (Fase 4)
+After=network.target idealandia.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=opc
+WorkingDirectory=/home/opc/Idealandia
+EnvironmentFile=/home/opc/Idealandia/.env
+
+# Ejecuta llamada protegida local mediante token de sincronizacion sin exponer credenciales
+ExecStart=/usr/bin/curl -fsS -X POST http://127.0.0.1:3000/api/admin/pensiones/indicadores/sincronizar \
+    -H "Content-Type: application/json" \
+    -H "X-Sync-Cron-Secret: ${SYNC_CRON_SECRET}" \
+    -d '{"dryRun": false, "fuente": "BANXICO_SIE"}'
+
+# Politica de reintentos
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=60s
+
+# Logging integrado con journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=idealandia-pension-sync

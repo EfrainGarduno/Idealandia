@@ -1,0 +1,18 @@
+[Unit]
+Description=Idealandia - Temporizador de Sincronizacion de Indicadores (Fase 4)
+RefuseManualStart=no
+RefuseManualStop=no
+
+[Timer]
+# Temporada alta (diciembre a febrero): Diario a las 06:00 AM hora centro
+# Resto del ano: Lunes a las 06:00 AM
+OnCalendar=Mon..Fri 06:00:00
+
+# Si el servidor estuvo apagado durante la ejecucion programada, correr al reiniciar
+Persistent=true
+
+# Jitter aleatorio de 5 minutos para evitar saturacion de la red
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -181,6 +181,54 @@ function calculateIMSSLey73Pension(data) {
     };
 }
 
+/**
+ * Capa posterior para determinar la pensión aplicable según el mínimo legal garantizado.
+ * Regla: PENSIÓN QUE APLICARÁ = MAX(Pensión calculada, Pensión mínima aplicable)
+ * 
+ * NO modifica la matemática existente de calculateIMSSLey73Pension.
+ * 
+ * @param {object} pensionCalculadaResult Resultado retornado por calculateIMSSLey73Pension
+ * @param {object} infoMinimoLegal Objeto con información del indicador mínimo legal (de pensionIndicadoresService)
+ * @returns {object} Objeto enriquecido con los 3 conceptos y metadatos de transparencia
+ */
+function aplicarCapaPensionMinima(pensionCalculadaResult, infoMinimoLegal) {
+    if (!pensionCalculadaResult) return null;
+    const calculada = typeof pensionCalculadaResult.pensionFinalMensual === 'number'
+        ? pensionCalculadaResult.pensionFinalMensual
+        : 0;
+
+    let minima = 0;
+    if (infoMinimoLegal) {
+        if (typeof infoMinimoLegal.pensionMinima === 'number') {
+            minima = infoMinimoLegal.pensionMinima;
+        } else if (typeof infoMinimoLegal.valor === 'number') {
+            minima = infoMinimoLegal.valor;
+        }
+    }
+
+    const pensionQueAplicara = Math.max(calculada, minima);
+    const aplicaMinimoLegal = minima > calculada;
+
+    let explicacionMinimo = '';
+    if (aplicaMinimoLegal) {
+        explicacionMinimo = 'Se aplica la pensión mínima legal porque es superior a la pensión calculada.';
+    } else if (calculada > minima) {
+        explicacionMinimo = 'La pensión calculada es superior a la pensión mínima legal, por lo que se toma como referencia la pensión calculada.';
+    } else {
+        explicacionMinimo = 'La pensión calculada coincide con la pensión mínima legal aplicable.';
+    }
+
+    return {
+        ...pensionCalculadaResult,
+        pensionCalculada: calculada,
+        pensionMinimaAplicable: minima,
+        pensionQueAplicara,
+        aplicaMinimoLegal,
+        explicacionMinimo,
+        minimoLegal: infoMinimoLegal || null
+    };
+}
+
 
 function iterateDays(startDateIso, endDateIso) {
     const [y1, m1, d1] = startDateIso.split('-').map(Number);
@@ -1400,6 +1448,7 @@ if (typeof window !== 'undefined') {
     window.addDaysToIso = addDaysToIso;
     window.determinarUltimoPeriodoCronologico = determinarUltimoPeriodoCronologico;
     window.validarSalarioProyectadoVsUltimoPeriodo = validarSalarioProyectadoVsUltimoPeriodo;
+    window.aplicarCapaPensionMinima = aplicarCapaPensionMinima;
     window.TABLA_PORCENTAJES_LEY73 = TABLA_EDAD;
 }
 
@@ -1408,6 +1457,7 @@ if (typeof module !== 'undefined' && module.exports) {
         SALARIO_MINIMO_GENERAL_VIGENTE,
         SALARIOS_MINIMOS_GENERALES,
         calculateIMSSLey73Pension,
+        aplicarCapaPensionMinima,
         calculateAverageSalaryLast250Weeks,
         extractPeriodsFromIMSSDocumentText,
         extractMovementsFromIMSSDocumentText,

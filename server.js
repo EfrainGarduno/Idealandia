@@ -18,6 +18,7 @@ const {
     validateAndCalculatePensionPeriods,
     calculatePensionProjection,
     calculateIMSSLey73Pension,
+    aplicarCapaPensionMinima,
     extractBirthDateFromCurp,
     calcularEdadPensionaria,
     calcularEdadCronologicaDetallada,
@@ -36,6 +37,17 @@ const crypto = require('crypto');
 const { parsePhoneNumber, isValidPhoneNumber } = require('libphonenumber-js');
 const { getEngine, listAvailableEngines } = require('./ideaEngines');
 const MotorFinanciero = require('./public/js/motorFinanciero');
+const {
+    obtenerIndicadoresActivos,
+    invalidarCacheIndicadores,
+    determinarIndicadorAplicable,
+    obtenerSalarioMinimoVigente
+} = require('./pensionIndicadoresService');
+const {
+    sincronizarIndicadores,
+    revertirIndicadorAHistorial,
+    consultarHistorialSincronizaciones
+} = require('./pensionSyncService');
 
 
 async function verifyToken(token, connectionPool) {
@@ -413,6 +425,111 @@ async function ensureInstitucionRestriccionesTable(connOrPool) {
     }
 }
 
+let pensionesIndicadoresTableReady = false;
+async function ensurePensionesIndicadoresTables(connOrPool) {
+    if (pensionesIndicadoresTableReady) return;
+    const runner = connOrPool || pool;
+    try {
+        if (runner && typeof runner.query === 'function') {
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS pensiones_indicadores (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    codigo VARCHAR(64) NOT NULL,
+                    regimen ENUM('ley73', 'ley97', 'general') NOT NULL,
+                    nombre VARCHAR(150) NOT NULL,
+                    descripcion TEXT NULL,
+                    valor DECIMAL(14, 4) NOT NULL,
+                    unidad ENUM('MXN_DIARIO', 'MXN_MENSUAL', 'UMA_DIARIA', 'PORCENTAJE') NOT NULL,
+                    tipo_valor ENUM('OFICIAL', 'ESTIMADO') NOT NULL DEFAULT 'OFICIAL',
+                    anio_referencia INT NOT NULL,
+                    fecha_vigencia_inicio DATE NOT NULL,
+                    fecha_vigencia_fin DATE NULL,
+                    fuente VARCHAR(150) NOT NULL,
+                    fuente_url VARCHAR(255) NULL,
+                    fundamento_legal TEXT NOT NULL,
+                    formula_calculo TEXT NULL,
+                    metodo_obtencion ENUM('AUTOMATICA', 'MANUAL') NOT NULL DEFAULT 'MANUAL',
+                    activo TINYINT(1) NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_indicador_regimen_anio (codigo, regimen, anio_referencia),
+                    INDEX idx_pension_busqueda (regimen, codigo, activo, fecha_vigencia_inicio, fecha_vigencia_fin),
+                    INDEX idx_pension_anio (anio_referencia, activo)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            `);
+
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS pensiones_indicadores_historial (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    indicador_id INT UNSIGNED NOT NULL,
+                    codigo VARCHAR(64) NOT NULL,
+                    regimen ENUM('ley73', 'ley97', 'general') NOT NULL,
+                    valor_anterior DECIMAL(14, 4) NULL,
+                    valor_nuevo DECIMAL(14, 4) NOT NULL,
+                    tipo_valor_nuevo ENUM('OFICIAL', 'ESTIMADO') NOT NULL,
+                    fecha_cambio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    motivo VARCHAR(255) NOT NULL,
+                    fuente VARCHAR(150) NOT NULL,
+                    fuente_url VARCHAR(255) NULL,
+                    usuario_id BIGINT UNSIGNED NULL,
+                    metodo_actualizacion ENUM('AUTOMATICA', 'MANUAL') NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_hist_indicador FOREIGN KEY (indicador_id) 
+                        REFERENCES pensiones_indicadores(id) ON DELETE CASCADE,
+                    INDEX idx_hist_indicador (indicador_id, fecha_cambio DESC),
+                    INDEX idx_hist_usuario (usuario_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            `);
+
+            await runner.query(`
+                CREATE TABLE IF NOT EXISTS pensiones_sincronizaciones (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    fuente VARCHAR(64) NOT NULL,
+                    indicador_codigo VARCHAR(64) NOT NULL,
+                    ejercicio_fiscal INT NOT NULL,
+                    estado ENUM(
+                        'EXITO_ACTUALIZADO',
+                        'EXITO_SIN_CAMBIOS',
+                        'ERROR_TIMEOUT',
+                        'ERROR_HTTP',
+                        'ERROR_PARSER',
+                        'RECHAZADO_VALIDACION',
+                        'ERROR_DISCREPANCIA',
+                        'BLOQUEO_MANUAL_ACTIVO',
+                        'SINCRONIZACION_OMITIDA',
+                        'ERROR_BD'
+                    ) NOT NULL,
+                    valor_anterior DECIMAL(14, 4) NULL,
+                    valor_candidato DECIMAL(14, 4) NULL,
+                    es_dry_run TINYINT(1) NOT NULL DEFAULT 0,
+                    detalles TEXT NULL,
+                    duracion_ms INT UNSIGNED NULL,
+                    ip_origen VARCHAR(45) NULL,
+                    usuario_id BIGINT UNSIGNED NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_sync_estado (estado, created_at DESC),
+                    INDEX idx_sync_indicador (indicador_codigo, ejercicio_fiscal),
+                    INDEX idx_sync_fecha (created_at DESC)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            `);
+
+            try {
+                const [cols] = await runner.query(
+                    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pensiones_indicadores' AND COLUMN_NAME = 'bloqueo_actualizacion_automatica'`
+                );
+                if (cols.length === 0) {
+                    await runner.query(`ALTER TABLE pensiones_indicadores ADD COLUMN bloqueo_actualizacion_automatica TINYINT(1) NOT NULL DEFAULT 0 AFTER activo`);
+                }
+            } catch (cErr) {}
+
+            pensionesIndicadoresTableReady = true;
+        }
+    } catch (err) {
+        console.warn('Note: pensiones_indicadores tables check/creation:', err.message);
+    }
+}
+
 pool.getConnection()
     .then(async (connection) => {
         console.log("Connected to MySQL database.");
@@ -424,6 +541,7 @@ pool.getConnection()
             await ensureAccesoPermisosTable(connection);
             await ensureUsuarioPeriodosImssTable(connection);
             await ensureInstitucionRestriccionesTable(connection);
+            await ensurePensionesIndicadoresTables(connection);
         } catch (e) {}
         connection.release();
     })
@@ -1301,15 +1419,63 @@ app.get('/api/pension/ultimo-salario-vigente', requireAnyPermission(['calculador
 app.get('/api/pension/salario-minimo-vigente', requireAnyPermission(['calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
     try {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        const fecha = req.query.fecha || null;
+        const infoSmg = await obtenerSalarioMinimoVigente(pool, fecha);
+        res.status(200).json(infoSmg);
+    } catch (err) {
+        console.error('Error in /api/pension/salario-minimo-vigente:', err);
+        // Fallback seguro de contingencia
         res.status(200).json({
             success: true,
             salarioMinimo: SALARIO_MINIMO_GENERAL_VIGENTE,
             anio: 2026,
+            tipoValor: 'OFICIAL',
+            esOficial: true,
             historico: SALARIOS_MINIMOS_GENERALES
         });
+    }
+});
+
+// Endpoint público/calculadora para consultar lista de indicadores activos
+app.get('/api/pension/indicadores', requireAnyPermission(['calculadora.basica', 'calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutos en cliente
+        const indicadores = await obtenerIndicadoresActivos(pool);
+        res.status(200).json({
+            success: true,
+            indicadores
+        });
     } catch (err) {
-        console.error('Error in /api/pension/salario-minimo-vigente:', err);
-        res.status(500).json({ error: 'Error al consultar el salario mínimo vigente.' });
+        console.error('Error in /api/pension/indicadores:', err);
+        res.status(500).json({ error: 'Error al consultar indicadores de pensiones.' });
+    }
+});
+
+// Endpoint para determinar el indicador legal de pensión mínima aplicable según régimen y fecha efectiva
+app.get('/api/pension/minimo-aplicable', requireAnyPermission(['calculadora.basica', 'calculadora.intermedia', 'calculadora.avanzada']), async (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        const { regimen = 'ley73', fecha = null, codigo = null } = req.query;
+
+        const resultado = await determinarIndicadorAplicable({
+            pool,
+            regimen,
+            fecha,
+            codigo
+        });
+
+        if (!resultado.success) {
+            return res.status(400).json(resultado);
+        }
+
+        res.status(200).json(resultado);
+    } catch (err) {
+        console.error('Error in /api/pension/minimo-aplicable:', err);
+        res.status(500).json({
+            success: false,
+            error: 'SERVER_ERROR',
+            message: 'Error al determinar la pensión mínima aplicable.'
+        });
     }
 });
 
@@ -1351,10 +1517,26 @@ app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'c
             tieneIncapacidad: Boolean(tieneIncapacidad)
         };
 
-        const result = calculateIMSSLey73Pension(data);
+        const rawResult = calculateIMSSLey73Pension(data);
+
+        // Capa de Pensión Mínima Legal
+        const fechaPension = req.body.fechaPension || req.body.fecha || null;
+        const infoMinimo = await determinarIndicadorAplicable({
+            pool,
+            regimen: req.body.regimen || 'ley73',
+            fecha: fechaPension
+        });
+        const result = aplicarCapaPensionMinima(rawResult, infoMinimo);
+
         res.status(200).json({
             success: true,
-            resultado: result
+            resultado: result,
+            pensionCalculada: result.pensionCalculada,
+            pensionMinimaAplicable: result.pensionMinimaAplicable,
+            pensionQueAplicara: result.pensionQueAplicara,
+            aplicaMinimoLegal: result.aplicaMinimoLegal,
+            explicacionMinimo: result.explicacionMinimo,
+            minimoLegal: result.minimoLegal
         });
     } catch (err) {
         console.error('Error in /api/pension/calcular:', err);
@@ -1404,6 +1586,61 @@ app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']
                 error: projectionResult.error,
                 message: projectionResult.message
             });
+        }
+
+        // Capa de Pensión Mínima Legal en Proyecciones
+        try {
+            const fechaHastaIso = req.body.fechaHasta ? req.body.fechaHasta.trim() : null;
+            const fechaDesdeIso = req.body.fechaDesde ? req.body.fechaDesde.trim() : null;
+
+            const infoMinimoAct = await determinarIndicadorAplicable({
+                pool,
+                regimen: 'ley73',
+                fecha: fechaDesdeIso || null
+            });
+
+            const infoMinimoProy = await determinarIndicadorAplicable({
+                pool,
+                regimen: 'ley73',
+                fecha: fechaHastaIso || null
+            });
+
+            if (projectionResult.situacionActual && projectionResult.situacionActual.desglose) {
+                const capaAct = aplicarCapaPensionMinima(projectionResult.situacionActual.desglose, infoMinimoAct);
+                projectionResult.situacionActual = {
+                    ...projectionResult.situacionActual,
+                    ...capaAct,
+                    pensionMensual: capaAct.pensionQueAplicara,
+                    desglose: capaAct
+                };
+            }
+
+            if (projectionResult.situacionProyectada && projectionResult.situacionProyectada.desglose) {
+                const capaProy = aplicarCapaPensionMinima(projectionResult.situacionProyectada.desglose, infoMinimoProy);
+                projectionResult.situacionProyectada = {
+                    ...projectionResult.situacionProyectada,
+                    ...capaProy,
+                    pensionMensual: capaProy.pensionQueAplicara,
+                    desglose: capaProy
+                };
+            }
+
+            if (projectionResult.situacionActual && projectionResult.situacionProyectada) {
+                const penAct = projectionResult.situacionActual.pensionQueAplicara;
+                const penProy = projectionResult.situacionProyectada.pensionQueAplicara;
+                const dif = Math.round((penProy - penAct) * 100) / 100;
+                const pct = penAct > 0 ? Math.round(((penProy - penAct) / penAct) * 10000) / 100 : 0;
+                projectionResult.comparativa = {
+                    ...projectionResult.comparativa,
+                    diferenciaMensual: dif,
+                    porcentajeIncremento: pct,
+                    esMejora: dif > 0,
+                    pensionQueAplicaraActual: penAct,
+                    pensionQueAplicaraProyectada: penProy
+                };
+            }
+        } catch (capaErr) {
+            console.warn('Advertencia al aplicar capa de pensión mínima en proyección:', capaErr.message);
         }
 
         if (periodosHistoricos && periodosHistoricos.length > 0) {
@@ -5467,6 +5704,491 @@ app.put('/api/admin/finanzas/indicadores/:codigo', requireFunctionality('admin')
     } catch (error) {
         console.error('Error in PUT /api/admin/finanzas/indicadores/:codigo:', error);
         res.status(500).json({ error: 'Error al actualizar indicador económico.' });
+    }
+});
+
+// =========================================================================
+// APIs Administrativas para Indicadores de Pensiones (FASE 1)
+// =========================================================================
+
+app.get('/api/admin/pensiones/indicadores', requirePermission('asesoria_pensiones.read'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const { regimen, codigo, activo } = req.query;
+        let query = `
+            SELECT id, codigo, regimen, nombre, descripcion,
+                   CAST(valor AS DOUBLE) AS valor, unidad, tipo_valor,
+                   anio_referencia,
+                   DATE_FORMAT(fecha_vigencia_inicio, '%Y-%m-%d') AS fecha_vigencia_inicio,
+                   DATE_FORMAT(fecha_vigencia_fin, '%Y-%m-%d') AS fecha_vigencia_fin,
+                   fuente, fuente_url, fundamento_legal, formula_calculo,
+                   bloqueo_actualizacion_automatica,
+                   metodo_obtencion, activo, created_at, updated_at
+            FROM pensiones_indicadores
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (regimen) {
+            query += ' AND regimen = ?';
+            params.push(regimen);
+        }
+        if (codigo) {
+            query += ' AND codigo = ?';
+            params.push(codigo);
+        }
+        if (activo !== undefined && activo !== '') {
+            query += ' AND activo = ?';
+            params.push(parseInt(activo, 10) === 1 ? 1 : 0);
+        }
+
+        query += ' ORDER BY anio_referencia DESC, codigo ASC, regimen ASC';
+
+        const [indicadores] = await pool.query(query, params);
+        res.json({ success: true, indicadores });
+    } catch (error) {
+        console.error('Error in GET /api/admin/pensiones/indicadores:', error);
+        res.status(500).json({ error: 'Error al consultar indicadores de pensiones.' });
+    }
+});
+
+app.post('/api/admin/pensiones/indicadores', requirePermission('asesoria_pensiones.update'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const {
+            codigo,
+            regimen,
+            nombre,
+            descripcion,
+            valor,
+            unidad,
+            tipo_valor = 'OFICIAL',
+            anio_referencia,
+            fecha_vigencia_inicio,
+            fecha_vigencia_fin = null,
+            fuente,
+            fuente_url = null,
+            fundamento_legal,
+            formula_calculo = null,
+            motivo = 'Alta inicial de indicador'
+        } = req.body;
+
+        if (!codigo || !regimen || !nombre || valor === undefined || valor === null || !unidad || !anio_referencia || !fecha_vigencia_inicio || !fuente || !fundamento_legal) {
+            return res.status(400).json({ error: 'Todos los campos obligatorios del indicador deben proporcionarse.' });
+        }
+
+        const validRegimenes = ['ley73', 'ley97', 'general'];
+        if (!validRegimenes.includes(regimen)) {
+            return res.status(400).json({ error: 'Régimen inválido. Debe ser ley73, ley97 o general.' });
+        }
+
+        const validUnidades = ['MXN_DIARIO', 'MXN_MENSUAL', 'UMA_DIARIA', 'PORCENTAJE'];
+        if (!validUnidades.includes(unidad)) {
+            return res.status(400).json({ error: 'Unidad inválida.' });
+        }
+
+        const validTipos = ['OFICIAL', 'ESTIMADO'];
+        if (!validTipos.includes(tipo_valor)) {
+            return res.status(400).json({ error: 'Tipo de valor inválido. Debe ser OFICIAL o ESTIMADO.' });
+        }
+
+        const valorNum = parseFloat(valor);
+        if (isNaN(valorNum) || valorNum <= 0) {
+            return res.status(400).json({ error: 'El valor debe ser un número positivo.' });
+        }
+
+        const anioNum = parseInt(anio_referencia, 10);
+        if (isNaN(anioNum) || anioNum < 1970 || anioNum > 2100) {
+            return res.status(400).json({ error: 'Año de referencia inválido.' });
+        }
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_vigencia_inicio)) {
+            return res.status(400).json({ error: 'La fecha de vigencia inicio debe tener el formato YYYY-MM-DD.' });
+        }
+        if (fecha_vigencia_fin && !/^\d{4}-\d{2}-\d{2}$/.test(fecha_vigencia_fin)) {
+            return res.status(400).json({ error: 'La fecha de vigencia fin debe tener el formato YYYY-MM-DD.' });
+        }
+
+        // Verificar si ya existe el indicador para ese régimen y año
+        const [existentes] = await pool.query(
+            'SELECT id FROM pensiones_indicadores WHERE codigo = ? AND regimen = ? AND anio_referencia = ?',
+            [codigo.trim(), regimen, anioNum]
+        );
+        if (existentes.length > 0) {
+            return res.status(409).json({ error: `Ya existe el indicador ${codigo} para el régimen ${regimen} y año ${anioNum}.` });
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            const [insertRes] = await connection.query(
+                `INSERT INTO pensiones_indicadores
+                 (codigo, regimen, nombre, descripcion, valor, unidad, tipo_valor, anio_referencia,
+                  fecha_vigencia_inicio, fecha_vigencia_fin, fuente, fuente_url, fundamento_legal,
+                  formula_calculo, metodo_obtencion, activo)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MANUAL', 1)`,
+                [
+                    codigo.trim(), regimen, nombre.trim(), descripcion || null, valorNum, unidad,
+                    tipo_valor, anioNum, fecha_vigencia_inicio, fecha_vigencia_fin || null,
+                    fuente.trim(), fuente_url || null, fundamento_legal.trim(), formula_calculo || null
+                ]
+            );
+
+            const indicadorId = insertRes.insertId;
+
+            // Historial de auditoría
+            await connection.query(
+                `INSERT INTO pensiones_indicadores_historial
+                 (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
+                  motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
+                 VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'MANUAL')`,
+                [
+                    indicadorId, codigo.trim(), regimen, valorNum, tipo_valor,
+                    motivo.trim(), fuente.trim(), fuente_url || null, req.userId || null
+                ]
+            );
+
+            await connection.commit();
+            invalidarCacheIndicadores();
+            res.status(201).json({ success: true, message: 'Indicador creado exitosamente.', id: indicadorId });
+        } catch (trxErr) {
+            await connection.rollback();
+            throw trxErr;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in POST /api/admin/pensiones/indicadores:', error);
+        res.status(500).json({ error: 'Error al registrar indicador de pensiones.' });
+    }
+});
+
+app.get('/api/admin/pensiones/indicadores/:id', requirePermission('asesoria_pensiones.read'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'ID de indicador inválido.' });
+        }
+
+        const [indicadores] = await pool.query(
+            `SELECT id, codigo, regimen, nombre, descripcion,
+                    CAST(valor AS DOUBLE) AS valor, unidad, tipo_valor,
+                    anio_referencia,
+                    DATE_FORMAT(fecha_vigencia_inicio, '%Y-%m-%d') AS fecha_vigencia_inicio,
+                    DATE_FORMAT(fecha_vigencia_fin, '%Y-%m-%d') AS fecha_vigencia_fin,
+                    fuente, fuente_url, fundamento_legal, formula_calculo,
+                    bloqueo_actualizacion_automatica,
+                    metodo_obtencion, activo, created_at, updated_at
+             FROM pensiones_indicadores
+             WHERE id = ?`,
+            [id]
+        );
+
+        if (indicadores.length === 0) {
+            return res.status(404).json({ error: 'Indicador no encontrado.' });
+        }
+
+        const [historial] = await pool.query(
+            `SELECT h.id, h.valor_anterior, h.valor_nuevo, h.tipo_valor_nuevo,
+                    h.fecha_cambio, h.motivo, h.fuente, h.fuente_url,
+                    h.metodo_actualizacion, u.usuario AS modificado_por
+             FROM pensiones_indicadores_historial h
+             LEFT JOIN usuarios u ON h.usuario_id = u.id
+             WHERE h.indicador_id = ?
+             ORDER BY h.fecha_cambio DESC, h.id DESC
+             LIMIT 20`,
+            [id]
+        );
+
+        res.json({ success: true, indicador: indicadores[0], historial });
+    } catch (error) {
+        console.error('Error in GET /api/admin/pensiones/indicadores/:id:', error);
+        res.status(500).json({ error: 'Error al consultar indicador de pensiones.' });
+    }
+});
+
+app.put('/api/admin/pensiones/indicadores/:id', requirePermission('asesoria_pensiones.update'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'ID de indicador inválido.' });
+        }
+
+        const {
+            valor,
+            tipo_valor,
+            fecha_vigencia_inicio,
+            fecha_vigencia_fin,
+            fuente,
+            fuente_url,
+            fundamento_legal,
+            formula_calculo,
+            bloqueo_actualizacion_automatica,
+            motivo = 'Modificación manual de indicador'
+        } = req.body;
+
+        const [existente] = await pool.query(
+            'SELECT * FROM pensiones_indicadores WHERE id = ?',
+            [id]
+        );
+        if (existente.length === 0) {
+            return res.status(404).json({ error: 'Indicador no encontrado.' });
+        }
+        const actual = existente[0];
+
+        const valorNum = valor !== undefined ? parseFloat(valor) : parseFloat(actual.valor);
+        if (isNaN(valorNum) || valorNum <= 0) {
+            return res.status(400).json({ error: 'El valor debe ser un número positivo.' });
+        }
+
+        const tipoValorFinal = tipo_valor || actual.tipo_valor;
+        if (!['OFICIAL', 'ESTIMADO'].includes(tipoValorFinal)) {
+            return res.status(400).json({ error: 'Tipo de valor inválido. Debe ser OFICIAL o ESTIMADO.' });
+        }
+
+        const vigInicio = fecha_vigencia_inicio || actual.fecha_vigencia_inicio;
+        const vigFin = fecha_vigencia_fin !== undefined ? (fecha_vigencia_fin || null) : actual.fecha_vigencia_fin;
+        const fuenteStr = fuente !== undefined ? fuente.trim() : actual.fuente;
+        const fuenteUrlStr = fuente_url !== undefined ? (fuente_url ? fuente_url.trim() : null) : actual.fuente_url;
+        const fundamentoStr = fundamento_legal !== undefined ? fundamento_legal.trim() : actual.fundamento_legal;
+        const formulaStr = formula_calculo !== undefined ? (formula_calculo ? formula_calculo.trim() : null) : actual.formula_calculo;
+        const bloqueoVal = bloqueo_actualizacion_automatica !== undefined 
+            ? ((bloqueo_actualizacion_automatica === 1 || bloqueo_actualizacion_automatica === true) ? 1 : 0)
+            : (actual.bloqueo_actualizacion_automatica || 0);
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            await connection.query(
+                `UPDATE pensiones_indicadores
+                 SET valor = ?, tipo_valor = ?, fecha_vigencia_inicio = ?, fecha_vigencia_fin = ?,
+                     fuente = ?, fuente_url = ?, fundamento_legal = ?, formula_calculo = ?,
+                     bloqueo_actualizacion_automatica = ?, metodo_obtencion = 'MANUAL'
+                 WHERE id = ?`,
+                [
+                    valorNum, tipoValorFinal, vigInicio, vigFin,
+                    fuenteStr, fuenteUrlStr, fundamentoStr, formulaStr,
+                    bloqueoVal, id
+                ]
+            );
+
+            // Registrar en historial si hubo cambio de valor o tipo
+            const valorAnterior = parseFloat(actual.valor);
+            await connection.query(
+                `INSERT INTO pensiones_indicadores_historial
+                 (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
+                  motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MANUAL')`,
+                [
+                    id, actual.codigo, actual.regimen, valorAnterior, valorNum, tipoValorFinal,
+                    motivo.trim(), fuenteStr, fuenteUrlStr, req.userId || null
+                ]
+            );
+
+            await connection.commit();
+            invalidarCacheIndicadores();
+            res.json({ success: true, message: 'Indicador actualizado exitosamente.' });
+        } catch (trxErr) {
+            await connection.rollback();
+            throw trxErr;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in PUT /api/admin/pensiones/indicadores/:id:', error);
+        res.status(500).json({ error: 'Error al actualizar indicador de pensiones.' });
+    }
+});
+
+app.patch('/api/admin/pensiones/indicadores/:id/estado', requirePermission('asesoria_pensiones.update'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'ID de indicador inválido.' });
+        }
+
+        const { activo, motivo = 'Cambio de estado activo/inactivo' } = req.body;
+        if (activo === undefined || (activo !== 0 && activo !== 1 && activo !== false && activo !== true)) {
+            return res.status(400).json({ error: 'El campo activo debe ser 0 o 1.' });
+        }
+        const nuevoEstado = (activo === 1 || activo === true) ? 1 : 0;
+
+        const [existente] = await pool.query(
+            'SELECT * FROM pensiones_indicadores WHERE id = ?',
+            [id]
+        );
+        if (existente.length === 0) {
+            return res.status(404).json({ error: 'Indicador no encontrado.' });
+        }
+        const actual = existente[0];
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            await connection.query(
+                'UPDATE pensiones_indicadores SET activo = ?, metodo_obtencion = "MANUAL" WHERE id = ?',
+                [nuevoEstado, id]
+            );
+
+            await connection.query(
+                `INSERT INTO pensiones_indicadores_historial
+                 (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
+                  motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MANUAL')`,
+                [
+                    id, actual.codigo, actual.regimen, parseFloat(actual.valor), parseFloat(actual.valor),
+                    actual.tipo_valor,
+                    `${motivo.trim()} (${nuevoEstado === 1 ? 'Activado' : 'Inactivado'})`,
+                    actual.fuente, actual.fuente_url, req.userId || null
+                ]
+            );
+
+            await connection.commit();
+            invalidarCacheIndicadores();
+            res.json({
+                success: true,
+                message: `Indicador ${actual.codigo} ${nuevoEstado === 1 ? 'activado' : 'inactivado'} exitosamente.`,
+                activo: nuevoEstado
+            });
+        } catch (trxErr) {
+            await connection.rollback();
+            throw trxErr;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in PATCH /api/admin/pensiones/indicadores/:id/estado:', error);
+        res.status(500).json({ error: 'Error al cambiar estado del indicador de pensiones.' });
+    }
+});
+
+app.get('/api/admin/pensiones/indicadores/:id/historial', requirePermission('asesoria_pensiones.read'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'ID de indicador inválido.' });
+        }
+
+        const [historial] = await pool.query(
+            `SELECT h.id, h.indicador_id, h.codigo, h.regimen,
+                    CAST(h.valor_anterior AS DOUBLE) AS valor_anterior,
+                    CAST(h.valor_nuevo AS DOUBLE) AS valor_nuevo,
+                    h.tipo_valor_nuevo, h.fecha_cambio, h.motivo,
+                    h.fuente, h.fuente_url, h.metodo_actualizacion,
+                    u.usuario AS modificado_por_usuario,
+                    u.nombre AS modificado_por_nombre
+             FROM pensiones_indicadores_historial h
+             LEFT JOIN usuarios u ON h.usuario_id = u.id
+             WHERE h.indicador_id = ?
+             ORDER BY h.fecha_cambio DESC, h.id DESC`,
+            [id]
+        );
+
+        res.json({ success: true, historial });
+    } catch (error) {
+        console.error('Error in GET /api/admin/pensiones/indicadores/:id/historial:', error);
+        res.status(500).json({ error: 'Error al consultar historial del indicador.' });
+    }
+});
+
+app.post('/api/admin/pensiones/indicadores/sincronizar', async (req, res) => {
+    // Autenticación dual: o por sesión RBAC (asesoria_pensiones.update) o por secreto de cron interno
+    const cronSecretHeader = req.headers['x-sync-cron-secret'];
+    const expectedSecret = process.env.SYNC_CRON_SECRET;
+    const isCronAuthorized = expectedSecret && cronSecretHeader && cronSecretHeader === expectedSecret;
+
+    if (!isCronAuthorized) {
+        const token = (req.cookies && req.cookies.auth_token) || (req.headers && req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+        if (!token) {
+            return res.status(401).json({ error: 'No autorizado. Se requiere sesión o credencial de sincronización.', code: 'AUTH_REQUIRED' });
+        }
+        try {
+            const decoded = await verifyToken(token, pool);
+            req.userId = decoded.id;
+            req.user = decoded;
+            const hasUpdate = await checkUserPermission(pool, req.userId, 'asesoria_pensiones.update');
+            if (!hasUpdate) {
+                return res.status(403).json({ error: 'Permiso insuficiente (asesoria_pensiones.update requerido).', code: 'RBAC_FORBIDDEN' });
+            }
+        } catch (authErr) {
+            return res.status(401).json({ error: authErr.message || 'Token inválido o expirado.', code: 'INVALID_TOKEN' });
+        }
+    }
+
+    try {
+        await ensurePensionesIndicadoresTables();
+        const { dryRun = false, fuente = 'BANXICO_SIE' } = req.body || {};
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+        const resultado = await sincronizarIndicadores({
+            pool,
+            dryRun: Boolean(dryRun),
+            fuente,
+            usuarioId: req.userId || null,
+            ip
+        });
+
+        if (!resultado.success) {
+            const statusCode = resultado.error === 'SYNC_ALREADY_RUNNING' ? 409 : 502;
+            return res.status(statusCode).json(resultado);
+        }
+
+        res.json(resultado);
+    } catch (error) {
+        console.error('Error in POST /api/admin/pensiones/indicadores/sincronizar:', error);
+        res.status(500).json({ success: false, error: 'SYNC_ERROR', mensaje: error.message });
+    }
+});
+
+app.get('/api/admin/pensiones/sincronizaciones', requirePermission('asesoria_pensiones.read'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const { limit = 50, estado, fuente } = req.query;
+        const historialSync = await consultarHistorialSincronizaciones(pool, {
+            limit: parseInt(limit, 10) || 50,
+            estado,
+            fuente
+        });
+        res.json({ success: true, sincronizaciones: historialSync });
+    } catch (error) {
+        console.error('Error in GET /api/admin/pensiones/sincronizaciones:', error);
+        res.status(500).json({ error: 'Error al consultar historial de sincronizaciones.' });
+    }
+});
+
+app.post('/api/admin/pensiones/indicadores/:id/revertir', requirePermission('asesoria_pensiones.update'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const indicadorId = parseInt(req.params.id, 10);
+        const { historialId, motivo = 'Reversión / Rollback auditado' } = req.body;
+
+        if (isNaN(indicadorId) || !historialId || isNaN(parseInt(historialId, 10))) {
+            return res.status(400).json({ error: 'ID de indicador y ID de historial válidos son obligatorios.' });
+        }
+
+        const resultado = await revertirIndicadorAHistorial({
+            pool,
+            indicadorId,
+            historialId: parseInt(historialId, 10),
+            usuarioId: req.userId || null,
+            motivo
+        });
+
+        if (!resultado.success) {
+            return res.status(400).json(resultado);
+        }
+
+        res.json(resultado);
+    } catch (error) {
+        console.error('Error in POST /api/admin/pensiones/indicadores/:id/revertir:', error);
+        res.status(500).json({ error: 'Error al ejecutar reversión del indicador.' });
     }
 });
 
