@@ -6143,14 +6143,15 @@ async function loadPensionesSyncs() {
                 estadoIcon = 'fa-shield-halved';
             }
 
-            const dryRunBadge = s.dry_run ? 
+            const isDryRun = Boolean(s.es_dry_run === 1 || s.es_dry_run === true || s.dry_run);
+            const dryRunBadge = isDryRun ? 
                 '<span class="admin-pensiones-badge admin-pensiones-badge--estimado"><i class="fas fa-flask"></i> SÍ</span>' : 
                 '<span class="admin-pensiones-badge admin-pensiones-badge--oficial"><i class="fas fa-database"></i> NO</span>';
 
             tr.innerHTML = `
                 <td style="font-size: 0.85rem; color: #475569;">${escapeHTML(s.created_at || s.fecha_ejecucion)}</td>
                 <td><strong style="color: #1e293b;">${escapeHTML(s.fuente)}</strong></td>
-                <td style="font-family: monospace; font-size: 0.85rem;">${escapeHTML(s.codigo_indicador || '-')}</td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${escapeHTML(s.indicador_codigo || s.codigo_indicador || '-')}</td>
                 <td style="text-align: center; font-weight: 600;">${escapeHTML(s.ejercicio_fiscal || '-')}</td>
                 <td style="text-align: center;">
                     <span class="${estadoBadgeClass}">
@@ -6161,7 +6162,7 @@ async function loadPensionesSyncs() {
                 <td style="text-align: right; font-size: 0.85rem; font-weight: 700;">${formatPensionValor(s.valor_candidato, 'PESOS_DIARIOS')}</td>
                 <td style="text-align: center;">${dryRunBadge}</td>
                 <td style="text-align: right; font-size: 0.85rem; color: #64748b;">${s.duracion_ms ? `${s.duracion_ms} ms` : '-'}</td>
-                <td style="font-size: 0.85rem;">${escapeHTML(s.usuario_nombre || (s.usuario_id ? `ID #${s.usuario_id}` : (s.tipo_ejecucion === 'CRON' ? 'CRON Automático' : 'Sistema')))}</td>
+                <td style="font-size: 0.85rem;">${escapeHTML(s.ejecutado_por || s.usuario_nombre || (s.usuario_id ? `ID #${s.usuario_id}` : (s.tipo_ejecucion === 'CRON' ? 'CRON Automático' : 'Sistema')))}</td>
                 <td style="font-size: 0.82rem; color: #475569; max-width: 300px; word-break: break-word;">${escapeHTML(s.detalles || s.mensaje || '-')}</td>
             `;
             tbody.appendChild(tr);
