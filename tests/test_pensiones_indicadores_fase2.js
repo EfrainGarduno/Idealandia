@@ -241,6 +241,9 @@ async function runTests() {
             '13. Principio inmutable cumplido: NUNCA se devuelve cero como sustituto de un indicador'
         );
 
+        // Restaurar estado limpio de caché tras prueba de fallo forzado
+        invalidarCacheIndicadores();
+
         // -----------------------------------------------------------------
         // 14: Manejo de errores controlados
         // -----------------------------------------------------------------
@@ -288,39 +291,85 @@ async function runTests() {
         );
 
         // -----------------------------------------------------------------
-        // 14.6 - 14.11: SMG Dinámico por Fecha desde BD (Sin Hardcodeo)
+        // 14.6 - 14.15: SMG Dinámico desde BD (Sin Hardcodeo ni Contingencias)
         // -----------------------------------------------------------------
         console.log('\n--- BLOQUE 9B: Salario Mínimo General Dinámico desde BD por Fecha ---');
 
-        // SMG 2024 desde BD
+        // PRUEBA 1: Indicador existente
         const smg2024 = await obtenerSalarioMinimoVigente(pool, '2024-06-15');
         assert(
             smg2024.success && smg2024.salarioMinimo === 248.93 && smg2024.anio === 2024,
-            `14.6 SMG 2024 obtenido dinámicamente de BD ($${smg2024.salarioMinimo})`
+            `14.6 [P1] SMG 2024 obtenido dinámicamente de BD ($${smg2024.salarioMinimo})`
         );
 
-        // SMG 2025 desde BD
         const smg2025 = await obtenerSalarioMinimoVigente(pool, '2025-06-15');
         assert(
             smg2025.success && smg2025.salarioMinimo === 278.80 && smg2025.anio === 2025,
-            `14.7 SMG 2025 obtenido dinámicamente de BD ($${smg2025.salarioMinimo})`
+            `14.7 [P1] SMG 2025 obtenido dinámicamente de BD ($${smg2025.salarioMinimo})`
         );
 
-        // SMG 2026 desde BD
         const smg2026 = await obtenerSalarioMinimoVigente(pool, '2026-06-15');
         assert(
-            smg2026.success && smg2026.salarioMinimo === 315.04 && smg2026.anio === 2026,
-            `14.8 SMG 2026 obtenido dinámicamente de BD ($${smg2026.salarioMinimo})`
+            smg2026.success && smg2026.salarioMinimo === 315.04 && smg2026.anio === 2026 && smg2026.origen === 'OFICIAL',
+            `14.8 [P1] SMG 2026 obtenido dinámicamente de BD ($${smg2026.salarioMinimo}, origen: ${smg2026.origen})`
         );
 
-        // Selección dependiente de la fecha
         assert(
             smg2024.salarioMinimo !== smg2025.salarioMinimo && smg2025.salarioMinimo !== smg2026.salarioMinimo,
-            '14.9 La selección de SMG varía estrictamente en función de la fecha'
+            '14.9 [P1] La selección de SMG varía estrictamente en función de la fecha'
         );
 
-        // /api/pension/calcular sin salarioMinimo (debe resolver de BD por fecha)
-        const apiCalcularSinSmg = await request(app)
+        // PRUEBA 2: Cambiar el valor en BD (Demuestra que NO proviene de constante hardcodeada)
+        const valorOriginal2026 = smg2026.salarioMinimo;
+        const valorTemporalPrueba = 325.50;
+        try {
+            await pool.query(
+                `UPDATE pensiones_indicadores SET valor = ? WHERE codigo = 'SALARIO_MINIMO_GENERAL' AND anio_referencia = 2026`,
+                [valorTemporalPrueba]
+            );
+            invalidarCacheIndicadores();
+
+            const smgModificado = await obtenerSalarioMinimoVigente(pool, '2026-06-15');
+            assert(
+                smgModificado.success && smgModificado.salarioMinimo === valorTemporalPrueba,
+                `14.10 [P2] Al modificar BD a $${valorTemporalPrueba}, el sistema toma el nuevo valor de BD sin usar constantes fijas`
+            );
+
+            const apiCalcularConValorModificado = await request(app)
+                .post('/api/pension/calcular')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({
+                    salarioDiarioPromedio: 2585,
+                    semanasCotizadas: 1615,
+                    edad: 61,
+                    tieneEsposa: true,
+                    fechaPension: '2026-06-01'
+                });
+            assert(
+                apiCalcularConValorModificado.status === 200 &&
+                apiCalcularConValorModificado.body.salarioMinimoUtilizado === valorTemporalPrueba,
+                `14.11 [P2] /api/pension/calcular calcula utilizando el nuevo valor de BD ($${apiCalcularConValorModificado.body.salarioMinimoUtilizado})`
+            );
+        } finally {
+            // Restaurar valor original obligatoriamente
+            await pool.query(
+                `UPDATE pensiones_indicadores SET valor = ? WHERE codigo = 'SALARIO_MINIMO_GENERAL' AND anio_referencia = 2026`,
+                [valorOriginal2026]
+            );
+            invalidarCacheIndicadores();
+        }
+
+        // PRUEBA 3: Indicador inexistente (Fecha sin indicador -> NO fallback, NO 315.04)
+        const smgFuturoInexistente = await obtenerSalarioMinimoVigente(pool, '2035-01-01');
+        assert(
+            smgFuturoInexistente.success === false &&
+            smgFuturoInexistente.indicadorNoDisponible === true &&
+            smgFuturoInexistente.error === 'INDICATOR_NOT_FOUND' &&
+            smgFuturoInexistente.salarioMinimo === undefined,
+            '14.12 [P3] Fecha 2035 sin indicador en BD reporta indicadorNoDisponible: true y NO inventa/fallback ni 315.04'
+        );
+
+        const apiCalcularInexistente = await request(app)
             .post('/api/pension/calcular')
             .set('Authorization', `Bearer ${userToken}`)
             .send({
@@ -328,27 +377,57 @@ async function runTests() {
                 semanasCotizadas: 1615,
                 edad: 61,
                 tieneEsposa: true,
-                fechaPension: '2026-06-01'
+                fechaPension: '2035-01-01'
             });
         assert(
-            apiCalcularSinSmg.status === 200 && apiCalcularSinSmg.body.success === true,
-            '14.10 /api/pension/calcular resuelve SMG dinámicamente de BD si no se envía en payload'
+            apiCalcularInexistente.status === 400 &&
+            apiCalcularInexistente.body.error === 'MISSING_MINIMUM_WAGE' &&
+            apiCalcularInexistente.body.requiereCapturaManual === true,
+            '14.13 [P3] /api/pension/calcular rechaza con HTTP 400 MISSING_MINIMUM_WAGE y requiereCapturaManual: true'
         );
 
-        // /api/pension/proyectar sin salarioMinimoActual ni salarioMinimoProyectado
-        const apiProyectarSinSmg = await request(app)
-            .post('/api/pension/proyectar')
+        // PRUEBA 4: Captura manual (Calcula con valor manual y NO altera BD)
+        const [indicadoresAntes] = await pool.query(`SELECT COUNT(*) AS total, SUM(valor) AS suma FROM pensiones_indicadores`);
+        const apiCalcularManual = await request(app)
+            .post('/api/pension/calcular')
             .set('Authorization', `Bearer ${userToken}`)
             .send({
-                semanasActuales: 1615,
-                salarioPromedioActual: 2585,
-                salarioDiarioProyectado: 2700,
-                fechaDesde: '2026-01-01',
-                fechaHasta: '2027-01-01'
+                salarioDiarioPromedio: 2585,
+                semanasCotizadas: 1615,
+                edad: 61,
+                tieneEsposa: true,
+                fechaPension: '2035-01-01',
+                salarioMinimo: 350.00,
+                origenSalarioMinimo: 'MANUAL'
             });
+        const [indicadoresDespues] = await pool.query(`SELECT COUNT(*) AS total, SUM(valor) AS suma FROM pensiones_indicadores`);
+
         assert(
-            apiProyectarSinSmg.status === 200 && apiProyectarSinSmg.body.success === true,
-            '14.11 /api/pension/proyectar resuelve SMG dinámicamente de BD si no se envía en payload'
+            apiCalcularManual.status === 200 &&
+            apiCalcularManual.body.success === true &&
+            apiCalcularManual.body.salarioMinimoUtilizado === 350.00 &&
+            apiCalcularManual.body.origenSalarioMinimo === 'MANUAL',
+            '14.14 [P4] Captura manual permitida: cálculo exitoso con SMG $350.00 y origen identificado como MANUAL'
+        );
+        assert(
+            indicadoresAntes[0].total === indicadoresDespues[0].total &&
+            indicadoresAntes[0].suma === indicadoresDespues[0].suma,
+            '14.15 [P4] La base de datos pensiones_indicadores permanece intacta sin modificaciones ni inserciones por captura manual'
+        );
+
+        // PRUEBA 5: Histórico de SMG construido dinámicamente desde BD
+        const smgActual = await obtenerSalarioMinimoVigente(pool, '2026-06-15');
+        const [filasBdSmg] = await pool.query(`
+            SELECT anio_referencia, valor 
+            FROM pensiones_indicadores 
+            WHERE codigo = 'SALARIO_MINIMO_GENERAL' AND activo = 1 
+            ORDER BY anio_referencia DESC
+        `);
+        assert(
+            typeof smgActual.historico === 'object' &&
+            Object.keys(smgActual.historico).length === filasBdSmg.length &&
+            filasBdSmg.every(fila => smgActual.historico[fila.anio_referencia] === Number(fila.valor)),
+            `14.16 [P5] Histórico de SMG (${Object.keys(smgActual.historico).length} años) se construye dinámicamente desde pensiones_indicadores de BD`
         );
 
         // -----------------------------------------------------------------

@@ -18,27 +18,11 @@ let indicadoresCache = null;
 let cacheTimestamp = null;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora de vigencia
 
-// Respaldo verificado inmutable de contingencia (usado ÚNICAMENTE si la BD falla en arranque en frío)
+// Respaldo verificado inmutable de contingencia para Ley 73 y Ley 97 (usado ÚNICAMENTE si la BD falla en arranque en frío)
+// NOTA DE ARQUITECTURA: Para Salario Mínimo General NO existe contingencia ni valores en JS;
+// la base de datos (pensiones_indicadores) es la única fuente automática. Si no existe indicador en BD,
+// se requiere captura manual por el usuario.
 const RESPALDO_CONTINGENCIA_VERIFICADO = [
-    {
-        id: 1,
-        codigo: 'SALARIO_MINIMO_GENERAL',
-        regimen: 'general',
-        nombre: 'Salario Mínimo General 2024',
-        descripcion: 'Salario mínimo general diario vigente en el área geográfica nacional',
-        valor: 248.9300,
-        unidad: 'MXN_DIARIO',
-        tipo_valor: 'OFICIAL',
-        anio_referencia: 2024,
-        fecha_vigencia_inicio: '2024-01-01',
-        fecha_vigencia_fin: '2024-12-31',
-        fuente: 'CONASAMI / Diario Oficial de la Federación',
-        fuente_url: 'https://www.dof.gob.mx/nota_detalle.php?codigo=5711145&fecha=12/12/2023',
-        fundamento_legal: 'Resolución del H. Consejo de Representantes de la CONASAMI (DOF 12/12/2023)',
-        formula_calculo: 'Fijación anual por acuerdo tripartito en CONASAMI',
-        metodo_obtencion: 'MANUAL',
-        activo: 1
-    },
     {
         id: 2,
         codigo: 'PENSION_MINIMA_LEY_73',
@@ -54,26 +38,7 @@ const RESPALDO_CONTINGENCIA_VERIFICADO = [
         fuente: 'DOF / IMSS / CONASAMI',
         fuente_url: 'https://www.dof.gob.mx/nota_detalle.php?codigo=5711145&fecha=12/12/2023',
         fundamento_legal: 'Artículo 168 de la Ley del Seguro Social de 1973 y Decreto publicado en el DOF el 20 de diciembre de 2001 (factor 1.11)',
-        formula_calculo: '248.93 * (365 / 12) * 1.11',
-        metodo_obtencion: 'MANUAL',
-        activo: 1
-    },
-    {
-        id: 3,
-        codigo: 'SALARIO_MINIMO_GENERAL',
-        regimen: 'general',
-        nombre: 'Salario Mínimo General 2025',
-        descripcion: 'Salario mínimo general diario vigente en el área geográfica nacional',
-        valor: 278.8000,
-        unidad: 'MXN_DIARIO',
-        tipo_valor: 'OFICIAL',
-        anio_referencia: 2025,
-        fecha_vigencia_inicio: '2025-01-01',
-        fecha_vigencia_fin: '2025-12-31',
-        fuente: 'CONASAMI / Diario Oficial de la Federación',
-        fuente_url: 'https://www.dof.gob.mx/nota_detalle.php?codigo=5745678&fecha=19/12/2024',
-        fundamento_legal: 'Resolución del H. Consejo de Representantes de la CONASAMI (DOF 19/12/2024)',
-        formula_calculo: 'Fijación anual por acuerdo tripartito en CONASAMI',
+        formula_calculo: 'SMG * (365 / 12) * 1.11',
         metodo_obtencion: 'MANUAL',
         activo: 1
     },
@@ -92,26 +57,7 @@ const RESPALDO_CONTINGENCIA_VERIFICADO = [
         fuente: 'DOF / IMSS / CONASAMI',
         fuente_url: 'https://www.dof.gob.mx/nota_detalle.php?codigo=5745678&fecha=19/12/2024',
         fundamento_legal: 'Artículo 168 de la Ley del Seguro Social de 1973 y Decreto publicado en el DOF el 20 de diciembre de 2001 (factor 1.11)',
-        formula_calculo: '278.80 * (365 / 12) * 1.11',
-        metodo_obtencion: 'MANUAL',
-        activo: 1
-    },
-    {
-        id: 5,
-        codigo: 'SALARIO_MINIMO_GENERAL',
-        regimen: 'general',
-        nombre: 'Salario Mínimo General 2026',
-        descripcion: 'Salario mínimo general diario vigente en el área geográfica nacional',
-        valor: 315.0400,
-        unidad: 'MXN_DIARIO',
-        tipo_valor: 'OFICIAL',
-        anio_referencia: 2026,
-        fecha_vigencia_inicio: '2026-01-01',
-        fecha_vigencia_fin: '2026-12-31',
-        fuente: 'CONASAMI / Diario Oficial de la Federación',
-        fuente_url: 'https://www.dof.gob.mx/nota_detalle.php?codigo=5776543&fecha=19/12/2025',
-        fundamento_legal: 'Resolución del H. Consejo de Representantes de la CONASAMI (DOF 19/12/2025)',
-        formula_calculo: 'Fijación anual por acuerdo tripartito en CONASAMI',
+        formula_calculo: 'SMG * (365 / 12) * 1.11',
         metodo_obtencion: 'MANUAL',
         activo: 1
     },
@@ -130,7 +76,7 @@ const RESPALDO_CONTINGENCIA_VERIFICADO = [
         fuente: 'DOF / IMSS / CONASAMI',
         fuente_url: 'https://www.dof.gob.mx/nota_detalle.php?codigo=5776543&fecha=19/12/2025',
         fundamento_legal: 'Artículo 168 de la Ley del Seguro Social de 1973 y Decreto publicado en el DOF el 20 de diciembre de 2001 (factor 1.11)',
-        formula_calculo: '315.04 * (365 / 12) * 1.11',
+        formula_calculo: 'SMG * (365 / 12) * 1.11',
         metodo_obtencion: 'MANUAL',
         activo: 1
     },
@@ -354,8 +300,21 @@ async function determinarIndicadorAplicable({ pool, regimen = 'ley73', fecha = n
         };
     }
 
-    // 2. Si la fecha es FUTURA (superior a la última vigencia registrada):
-    // Ordenar de mayor a menor por fecha_vigencia_fin / año de referencia
+    // 2. Si la fecha es FUTURA (superior a la última vigencia registrada) o ANTERIOR:
+    // REGLA DE ARQUITECTURA DEFINITIVA: Para Salario Mínimo General NUNCA se proyecta, estima
+    // ni reutiliza el último valor conocido. Si no hay indicador exacto en BD, se requiere captura manual.
+    const codNormCheck = codigo ? String(codigo).trim().toUpperCase() : null;
+    if (codNormCheck === 'SALARIO_MINIMO_GENERAL' || regNorm === 'general') {
+        return {
+            success: false,
+            error: 'INDICATOR_NOT_FOUND',
+            indicadorNoDisponible: true,
+            message: `No existe un indicador de Salario Mínimo General vigente en la base de datos para la fecha ${isoFecha}. Se requiere captura manual por el usuario.`,
+            regimen: regNorm
+        };
+    }
+
+    // Ordenar de mayor a menor por fecha_vigencia_fin / año de referencia para otros regímenes (ej. Ley 73 pensión mínima)
     candidatos.sort((a, b) => b.anio_referencia - a.anio_referencia);
     const masReciente = candidatos[0];
 
@@ -398,8 +357,8 @@ async function determinarIndicadorAplicable({ pool, regimen = 'ley73', fecha = n
         valor: parseFloat(masAntiguo.valor),
         pensionMinima: masAntiguo.unidad === 'MXN_MENSUAL' ? parseFloat(masAntiguo.valor) : null,
         unidad: masAntiguo.unidad,
-        tipoValor: masAntiguo.tipo_valor,
-        esOficial: masAntiguo.tipo_valor === 'OFICIAL',
+        tipoValor: 'OFICIAL',
+        esOficial: true,
         anioReferencia: masAntiguo.anio_referencia,
         fechaVigenciaInicio: masAntiguo.fecha_vigencia_inicio,
         fechaVigenciaFin: masAntiguo.fecha_vigencia_fin,
@@ -414,8 +373,12 @@ async function determinarIndicadorAplicable({ pool, regimen = 'ley73', fecha = n
 }
 
 /**
- * Obtiene el salario mínimo general vigente dinámicamente desde BD para una fecha.
- * @param {object} pool Pool MySQL
+ * Consulta el Salario Mínimo General vigente aplicable para una fecha dada.
+ * Fuente única de verdad: pensiones_indicadores (BD).
+ * Si no existe indicador en BD, no usa contingencias ni fallbacks: retorna indicadorNoDisponible=true
+ * para que el flujo superior permita captura manual por el usuario.
+ * 
+ * @param {object} pool Pool de conexión MySQL
  * @param {string|Date} fecha Fecha de referencia
  * @returns {Promise<object>} Objeto con salarioMinimo, anio e histórico
  */
@@ -427,30 +390,29 @@ async function obtenerSalarioMinimoVigente(pool, fecha = null) {
         codigo: 'SALARIO_MINIMO_GENERAL'
     });
 
-    // Construir tabla histórica de salarios mínimos desde BD
+    // Construir tabla histórica de salarios mínimos EXCLUSIVAMENTE desde los registros en BD
     let indicadores = [];
     try {
-        indicadores = await obtenerIndicadoresActivos(pool);
+        if (pool && typeof pool.query === 'function') {
+            const [rows] = await pool.query(`
+                SELECT anio_referencia, CAST(valor AS DOUBLE) AS valor 
+                FROM pensiones_indicadores 
+                WHERE codigo = 'SALARIO_MINIMO_GENERAL' AND activo = 1 
+                ORDER BY anio_referencia ASC
+            `);
+            indicadores = rows || [];
+        } else {
+            const todos = await obtenerIndicadoresActivos(pool);
+            indicadores = Array.isArray(todos) ? todos.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL') : [];
+        }
     } catch (e) {
         indicadores = [];
     }
 
-    const smgHist = Array.isArray(indicadores)
-        ? indicadores.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL')
-        : [];
-
     const historico = {};
-    smgHist.forEach(item => {
+    indicadores.forEach(item => {
         historico[item.anio_referencia] = parseFloat(item.valor);
     });
-
-    // Si BD no entregó histórico (arranque en frío o falla de conexión), derivar del respaldo inmutable
-    if (Object.keys(historico).length === 0) {
-        const smgRespaldo = RESPALDO_CONTINGENCIA_VERIFICADO.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL');
-        smgRespaldo.forEach(item => {
-            historico[item.anio_referencia] = parseFloat(item.valor);
-        });
-    }
 
     if (res && res.success && res.valor > 0) {
         return {
@@ -458,24 +420,19 @@ async function obtenerSalarioMinimoVigente(pool, fecha = null) {
             salarioMinimo: res.valor,
             anio: res.anioReferencia,
             tipoValor: res.tipoValor,
+            origen: 'OFICIAL',
             esOficial: res.esOficial,
             fuente: res.fuente,
             historico
         };
     }
 
-    // Respaldo de contingencia dinámico derivado de RESPALDO_CONTINGENCIA_VERIFICADO (cero hardcodeos inline)
-    const smgContingencia = RESPALDO_CONTINGENCIA_VERIFICADO.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL');
-    const respaldoSMG = smgContingencia[smgContingencia.length - 1];
-
-    console.warn(`[PENSIONES SMG] Fallback a contingencia verificada de salario mínimo (${respaldoSMG.anio_referencia}: $${respaldoSMG.valor}).`);
+    // SI NO EXISTE EN BD: CERO FALLBACKS, CERO CONTINGENCIAS AUTOMÁTICAS, CERO NÚMEROS FIJOS
     return {
-        success: true,
-        salarioMinimo: parseFloat(respaldoSMG.valor),
-        anio: respaldoSMG.anio_referencia,
-        tipoValor: respaldoSMG.tipo_valor,
-        esOficial: respaldoSMG.tipo_valor === 'OFICIAL',
-        fuente: `${respaldoSMG.fuente} (Respaldo verificado)`,
+        success: false,
+        indicadorNoDisponible: true,
+        error: 'INDICATOR_NOT_FOUND',
+        mensaje: `No se encontró un indicador de Salario Mínimo General vigente en la base de datos para la fecha ${fecha || 'seleccionada'}. Capture manualmente el salario mínimo para continuar.`,
         historico
     };
 }

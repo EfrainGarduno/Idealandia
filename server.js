@@ -1429,13 +1429,13 @@ app.get('/api/pension/salario-minimo-vigente', requireAnyPermission(['calculador
         res.status(200).json(infoSmg);
     } catch (err) {
         console.error('Error in /api/pension/salario-minimo-vigente:', err);
-        // Fallback de contingencia delegado dinámicamente al servicio (sin hardcodeo)
-        try {
-            const fallback = await obtenerSalarioMinimoVigente(null, req.query.fecha || null);
-            res.status(200).json(fallback);
-        } catch (fbErr) {
-            res.status(500).json({ error: 'Error al consultar el salario mínimo vigente.' });
-        }
+        res.status(200).json({
+            success: false,
+            indicadorNoDisponible: true,
+            error: 'INDICATOR_QUERY_ERROR',
+            mensaje: 'No fue posible consultar los indicadores desde la base de datos. Capture manualmente el salario mínimo para continuar.',
+            historico: {}
+        });
     }
 });
 
@@ -1497,18 +1497,33 @@ app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'c
         } = req.body || {};
 
         let salMin = parseFloat(salarioMinimo);
+        let origenSmg = req.body.origenSalarioMinimo || null;
+
         if (isNaN(salMin) || salMin <= 0) {
             // Resolver SMG dinámicamente desde BD por fecha
             const fechaPension = req.body.fechaPension || req.body.fecha || null;
             const infoSmg = await obtenerSalarioMinimoVigente(pool, fechaPension);
-            salMin = infoSmg && infoSmg.salarioMinimo ? parseFloat(infoSmg.salarioMinimo) : null;
+            if (infoSmg && infoSmg.success && infoSmg.salarioMinimo > 0) {
+                salMin = parseFloat(infoSmg.salarioMinimo);
+                origenSmg = 'OFICIAL';
+            }
+        } else if (!origenSmg) {
+            origenSmg = 'MANUAL';
         }
 
         const salProm = parseFloat(salarioDiarioPromedio);
         const sem = parseInt(semanasCotizadas, 10);
         const ed = parseInt(edad, 10);
 
-        if (!salMin || isNaN(salMin) || isNaN(salProm) || isNaN(sem) || isNaN(ed)) {
+        if (!salMin || isNaN(salMin) || salMin <= 0) {
+            return res.status(400).json({
+                error: 'MISSING_MINIMUM_WAGE',
+                requiereCapturaManual: true,
+                message: 'No se encontró un indicador de Salario Mínimo General vigente en la base de datos para la fecha seleccionada. Capture manualmente el salario mínimo para continuar.'
+            });
+        }
+
+        if (isNaN(salProm) || isNaN(sem) || isNaN(ed)) {
             return res.status(400).json({
                 error: 'INVALID_DATA',
                 message: 'Por favor ingresa todos los campos numéricos de datos generales correctamente.'
@@ -1541,6 +1556,9 @@ app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'c
         res.status(200).json({
             success: true,
             resultado: result,
+            salarioMinimoUtilizado: salMin,
+            origenSalarioMinimo: origenSmg,
+            tipoValorSalarioMinimo: origenSmg === 'OFICIAL' ? 'OFICIAL' : 'MANUAL',
             pensionCalculada: result.pensionCalculada,
             pensionMinimaAplicable: result.pensionMinimaAplicable,
             pensionQueAplicara: result.pensionQueAplicara,
@@ -1586,17 +1604,45 @@ app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']
         }
 
         let salMinAct = parseFloat(req.body.salarioMinimoActual);
+        let origenSmgAct = req.body.origenSalarioMinimoActual || null;
         if (isNaN(salMinAct) || salMinAct <= 0) {
             const fechaDesdeIso = req.body.fechaDesde ? req.body.fechaDesde.trim() : null;
             const infoAct = await obtenerSalarioMinimoVigente(pool, fechaDesdeIso);
-            salMinAct = infoAct && infoAct.salarioMinimo ? parseFloat(infoAct.salarioMinimo) : null;
+            if (infoAct && infoAct.success && infoAct.salarioMinimo > 0) {
+                salMinAct = parseFloat(infoAct.salarioMinimo);
+                origenSmgAct = 'OFICIAL';
+            }
+        } else if (!origenSmgAct) {
+            origenSmgAct = 'MANUAL';
         }
 
         let salMinProj = parseFloat(req.body.salarioMinimoProyectado);
+        let origenSmgProj = req.body.origenSalarioMinimoProyectado || null;
         if (isNaN(salMinProj) || salMinProj <= 0) {
             const fechaHastaIso = req.body.fechaHasta ? req.body.fechaHasta.trim() : null;
             const infoProj = await obtenerSalarioMinimoVigente(pool, fechaHastaIso);
-            salMinProj = infoProj && infoProj.salarioMinimo ? parseFloat(infoProj.salarioMinimo) : salMinAct;
+            if (infoProj && infoProj.success && infoProj.salarioMinimo > 0) {
+                salMinProj = parseFloat(infoProj.salarioMinimo);
+                origenSmgProj = 'OFICIAL';
+            }
+        } else if (!origenSmgProj) {
+            origenSmgProj = 'MANUAL';
+        }
+
+        if (!salMinAct || isNaN(salMinAct) || salMinAct <= 0) {
+            return res.status(400).json({
+                error: 'MISSING_MINIMUM_WAGE',
+                requiereCapturaManual: true,
+                message: 'No se encontró un indicador de Salario Mínimo General vigente en la base de datos para la fecha inicial. Capture manualmente el salario mínimo para continuar.'
+            });
+        }
+
+        if (!salMinProj || isNaN(salMinProj) || salMinProj <= 0) {
+            return res.status(400).json({
+                error: 'MISSING_PROJECTED_MINIMUM_WAGE',
+                requiereCapturaManual: true,
+                message: 'No se encontró un indicador de Salario Mínimo General vigente en la base de datos para la fecha fin. Capture manualmente el salario mínimo proyectado para continuar.'
+            });
         }
 
         const projectionResult = calculatePensionProjection({
@@ -1610,9 +1656,13 @@ app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']
         if (!projectionResult.success) {
             return res.status(400).json({
                 error: projectionResult.error,
-                message: projectionResult.message
+                message: projectionResult.message,
+                requiereCapturaManual: Boolean(projectionResult.requiereCapturaManual)
             });
         }
+
+        projectionResult.origenSalarioMinimoActual = origenSmgAct;
+        projectionResult.origenSalarioMinimoProyectado = origenSmgProj;
 
         // Capa de Pensión Mínima Legal en Proyecciones
         try {

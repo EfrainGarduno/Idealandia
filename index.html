@@ -725,9 +725,10 @@
                 <div id="form-estimacion" style="display: none;" class="pension-form">
                 <fieldset>
                     <legend>Datos generales</legend>
-                    <div class="form-group">
+                    <div class="form-group" id="salario-minimo-container">
                         <label for="salario-minimo">Salario mínimo general vigente:</label>
-                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo" value="315.04">
+                        <input type="number" step="0.01" id="salario-minimo" name="salario-minimo" placeholder="Cargando indicador...">
+                        <div id="salario-minimo-status" style="margin-top: 4px; font-size: 0.82em;"></div>
                     </div>
                     <div class="form-group">
                         <label for="salario-promedio">Salario diario promedio últimas 250 semanas:</label>
@@ -896,7 +897,8 @@
                                 </div>
                                 <div>
                                     <label for="proy-salario-minimo-estimado" style="font-size: 0.85em; color: #1e3a8a; font-weight: 600; display: block; margin-bottom: 4px;">Salario Mínimo General estimado al terminar la proyección: <span style="color:red;">*</span></label>
-                                    <input type="number" step="0.01" min="1" id="proy-salario-minimo-estimado" value="315.04" required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+                                    <input type="number" step="0.01" min="1" id="proy-salario-minimo-estimado" placeholder="Cargando o capture manual..." required style="width: 100%; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 6px; box-sizing: border-box; font-size: 14px;">
+                                    <div id="proy-salario-minimo-status" style="margin-top: 4px; font-size: 0.82em;"></div>
                                 </div>
                             </div>
 
@@ -4840,33 +4842,73 @@
             }
 
             const salarioMinimoInput = document.getElementById('salario-minimo');
-            const defaultSalarioMinimo = (typeof window !== 'undefined' && (window.CONTINGENCIA_TECNICA_SMG || window.SALARIO_MINIMO_GENERAL_VIGENTE)) || 315.04;
-            if (salarioMinimoInput && !salarioMinimoInput.value) {
-                salarioMinimoInput.value = defaultSalarioMinimo;
-            }
+            const statusSmgElem = document.getElementById('salario-minimo-status');
 
-            // Recuperación dinámica del Salario Mínimo General Vigente
-            async function fetchSalarioMinimoVigente() {
+            // Recuperación dinámica del Salario Mínimo General Vigente desde BD (Cero Hardcodeo)
+            async function fetchSalarioMinimoVigente(fecha = null) {
+                const url = fecha ? `/api/pension/salario-minimo-vigente?fecha=${encodeURIComponent(fecha)}` : '/api/pension/salario-minimo-vigente';
                 try {
-                    const res = await fetch('/api/pension/salario-minimo-vigente', { cache: 'no-store' });
+                    const res = await fetch(url, { cache: 'no-store' });
                     if (res.ok) {
                         const data = await res.json();
-                        if (data && typeof data.salarioMinimo === 'number') {
-                            if (salarioMinimoInput) {
+                        if (data && data.success && typeof data.salarioMinimo === 'number') {
+                            if (salarioMinimoInput && !salarioMinimoInput.dataset.manualEdited) {
                                 salarioMinimoInput.value = data.salarioMinimo;
+                                salarioMinimoInput.dataset.origen = 'OFICIAL';
+                            }
+                            if (statusSmgElem && (!salarioMinimoInput || !salarioMinimoInput.dataset.manualEdited)) {
+                                statusSmgElem.innerHTML = `<span style="color: #15803d; font-weight: 600;"><i class="fas fa-check-circle"></i> Origen: Indicadores de Pensiones (OFICIAL)</span>`;
                             }
                             return data.salarioMinimo;
+                        } else {
+                            // Indicador no encontrado en BD: permitir captura manual obligatoria
+                            if (salarioMinimoInput && !salarioMinimoInput.dataset.manualEdited) {
+                                salarioMinimoInput.value = '';
+                                salarioMinimoInput.dataset.origen = 'MANUAL';
+                            }
+                            if (statusSmgElem) {
+                                statusSmgElem.innerHTML = `
+                                    <div style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 6px 10px; border-radius: 4px; line-height: 1.35; margin-top: 4px;">
+                                        <i class="fas fa-info-circle"></i> No se encontró un indicador vigente para la fecha seleccionada. Capture manualmente el salario mínimo para continuar.<br>
+                                        <strong style="color: #b45309;">Origen: Captura manual (MANUAL)</strong>
+                                    </div>
+                                `;
+                            }
+                            return null;
                         }
                     }
                 } catch (e) {
-                    // Fallback a valor centralizado
+                    console.warn('Error al consultar salario mínimo:', e);
                 }
-                const fallback = (typeof window !== 'undefined' && (window.CONTINGENCIA_TECNICA_SMG || window.SALARIO_MINIMO_GENERAL_VIGENTE)) || 315.04;
-                if (salarioMinimoInput && !salarioMinimoInput.value) {
-                    salarioMinimoInput.value = fallback;
+
+                // Error de conexión a BD: solicitar captura manual
+                if (salarioMinimoInput && !salarioMinimoInput.dataset.manualEdited) {
+                    salarioMinimoInput.value = '';
+                    salarioMinimoInput.dataset.origen = 'MANUAL';
                 }
-                return fallback;
+                if (statusSmgElem) {
+                    statusSmgElem.innerHTML = `
+                        <div style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 6px 10px; border-radius: 4px; line-height: 1.35; margin-top: 4px;">
+                            <i class="fas fa-info-circle"></i> No se encontró un indicador vigente para la fecha seleccionada. Capture manualmente el salario mínimo para continuar.<br>
+                            <strong style="color: #b45309;">Origen: Captura manual (MANUAL)</strong>
+                        </div>
+                    `;
+                }
+                return null;
             }
+
+            if (salarioMinimoInput) {
+                salarioMinimoInput.addEventListener('input', () => {
+                    salarioMinimoInput.dataset.manualEdited = 'true';
+                    salarioMinimoInput.dataset.origen = 'MANUAL';
+                    if (statusSmgElem) {
+                        statusSmgElem.innerHTML = `<span style="color: #b45309; font-weight: 600;"><i class="fas fa-pen"></i> Origen: Captura manual (MANUAL)</span>`;
+                    }
+                });
+            }
+
+            // Iniciar consulta de salario mínimo al cargar la interfaz
+            fetchSalarioMinimoVigente();
 
             // Sincronización de Modalidades basada en el modelo RBAC Dinámico
             async function syncPensionModalidades(overridePerms = null) {
@@ -5094,11 +5136,11 @@
 
                 const semVal = semInput ? parseInt(semInput.value, 10) || 0 : 0;
                 const salVal = salInput ? parseFloat(salInput.value) || 0 : 0;
-                const salMinVal = salMinInput ? parseFloat(salMinInput.value) || defaultSalarioMinimo : defaultSalarioMinimo;
+                const salMinVal = salMinInput && salMinInput.value ? parseFloat(salMinInput.value) : null;
 
                 if (proySemAct) proySemAct.value = semVal;
                 if (proySalAct) proySalAct.value = salVal.toFixed(2);
-                if (proySalMinEst && !proySalMinEst.value) proySalMinEst.value = salMinVal.toFixed(2);
+                if (proySalMinEst && !proySalMinEst.value && salMinVal) proySalMinEst.value = salMinVal.toFixed(2);
                 if (proySalNuevo && !proySalNuevo.value && salVal > 0) {
                     proySalNuevo.value = salVal.toFixed(2);
                 }
@@ -5213,7 +5255,18 @@
                     const semAct = parseInt(document.getElementById('proy-semanas-actuales').value, 10) || 0;
                     const salAct = parseFloat(document.getElementById('proy-salario-promedio-actual').value) || 0;
                     const salProj = parseFloat(document.getElementById('proy-salario-diario-nuevo').value) || 0;
-                    const salMinProj = parseFloat(document.getElementById('proy-salario-minimo-estimado').value) || defaultSalarioMinimo;
+                    const salMinProj = parseFloat(document.getElementById('proy-salario-minimo-estimado').value);
+
+                    if (isNaN(salMinProj) || salMinProj <= 0) {
+                        if (msgVal) {
+                            msgVal.style.display = 'block';
+                            msgVal.style.background = '#fef2f2';
+                            msgVal.style.color = '#991b1b';
+                            msgVal.style.border = '1px solid #fecaca';
+                            msgVal.textContent = 'Por favor capture el Salario Mínimo General estimado al terminar la proyección.';
+                        }
+                        return;
+                    }
                     const fechaDesde = proyFechaDesdeInput ? proyFechaDesdeInput.value : '';
                     const fechaHasta = proyFechaHastaInput ? proyFechaHastaInput.value : '';
 
@@ -5329,7 +5382,7 @@
                     const params = {
                         semanasActuales: semAct,
                         salarioPromedioActual: salAct > 0 ? salAct : salProj,
-                        salarioMinimoActual: parseFloat(salarioMinimoInput.value) || defaultSalarioMinimo,
+                        salarioMinimoActual: parseFloat(salarioMinimoInput && salarioMinimoInput.value) || salMinProj,
                         salarioMinimoProyectado: salMinProj,
                         salarioDiarioProyectado: salProj,
                         fechaDesde,
@@ -5602,7 +5655,7 @@
                         formEstimacion.style.display = 'block';
                         syncPensionModalidades();
                         if (salarioMinimoInput && !salarioMinimoInput.value) {
-                            salarioMinimoInput.value = defaultSalarioMinimo;
+                            fetchSalarioMinimoVigente();
                         }
                     } else {
                         formEstimacion.style.display = 'none';
@@ -5815,7 +5868,7 @@
                             fechaVigenciaFin: '2026-12-31',
                             fuente: 'DOF / IMSS / CONASAMI',
                             fundamentoLegal: 'Artículo 168 de la Ley del Seguro Social de 1973 y Decreto DOF 20/12/2001 (factor 1.11)',
-                            formulaCalculo: '315.04 * (365 / 12) * 1.11'
+                            formulaCalculo: 'SMG * (365 / 12) * 1.11'
                         };
                     }
 
@@ -5955,13 +6008,14 @@
                         labelSemanasReset.textContent = 'Semanas cotizadas:';
                     }
 
-                    // Restablecer y recalcular el Salario Mínimo General Vigente oficial sin conservar valores previos
+                    // Restablecer y recalcular el Salario Mínimo General Vigente oficial desde BD
+                    const salMinInput = document.getElementById('salario-minimo');
+                    if (salMinInput) {
+                        delete salMinInput.dataset.manualEdited;
+                        salMinInput.value = '';
+                    }
                     if (typeof fetchSalarioMinimoVigente === 'function') {
                         fetchSalarioMinimoVigente();
-                    } else {
-                        const fallback = (typeof window !== 'undefined' && (window.CONTINGENCIA_TECNICA_SMG || window.SALARIO_MINIMO_GENERAL_VIGENTE)) || 315.04;
-                        const salMinInput = document.getElementById('salario-minimo');
-                        if (salMinInput) salMinInput.value = fallback;
                     }
                 });
             }

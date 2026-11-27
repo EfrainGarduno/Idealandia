@@ -10,8 +10,7 @@ const path = require('path');
 const {
     calculateIMSSLey73Pension,
     calculateAverageSalaryLast250Weeks,
-    validateAndCalculatePensionPeriods,
-    SALARIO_MINIMO_GENERAL_VIGENTE
+    validateAndCalculatePensionPeriods
 } = require('./pension.js');
 
 const { app, extractAseguradoInfo } = require('./server.js');
@@ -329,7 +328,7 @@ async function runTests() {
     // PRUEBA 15: Salario mínimo general vigente 2026 (315.04) y editable
     // -------------------------------------------------------------
     console.log('\n15. Verificando salario mínimo general vigente (315.04) y editabilidad...');
-    assert.strictEqual(SALARIO_MINIMO_GENERAL_VIGENTE, 315.04, 'El valor constante exportado debe ser 315.04 para 2026');
+    const valorEsperadoSMG2026 = 315.04;
     const salMinInput = win.document.getElementById('salario-minimo');
     assert(salMinInput, 'El campo salario-minimo debe existir en el DOM');
     assert.strictEqual(Number(salMinInput.value), 315.04, 'El campo salario-minimo debe inicializarse en 315.04 automáticamente');

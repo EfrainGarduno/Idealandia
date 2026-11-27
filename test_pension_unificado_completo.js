@@ -17,7 +17,6 @@ const {
     calcularEdadPensionaria,
     reconstructDeterministicPeriods,
     calculateInclusiveDays,
-    SALARIO_MINIMO_GENERAL_VIGENTE,
     TABLA_EDAD
 } = require('./pension.js');
 
@@ -474,6 +473,7 @@ async function runUnifiedPensionSuite() {
         semanasActuales: 1615,
         salarioPromedioActual: 2585.94,
         salarioDiarioProyectado: 2714.25,
+        salarioMinimoActual: 315.04,
         fechaDesde: '2026-05-01',
         fechaHasta: '2026-06-07',
         fechaNacimiento: '1965-12-07',
@@ -490,6 +490,7 @@ async function runUnifiedPensionSuite() {
         semanasActuales: 1615,
         salarioPromedioActual: 2585.94,
         salarioDiarioProyectado: 2714.25,
+        salarioMinimoActual: 315.04,
         fechaDesde: '2026-05-01',
         fechaHasta: '2026-06-08',
         fechaNacimiento: '1965-12-07',
@@ -527,6 +528,7 @@ async function runUnifiedPensionSuite() {
         semanasActuales: 1615,
         salarioPromedioActual: 2585.94,
         salarioDiarioProyectado: 2714.25,
+        salarioMinimoActual: 315.04,
         fechaDesde: '2026-05-01',
         fechaHasta: '2026-06-08',
         edadRetiroActual: 60,
@@ -542,6 +544,7 @@ async function runUnifiedPensionSuite() {
         semanasActuales: 1615,
         salarioPromedioActual: 2585.94,
         salarioDiarioProyectado: 2714.25,
+        salarioMinimoActual: 315.04,
         fechaDesde: '2027-01-01',
         fechaHasta: '2027-06-08',
         fechaNacimiento: '1965-12-07',

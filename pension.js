@@ -1,9 +1,7 @@
-// Contingencia técnica de último recurso para entornos aislados u offline (ej. tests unitarios síncronos).
-// NOTA DE ARQUITECTURA: La FUENTE DE VERDAD oficial y productiva para el Salario Mínimo General
-// reside exclusivamente en la base de datos (pensiones_indicadores) a través de
-// pensionIndicadoresService.js y endpoints de API (/api/pension/salario-minimo-vigente).
-// Este módulo (pension.js) es un motor actuarial puro y no contiene tablas anuales de producción.
-const CONTINGENCIA_TECNICA_SMG = 315.04;
+// pension.js - Motor actuarial de cálculo de pensiones Ley 73 y proyecciones
+// REGLA DE ARQUITECTURA: La única fuente automática del Salario Mínimo General (SMG)
+// es la base de datos (pensiones_indicadores). Si el indicador no existe en BD,
+// el cálculo requiere captura manual por el usuario. CERO constantes y CERO fallbacks en código.
 
 const TABLA_GRUPOS_SALARIALES = [
     { max: 1.00, cuantia: 0.8000, incremento: 0.00563 },
@@ -1184,11 +1182,25 @@ function calculatePensionProjection(params) {
         return { success: false, error: 'INVALID_CURRENT_SALARY', message: 'El salario promedio actual debe ser mayor a cero.' };
     }
 
-    // Salario mínimo: fuente de verdad en BD; si un caller síncrono offline no lo pasa, acude a contingencia técnica
-    const salMinAct = parseFloat(salarioMinimoActual) || CONTINGENCIA_TECNICA_SMG;
+    // Salario mínimo: debe provenir de BD o ser capturado manualmente por el usuario. CERO fallbacks a constantes.
+    const salMinAct = parseFloat(salarioMinimoActual) || parseFloat(salarioMinimoProyectado);
+    if (isNaN(salMinAct) || salMinAct <= 0) {
+        return {
+            success: false,
+            error: 'MISSING_MINIMUM_WAGE',
+            requiereCapturaManual: true,
+            message: 'No se proporcionó un Salario Mínimo General válido. Se requiere indicador de BD o captura manual.'
+        };
+    }
+
     const salMinProj = parseFloat(salarioMinimoProyectado) || salMinAct;
     if (isNaN(salMinProj) || salMinProj <= 0) {
-        return { success: false, error: 'INVALID_MIN_SALARY', message: 'El salario mínimo estimado debe ser un número mayor a cero.' };
+        return {
+            success: false,
+            error: 'MISSING_PROJECTED_MINIMUM_WAGE',
+            requiereCapturaManual: true,
+            message: 'No se proporcionó un Salario Mínimo General proyectado válido. Se requiere captura manual.'
+        };
     }
 
     const salProj = parseFloat(salarioDiarioProyectado);
@@ -1428,8 +1440,6 @@ function calculatePensionProjection(params) {
 }
 
 if (typeof window !== 'undefined') {
-    window.CONTINGENCIA_TECNICA_SMG = CONTINGENCIA_TECNICA_SMG;
-    window.SALARIO_MINIMO_GENERAL_VIGENTE = CONTINGENCIA_TECNICA_SMG; // Retrocompatibilidad
     window.calculateIMSSLey73Pension = calculateIMSSLey73Pension;
     window.calculateAverageSalaryLast250Weeks = calculateAverageSalaryLast250Weeks;
     window.extractPeriodsFromIMSSDocumentText = extractPeriodsFromIMSSDocumentText;
@@ -1453,8 +1463,6 @@ if (typeof window !== 'undefined') {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        CONTINGENCIA_TECNICA_SMG,
-        SALARIO_MINIMO_GENERAL_VIGENTE: CONTINGENCIA_TECNICA_SMG, // Retrocompatibilidad para tests
         calculateIMSSLey73Pension,
         aplicarCapaPensionMinima,
         calculateAverageSalaryLast250Weeks,
