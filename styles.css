@@ -3029,6 +3029,225 @@ th.sortable-th.sort-desc .sort-indicator {
     }
 }
 
+/* ==========================================================================
+   Fase 4: Estilos de Administración de Indicadores de Pensiones
+   ========================================================================== */
+
+.admin-pensiones-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    white-space: nowrap;
+}
+
+.admin-pensiones-badge--oficial {
+    background-color: #dcfce7;
+    color: #15803d;
+    border: 1px solid #86efac;
+}
+
+.admin-pensiones-badge--estimado {
+    background-color: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fcd34d;
+}
+
+.admin-pensiones-badge--ley73 {
+    background-color: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
+}
+
+.admin-pensiones-badge--ley97 {
+    background-color: #f5f3ff;
+    color: #6d28d9;
+    border: 1px solid #c4b5fd;
+}
+
+.admin-pensiones-badge--general {
+    background-color: #f8fafc;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+.admin-pensiones-badge--auto {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #7dd3fc;
+}
+
+.admin-pensiones-badge--manual {
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.admin-pensiones-badge--active {
+    background-color: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+}
+
+.admin-pensiones-badge--inactive {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+}
+
+.admin-pensiones-badge--locked {
+    background-color: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fdba74;
+}
+
+.admin-pensiones-badge--unlocked {
+    background-color: #f0fdfa;
+    color: #0f766e;
+    border: 1px solid #99f6e4;
+}
+
+/* Badges para Estados de Sincronización */
+.admin-pensiones-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.admin-pensiones-sync-badge--exito-actualizado {
+    background-color: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+}
+
+.admin-pensiones-sync-badge--exito-sin-cambios {
+    background-color: #e0f2fe;
+    color: #075985;
+    border: 1px solid #7dd3fc;
+}
+
+.admin-pensiones-sync-badge--exito-dry-run {
+    background-color: #f3e8ff;
+    color: #6b21a8;
+    border: 1px solid #d8b4fe;
+}
+
+.admin-pensiones-sync-badge--rechazado {
+    background-color: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fdba74;
+}
+
+.admin-pensiones-sync-badge--bloqueo {
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.admin-pensiones-sync-badge--error {
+    background-color: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* Acciones Homologadas para Pensiones */
+.admin-action-btn--lock {
+    background-color: #fff7ed;
+    border-color: #fed7aa;
+    color: #c2410c;
+}
+.admin-action-btn--lock:hover:not(:disabled) {
+    background-color: #ffedd5;
+    border-color: #fdba74;
+    color: #9a3412;
+}
+
+.admin-action-btn--unlock {
+    background-color: #f0fdfa;
+    border-color: #ccfbf1;
+    color: #0d9488;
+}
+.admin-action-btn--unlock:hover:not(:disabled) {
+    background-color: #ccfbf1;
+    border-color: #99f6e4;
+    color: #0f766e;
+}
+
+.admin-action-btn--detail {
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+.admin-action-btn--detail:hover:not(:disabled) {
+    background-color: #dbeafe;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+
+/* Transparencia de Fechas Banner */
+.admin-pensiones-fechas-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+}
+
+.admin-pensiones-fechas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.admin-pensiones-fecha-item {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.admin-pensiones-fecha-item .label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.admin-pensiones-fecha-item .value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+/* Adaptabilidad móvil y pantallas reducidas */
+@media (max-width: 768px) {
+    .admin-pensiones-filters {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .admin-pensiones-filters > div {
+        width: 100%;
+        min-width: 100% !important;
+    }
+    .admin-pensiones-fechas-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
 
 
 

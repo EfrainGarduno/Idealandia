@@ -523,6 +523,13 @@ async function ensurePensionesIndicadoresTables(connOrPool) {
                 }
             } catch (cErr) {}
 
+            try {
+                await runner.query(`
+                    INSERT IGNORE INTO funcionalidad_permisos (funcionalidad_id, permiso_id)
+                    SELECT 8, id FROM permisos WHERE codigo IN ('asesoria_pensiones.read', 'asesoria_pensiones.update')
+                `);
+            } catch (fpErr) {}
+
             pensionesIndicadoresTableReady = true;
         }
     } catch (err) {
@@ -6032,7 +6039,7 @@ app.patch('/api/admin/pensiones/indicadores/:id/estado', requirePermission('ases
             await connection.beginTransaction();
 
             await connection.query(
-                'UPDATE pensiones_indicadores SET activo = ?, metodo_obtencion = "MANUAL" WHERE id = ?',
+                'UPDATE pensiones_indicadores SET activo = ?, metodo_obtencion = "MANUAL", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
                 [nuevoEstado, id]
             );
 
@@ -6065,6 +6072,108 @@ app.patch('/api/admin/pensiones/indicadores/:id/estado', requirePermission('ases
     } catch (error) {
         console.error('Error in PATCH /api/admin/pensiones/indicadores/:id/estado:', error);
         res.status(500).json({ error: 'Error al cambiar estado del indicador de pensiones.' });
+    }
+});
+
+app.patch('/api/admin/pensiones/indicadores/:id/bloqueo', requirePermission('asesoria_pensiones.update'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'ID de indicador inválido.' });
+        }
+
+        const { bloqueo, motivo = 'Cambio de bloqueo de actualización automática' } = req.body;
+        if (bloqueo === undefined || (bloqueo !== 0 && bloqueo !== 1 && bloqueo !== false && bloqueo !== true)) {
+            return res.status(400).json({ error: 'El campo bloqueo debe ser 0 o 1.' });
+        }
+        const nuevoBloqueo = (bloqueo === 1 || bloqueo === true) ? 1 : 0;
+
+        const [existente] = await pool.query(
+            'SELECT * FROM pensiones_indicadores WHERE id = ?',
+            [id]
+        );
+        if (existente.length === 0) {
+            return res.status(404).json({ error: 'Indicador no encontrado.' });
+        }
+        const actual = existente[0];
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            await connection.query(
+                'UPDATE pensiones_indicadores SET bloqueo_actualizacion_automatica = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [nuevoBloqueo, id]
+            );
+
+            await connection.query(
+                `INSERT INTO pensiones_indicadores_historial
+                 (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
+                  motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MANUAL')`,
+                [
+                    id, actual.codigo, actual.regimen, parseFloat(actual.valor), parseFloat(actual.valor),
+                    actual.tipo_valor,
+                    `${motivo.trim()} (${nuevoBloqueo === 1 ? 'Bloqueo automático activado' : 'Bloqueo automático desactivado'})`,
+                    actual.fuente, actual.fuente_url, req.userId || null
+                ]
+            );
+
+            await connection.commit();
+            invalidarCacheIndicadores();
+            res.json({
+                success: true,
+                message: `Bloqueo automático de ${actual.codigo} ${nuevoBloqueo === 1 ? 'activado' : 'desactivado'} exitosamente.`,
+                bloqueo_actualizacion_automatica: nuevoBloqueo
+            });
+        } catch (trxErr) {
+            await connection.rollback();
+            throw trxErr;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error in PATCH /api/admin/pensiones/indicadores/:id/bloqueo:', error);
+        res.status(500).json({ error: 'Error al cambiar bloqueo automático del indicador de pensiones.' });
+    }
+});
+
+app.get('/api/admin/pensiones/historial', requirePermission('asesoria_pensiones.read'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const { limit = 100, indicadorId, codigo } = req.query;
+        let query = `
+            SELECT h.id, h.indicador_id, h.codigo, h.regimen,
+                   CAST(h.valor_anterior AS DOUBLE) AS valor_anterior,
+                   CAST(h.valor_nuevo AS DOUBLE) AS valor_nuevo,
+                   h.tipo_valor_nuevo, h.fecha_cambio, h.motivo,
+                   h.fuente, h.fuente_url, h.metodo_actualizacion,
+                   i.nombre AS indicador_nombre,
+                   u.usuario AS modificado_por_usuario,
+                   u.nombre AS modificado_por_nombre
+            FROM pensiones_indicadores_historial h
+            LEFT JOIN pensiones_indicadores i ON h.indicador_id = i.id
+            LEFT JOIN usuarios u ON h.usuario_id = u.id
+            WHERE 1=1
+        `;
+        const params = [];
+        if (indicadorId) {
+            query += ' AND h.indicador_id = ?';
+            params.push(parseInt(indicadorId, 10));
+        }
+        if (codigo) {
+            query += ' AND h.codigo = ?';
+            params.push(codigo);
+        }
+        query += ' ORDER BY h.fecha_cambio DESC, h.id DESC LIMIT ?';
+        params.push(parseInt(limit, 10) || 100);
+
+        const [historial] = await pool.query(query, params);
+        res.json({ success: true, historial });
+    } catch (error) {
+        console.error('Error in GET /api/admin/pensiones/historial:', error);
+        res.status(500).json({ error: 'Error al consultar historial general de indicadores.' });
     }
 });
 

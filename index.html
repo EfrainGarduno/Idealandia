@@ -1547,6 +1547,9 @@
                 <button type="button" class="admin-nav-block-btn" data-block="admin-block-contexto" style="padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; border: 1px solid #cbd5e1; cursor: pointer; transition: all 0.2s; background: #f8fafc; color: #475569; display: inline-flex; align-items: center; gap: 8px;">
                     <i class="fas fa-brain"></i> Contexto de Idealita
                 </button>
+                <button type="button" class="admin-nav-block-btn" data-block="admin-block-pensiones" style="padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 1rem; border: 1px solid #cbd5e1; cursor: pointer; transition: all 0.2s; background: #f8fafc; color: #475569; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-scale-balanced"></i> Indicadores de Pensiones
+                </button>
             </div>
 
             <!-- BLOQUE 1: CONSOLA (Módulos existentes 100% preservados) -->
@@ -1904,6 +1907,359 @@
                     </div>
                 </div>
             </div> <!-- /#admin-block-contexto -->
+
+            <!-- BLOQUE 5: INDICADORES DE PENSIONES (Fase 4) -->
+            <div id="admin-block-pensiones" class="admin-main-block" style="display: none; width: 100%;">
+                <!-- Sub-tabs: Catálogo, Historial, Sincronizaciones -->
+                <div class="admin-tabs" style="margin-bottom: 20px;">
+                    <button type="button" class="admin-tab-btn admin-pensiones-subtab-btn active" data-pensionestab="admin-pensiones-catalogo">
+                        <i class="fas fa-list-check"></i> Indicadores de Pensiones
+                    </button>
+                    <button type="button" class="admin-tab-btn admin-pensiones-subtab-btn" data-pensionestab="admin-pensiones-historial">
+                        <i class="fas fa-history"></i> Historial de Cambios
+                    </button>
+                    <button type="button" class="admin-tab-btn admin-pensiones-subtab-btn" data-pensionestab="admin-pensiones-syncs">
+                        <i class="fas fa-satellite-dish"></i> Sincronizaciones
+                    </button>
+                </div>
+
+                <!-- Sub-tab 1: Catálogo de Indicadores -->
+                <div id="admin-pensiones-catalogo" class="admin-pensiones-content" style="display: block;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-scale-balanced" style="color: #2563eb;"></i> Indicadores de Pensiones
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9em;">
+                                Catálogo oficial y estimado de Salario Mínimo General, Pensión Mínima Ley 73, Ley 97 e INPC.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button type="button" id="admin-pensiones-btn-sync" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fas fa-rotate"></i> Sincronizar Indicadores
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filtros Combinables -->
+                    <div class="admin-pensiones-filters" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;">
+                        <div style="flex: 1; min-width: 140px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Régimen</label>
+                            <select id="admin-pensiones-filtro-regimen" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="ley73">Ley 73</option>
+                                <option value="ley97">Ley 97</option>
+                                <option value="general">General</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 120px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Año</label>
+                            <select id="admin-pensiones-filtro-anio" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos los años</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 130px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Tipo</label>
+                            <select id="admin-pensiones-filtro-tipo" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="OFICIAL">OFICIAL</option>
+                                <option value="ESTIMADO">ESTIMADO</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 140px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Método</label>
+                            <select id="admin-pensiones-filtro-metodo" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="AUTOMATICA">AUTOMÁTICA</option>
+                                <option value="MANUAL">MANUAL</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 120px;">
+                            <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Estado</label>
+                            <select id="admin-pensiones-filtro-estado" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem;">
+                                <option value="todos">Todos</option>
+                                <option value="1">Activo</option>
+                                <option value="0">Inactivo</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button type="button" id="admin-pensiones-btn-reset-filtros" class="btn" style="background: #e2e8f0; color: #334155; padding: 7px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; border: none; cursor: pointer;">
+                                <i class="fas fa-filter-circle-xmark"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <span id="admin-pensiones-counter" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">Cargando indicadores...</span>
+                        <div style="font-size: 0.8rem; color: #64748b; display: flex; gap: 14px;">
+                            <span>🔒 = Auto-sync bloqueada</span>
+                            <span>🔄 = Auto-sync permitida</span>
+                        </div>
+                    </div>
+
+                    <!-- Tabla Principal -->
+                    <div class="table-responsive">
+                        <table class="admin-table" id="admin-pensiones-tabla">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 170px;">Indicador</th>
+                                    <th style="width: 140px;">Código</th>
+                                    <th style="width: 85px; text-align: center;">Régimen</th>
+                                    <th style="width: 65px; text-align: center;">Año</th>
+                                    <th style="min-width: 110px; text-align: right;">Valor</th>
+                                    <th style="width: 95px; text-align: center;">Unidad</th>
+                                    <th style="width: 95px; text-align: center;">Tipo</th>
+                                    <th style="min-width: 170px; text-align: center;">Vigencia</th>
+                                    <th style="min-width: 150px;">Fuente</th>
+                                    <th style="width: 100px; text-align: center;">Método</th>
+                                    <th style="width: 105px; text-align: center;">Estado</th>
+                                    <th style="width: 140px; text-align: center;" data-no-sort="true">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-pensiones-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 2: Historial de Cambios -->
+                <div id="admin-pensiones-historial" class="admin-pensiones-content" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-history" style="color: #6366f1;"></i> Historial de Cambios
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9em;">
+                                Auditoría inmutable de modificaciones manuales y automáticas con trazabilidad de usuario y fuente.
+                            </p>
+                        </div>
+                        <button type="button" id="admin-pensiones-btn-refresh-historial" class="btn" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 7px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-arrows-rotate"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 150px;">Fecha del cambio</th>
+                                    <th style="min-width: 170px;">Indicador</th>
+                                    <th style="width: 110px; text-align: right;">Valor anterior</th>
+                                    <th style="width: 110px; text-align: right;">Valor nuevo</th>
+                                    <th style="width: 90px; text-align: center;">Tipo de valor</th>
+                                    <th style="min-width: 200px;">Motivo</th>
+                                    <th style="min-width: 150px;">Fuente</th>
+                                    <th style="width: 100px;">URL de fuente</th>
+                                    <th style="width: 120px;">Usuario</th>
+                                    <th style="width: 110px; text-align: center;">Método de actualización</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-pensiones-historial-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 3: Sincronizaciones -->
+                <div id="admin-pensiones-syncs" class="admin-pensiones-content" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-satellite-dish" style="color: #0ea5e9;"></i> Sincronizaciones
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9em;">
+                                Registro de sincronizaciones automáticas y simulaciones (telemetría oficial).
+                            </p>
+                        </div>
+                        <button type="button" id="admin-pensiones-btn-refresh-syncs" class="btn" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 7px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-arrows-rotate"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 145px;">Fecha/hora</th>
+                                    <th style="width: 115px;">Fuente</th>
+                                    <th style="width: 145px;">Indicador</th>
+                                    <th style="width: 65px; text-align: center;">Ejercicio fiscal</th>
+                                    <th style="width: 135px; text-align: center;">Estado</th>
+                                    <th style="width: 105px; text-align: right;">Valor anterior</th>
+                                    <th style="width: 105px; text-align: right;">Valor candidato</th>
+                                    <th style="width: 75px; text-align: center;">Dry-run</th>
+                                    <th style="width: 75px; text-align: right;">Duración</th>
+                                    <th style="width: 110px;">Usuario</th>
+                                    <th style="min-width: 250px;">Detalles</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-pensiones-syncs-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div> <!-- /#admin-block-pensiones -->
+        </section>
+
+        <!-- Modal 1: Ver Detalle del Indicador de Pensiones -->
+        <div id="modal-pension-detalle" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 760px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 id="modal-pension-detalle-titulo" style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-circle-info" style="color: #2563eb;"></i> <span>Detalle del Indicador</span>
+                    </h3>
+                    <button type="button" id="btn-cerrar-modal-pension-detalle" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;" aria-label="Cerrar">&times;</button>
+                </div>
+                <div id="modal-pension-detalle-body">
+                    <!-- Rellenado dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal 2: Editar Indicador de Pensiones -->
+        <div id="modal-pension-editar" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 700px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 id="modal-pension-editar-titulo" style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-pen-to-square" style="color: #f59e0b;"></i> <span>Editar Indicador de Pensiones</span>
+                    </h3>
+                    <button type="button" id="btn-cerrar-modal-pension-editar" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;" aria-label="Cerrar">&times;</button>
+                </div>
+                <form id="form-pension-editar">
+                    <input type="hidden" id="edit-pension-id">
+                    
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #64748b; display: block;">INDICADOR</span>
+                            <span id="edit-pension-nombre-display" style="font-weight: 700; color: #1e293b; font-size: 1rem;"></span>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #64748b; display: block;">CÓDIGO</span>
+                            <span id="edit-pension-codigo-display" class="admin-pensiones-badge" style="background: #f1f5f9; color: #475569;"></span>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #64748b; display: block;">AÑO</span>
+                            <span id="edit-pension-anio-display" style="font-weight: 700; color: #1e293b;"></span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Valor Numérico *</label>
+                            <input type="number" step="0.0001" id="edit-pension-valor" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Tipo de Valor *</label>
+                            <select id="edit-pension-tipo" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                                <option value="OFICIAL">OFICIAL</option>
+                                <option value="ESTIMADO">ESTIMADO</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Inicio de Vigencia *</label>
+                            <input type="date" id="edit-pension-vigencia-inicio" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fin de Vigencia</label>
+                            <input type="date" id="edit-pension-vigencia-fin" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fuente Oficial *</label>
+                            <input type="text" id="edit-pension-fuente" class="form-control" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">URL de la Fuente</label>
+                            <input type="url" id="edit-pension-fuente-url" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fundamento Legal *</label>
+                        <textarea id="edit-pension-fundamento" class="form-control" rows="2" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;"></textarea>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Fórmula de Cálculo</label>
+                        <input type="text" id="edit-pension-formula" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                    </div>
+
+                    <div style="margin-bottom: 14px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: #92400e; font-size: 0.9rem;">
+                            <input type="checkbox" id="edit-pension-bloqueo" style="width: 18px; height: 18px;">
+                            <span>🔒 Bloquear actualización automática (proteger contra sobreescritura de auto-sync)</span>
+                        </label>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 4px;">Motivo del Cambio (Obligatorio para auditoría) *</label>
+                        <input type="text" id="edit-pension-motivo" class="form-control" required placeholder="Ej. Actualización conforme a publicación DOF del 28 de diciembre..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem;">
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e2e8f0; padding-top: 14px;">
+                        <button type="button" id="btn-cancelar-edit-pension" class="btn" style="background: #e2e8f0; color: #334155; padding: 8px 16px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">Cancelar</button>
+                        <button type="submit" id="btn-guardar-edit-pension" class="btn btn-primary" style="padding: 8px 18px; font-weight: 600;">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal 3: Sincronizar Indicadores (con Dry-Run) -->
+        <div id="modal-pension-sync" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal-content" style="max-width: 680px; width: 95%; text-align: left; max-height: 90vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-rotate" style="color: #2563eb;"></i> <span>Sincronización de Indicadores Oficiales</span>
+                    </h3>
+                    <button type="button" id="btn-cerrar-modal-pension-sync" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;" aria-label="Cerrar">&times;</button>
+                </div>
+
+                <div style="background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 0.9rem; color: #1e40af;">
+                    <p style="margin: 0; font-weight: 600;">La sincronización consultará las fuentes oficiales configuradas (Banco de México SIE / INEGI BIE).</p>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85rem;">Se recomienda ejecutar primero una <strong>simulación (Dry Run)</strong> para previsualizar los datos obtenidos sin realizar modificaciones en la base de datos.</p>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 8px;">Fuente a Consultar:</label>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+                            <input type="radio" name="sync-pension-fuente" value="BANXICO_SIE" checked>
+                            <div>
+                                <span style="font-weight: 700; color: #1e293b; display: block;">Banco de México (SIE API) / CONASAMI</span>
+                                <span style="font-size: 0.8rem; color: #64748b;">Salario Mínimo General (Serie SL11298) y derivación atómica a Pensión Mínima Ley 73</span>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+                            <input type="radio" name="sync-pension-fuente" value="INEGI_BIE">
+                            <div>
+                                <span style="font-weight: 700; color: #1e293b; display: block;">INEGI (BIE API)</span>
+                                <span style="font-size: 0.8rem; color: #64748b;">Índice Nacional de Precios al Consumidor (Indicador 910392 - INPC General)</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; color: #334155; font-size: 0.9rem;">
+                        <input type="checkbox" id="sync-pension-dryrun" checked style="width: 18px; height: 18px;">
+                        <span>Ejecutar simulación (Dry Run) — Consulta y valida sin modificar la BD</span>
+                    </label>
+                </div>
+
+                <!-- Contenedor dinámico de resultados de simulación -->
+                <div id="sync-pension-resultado" style="display: none; margin-bottom: 18px; border-radius: 8px; padding: 14px; font-size: 0.9rem;"></div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; flex-wrap: wrap;">
+                    <button type="button" id="btn-cancelar-sync-pension" class="btn" style="background: #e2e8f0; color: #334155; padding: 8px 16px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">Cerrar</button>
+                    <button type="button" id="btn-ejecutar-sync-simulacion" class="btn btn-primary" style="padding: 8px 18px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-play"></i> <span id="btn-sync-action-text">Ejecutar Simulación (Dry Run)</span>
+                    </button>
+                    <button type="button" id="btn-ejecutar-sync-real" class="btn" style="display: none; background: #dc2626; color: #ffffff; padding: 8px 18px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">
+                        <i class="fas fa-triangle-exclamation"></i> Confirmar y Aplicar Sincronización Real
+                    </button>
+                </div>
+            </div>
+        </div>
         </section>
 
         <!-- Modal Detalle de Asociado -->
