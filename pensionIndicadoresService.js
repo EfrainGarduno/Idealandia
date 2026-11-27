@@ -428,12 +428,29 @@ async function obtenerSalarioMinimoVigente(pool, fecha = null) {
     });
 
     // Construir tabla histórica de salarios mínimos desde BD
-    const indicadores = await obtenerIndicadoresActivos(pool);
-    const smgHist = indicadores.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL');
+    let indicadores = [];
+    try {
+        indicadores = await obtenerIndicadoresActivos(pool);
+    } catch (e) {
+        indicadores = [];
+    }
+
+    const smgHist = Array.isArray(indicadores)
+        ? indicadores.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL')
+        : [];
+
     const historico = {};
     smgHist.forEach(item => {
         historico[item.anio_referencia] = parseFloat(item.valor);
     });
+
+    // Si BD no entregó histórico (arranque en frío o falla de conexión), derivar del respaldo inmutable
+    if (Object.keys(historico).length === 0) {
+        const smgRespaldo = RESPALDO_CONTINGENCIA_VERIFICADO.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL');
+        smgRespaldo.forEach(item => {
+            historico[item.anio_referencia] = parseFloat(item.valor);
+        });
+    }
 
     if (res && res.success && res.valor > 0) {
         return {
@@ -443,20 +460,23 @@ async function obtenerSalarioMinimoVigente(pool, fecha = null) {
             tipoValor: res.tipoValor,
             esOficial: res.esOficial,
             fuente: res.fuente,
-            historico: Object.keys(historico).length > 0 ? historico : { 2024: 248.93, 2025: 278.80, 2026: 315.04 }
+            historico
         };
     }
 
-    // Respaldo de contingencia seguro si res fallara
-    console.warn('[PENSIONES SMG] Fallback a contingencia de salario mínimo vigente 2026 ($315.04).');
+    // Respaldo de contingencia dinámico derivado de RESPALDO_CONTINGENCIA_VERIFICADO (cero hardcodeos inline)
+    const smgContingencia = RESPALDO_CONTINGENCIA_VERIFICADO.filter(i => i.codigo === 'SALARIO_MINIMO_GENERAL');
+    const respaldoSMG = smgContingencia[smgContingencia.length - 1];
+
+    console.warn(`[PENSIONES SMG] Fallback a contingencia verificada de salario mínimo (${respaldoSMG.anio_referencia}: $${respaldoSMG.valor}).`);
     return {
         success: true,
-        salarioMinimo: 315.04,
-        anio: 2026,
-        tipoValor: 'OFICIAL',
-        esOficial: true,
-        fuente: 'CONASAMI / DOF (Respaldo verificado)',
-        historico: { 2024: 248.93, 2025: 278.80, 2026: 315.04 }
+        salarioMinimo: parseFloat(respaldoSMG.valor),
+        anio: respaldoSMG.anio_referencia,
+        tipoValor: respaldoSMG.tipo_valor,
+        esOficial: respaldoSMG.tipo_valor === 'OFICIAL',
+        fuente: `${respaldoSMG.fuente} (Respaldo verificado)`,
+        historico
     };
 }
 

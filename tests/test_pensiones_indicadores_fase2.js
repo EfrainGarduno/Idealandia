@@ -288,6 +288,70 @@ async function runTests() {
         );
 
         // -----------------------------------------------------------------
+        // 14.6 - 14.11: SMG Dinámico por Fecha desde BD (Sin Hardcodeo)
+        // -----------------------------------------------------------------
+        console.log('\n--- BLOQUE 9B: Salario Mínimo General Dinámico desde BD por Fecha ---');
+
+        // SMG 2024 desde BD
+        const smg2024 = await obtenerSalarioMinimoVigente(pool, '2024-06-15');
+        assert(
+            smg2024.success && smg2024.salarioMinimo === 248.93 && smg2024.anio === 2024,
+            `14.6 SMG 2024 obtenido dinámicamente de BD ($${smg2024.salarioMinimo})`
+        );
+
+        // SMG 2025 desde BD
+        const smg2025 = await obtenerSalarioMinimoVigente(pool, '2025-06-15');
+        assert(
+            smg2025.success && smg2025.salarioMinimo === 278.80 && smg2025.anio === 2025,
+            `14.7 SMG 2025 obtenido dinámicamente de BD ($${smg2025.salarioMinimo})`
+        );
+
+        // SMG 2026 desde BD
+        const smg2026 = await obtenerSalarioMinimoVigente(pool, '2026-06-15');
+        assert(
+            smg2026.success && smg2026.salarioMinimo === 315.04 && smg2026.anio === 2026,
+            `14.8 SMG 2026 obtenido dinámicamente de BD ($${smg2026.salarioMinimo})`
+        );
+
+        // Selección dependiente de la fecha
+        assert(
+            smg2024.salarioMinimo !== smg2025.salarioMinimo && smg2025.salarioMinimo !== smg2026.salarioMinimo,
+            '14.9 La selección de SMG varía estrictamente en función de la fecha'
+        );
+
+        // /api/pension/calcular sin salarioMinimo (debe resolver de BD por fecha)
+        const apiCalcularSinSmg = await request(app)
+            .post('/api/pension/calcular')
+            .set('Authorization', `Bearer ${userToken}`)
+            .send({
+                salarioDiarioPromedio: 2585,
+                semanasCotizadas: 1615,
+                edad: 61,
+                tieneEsposa: true,
+                fechaPension: '2026-06-01'
+            });
+        assert(
+            apiCalcularSinSmg.status === 200 && apiCalcularSinSmg.body.success === true,
+            '14.10 /api/pension/calcular resuelve SMG dinámicamente de BD si no se envía en payload'
+        );
+
+        // /api/pension/proyectar sin salarioMinimoActual ni salarioMinimoProyectado
+        const apiProyectarSinSmg = await request(app)
+            .post('/api/pension/proyectar')
+            .set('Authorization', `Bearer ${userToken}`)
+            .send({
+                semanasActuales: 1615,
+                salarioPromedioActual: 2585,
+                salarioDiarioProyectado: 2700,
+                fechaDesde: '2026-01-01',
+                fechaHasta: '2027-01-01'
+            });
+        assert(
+            apiProyectarSinSmg.status === 200 && apiProyectarSinSmg.body.success === true,
+            '14.11 /api/pension/proyectar resuelve SMG dinámicamente de BD si no se envía en payload'
+        );
+
+        // -----------------------------------------------------------------
         // 15: No Regresión del Motor Actuarial Existente
         // -----------------------------------------------------------------
         console.log('\n--- BLOQUE 10: Prueba Crítica de No Regresión del Motor Actual ---');

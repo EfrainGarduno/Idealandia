@@ -6348,8 +6348,18 @@ function initPensionesAdmin() {
     const btnReal = document.getElementById('btn-ejecutar-sync-real');
     if (btnReal && !btnReal.dataset.configured) {
         btnReal.dataset.configured = 'true';
-        btnReal.addEventListener('click', () => {
-            if (confirm('¿Está seguro de aplicar la sincronización real en la base de datos?\n\nEsta acción actualizará los valores oficiales en Idealandia y quedará registrada en el historial de auditoría.')) {
+        btnReal.addEventListener('click', async () => {
+            const confirmed = await window.showConfirm(
+                '¿Está seguro de aplicar la sincronización real de los indicadores en la base de datos?',
+                {
+                    title: 'Confirmar sincronización',
+                    subtext: 'Esta acción actualizará los valores oficiales de Idealandia y quedará registrada en el historial de auditoría.',
+                    confirmText: 'Confirmar sincronización',
+                    cancelText: 'Cancelar',
+                    confirmClass: 'custom-modal-btn primary'
+                }
+            );
+            if (confirmed) {
                 ejecutarSincronizacionIndicadores(true);
             }
         });

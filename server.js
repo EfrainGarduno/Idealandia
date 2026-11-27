@@ -24,9 +24,7 @@ const {
     calcularEdadCronologicaDetallada,
     reconstructDeterministicPeriods,
     determinarUltimoPeriodoCronologico,
-    validarSalarioProyectadoVsUltimoPeriodo,
-    SALARIO_MINIMO_GENERAL_VIGENTE,
-    SALARIOS_MINIMOS_GENERALES
+    validarSalarioProyectadoVsUltimoPeriodo
 } = require('./pension');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
@@ -1431,15 +1429,13 @@ app.get('/api/pension/salario-minimo-vigente', requireAnyPermission(['calculador
         res.status(200).json(infoSmg);
     } catch (err) {
         console.error('Error in /api/pension/salario-minimo-vigente:', err);
-        // Fallback seguro de contingencia
-        res.status(200).json({
-            success: true,
-            salarioMinimo: SALARIO_MINIMO_GENERAL_VIGENTE,
-            anio: 2026,
-            tipoValor: 'OFICIAL',
-            esOficial: true,
-            historico: SALARIOS_MINIMOS_GENERALES
-        });
+        // Fallback de contingencia delegado dinámicamente al servicio (sin hardcodeo)
+        try {
+            const fallback = await obtenerSalarioMinimoVigente(null, req.query.fecha || null);
+            res.status(200).json(fallback);
+        } catch (fbErr) {
+            res.status(500).json({ error: 'Error al consultar el salario mínimo vigente.' });
+        }
     }
 });
 
@@ -1500,12 +1496,19 @@ app.post('/api/pension/calcular', requireAnyPermission(['calculadora.basica', 'c
             tieneIncapacidad
         } = req.body || {};
 
-        const salMin = parseFloat(salarioMinimo);
+        let salMin = parseFloat(salarioMinimo);
+        if (isNaN(salMin) || salMin <= 0) {
+            // Resolver SMG dinámicamente desde BD por fecha
+            const fechaPension = req.body.fechaPension || req.body.fecha || null;
+            const infoSmg = await obtenerSalarioMinimoVigente(pool, fechaPension);
+            salMin = infoSmg && infoSmg.salarioMinimo ? parseFloat(infoSmg.salarioMinimo) : null;
+        }
+
         const salProm = parseFloat(salarioDiarioPromedio);
         const sem = parseInt(semanasCotizadas, 10);
         const ed = parseInt(edad, 10);
 
-        if (isNaN(salMin) || isNaN(salProm) || isNaN(sem) || isNaN(ed)) {
+        if (!salMin || isNaN(salMin) || isNaN(salProm) || isNaN(sem) || isNaN(ed)) {
             return res.status(400).json({
                 error: 'INVALID_DATA',
                 message: 'Por favor ingresa todos los campos numéricos de datos generales correctamente.'
@@ -1582,8 +1585,24 @@ app.post('/api/pension/proyectar', requireAnyPermission(['calculadora.avanzada']
             }
         }
 
+        let salMinAct = parseFloat(req.body.salarioMinimoActual);
+        if (isNaN(salMinAct) || salMinAct <= 0) {
+            const fechaDesdeIso = req.body.fechaDesde ? req.body.fechaDesde.trim() : null;
+            const infoAct = await obtenerSalarioMinimoVigente(pool, fechaDesdeIso);
+            salMinAct = infoAct && infoAct.salarioMinimo ? parseFloat(infoAct.salarioMinimo) : null;
+        }
+
+        let salMinProj = parseFloat(req.body.salarioMinimoProyectado);
+        if (isNaN(salMinProj) || salMinProj <= 0) {
+            const fechaHastaIso = req.body.fechaHasta ? req.body.fechaHasta.trim() : null;
+            const infoProj = await obtenerSalarioMinimoVigente(pool, fechaHastaIso);
+            salMinProj = infoProj && infoProj.salarioMinimo ? parseFloat(infoProj.salarioMinimo) : salMinAct;
+        }
+
         const projectionResult = calculatePensionProjection({
             ...req.body,
+            salarioMinimoActual: salMinAct,
+            salarioMinimoProyectado: salMinProj,
             fechaNacimiento,
             periodosHistoricos
         });

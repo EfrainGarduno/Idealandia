@@ -3882,12 +3882,22 @@
                 overlay.style.removeProperty('display');
 
                 const safeEscape = (str) => String(str || '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+                let contentHtml = '';
+                if (options.title) {
+                    contentHtml += `<div style="font-size: 1.15rem; font-weight: 700; color: #1e293b; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-circle-question" style="color: #4f46e5;"></i><span>${safeEscape(options.title)}</span></div>`;
+                }
                 if (options.subtext) {
-                    textElement.innerHTML = `<div style="font-size: 1.05rem; font-weight: 700; color: #1e293b; margin-bottom: 8px;">${safeEscape(message)}</div><div style="font-size: 0.9rem; color: #64748b; line-height: 1.4;">${safeEscape(options.subtext)}</div>`;
+                    contentHtml += `<div style="font-size: 1.0rem; font-weight: 600; color: #334155; margin-bottom: 8px;">${safeEscape(message)}</div><div style="font-size: 0.88rem; color: #64748b; line-height: 1.45;">${safeEscape(options.subtext)}</div>`;
+                    textElement.innerHTML = contentHtml;
                 } else if (options.html) {
-                    textElement.innerHTML = message;
+                    textElement.innerHTML = contentHtml + message;
                 } else {
-                    textElement.textContent = message;
+                    if (options.title) {
+                        contentHtml += `<div style="font-size: 0.95rem; color: #334155; line-height: 1.45;">${safeEscape(message)}</div>`;
+                        textElement.innerHTML = contentHtml;
+                    } else {
+                        textElement.textContent = message;
+                    }
                 }
                 buttonsContainer.innerHTML = '';
 
@@ -4830,7 +4840,7 @@
             }
 
             const salarioMinimoInput = document.getElementById('salario-minimo');
-            const defaultSalarioMinimo = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
+            const defaultSalarioMinimo = (typeof window !== 'undefined' && (window.CONTINGENCIA_TECNICA_SMG || window.SALARIO_MINIMO_GENERAL_VIGENTE)) || 315.04;
             if (salarioMinimoInput && !salarioMinimoInput.value) {
                 salarioMinimoInput.value = defaultSalarioMinimo;
             }
@@ -4851,7 +4861,7 @@
                 } catch (e) {
                     // Fallback a valor centralizado
                 }
-                const fallback = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
+                const fallback = (typeof window !== 'undefined' && (window.CONTINGENCIA_TECNICA_SMG || window.SALARIO_MINIMO_GENERAL_VIGENTE)) || 315.04;
                 if (salarioMinimoInput && !salarioMinimoInput.value) {
                     salarioMinimoInput.value = fallback;
                 }
@@ -5949,7 +5959,7 @@
                     if (typeof fetchSalarioMinimoVigente === 'function') {
                         fetchSalarioMinimoVigente();
                     } else {
-                        const fallback = (typeof window !== 'undefined' && window.SALARIO_MINIMO_GENERAL_VIGENTE) || 315.04;
+                        const fallback = (typeof window !== 'undefined' && (window.CONTINGENCIA_TECNICA_SMG || window.SALARIO_MINIMO_GENERAL_VIGENTE)) || 315.04;
                         const salMinInput = document.getElementById('salario-minimo');
                         if (salMinInput) salMinInput.value = fallback;
                     }
