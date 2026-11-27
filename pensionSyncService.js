@@ -98,6 +98,9 @@ async function sincronizarIndicadores({
     const inicioProceso = Date.now();
     let connection = null;
     let lockAdquirido = false;
+    let indicadorCodigoOperacion = fuente === 'INEGI_BIE' ? 'INPC_GENERAL' : 'SALARIO_MINIMO_GENERAL';
+    let valorCandidatoOperacion = null;
+    let anioFiscalOperacion = new Date().getFullYear();
 
     try {
         connection = await pool.getConnection();
@@ -603,6 +606,10 @@ async function sincronizarIndicadores({
             const fechaVigenciaInicio = vigencia ? vigencia.fechaVigenciaInicio : `${anioFiscal}-01-01`;
             const fechaVigenciaFin = vigencia ? vigencia.fechaVigenciaFin : `${anioFiscal}-12-31`;
 
+            indicadorCodigoOperacion = 'INPC_GENERAL';
+            valorCandidatoOperacion = inpcCandidato;
+            anioFiscalOperacion = anioFiscal;
+
             if (!inpcCandidato || !fechaObservacion) {
                 await registrarTelemetriaSincronizacion(connection, {
                     fuente: 'INEGI_BIE',
@@ -770,6 +777,42 @@ async function sincronizarIndicadores({
                 };
             }
 
+            // Verificación previa de compatibilidad de esquema para la unidad 'INDICE'
+            // Regla arquitectónica: No inventar unidades erróneas ni alterar el esquema sin migración formal aprobada.
+            const [columnInfo] = await connection.query(`
+                SHOW COLUMNS FROM pensiones_indicadores WHERE Field = 'unidad'
+            `);
+            const enumDef = (columnInfo && columnInfo.length > 0 && columnInfo[0].Type) ? columnInfo[0].Type : '';
+            const soportaUnidadIndice = enumDef.includes("'INDICE'");
+
+            if (!soportaUnidadIndice) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'ERROR_BD',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    esDryRun: false,
+                    detalles: `El esquema actual de pensiones_indicadores.unidad (${enumDef}) no admite la unidad 'INDICE'. No se modifica la BD ni se inventan unidades erróneas; se requiere migración formal previa.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: false,
+                    error: 'UNIDAD_INDICE_NO_SOPORTADA',
+                    estado: 'ERROR_BD',
+                    mensaje: `No es posible persistir el INPC en base de datos: la columna 'unidad' no admite el valor 'INDICE'. Se requiere migración formal de esquema. Para simulación utilice dryRun=true.`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    valorCandidato: inpcCandidato,
+                    duracionMs: duracionTotal
+                };
+            }
+
             // Persistencia Real en Transacción MySQL
             await connection.beginTransaction();
 
@@ -893,9 +936,12 @@ async function sincronizarIndicadores({
         if (connection) {
             await registrarTelemetriaSincronizacion(connection, {
                 fuente,
-                indicadorCodigo: 'GENERAL',
-                ejercicioFiscal: new Date().getFullYear(),
+                indicadorCodigo: indicadorCodigoOperacion,
+                ejercicioFiscal: anioFiscalOperacion,
                 estado: 'ERROR_BD',
+                valorAnterior: null,
+                valorCandidato: valorCandidatoOperacion,
+                esDryRun: dryRun,
                 detalles: err.message || 'Excepción no controlada durante el proceso de sincronización.',
                 duracionMs: duracionTotal,
                 ipOrigen: ip,

@@ -1,12 +1,20 @@
 [Unit]
-Description=Idealandia - Temporizador de Sincronizacion de Indicadores (Fase 4)
+Description=Idealandia - Temporizador Trimestral de Sincronizacion de Indicadores (Fase 4)
 RefuseManualStart=no
 RefuseManualStop=no
 
 [Timer]
-# Temporada alta (diciembre a febrero): Diario a las 06:00 AM hora centro
-# Resto del ano: Lunes a las 06:00 AM
-OnCalendar=Mon..Fri 06:00:00
+# Calendario trimestral y respaldo de inicio de ano en hora oficial de Ciudad de Mexico
+# 1 de enero - Inicio de ejercicio fiscal
+OnCalendar=*-01-01 06:00:00 America/Mexico_City
+# 5 de enero - Respaldo especial de inicio de ano (idempotente)
+OnCalendar=*-01-05 06:00:00 America/Mexico_City
+# 1 de abril - Segundo trimestre
+OnCalendar=*-04-01 06:00:00 America/Mexico_City
+# 1 de julio - Tercer trimestre
+OnCalendar=*-07-01 06:00:00 America/Mexico_City
+# 1 de octubre - Cuarto trimestre
+OnCalendar=*-10-01 06:00:00 America/Mexico_City
 
 # Si el servidor estuvo apagado durante la ejecucion programada, correr al reiniciar
 Persistent=true
