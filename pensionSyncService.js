@@ -368,6 +368,7 @@ async function sincronizarIndicadores({
                             codigo: 'PENSION_MINIMA_LEY_73',
                             regimen: 'ley73',
                             ejercicioFiscal: anioFiscal,
+                            fechaObservacionFuente: fechaObservacion,
                             fechaVigenciaInicio,
                             fechaVigenciaFin,
                             formulaCalculo: `${smgCandidato} * (365 / 12) * 1.11`,

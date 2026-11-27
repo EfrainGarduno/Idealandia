@@ -99,7 +99,7 @@ async function runFase4Tests() {
                         series: [{
                             idSerie: 'SL11298',
                             titulo: 'Salarios mínimos generales promedio nacional diario',
-                            datos: [{ fecha: '01/01/2026', dato: '315.04' }]
+                            datos: [{ fecha: '01/10/2026', dato: '315.04' }]
                         }]
                     }
                 })
@@ -108,7 +108,7 @@ async function runFase4Tests() {
             const res = await fetchBanxicoSerie({ serieId: 'SL11298', token: 'mock-token', fetchFn: mockFetch });
             assert.strictEqual(res.success, true);
             assert.strictEqual(res.valorStr, '315.04');
-            assert.strictEqual(res.fechaStr, '01/01/2026');
+            assert.strictEqual(res.fechaStr, '01/10/2026');
             assert.strictEqual(res.serieId, 'SL11298');
         });
 
@@ -124,7 +124,7 @@ async function runFase4Tests() {
                             series: [{
                                 idSerie: 'SL11298',
                                 titulo: 'Salarios mínimos generales',
-                                datos: [{ fecha: '01/01/2026', dato: '315.04' }]
+                                datos: [{ fecha: '01/10/2026', dato: '315.04' }]
                             }]
                         }
                     })
@@ -133,6 +133,7 @@ async function runFase4Tests() {
 
             const res = await fetchBanxicoSerie({ serieId: 'CA601', token: 'mock-token', fetchFn: mockFetch });
             assert.strictEqual(res.success, true);
+            assert.strictEqual(res.fechaStr, '01/10/2026');
             assert(requestedUrl.includes('SL11298'), 'Debe consultar la serie oficial SL11298 en lugar del cuadro CA601');
         });
 
@@ -395,9 +396,9 @@ async function runFase4Tests() {
                 json: async () => ({
                     bmx: {
                         series: [{
-                            idSerie: 'CA601',
+                            idSerie: 'SL11298',
                             titulo: 'Salarios mínimos',
-                            datos: [{ fecha: '01/01/2026', dato: '315.04' }]
+                            datos: [{ fecha: '01/10/2026', dato: '315.04' }]
                         }]
                     }
                 })
@@ -415,6 +416,14 @@ async function runFase4Tests() {
 
             assert.strictEqual(syncRes.success, true);
             assert.strictEqual(syncRes.estado, 'EXITO_SIN_CAMBIOS');
+            assert.strictEqual(syncRes.fechaObservacionFuente, '2026-10-01');
+            assert.strictEqual(syncRes.fechaVigenciaInicio, '2026-01-01');
+            assert.strictEqual(syncRes.fechaVigenciaFin, '2026-12-31');
+
+            // Verificar que pensiones_sincronizaciones registró la fecha real de observación
+            const [syncRow] = await pool.query('SELECT * FROM pensiones_sincronizaciones ORDER BY id DESC LIMIT 1');
+            assert(syncRow[0].detalles.includes('Observación de fuente: 2026-10-01'), 'El detalle de sincronización debe registrar 2026-10-01');
+            assert(syncRow[0].detalles.includes('Vigencia anual: 2026-01-01 a 2026-12-31'), 'El detalle debe registrar vigencia 2026-01-01 a 2026-12-31');
 
             // Verificar que no se insertó ninguna fila en historial
             const [histDespues] = await pool.query('SELECT COUNT(*) AS total FROM pensiones_indicadores_historial');
@@ -449,18 +458,21 @@ async function runFase4Tests() {
             assert.strictEqual(syncRes.fechaVigenciaInicio, '2026-01-01');
             assert.strictEqual(syncRes.fechaVigenciaFin, '2026-12-31');
             assert.strictEqual(syncRes.valorVigente, 315.04);
+
+            const [syncRow] = await pool.query('SELECT * FROM pensiones_sincronizaciones ORDER BY id DESC LIMIT 1');
+            assert(syncRow[0].detalles.includes('Observación de fuente: 2026-10-01'), 'El detalle de telemetría debe conservar 2026-10-01');
         });
 
-        await testAsync('Caso 15: Modo DRY-RUN valida y proyecta cambios sin modificar indicadores en BD', async () => {
+        await testAsync('Caso 15: Modo DRY-RUN valida y proyecta cambios sin modificar indicadores en BD ni transformar fecha', async () => {
             const mockFetchDry = async () => ({
                 ok: true,
                 status: 200,
                 json: async () => ({
                     bmx: {
                         series: [{
-                            idSerie: 'CA601',
+                            idSerie: 'SL11298',
                             titulo: 'Salarios mínimos',
-                            datos: [{ fecha: '01/01/2026', dato: '320.00' }]
+                            datos: [{ fecha: '01/10/2026', dato: '320.00' }]
                         }]
                     }
                 })
@@ -475,8 +487,19 @@ async function runFase4Tests() {
             assert.strictEqual(dryRes.success, true);
             assert.strictEqual(dryRes.esDryRun, true);
             assert.strictEqual(dryRes.estado, 'EXITO_DRY_RUN');
+            assert.strictEqual(dryRes.fechaObservacionFuente, '2026-10-01');
             assert(Array.isArray(dryRes.cambiosPropuestos));
             assert.strictEqual(dryRes.cambiosPropuestos[0].valorCandidato, 320.00);
+            assert.strictEqual(dryRes.cambiosPropuestos[0].fechaObservacionFuente, '2026-10-01');
+            assert.strictEqual(dryRes.cambiosPropuestos[0].fechaVigenciaInicio, '2026-01-01');
+            assert.strictEqual(dryRes.cambiosPropuestos[0].fechaVigenciaFin, '2026-12-31');
+            assert.strictEqual(dryRes.cambiosPropuestos[1].fechaObservacionFuente, '2026-10-01');
+            assert.strictEqual(dryRes.cambiosPropuestos[1].fechaVigenciaInicio, '2026-01-01');
+            assert.strictEqual(dryRes.cambiosPropuestos[1].fechaVigenciaFin, '2026-12-31');
+
+            const [syncDryRow] = await pool.query('SELECT * FROM pensiones_sincronizaciones ORDER BY id DESC LIMIT 1');
+            assert(syncDryRow[0].detalles.includes('Observación de fuente: 2026-10-01'), 'Dry-run debe conservar la fecha de observación 2026-10-01 en detalles');
+            assert(syncDryRow[0].detalles.includes('Vigencia anual: 2026-01-01 a 2026-12-31'), 'Dry-run debe conservar vigencia anual en detalles');
 
             // Verificar que en la BD el valor real de 2026 sigue siendo exactamente 315.04
             const [bdRows] = await pool.query('SELECT valor FROM pensiones_indicadores WHERE codigo = "SALARIO_MINIMO_GENERAL" AND anio_referencia = 2026');
@@ -541,8 +564,8 @@ async function runFase4Tests() {
                     json: async () => ({
                         bmx: {
                             series: [{
-                                idSerie: 'CA601',
-                                datos: [{ fecha: '01/01/2026', dato: '330.00' }]
+                                idSerie: 'SL11298',
+                                datos: [{ fecha: '01/10/2026', dato: '330.00' }]
                             }]
                         }
                     })
@@ -556,6 +579,7 @@ async function runFase4Tests() {
 
                 assert.strictEqual(resBloqueo.success, true);
                 assert.strictEqual(resBloqueo.estado, 'BLOQUEO_MANUAL_ACTIVO');
+                assert.strictEqual(resBloqueo.fechaObservacionFuente, '2026-10-01');
 
                 // Verificar que en la BD el valor NO cambió
                 const [bdRows] = await pool.query('SELECT valor FROM pensiones_indicadores WHERE codigo = "SALARIO_MINIMO_GENERAL" AND anio_referencia = 2026');
@@ -573,8 +597,8 @@ async function runFase4Tests() {
                 json: async () => ({
                     bmx: {
                         series: [{
-                            idSerie: 'CA601',
-                            datos: [{ fecha: '01/01/2026', dato: '315.04' }]
+                            idSerie: 'SL11298',
+                            datos: [{ fecha: '01/10/2026', dato: '315.04' }]
                         }]
                     }
                 })
@@ -586,6 +610,7 @@ async function runFase4Tests() {
             for (let i = 0; i < 20; i++) {
                 const r = await sincronizarIndicadores({ pool, fetchFn: mockFetchConstante });
                 assert.strictEqual(r.estado, 'EXITO_SIN_CAMBIOS');
+                assert.strictEqual(r.fechaObservacionFuente, '2026-10-01');
             }
 
             const [hist2] = await pool.query('SELECT COUNT(*) AS cnt FROM pensiones_indicadores_historial');
@@ -629,16 +654,16 @@ async function runFase4Tests() {
             assert(resMalo.motivoRechazo.includes('Discrepancia en pensión Ley 73'));
         });
 
-        await testAsync('Caso 23: Opción C en Transacción Real: Sincronización actualiza SMG y deriva atómicamente Pensión Ley 73 con historial completo', async () => {
-            // Simulamos actualización legítima del SMG a 316.00 (+0.3% variación)
+        await testAsync('Caso 23: Opción C en Transacción Real: Sincronización actualiza SMG y deriva atómicamente Pensión Ley 73 con historial completo y observación 2026-10-01', async () => {
+            // Simulamos actualización legítima del SMG a 316.00 (+0.3% variación) con observación real de Banxico
             const mockFetchSMGNuevo = async () => ({
                 ok: true,
                 status: 200,
                 json: async () => ({
                     bmx: {
                         series: [{
-                            idSerie: 'CA601',
-                            datos: [{ fecha: '01/01/2026', dato: '316.00' }]
+                            idSerie: 'SL11298',
+                            datos: [{ fecha: '01/10/2026', dato: '316.00' }]
                         }]
                     }
                 })
@@ -652,26 +677,40 @@ async function runFase4Tests() {
 
             assert.strictEqual(resUpdate.success, true);
             assert.strictEqual(resUpdate.estado, 'EXITO_ACTUALIZADO');
+            assert.strictEqual(resUpdate.fechaObservacionFuente, '2026-10-01');
+            assert.strictEqual(resUpdate.fechaVigenciaInicio, '2026-01-01');
+            assert.strictEqual(resUpdate.fechaVigenciaFin, '2026-12-31');
 
             // 1. Verificar SMG actualizado en BD
-            const [smgBD] = await pool.query('SELECT valor, metodo_obtencion FROM pensiones_indicadores WHERE codigo = "SALARIO_MINIMO_GENERAL" AND anio_referencia = 2026');
+            const [smgBD] = await pool.query('SELECT valor, metodo_obtencion, fecha_vigencia_inicio, fecha_vigencia_fin FROM pensiones_indicadores WHERE codigo = "SALARIO_MINIMO_GENERAL" AND anio_referencia = 2026');
             assert.strictEqual(parseFloat(smgBD[0].valor), 316.00);
             assert.strictEqual(smgBD[0].metodo_obtencion, 'AUTOMATICA');
+            assert.strictEqual(smgBD[0].fecha_vigencia_inicio.toISOString().slice(0, 10), '2026-01-01');
+            assert.strictEqual(smgBD[0].fecha_vigencia_fin.toISOString().slice(0, 10), '2026-12-31');
 
             // 2. Verificar Pensión Mínima Ley 73 derivada atómicamente en BD: 316 * (365/12) * 1.11 = 10,668.95
-            const [penBD] = await pool.query('SELECT valor, metodo_obtencion, formula_calculo FROM pensiones_indicadores WHERE codigo = "PENSION_MINIMA_LEY_73" AND anio_referencia = 2026');
+            const [penBD] = await pool.query('SELECT valor, metodo_obtencion, formula_calculo, fecha_vigencia_inicio, fecha_vigencia_fin FROM pensiones_indicadores WHERE codigo = "PENSION_MINIMA_LEY_73" AND anio_referencia = 2026');
             assert.strictEqual(parseFloat(penBD[0].valor), 10668.95);
             assert.strictEqual(penBD[0].metodo_obtencion, 'AUTOMATICA');
             assert(penBD[0].formula_calculo.includes('316 * (365 / 12) * 1.11'));
+            assert.strictEqual(penBD[0].fecha_vigencia_inicio.toISOString().slice(0, 10), '2026-01-01');
+            assert.strictEqual(penBD[0].fecha_vigencia_fin.toISOString().slice(0, 10), '2026-12-31');
 
-            // 3. Verificar auditoría en historial para ambos
+            // 3. Verificar telemetría en pensiones_sincronizaciones
+            const [syncUpdateRow] = await pool.query('SELECT * FROM pensiones_sincronizaciones ORDER BY id DESC LIMIT 1');
+            assert(syncUpdateRow[0].detalles.includes('Observación de fuente: 2026-10-01'), 'EXITO_ACTUALIZADO debe registrar la fecha real de observación 2026-10-01 en detalles');
+            assert(syncUpdateRow[0].detalles.includes('Vigencia: 2026-01-01 a 2026-12-31'), 'EXITO_ACTUALIZADO debe registrar la vigencia legal 2026-01-01 a 2026-12-31 en detalles');
+
+            // 4. Verificar auditoría en historial para ambos con observación de fuente 2026-10-01
             const [histSMG] = await pool.query('SELECT * FROM pensiones_indicadores_historial WHERE codigo = "SALARIO_MINIMO_GENERAL" ORDER BY id DESC LIMIT 1');
             assert.strictEqual(parseFloat(histSMG[0].valor_nuevo), 316.00);
             assert.strictEqual(histSMG[0].metodo_actualizacion, 'AUTOMATICA');
+            assert(histSMG[0].motivo.includes('Observación fuente: 2026-10-01'), 'Historial de SMG debe auditar la fecha real de observación 2026-10-01');
 
             const [histPen] = await pool.query('SELECT * FROM pensiones_indicadores_historial WHERE codigo = "PENSION_MINIMA_LEY_73" ORDER BY id DESC LIMIT 1');
             assert.strictEqual(parseFloat(histPen[0].valor_nuevo), 10668.95);
             assert.strictEqual(histPen[0].metodo_actualizacion, 'AUTOMATICA');
+            assert(histPen[0].motivo.includes('Observación fuente: 2026-10-01'), 'Historial de Ley 73 debe auditar la fecha real de observación 2026-10-01');
         });
 
         await testAsync('Caso 24: Separación de Regímenes: La actualización de Ley 73 no afecta ni modifica el indicador base de Ley 97 ($3,778.00)', async () => {

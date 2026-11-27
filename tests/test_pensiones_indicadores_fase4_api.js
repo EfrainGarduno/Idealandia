@@ -51,7 +51,7 @@ async function testFase4API() {
         { expiresIn: '1h' }
     );
 
-    // Mock temporal de globalThis.fetch para simular respuesta oficial sin internet
+    // Mock temporal de globalThis.fetch para simular respuesta oficial sin internet (observación real Banxico: 01/10/2026)
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => ({
         ok: true,
@@ -60,7 +60,7 @@ async function testFase4API() {
             bmx: {
                 series: [{
                     idSerie: 'SL11298',
-                    datos: [{ fecha: '01/01/2026', dato: '315.04' }]
+                    datos: [{ fecha: '01/10/2026', dato: '315.04' }]
                 }]
             }
         })
@@ -76,7 +76,10 @@ async function testFase4API() {
 
         assert.strictEqual(resDry.status, 200);
         assert.strictEqual(resDry.body.success, true);
-        console.log('   [PASS] Endpoint de sincronización con RBAC responde HTTP 200.');
+        assert.strictEqual(resDry.body.fechaObservacionFuente, '2026-10-01');
+        assert.strictEqual(resDry.body.fechaVigenciaInicio, '2026-01-01');
+        assert.strictEqual(resDry.body.fechaVigenciaFin, '2026-12-31');
+        console.log('   [PASS] Endpoint de sincronización con RBAC responde HTTP 200 y conserva fecha de observación 2026-10-01.');
 
         // 2. Sincronizar con cabecera X-Sync-Cron-Secret (sin sesión de usuario)
         console.log('2. Probando POST /api/admin/pensiones/indicadores/sincronizar con X-Sync-Cron-Secret...');
@@ -87,7 +90,10 @@ async function testFase4API() {
 
         assert.strictEqual(resCron.status, 200);
         assert.strictEqual(resCron.body.success, true);
-        console.log('   [PASS] Endpoint de sincronización con cron secret responde HTTP 200.');
+        assert.strictEqual(resCron.body.fechaObservacionFuente, '2026-10-01');
+        assert.strictEqual(resCron.body.fechaVigenciaInicio, '2026-01-01');
+        assert.strictEqual(resCron.body.fechaVigenciaFin, '2026-12-31');
+        console.log('   [PASS] Endpoint de sincronización con cron secret responde HTTP 200 y conserva fecha de observación 2026-10-01.');
 
         // 3. Rechazar sin token ni secret
         console.log('3. Probando rechazo de sincronización sin credenciales (HTTP 401)...');
