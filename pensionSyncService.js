@@ -20,6 +20,7 @@ const {
     normalizarValorNumerico, 
     normalizarFechaAISO, 
     extraerEjercicioFiscal, 
+    determinarVigenciaIndicadorAnual,
     calcularPensionMinimaLey73 
 } = require('./indicatorNormalizer');
 const { 
@@ -129,410 +130,759 @@ async function sincronizarIndicadores({
         }
         lockAdquirido = true;
 
-        // 2. Extracción de Fuente Oficial (Salario Mínimo General via Banxico SIE Serie SL11298)
-        const extractorRes = await fetchBanxicoSerie({
-            serieId: 'SL11298',
-            token: process.env.BANXICO_TOKEN || (fetchFn ? 'mock-test-token' : null),
-            timeoutMs: 8000,
-            fetchFn: fetchFn || globalThis.fetch
-        });
-
-        const duracionExtractor = Date.now() - inicioProceso;
-
-        if (!extractorRes.success) {
-            let estadoFalla = 'ERROR_HTTP';
-            if (extractorRes.error === 'TIMEOUT') estadoFalla = 'ERROR_TIMEOUT';
-            else if (extractorRes.error && extractorRes.error.includes('JSON')) estadoFalla = 'ERROR_PARSER';
-            else if (extractorRes.error && extractorRes.error.includes('TOKEN')) estadoFalla = 'ERROR_HTTP';
-
-            await registrarTelemetriaSincronizacion(connection, {
-                fuente: extractorRes.fuente || fuente,
-                indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
-                ejercicioFiscal: new Date().getFullYear(),
-                estado: estadoFalla,
-                detalles: extractorRes.detalles || extractorRes.error,
-                duracionMs: duracionExtractor,
-                ipOrigen: ip,
-                usuarioId
+        // 2. Despacho según Fuente Oficial
+        if (fuente === 'BANXICO_SIE') {
+            // Extracción de Salario Mínimo General via Banxico SIE Serie SL11298
+            const extractorRes = await fetchBanxicoSerie({
+                serieId: 'SL11298',
+                token: process.env.BANXICO_TOKEN || (fetchFn ? 'mock-test-token' : null),
+                timeoutMs: 8000,
+                fetchFn: fetchFn || globalThis.fetch
             });
 
-            return {
-                success: false,
-                error: extractorRes.error,
-                mensaje: `Falla en extracción desde fuente oficial: ${extractorRes.detalles}`,
-                estado: estadoFalla,
-                duracionMs: duracionExtractor
-            };
-        }
+            const duracionExtractor = Date.now() - inicioProceso;
 
-        // 3. Normalización de Datos Crudos
-        const smgCandidato = normalizarValorNumerico(extractorRes.valorStr, 2);
-        const fechaVigenciaInicio = normalizarFechaAISO(extractorRes.fechaStr);
-        const anioFiscal = extraerEjercicioFiscal(fechaVigenciaInicio);
+            if (!extractorRes.success) {
+                let estadoFalla = 'ERROR_HTTP';
+                if (extractorRes.error === 'TIMEOUT') estadoFalla = 'ERROR_TIMEOUT';
+                else if (extractorRes.error && extractorRes.error.includes('JSON')) estadoFalla = 'ERROR_PARSER';
+                else if (extractorRes.error && extractorRes.error.includes('TOKEN')) estadoFalla = 'ERROR_HTTP';
 
-        if (!smgCandidato || !fechaVigenciaInicio || !anioFiscal) {
-            await registrarTelemetriaSincronizacion(connection, {
-                fuente: 'BANXICO_SIE',
-                indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
-                ejercicioFiscal: anioFiscal || new Date().getFullYear(),
-                estado: 'ERROR_PARSER',
-                detalles: `Error normalizando datos de fuente: valorStr='${extractorRes.valorStr}', fechaStr='${extractorRes.fechaStr}'`,
-                duracionMs: duracionExtractor,
-                ipOrigen: ip,
-                usuarioId
-            });
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: extractorRes.fuente || fuente,
+                    indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
+                    ejercicioFiscal: new Date().getFullYear(),
+                    estado: estadoFalla,
+                    detalles: extractorRes.detalles || extractorRes.error,
+                    duracionMs: duracionExtractor,
+                    ipOrigen: ip,
+                    usuarioId
+                });
 
-            return {
-                success: false,
-                error: 'NORMALIZACION_FALLIDA',
-                mensaje: 'Los datos entregados por la fuente no pudieron ser normalizados a formato numérico o fecha válida.',
-                duracionMs: duracionExtractor
-            };
-        }
-
-        // 4. Consulta del Estado Actual en BD
-        const [indicadoresBD] = await connection.query(
-            `SELECT id, codigo, valor, tipo_valor, fecha_vigencia_inicio, bloqueo_actualizacion_automatica, activo
-             FROM pensiones_indicadores 
-             WHERE codigo = 'SALARIO_MINIMO_GENERAL' AND anio_referencia = ? AND activo = 1`,
-            [anioFiscal]
-        );
-
-        const registroActual = indicadoresBD.length > 0 ? indicadoresBD[0] : null;
-        const valorActualEnBD = registroActual ? parseFloat(registroActual.valor) : null;
-
-        // 5. Verificación de Bandera de Bloqueo Manual
-        if (registroActual && registroActual.bloqueo_actualizacion_automatica === 1) {
-            const duracionTotal = Date.now() - inicioProceso;
-            await registrarTelemetriaSincronizacion(connection, {
-                fuente: 'BANXICO_SIE',
-                indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
-                ejercicioFiscal: anioFiscal,
-                estado: 'BLOQUEO_MANUAL_ACTIVO',
-                valorAnterior: valorActualEnBD,
-                valorCandidato: smgCandidato,
-                esDryRun: dryRun,
-                detalles: `El indicador SALARIO_MINIMO_GENERAL para el ejercicio ${anioFiscal} tiene bloqueo manual activo. Sincronización omitida.`,
-                duracionMs: duracionTotal,
-                ipOrigen: ip,
-                usuarioId
-            });
-
-            return {
-                success: true,
-                estado: 'BLOQUEO_MANUAL_ACTIVO',
-                mensaje: `Actualización automática omitida: el indicador para el ejercicio ${anioFiscal} está protegido por bloqueo manual.`,
-                ejercicioFiscal: anioFiscal,
-                valorActualEnBD,
-                valorCandidato: smgCandidato,
-                duracionMs: duracionTotal
-            };
-        }
-
-        // 6. Validación Rigurosa y Sanity Checks Dinámicos
-        const validacionSMG = validarSalarioMinimoCandidato(
-            { valor: smgCandidato, anioReferencia: anioFiscal, fechaVigenciaInicio },
-            valorActualEnBD
-        );
-
-        if (!validacionSMG.valido) {
-            const duracionTotal = Date.now() - inicioProceso;
-            await registrarTelemetriaSincronizacion(connection, {
-                fuente: 'BANXICO_SIE',
-                indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
-                ejercicioFiscal: anioFiscal,
-                estado: 'RECHAZADO_VALIDACION',
-                valorAnterior: valorActualEnBD,
-                valorCandidato: smgCandidato,
-                esDryRun: dryRun,
-                detalles: validacionSMG.motivoRechazo,
-                duracionMs: duracionTotal,
-                ipOrigen: ip,
-                usuarioId
-            });
-
-            return {
-                success: false,
-                error: 'RECHAZADO_VALIDACION',
-                mensaje: `Dato candidato rechazado por validación de seguridad: ${validacionSMG.motivoRechazo}`,
-                valorCandidato: smgCandidato,
-                duracionMs: duracionTotal
-            };
-        }
-
-        // 7. Verificación de Idempotencia (¿Dato sin cambios?)
-        const hayCambio = !valorActualEnBD || Math.abs(valorActualEnBD - smgCandidato) >= 0.0001;
-
-        if (!hayCambio) {
-            const duracionTotal = Date.now() - inicioProceso;
-            await registrarTelemetriaSincronizacion(connection, {
-                fuente: 'BANXICO_SIE',
-                indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
-                ejercicioFiscal: anioFiscal,
-                estado: 'EXITO_SIN_CAMBIOS',
-                valorAnterior: valorActualEnBD,
-                valorCandidato: smgCandidato,
-                esDryRun: dryRun,
-                detalles: `El indicador en BD ($${valorActualEnBD}) coincide exactamente con la fuente oficial ($${smgCandidato}). Cero escrituras realizadas.`,
-                duracionMs: duracionTotal,
-                ipOrigen: ip,
-                usuarioId
-            });
-
-            return {
-                success: true,
-                estado: 'EXITO_SIN_CAMBIOS',
-                mensaje: `Indicador verificado en fuente oficial: sin cambios respecto a la BD ($${valorActualEnBD}).`,
-                ejercicioFiscal: anioFiscal,
-                valorVigente: valorActualEnBD,
-                duracionMs: duracionTotal
-            };
-        }
-
-        // 8. Cálculo de Opción C: Pensión Mínima Ley 73 Derivada Atómicamente
-        const pensionLey73Candidata = calcularPensionMinimaLey73(smgCandidato);
-        const validacionLey73 = validarConsistenciaMatematicaLey73(smgCandidato, pensionLey73Candidata);
-
-        if (!validacionLey73.valido) {
-            const duracionTotal = Date.now() - inicioProceso;
-            await registrarTelemetriaSincronizacion(connection, {
-                fuente: 'BANXICO_SIE',
-                indicadorCodigo: 'PENSION_MINIMA_LEY_73',
-                ejercicioFiscal: anioFiscal,
-                estado: 'RECHAZADO_VALIDACION',
-                valorCandidato: pensionLey73Candidata,
-                detalles: validacionLey73.motivoRechazo,
-                duracionMs: duracionTotal,
-                ipOrigen: ip,
-                usuarioId
-            });
-
-            return {
-                success: false,
-                error: 'INCONSISTENCIA_LEY73',
-                mensaje: `Error en derivación de Ley 73: ${validacionLey73.motivoRechazo}`,
-                duracionMs: duracionTotal
-            };
-        }
-
-        // 9. Modo DRY-RUN (Simulación sin escrituras en BD)
-        if (dryRun) {
-            const duracionTotal = Date.now() - inicioProceso;
-            await registrarTelemetriaSincronizacion(connection, {
-                fuente: 'BANXICO_SIE',
-                indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
-                ejercicioFiscal: anioFiscal,
-                estado: 'EXITO_ACTUALIZADO',
-                valorAnterior: valorActualEnBD,
-                valorCandidato: smgCandidato,
-                esDryRun: true,
-                detalles: `[DRY-RUN] Simulación exitosa. Se actualizaría SMG a $${smgCandidato} y Pensión Ley 73 a $${pensionLey73Candidata}.`,
-                duracionMs: duracionTotal,
-                ipOrigen: ip,
-                usuarioId
-            });
-
-            return {
-                success: true,
-                estado: 'EXITO_DRY_RUN',
-                esDryRun: true,
-                mensaje: 'Simulación completada exitosamente. Las validaciones fueron superadas y no se modificaron datos.',
-                cambiosPropuestos: [
-                    {
-                        codigo: 'SALARIO_MINIMO_GENERAL',
-                        regimen: 'general',
-                        ejercicioFiscal: anioFiscal,
-                        valorAnterior: valorActualEnBD,
-                        valorCandidato: smgCandidato,
-                        unidad: 'MXN_DIARIO'
-                    },
-                    {
-                        codigo: 'PENSION_MINIMA_LEY_73',
-                        regimen: 'ley73',
-                        ejercicioFiscal: anioFiscal,
-                        formulaCalculo: `${smgCandidato} * (365 / 12) * 1.11`,
-                        valorCandidato: pensionLey73Candidata,
-                        unidad: 'MXN_MENSUAL'
-                    }
-                ],
-                duracionMs: duracionTotal
-            };
-        }
-
-        // 10. Persistencia Real en Transacción Atómica MySQL (Opción C)
-        await connection.beginTransaction();
-
-        try {
-            // A. Persistir SALARIO_MINIMO_GENERAL
-            let smgIndicadorId;
-            const fuenteNombre = 'Banco de México (SIE API) / CONASAMI';
-            const fuenteUrl = 'https://www.banxico.org.mx/SieAPIRest/';
-            const fechaFin = `${anioFiscal}-12-31`;
-
-            if (registroActual) {
-                smgIndicadorId = registroActual.id;
-                await connection.query(
-                    `UPDATE pensiones_indicadores
-                     SET valor = ?, tipo_valor = 'OFICIAL', fecha_vigencia_inicio = ?, fecha_vigencia_fin = ?,
-                         fuente = ?, fuente_url = ?, metodo_obtencion = 'AUTOMATICA', updated_at = CURRENT_TIMESTAMP
-                     WHERE id = ?`,
-                    [smgCandidato, fechaVigenciaInicio, fechaFin, fuenteNombre, fuenteUrl, smgIndicadorId]
-                );
-            } else {
-                const [insertSMG] = await connection.query(
-                    `INSERT INTO pensiones_indicadores
-                     (codigo, regimen, nombre, descripcion, valor, unidad, tipo_valor, anio_referencia,
-                      fecha_vigencia_inicio, fecha_vigencia_fin, fuente, fuente_url, fundamento_legal,
-                      formula_calculo, metodo_obtencion, activo)
-                     VALUES
-                     ('SALARIO_MINIMO_GENERAL', 'general', ?, 'Salario mínimo general diario vigente en el área geográfica nacional',
-                      ?, 'MXN_DIARIO', 'OFICIAL', ?, ?, ?, ?, ?, 'Resolución de CONASAMI publicada en DOF y reportada por Banxico SIE',
-                      'Fijación anual por acuerdo tripartito en CONASAMI', 'AUTOMATICA', 1)`,
-                    [
-                        `Salario Mínimo General ${anioFiscal}`,
-                        smgCandidato,
-                        anioFiscal,
-                        fechaVigenciaInicio,
-                        fechaFin,
-                        fuenteNombre,
-                        fuenteUrl
-                    ]
-                );
-                smgIndicadorId = insertSMG.insertId;
+                return {
+                    success: false,
+                    error: extractorRes.error,
+                    mensaje: `Falla en extracción desde fuente oficial: ${extractorRes.detalles}`,
+                    estado: estadoFalla,
+                    duracionMs: duracionExtractor
+                };
             }
 
-            // Historial de auditoría para SMG
-            await connection.query(
-                `INSERT INTO pensiones_indicadores_historial
-                 (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
-                  motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
-                 VALUES (?, 'SALARIO_MINIMO_GENERAL', 'general', ?, ?, 'OFICIAL',
-                  ?, ?, ?, ?, 'AUTOMATICA')`,
-                [
-                    smgIndicadorId,
-                    valorActualEnBD,
-                    smgCandidato,
-                    `Actualización automática oficial desde ${fuenteNombre}`,
-                    fuenteNombre,
-                    fuenteUrl,
-                    usuarioId
-                ]
-            );
+            // 3. Normalización y Separación Semántica de Fechas
+            // fechaObservacion: fecha devuelta intacta por Banxico (ej. '01/10/2026' -> '2026-10-01')
+            // anioFiscal: ejercicio fiscal derivado de la observación (ej. 2026)
+            // fechaVigenciaInicio / fechaVigenciaFin: periodo reglamentario del indicador anual ('2026-01-01' a '2026-12-31')
+            const smgCandidato = normalizarValorNumerico(extractorRes.valorStr, 2);
+            const fechaObservacion = normalizarFechaAISO(extractorRes.fechaStr);
+            const anioFiscal = extraerEjercicioFiscal(fechaObservacion);
+            const vigencia = determinarVigenciaIndicadorAnual(anioFiscal);
+            const fechaVigenciaInicio = vigencia ? vigencia.fechaVigenciaInicio : null;
+            const fechaVigenciaFin = vigencia ? vigencia.fechaVigenciaFin : null;
 
-            // B. Persistir PENSION_MINIMA_LEY_73 (Opción C)
-            const [pensionLey73BD] = await connection.query(
-                `SELECT id, valor FROM pensiones_indicadores 
-                 WHERE codigo = 'PENSION_MINIMA_LEY_73' AND anio_referencia = ? AND activo = 1`,
+            if (!smgCandidato || !fechaObservacion || !anioFiscal || !fechaVigenciaInicio) {
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'BANXICO_SIE',
+                    indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
+                    ejercicioFiscal: anioFiscal || new Date().getFullYear(),
+                    estado: 'ERROR_PARSER',
+                    detalles: `Error normalizando datos de fuente: valorStr='${extractorRes.valorStr}', fechaStr='${extractorRes.fechaStr}'`,
+                    duracionMs: duracionExtractor,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: false,
+                    error: 'NORMALIZACION_FALLIDA',
+                    mensaje: 'Los datos entregados por la fuente no pudieron ser normalizados a formato numérico o fecha válida.',
+                    duracionMs: duracionExtractor
+                };
+            }
+
+            // 4. Consulta del Estado Actual en BD
+            const [indicadoresBD] = await connection.query(
+                `SELECT id, codigo, valor, tipo_valor, fecha_vigencia_inicio, bloqueo_actualizacion_automatica, activo
+                 FROM pensiones_indicadores 
+                 WHERE codigo = 'SALARIO_MINIMO_GENERAL' AND anio_referencia = ? AND activo = 1`,
                 [anioFiscal]
             );
 
-            let pensionLey73Id;
-            const valorAnteriorLey73 = pensionLey73BD.length > 0 ? parseFloat(pensionLey73BD[0].valor) : null;
-            const formulaTexto = `${smgCandidato} * (365 / 12) * 1.11`;
-            const fundamentoLey73 = 'Artículo 168 de la Ley del Seguro Social de 1973 y Decreto publicado en el DOF el 20 de diciembre de 2001 (factor 1.11)';
+            const registroActual = indicadoresBD.length > 0 ? indicadoresBD[0] : null;
+            const valorActualEnBD = registroActual ? parseFloat(registroActual.valor) : null;
 
-            if (pensionLey73BD.length > 0) {
-                pensionLey73Id = pensionLey73BD[0].id;
-                await connection.query(
-                    `UPDATE pensiones_indicadores
-                     SET valor = ?, tipo_valor = 'OFICIAL', fecha_vigencia_inicio = ?, fecha_vigencia_fin = ?,
-                         fuente = ?, fuente_url = ?, formula_calculo = ?, metodo_obtencion = 'AUTOMATICA',
-                         updated_at = CURRENT_TIMESTAMP
-                     WHERE id = ?`,
-                    [
-                        pensionLey73Candidata,
-                        fechaVigenciaInicio,
-                        fechaFin,
-                        fuenteNombre,
-                        fuenteUrl,
-                        formulaTexto,
-                        pensionLey73Id
-                    ]
-                );
-            } else {
-                const [insertPension] = await connection.query(
-                    `INSERT INTO pensiones_indicadores
-                     (codigo, regimen, nombre, descripcion, valor, unidad, tipo_valor, anio_referencia,
-                      fecha_vigencia_inicio, fecha_vigencia_fin, fuente, fuente_url, fundamento_legal,
-                      formula_calculo, metodo_obtencion, activo)
-                     VALUES
-                     ('PENSION_MINIMA_LEY_73', 'ley73', ?, 'Pensión mínima garantizada mensual para pensionados bajo régimen Ley 73',
-                      ?, 'MXN_MENSUAL', 'OFICIAL', ?, ?, ?, ?, ?, ?, ?, 'AUTOMATICA', 1)`,
-                    [
-                        `Pensión Mínima Garantizada Ley 73 (${anioFiscal})`,
-                        pensionLey73Candidata,
-                        anioFiscal,
-                        fechaVigenciaInicio,
-                        fechaFin,
-                        fuenteNombre,
-                        fuenteUrl,
-                        fundamentoLey73,
-                        formulaTexto
-                    ]
-                );
-                pensionLey73Id = insertPension.insertId;
+            // 5. Verificación de Bandera de Bloqueo Manual
+            if (registroActual && registroActual.bloqueo_actualizacion_automatica === 1) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'BANXICO_SIE',
+                    indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'BLOQUEO_MANUAL_ACTIVO',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: smgCandidato,
+                    esDryRun: dryRun,
+                    detalles: `El indicador SALARIO_MINIMO_GENERAL para el ejercicio ${anioFiscal} tiene bloqueo manual activo. Sincronización omitida. Fecha observación fuente: ${fechaObservacion}.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'BLOQUEO_MANUAL_ACTIVO',
+                    mensaje: `Actualización automática omitida: el indicador para el ejercicio ${anioFiscal} está protegido por bloqueo manual.`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    valorActualEnBD,
+                    valorCandidato: smgCandidato,
+                    duracionMs: duracionTotal
+                };
             }
 
-            // Historial de auditoría para Pensión Ley 73
-            await connection.query(
-                `INSERT INTO pensiones_indicadores_historial
-                 (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
-                  motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
-                 VALUES (?, 'PENSION_MINIMA_LEY_73', 'ley73', ?, ?, 'OFICIAL',
-                  ?, ?, ?, ?, 'AUTOMATICA')`,
-                [
-                    pensionLey73Id,
-                    valorAnteriorLey73,
-                    pensionLey73Candidata,
-                    `Derivación automática oficial Ley 73 conforme a SMG ($${smgCandidato}) x (365/12) x 1.11`,
-                    fuenteNombre,
-                    fuenteUrl,
-                    usuarioId
-                ]
+            // 6. Validación Rigurosa y Sanity Checks Dinámicos
+            const validacionSMG = validarSalarioMinimoCandidato(
+                { valor: smgCandidato, anioReferencia: anioFiscal, fechaVigenciaInicio },
+                valorActualEnBD
             );
 
-            // Commit formal de la transacción
-            await connection.commit();
+            if (!validacionSMG.valido) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'BANXICO_SIE',
+                    indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'RECHAZADO_VALIDACION',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: smgCandidato,
+                    esDryRun: dryRun,
+                    detalles: `${validacionSMG.motivoRechazo} (Fecha observación fuente: ${fechaObservacion}, Vigencia evaluada: ${fechaVigenciaInicio})`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
 
-            // 11. Post-Commit: Invalidación Inmediata de Caché
-            invalidarCacheIndicadores();
+                return {
+                    success: false,
+                    error: 'RECHAZADO_VALIDACION',
+                    mensaje: `Dato candidato rechazado por validación de seguridad: ${validacionSMG.motivoRechazo}`,
+                    fechaObservacionFuente: fechaObservacion,
+                    valorCandidato: smgCandidato,
+                    duracionMs: duracionTotal
+                };
+            }
 
+            // 7. Verificación de Idempotencia (¿Dato sin cambios?)
+            const hayCambio = !valorActualEnBD || Math.abs(valorActualEnBD - smgCandidato) >= 0.0001;
+
+            if (!hayCambio) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'BANXICO_SIE',
+                    indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'EXITO_SIN_CAMBIOS',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: smgCandidato,
+                    esDryRun: dryRun,
+                    detalles: `El indicador en BD ($${valorActualEnBD}) coincide exactamente con la fuente oficial ($${smgCandidato}). Observación de fuente: ${fechaObservacion}. Vigencia anual: ${fechaVigenciaInicio} a ${fechaVigenciaFin}. Cero escrituras realizadas.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'EXITO_SIN_CAMBIOS',
+                    mensaje: `Indicador verificado en fuente oficial: sin cambios respecto a la BD ($${valorActualEnBD}).`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    fechaVigenciaInicio,
+                    fechaVigenciaFin,
+                    valorVigente: valorActualEnBD,
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // 8. Cálculo de Opción C: Pensión Mínima Ley 73 Derivada Atómicamente
+            const pensionLey73Candidata = calcularPensionMinimaLey73(smgCandidato);
+            const validacionLey73 = validarConsistenciaMatematicaLey73(smgCandidato, pensionLey73Candidata);
+
+            if (!validacionLey73.valido) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'BANXICO_SIE',
+                    indicadorCodigo: 'PENSION_MINIMA_LEY_73',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'RECHAZADO_VALIDACION',
+                    valorCandidato: pensionLey73Candidata,
+                    detalles: validacionLey73.motivoRechazo,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: false,
+                    error: 'INCONSISTENCIA_LEY73',
+                    mensaje: `Error en derivación de Ley 73: ${validacionLey73.motivoRechazo}`,
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // 9. Modo DRY-RUN (Simulación sin escrituras en BD)
+            if (dryRun) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'BANXICO_SIE',
+                    indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'EXITO_ACTUALIZADO',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: smgCandidato,
+                    esDryRun: true,
+                    detalles: `[DRY-RUN] Simulación exitosa. Se actualizaría SMG a $${smgCandidato} y Pensión Ley 73 a $${pensionLey73Candidata}. Observación de fuente: ${fechaObservacion}, Vigencia anual: ${fechaVigenciaInicio} a ${fechaVigenciaFin}.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'EXITO_DRY_RUN',
+                    esDryRun: true,
+                    mensaje: 'Simulación completada exitosamente. Las validaciones fueron superadas y no se modificaron datos.',
+                    fechaObservacionFuente: fechaObservacion,
+                    cambiosPropuestos: [
+                        {
+                            codigo: 'SALARIO_MINIMO_GENERAL',
+                            regimen: 'general',
+                            ejercicioFiscal: anioFiscal,
+                            fechaObservacionFuente: fechaObservacion,
+                            fechaVigenciaInicio,
+                            fechaVigenciaFin,
+                            valorAnterior: valorActualEnBD,
+                            valorCandidato: smgCandidato,
+                            unidad: 'MXN_DIARIO'
+                        },
+                        {
+                            codigo: 'PENSION_MINIMA_LEY_73',
+                            regimen: 'ley73',
+                            ejercicioFiscal: anioFiscal,
+                            fechaVigenciaInicio,
+                            fechaVigenciaFin,
+                            formulaCalculo: `${smgCandidato} * (365 / 12) * 1.11`,
+                            valorCandidato: pensionLey73Candidata,
+                            unidad: 'MXN_MENSUAL'
+                        }
+                    ],
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // 10. Persistencia Real en Transacción Atómica MySQL (Opción C)
+            await connection.beginTransaction();
+
+            try {
+                // A. Persistir SALARIO_MINIMO_GENERAL
+                let smgIndicadorId;
+                const fuenteNombre = 'Banco de México (SIE API) / CONASAMI';
+                const fuenteUrl = 'https://www.banxico.org.mx/SieAPIRest/';
+
+                if (registroActual) {
+                    smgIndicadorId = registroActual.id;
+                    await connection.query(
+                        `UPDATE pensiones_indicadores
+                         SET valor = ?, tipo_valor = 'OFICIAL', fecha_vigencia_inicio = ?, fecha_vigencia_fin = ?,
+                             fuente = ?, fuente_url = ?, metodo_obtencion = 'AUTOMATICA', updated_at = CURRENT_TIMESTAMP
+                         WHERE id = ?`,
+                        [smgCandidato, fechaVigenciaInicio, fechaVigenciaFin, fuenteNombre, fuenteUrl, smgIndicadorId]
+                    );
+                } else {
+                    const [insertSMG] = await connection.query(
+                        `INSERT INTO pensiones_indicadores
+                         (codigo, regimen, nombre, descripcion, valor, unidad, tipo_valor, anio_referencia,
+                          fecha_vigencia_inicio, fecha_vigencia_fin, fuente, fuente_url, fundamento_legal,
+                          formula_calculo, metodo_obtencion, activo)
+                         VALUES
+                         ('SALARIO_MINIMO_GENERAL', 'general', ?, 'Salario mínimo general diario vigente en el área geográfica nacional',
+                          ?, 'MXN_DIARIO', 'OFICIAL', ?, ?, ?, ?, ?, 'Resolución de CONASAMI publicada en DOF y reportada por Banxico SIE',
+                          'Fijación anual por acuerdo tripartito en CONASAMI', 'AUTOMATICA', 1)`,
+                        [
+                            `Salario Mínimo General ${anioFiscal}`,
+                            smgCandidato,
+                            anioFiscal,
+                            fechaVigenciaInicio,
+                            fechaVigenciaFin,
+                            fuenteNombre,
+                            fuenteUrl
+                        ]
+                    );
+                    smgIndicadorId = insertSMG.insertId;
+                }
+
+                // Historial de auditoría para SMG
+                await connection.query(
+                    `INSERT INTO pensiones_indicadores_historial
+                     (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
+                      motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
+                     VALUES (?, 'SALARIO_MINIMO_GENERAL', 'general', ?, ?, 'OFICIAL',
+                      ?, ?, ?, ?, 'AUTOMATICA')`,
+                    [
+                        smgIndicadorId,
+                        valorActualEnBD,
+                        smgCandidato,
+                        `Actualización automática oficial desde ${fuenteNombre} (Observación fuente: ${fechaObservacion})`,
+                        fuenteNombre,
+                        fuenteUrl,
+                        usuarioId
+                    ]
+                );
+
+                // B. Persistir PENSION_MINIMA_LEY_73 (Opción C)
+                const [pensionLey73BD] = await connection.query(
+                    `SELECT id, valor FROM pensiones_indicadores 
+                     WHERE codigo = 'PENSION_MINIMA_LEY_73' AND anio_referencia = ? AND activo = 1`,
+                    [anioFiscal]
+                );
+
+                let pensionLey73Id;
+                const valorAnteriorLey73 = pensionLey73BD.length > 0 ? parseFloat(pensionLey73BD[0].valor) : null;
+                const formulaTexto = `${smgCandidato} * (365 / 12) * 1.11`;
+                const fundamentoLey73 = 'Artículo 168 de la Ley del Seguro Social de 1973 y Decreto publicado en el DOF el 20 de diciembre de 2001 (factor 1.11)';
+
+                if (pensionLey73BD.length > 0) {
+                    pensionLey73Id = pensionLey73BD[0].id;
+                    await connection.query(
+                        `UPDATE pensiones_indicadores
+                         SET valor = ?, tipo_valor = 'OFICIAL', fecha_vigencia_inicio = ?, fecha_vigencia_fin = ?,
+                             fuente = ?, fuente_url = ?, formula_calculo = ?, metodo_obtencion = 'AUTOMATICA',
+                             updated_at = CURRENT_TIMESTAMP
+                         WHERE id = ?`,
+                        [
+                            pensionLey73Candidata,
+                            fechaVigenciaInicio,
+                            fechaVigenciaFin,
+                            fuenteNombre,
+                            fuenteUrl,
+                            formulaTexto,
+                            pensionLey73Id
+                        ]
+                    );
+                } else {
+                    const [insertPension] = await connection.query(
+                        `INSERT INTO pensiones_indicadores
+                         (codigo, regimen, nombre, descripcion, valor, unidad, tipo_valor, anio_referencia,
+                          fecha_vigencia_inicio, fecha_vigencia_fin, fuente, fuente_url, fundamento_legal,
+                          formula_calculo, metodo_obtencion, activo)
+                         VALUES
+                         ('PENSION_MINIMA_LEY_73', 'ley73', ?, 'Pensión mínima garantizada mensual para pensionados bajo régimen Ley 73',
+                          ?, 'MXN_MENSUAL', 'OFICIAL', ?, ?, ?, ?, ?, ?, ?, 'AUTOMATICA', 1)`,
+                        [
+                            `Pensión Mínima Garantizada Ley 73 (${anioFiscal})`,
+                            pensionLey73Candidata,
+                            anioFiscal,
+                            fechaVigenciaInicio,
+                            fechaVigenciaFin,
+                            fuenteNombre,
+                            fuenteUrl,
+                            fundamentoLey73,
+                            formulaTexto
+                        ]
+                    );
+                    pensionLey73Id = insertPension.insertId;
+                }
+
+                // Historial de auditoría para Pensión Ley 73
+                await connection.query(
+                    `INSERT INTO pensiones_indicadores_historial
+                     (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
+                      motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
+                     VALUES (?, 'PENSION_MINIMA_LEY_73', 'ley73', ?, ?, 'OFICIAL',
+                      ?, ?, ?, ?, 'AUTOMATICA')`,
+                    [
+                        pensionLey73Id,
+                        valorAnteriorLey73,
+                        pensionLey73Candidata,
+                        `Derivación automática oficial Ley 73 conforme a SMG ($${smgCandidato}) x (365/12) x 1.11 (Observación fuente: ${fechaObservacion})`,
+                        fuenteNombre,
+                        fuenteUrl,
+                        usuarioId
+                    ]
+                );
+
+                // Commit formal de la transacción
+                await connection.commit();
+
+                // 11. Post-Commit: Invalidación Inmediata de Caché
+                invalidarCacheIndicadores();
+
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'BANXICO_SIE',
+                    indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'EXITO_ACTUALIZADO',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: smgCandidato,
+                    esDryRun: false,
+                    detalles: `Actualización automática exitosa. SMG: $${smgCandidato}, Pensión Ley 73: $${pensionLey73Candidata}. Observación de fuente: ${fechaObservacion}, Vigencia: ${fechaVigenciaInicio} a ${fechaVigenciaFin}.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'EXITO_ACTUALIZADO',
+                    mensaje: `Indicadores para el ejercicio ${anioFiscal} actualizados exitosamente en base de datos.`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    fechaVigenciaInicio,
+                    fechaVigenciaFin,
+                    smg: {
+                        valorAnterior: valorActualEnBD,
+                        valorNuevo: smgCandidato
+                    },
+                    pensionLey73: {
+                        valorAnterior: valorAnteriorLey73,
+                        valorNuevo: pensionLey73Candidata,
+                        formula: formulaTexto
+                    },
+                    duracionMs: duracionTotal
+                };
+
+            } catch (trxError) {
+                await connection.rollback();
+                // Nota: NUNCA se invalida el caché ante un ROLLBACK
+                throw trxError;
+            }
+
+        } else if (fuente === 'INEGI_BIE') {
+            // Extracción de INPC via INEGI BIE Indicador 910392
+            const extractorRes = await fetchInegiIndicador({
+                indicadorId: '910392',
+                token: process.env.INEGI_TOKEN || (fetchFn ? 'mock-test-token' : null),
+                timeoutMs: 8000,
+                fetchFn: fetchFn || globalThis.fetch
+            });
+
+            const duracionExtractor = Date.now() - inicioProceso;
+
+            if (!extractorRes.success) {
+                let estadoFalla = 'ERROR_HTTP';
+                if (extractorRes.error === 'TIMEOUT') estadoFalla = 'ERROR_TIMEOUT';
+                else if (extractorRes.error && extractorRes.error.includes('JSON')) estadoFalla = 'ERROR_PARSER';
+                else if (extractorRes.error && extractorRes.error.includes('TOKEN')) estadoFalla = 'ERROR_HTTP';
+
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: new Date().getFullYear(),
+                    estado: estadoFalla,
+                    detalles: extractorRes.detalles || extractorRes.error,
+                    duracionMs: duracionExtractor,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: false,
+                    error: extractorRes.error,
+                    mensaje: `Falla en extracción desde INEGI BIE: ${extractorRes.detalles}`,
+                    estado: estadoFalla,
+                    duracionMs: duracionExtractor
+                };
+            }
+
+            // Normalización y Separación Semántica
+            const inpcCandidato = normalizarValorNumerico(extractorRes.valorStr, 4);
+            const fechaObservacion = normalizarFechaAISO(extractorRes.periodoStr);
+            const anioFiscal = extraerEjercicioFiscal(fechaObservacion) || new Date().getFullYear();
+            const vigencia = determinarVigenciaIndicadorAnual(anioFiscal);
+            const fechaVigenciaInicio = vigencia ? vigencia.fechaVigenciaInicio : `${anioFiscal}-01-01`;
+            const fechaVigenciaFin = vigencia ? vigencia.fechaVigenciaFin : `${anioFiscal}-12-31`;
+
+            if (!inpcCandidato || !fechaObservacion) {
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'ERROR_PARSER',
+                    detalles: `Error normalizando datos de INEGI: valorStr='${extractorRes.valorStr}', periodoStr='${extractorRes.periodoStr}'`,
+                    duracionMs: duracionExtractor,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: false,
+                    error: 'NORMALIZACION_FALLIDA',
+                    mensaje: 'Los datos entregados por INEGI no pudieron ser normalizados.',
+                    duracionMs: duracionExtractor
+                };
+            }
+
+            // Consulta del Estado Actual en BD
+            const [indicadoresBD] = await connection.query(
+                `SELECT id, codigo, valor, tipo_valor, fecha_vigencia_inicio, bloqueo_actualizacion_automatica, activo
+                 FROM pensiones_indicadores 
+                 WHERE codigo = 'INPC_GENERAL' AND anio_referencia = ? AND activo = 1`,
+                [anioFiscal]
+            );
+
+            const registroActual = indicadoresBD.length > 0 ? indicadoresBD[0] : null;
+            const valorActualEnBD = registroActual ? parseFloat(registroActual.valor) : null;
+
+            // Bloqueo manual
+            if (registroActual && registroActual.bloqueo_actualizacion_automatica === 1) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'BLOQUEO_MANUAL_ACTIVO',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    esDryRun: dryRun,
+                    detalles: `El indicador INPC_GENERAL para el ejercicio ${anioFiscal} tiene bloqueo manual activo. Sincronización omitida.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'BLOQUEO_MANUAL_ACTIVO',
+                    mensaje: `Actualización automática omitida: el indicador para el ejercicio ${anioFiscal} está protegido por bloqueo manual.`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // Validación INPC
+            const validacionINPC = validarINPCCandidato(
+                { valor: inpcCandidato, anioReferencia: anioFiscal },
+                valorActualEnBD
+            );
+
+            if (!validacionINPC.valido) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'RECHAZADO_VALIDACION',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    esDryRun: dryRun,
+                    detalles: `${validacionINPC.motivoRechazo} (Fecha observación fuente: ${fechaObservacion})`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: false,
+                    error: 'RECHAZADO_VALIDACION',
+                    mensaje: `Dato candidato INPC rechazado por validación de seguridad: ${validacionINPC.motivoRechazo}`,
+                    fechaObservacionFuente: fechaObservacion,
+                    valorCandidato: inpcCandidato,
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // Idempotencia
+            const hayCambio = !valorActualEnBD || Math.abs(valorActualEnBD - inpcCandidato) >= 0.0001;
+
+            if (!hayCambio) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'EXITO_SIN_CAMBIOS',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    esDryRun: dryRun,
+                    detalles: `El indicador INPC en BD (${valorActualEnBD}) coincide exactamente con la fuente oficial INEGI (${inpcCandidato}). Observación de fuente: ${fechaObservacion}. Cero escrituras realizadas.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'EXITO_SIN_CAMBIOS',
+                    mensaje: `Indicador INPC verificado en fuente oficial: sin cambios respecto a la BD (${valorActualEnBD}).`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    fechaVigenciaInicio,
+                    fechaVigenciaFin,
+                    valorVigente: valorActualEnBD,
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // Modo DRY-RUN
+            if (dryRun) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'EXITO_ACTUALIZADO',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    esDryRun: true,
+                    detalles: `[DRY-RUN] Simulación exitosa desde INEGI BIE. Se actualizaría INPC a ${inpcCandidato}. Observación de fuente: ${fechaObservacion}, Vigencia: ${fechaVigenciaInicio} a ${fechaVigenciaFin}.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'EXITO_DRY_RUN',
+                    esDryRun: true,
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    mensaje: 'Simulación completada exitosamente desde INEGI BIE. Las validaciones fueron superadas y no se modificaron datos.',
+                    fechaObservacionFuente: fechaObservacion,
+                    cambiosPropuestos: [
+                        {
+                            codigo: 'INPC_GENERAL',
+                            regimen: 'general',
+                            indicadorId: '910392',
+                            ejercicioFiscal: anioFiscal,
+                            fechaObservacionFuente: fechaObservacion,
+                            fechaVigenciaInicio,
+                            fechaVigenciaFin,
+                            valorAnterior: valorActualEnBD,
+                            valorCandidato: inpcCandidato,
+                            unidad: 'INDICE'
+                        }
+                    ],
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // Persistencia Real en Transacción MySQL
+            await connection.beginTransaction();
+
+            try {
+                let inpcIndicadorId;
+                const fuenteNombre = 'Instituto Nacional de Estadística y Geografía (INEGI BIE)';
+                const fuenteUrl = 'https://www.inegi.org.mx/app/api/indicadores/desarrolladores/';
+
+                if (registroActual) {
+                    inpcIndicadorId = registroActual.id;
+                    await connection.query(
+                        `UPDATE pensiones_indicadores
+                         SET valor = ?, tipo_valor = 'OFICIAL', fecha_vigencia_inicio = ?, fecha_vigencia_fin = ?,
+                             fuente = ?, fuente_url = ?, metodo_obtencion = 'AUTOMATICA', updated_at = CURRENT_TIMESTAMP
+                         WHERE id = ?`,
+                        [inpcCandidato, fechaVigenciaInicio, fechaVigenciaFin, fuenteNombre, fuenteUrl, inpcIndicadorId]
+                    );
+                } else {
+                    const [insertINPC] = await connection.query(
+                        `INSERT INTO pensiones_indicadores
+                         (codigo, regimen, nombre, descripcion, valor, unidad, tipo_valor, anio_referencia,
+                          fecha_vigencia_inicio, fecha_vigencia_fin, fuente, fuente_url, fundamento_legal,
+                          formula_calculo, metodo_obtencion, activo)
+                         VALUES
+                         ('INPC_GENERAL', 'general', ?, 'Índice Nacional de Precios al Consumidor para ajuste anual de pensiones',
+                          ?, 'INDICE', 'OFICIAL', ?, ?, ?, ?, ?, 'Artículo 170 de la Ley del Seguro Social y publicación DOF',
+                          'Publicación mensual en DOF/INEGI', 'AUTOMATICA', 1)`,
+                        [
+                            `Índice Nacional de Precios al Consumidor ${anioFiscal}`,
+                            inpcCandidato,
+                            anioFiscal,
+                            fechaVigenciaInicio,
+                            fechaVigenciaFin,
+                            fuenteNombre,
+                            fuenteUrl
+                        ]
+                    );
+                    inpcIndicadorId = insertINPC.insertId;
+                }
+
+                await connection.query(
+                    `INSERT INTO pensiones_indicadores_historial
+                     (indicador_id, codigo, regimen, valor_anterior, valor_nuevo, tipo_valor_nuevo,
+                      motivo, fuente, fuente_url, usuario_id, metodo_actualizacion)
+                     VALUES (?, 'INPC_GENERAL', 'general', ?, ?, 'OFICIAL',
+                      ?, ?, ?, ?, 'AUTOMATICA')`,
+                    [
+                        inpcIndicadorId,
+                        valorActualEnBD,
+                        inpcCandidato,
+                        `Actualización automática oficial desde ${fuenteNombre} (Observación de fuente: ${fechaObservacion})`,
+                        fuenteNombre,
+                        fuenteUrl,
+                        usuarioId
+                    ]
+                );
+
+                await connection.commit();
+                invalidarCacheIndicadores();
+
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'EXITO_ACTUALIZADO',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    esDryRun: false,
+                    detalles: `Actualización automática exitosa desde INEGI BIE. INPC: ${inpcCandidato}. Observación de fuente: ${fechaObservacion}, Vigencia: ${fechaVigenciaInicio} a ${fechaVigenciaFin}.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'EXITO_ACTUALIZADO',
+                    mensaje: `Indicador INPC para el ejercicio ${anioFiscal} actualizado exitosamente en base de datos.`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    fechaVigenciaInicio,
+                    fechaVigenciaFin,
+                    inpc: {
+                        valorAnterior: valorActualEnBD,
+                        valorNuevo: inpcCandidato
+                    },
+                    duracionMs: duracionTotal
+                };
+
+            } catch (trxError) {
+                await connection.rollback();
+                throw trxError;
+            }
+
+        } else {
             const duracionTotal = Date.now() - inicioProceso;
             await registrarTelemetriaSincronizacion(connection, {
-                fuente: 'BANXICO_SIE',
-                indicadorCodigo: 'SALARIO_MINIMO_GENERAL',
-                ejercicioFiscal: anioFiscal,
-                estado: 'EXITO_ACTUALIZADO',
-                valorAnterior: valorActualEnBD,
-                valorCandidato: smgCandidato,
-                esDryRun: false,
-                detalles: `Actualización automática exitosa. SMG: $${smgCandidato}, Pensión Ley 73: $${pensionLey73Candidata}.`,
+                fuente,
+                indicadorCodigo: 'GENERAL',
+                ejercicioFiscal: new Date().getFullYear(),
+                estado: 'ERROR_PARAMETRO',
+                detalles: `La fuente '${fuente}' no está soportada. Fuentes disponibles: BANXICO_SIE, INEGI_BIE.`,
                 duracionMs: duracionTotal,
                 ipOrigen: ip,
                 usuarioId
             });
 
             return {
-                success: true,
-                estado: 'EXITO_ACTUALIZADO',
-                mensaje: `Indicadores para el ejercicio ${anioFiscal} actualizados exitosamente en base de datos.`,
-                ejercicioFiscal: anioFiscal,
-                smg: {
-                    valorAnterior: valorActualEnBD,
-                    valorNuevo: smgCandidato
-                },
-                pensionLey73: {
-                    valorAnterior: valorAnteriorLey73,
-                    valorNuevo: pensionLey73Candidata,
-                    formula: formulaTexto
-                },
+                success: false,
+                error: 'FUENTE_NO_SOPORTADA',
+                mensaje: `La fuente '${fuente}' no está soportada. Fuentes disponibles: BANXICO_SIE, INEGI_BIE.`,
                 duracionMs: duracionTotal
             };
-
-        } catch (trxError) {
-            await connection.rollback();
-            // Nota: NUNCA se invalida el caché ante un ROLLBACK
-            throw trxError;
         }
 
     } catch (err) {

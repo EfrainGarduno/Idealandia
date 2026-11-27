@@ -22,6 +22,7 @@ const {
     normalizarValorNumerico, 
     normalizarFechaAISO, 
     extraerEjercicioFiscal, 
+    determinarVigenciaIndicadorAnual,
     calcularPensionMinimaLey73 
 } = require('../indicatorNormalizer');
 const { 
@@ -259,6 +260,40 @@ async function runFase4Tests() {
             assert.strictEqual(res404.error, 'HTTP_404_NOT_FOUND');
         });
 
+        await testAsync('Caso 5c: Orquestador sincronizarIndicadores despacha a INEGI BIE cuando fuente = INEGI_BIE', async () => {
+            let inegiLlamado = false;
+            const mockFetchInegi = async (url) => {
+                if (url.includes('indicadores') || url.includes('INDICATOR')) {
+                    inegiLlamado = true;
+                    return {
+                        ok: true,
+                        status: 200,
+                        json: async () => ({
+                            Series: [{
+                                INDICADOR: '910392',
+                                OBSERVATIONS: [{ TIME_PERIOD: '2026/01', OBS_VALUE: '147.0260' }]
+                            }]
+                        })
+                    };
+                }
+                throw new Error('No debe llamar a otra fuente');
+            };
+
+            const dryRes = await sincronizarIndicadores({
+                pool,
+                dryRun: true,
+                fuente: 'INEGI_BIE',
+                fetchFn: mockFetchInegi
+            });
+
+            assert.strictEqual(inegiLlamado, true, 'Debe invocar el extractor de INEGI BIE');
+            assert.strictEqual(dryRes.success, true);
+            assert.strictEqual(dryRes.fuente, 'INEGI_BIE');
+            assert.strictEqual(dryRes.estado, 'EXITO_DRY_RUN');
+            assert.strictEqual(dryRes.indicadorCodigo, 'INPC_GENERAL');
+            assert.strictEqual(dryRes.fechaObservacionFuente, '2026-01-01');
+        });
+
         await testAsync('Caso 6: Respuesta con formato inesperado (HTML en lugar de JSON) genera error parse controlado', async () => {
             const mockFetchHtml = async () => ({
                 ok: true,
@@ -336,6 +371,23 @@ async function runFase4Tests() {
             assert(resFecha.motivoRechazo.includes('1 de enero'));
         });
 
+        test('Caso 13b: determinarVigenciaIndicadorAnual deriva vigencia anual reglamentaria 01-01 a 12-31 sin mutar fecha de observación', () => {
+            const vigencia2026 = determinarVigenciaIndicadorAnual(2026);
+            assert.deepStrictEqual(vigencia2026, {
+                fechaVigenciaInicio: '2026-01-01',
+                fechaVigenciaFin: '2026-12-31'
+            });
+
+            // Verificar que extraerEjercicioFiscal no altera fechaObservacion ISO
+            const fechaObs = normalizarFechaAISO('01/10/2026');
+            assert.strictEqual(fechaObs, '2026-10-01');
+            const anio = extraerEjercicioFiscal(fechaObs);
+            assert.strictEqual(anio, 2026);
+            const vigDerivada = determinarVigenciaIndicadorAnual(anio);
+            assert.strictEqual(vigDerivada.fechaVigenciaInicio, '2026-01-01');
+            assert.strictEqual(vigDerivada.fechaVigenciaFin, '2026-12-31');
+        });
+
         await testAsync('Caso 14: Verificación de Idempotencia: SMG 2026 idéntico ($315.04) resulta en EXITO_SIN_CAMBIOS con cero escrituras', async () => {
             const mockFetch2026 = async () => ({
                 ok: true,
@@ -367,6 +419,36 @@ async function runFase4Tests() {
             // Verificar que no se insertó ninguna fila en historial
             const [histDespues] = await pool.query('SELECT COUNT(*) AS total FROM pensiones_indicadores_historial');
             assert.strictEqual(histDespues[0].total, totalAntes);
+        });
+
+        await testAsync('Caso 14b: Separación Semántica de Fechas: Banxico devuelve observación 01/10/2026 con $315.04 -> valida correctamente y resulta en EXITO_SIN_CAMBIOS', async () => {
+            const mockFetchBanxicoOct = async () => ({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    bmx: {
+                        series: [{
+                            idSerie: 'SL11298',
+                            titulo: 'Salarios Mínimos General Pesos por día',
+                            datos: [{ fecha: '01/10/2026', dato: '315.0400' }]
+                        }]
+                    }
+                })
+            });
+
+            const syncRes = await sincronizarIndicadores({
+                pool,
+                dryRun: true,
+                fuente: 'BANXICO_SIE',
+                fetchFn: mockFetchBanxicoOct
+            });
+
+            assert.strictEqual(syncRes.success, true);
+            assert.strictEqual(syncRes.estado, 'EXITO_SIN_CAMBIOS');
+            assert.strictEqual(syncRes.fechaObservacionFuente, '2026-10-01');
+            assert.strictEqual(syncRes.fechaVigenciaInicio, '2026-01-01');
+            assert.strictEqual(syncRes.fechaVigenciaFin, '2026-12-31');
+            assert.strictEqual(syncRes.valorVigente, 315.04);
         });
 
         await testAsync('Caso 15: Modo DRY-RUN valida y proyecta cambios sin modificar indicadores en BD', async () => {

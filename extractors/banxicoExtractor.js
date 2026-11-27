@@ -15,7 +15,25 @@
 
 const BANXICO_API_BASE = 'https://www.banxico.org.mx/SieAPIRest/service/v1/series';
 
-// Serie oficial por defecto en Banxico SIE para Salario Mínimo General (promedio nacional diario)
+/**
+ * DOCUMENTACIÓN TÉCNICA Y NORMATIVA DE SERIES BANXICO SIE: CA601 vs SL11298
+ * 
+ * 1. ¿Qué es CA601?
+ *    'CA601' representa el "Cuadro Analítico 601" en la taxonomía web del Banco de México (SIE).
+ *    Agrupa temáticamente las series de "Salarios mínimos generales y profesionales por área geográfica".
+ *    NO es un identificador de serie individual (Time Series ID), sino un agrupador de catálogo.
+ *    La API REST del SIE (/SieAPIRest/service/v1/series/{idSerie}/...) requiere forzosamente un idSerie
+ *    individual y rechaza consultas directas a cuadros analíticos con HTTP 400 Bad Request.
+ * 
+ * 2. ¿Qué es SL11298?
+ *    'SL11298' es el identificador oficial de la serie cronológica dentro de dicho Cuadro CA601 correspondiente
+ *    a: "Salarios Mínimos General Pesos por día" (promedio nacional diario determinado por la CONASAMI
+ *    y publicado en el DOF). Es el único idSerie válido para obtener el Salario Mínimo General vigente en la API REST.
+ * 
+ * 3. Mapeo de Compatibilidad:
+ *    Si una consulta o parámetro solicita 'CA601' por referencia documental, este extractor lo mapea
+ *    automáticamente a la serie cronológica 'SL11298' para garantizar el consumo exitoso de la API REST.
+ */
 const SERIE_DEFAULT_SALARIO_MINIMO = 'SL11298';
 
 /**

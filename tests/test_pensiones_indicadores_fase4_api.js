@@ -147,6 +147,12 @@ async function testFase4API() {
                 .send({ historialId: hId, motivo: 'Prueba unitaria de reversión via API' });
             assert(resRevert.status === 200 || resRevert.status === 400);
             console.log('   [PASS] Endpoint de reversión / rollback responde correctamente.');
+
+            // Restaurar estado oficial determinístico de BD local tras la prueba de reversión
+            await pool.query('UPDATE pensiones_indicadores SET valor = 315.04 WHERE codigo = "SALARIO_MINIMO_GENERAL" AND anio_referencia = 2026');
+            await pool.query('UPDATE pensiones_indicadores SET valor = 10636.54 WHERE codigo = "PENSION_MINIMA_LEY_73" AND anio_referencia = 2026');
+            const { invalidarCacheIndicadores } = require('../pensionIndicadoresService');
+            invalidarCacheIndicadores();
         }
 
         console.log('--- TODOS LOS ENDPOINTS DE FASE 4 FUNCIONAN CORRECTAMENTE ---\n');

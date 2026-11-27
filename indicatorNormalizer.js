@@ -71,6 +71,24 @@ function extraerEjercicioFiscal(fechaISO) {
 }
 
 /**
+ * Determina el rango de vigencia oficial de un indicador anual a partir del ejercicio fiscal.
+ * Para indicadores con fijación o vigencia de año natural (ej. Salario Mínimo General),
+ * la vigencia reglamentaria inicia el 1 de enero y culmina el 31 de diciembre del ejercicio.
+ * 
+ * Separa semánticamente la fecha de observación de la fuente de la fecha de vigencia del registro.
+ * 
+ * @param {number} anioFiscal 
+ * @returns {{ fechaVigenciaInicio: string, fechaVigenciaFin: string } | null}
+ */
+function determinarVigenciaIndicadorAnual(anioFiscal) {
+    if (!anioFiscal || typeof anioFiscal !== 'number' || isNaN(anioFiscal)) return null;
+    return {
+        fechaVigenciaInicio: `${anioFiscal}-01-01`,
+        fechaVigenciaFin: `${anioFiscal}-12-31`
+    };
+}
+
+/**
  * Calcula la Pensión Mínima Garantizada de Ley 73 conforme a la fórmula legal oficial:
  * SMG * (365 / 12) * 1.11
  * 
@@ -88,5 +106,6 @@ module.exports = {
     normalizarValorNumerico,
     normalizarFechaAISO,
     extraerEjercicioFiscal,
+    determinarVigenciaIndicadorAnual,
     calcularPensionMinimaLey73
 };
