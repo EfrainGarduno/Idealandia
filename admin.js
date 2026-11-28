@@ -5634,6 +5634,16 @@ function renderPensionesIndicadoresTabla() {
                 onClick: () => toggleBloqueoIndicador(ind.id, ind.bloqueo_actualizacion_automatica ? 0 : 1)
             });
             group.appendChild(btnToggleBloqueo);
+
+            // Eliminar Indicador
+            const btnDelete = createAdminActionButton({
+                type: 'delete',
+                icon: 'fas fa-trash-can',
+                title: `Eliminar indicador ${ind.nombre} (${ind.anio_referencia})`,
+                srText: 'Eliminar',
+                onClick: () => confirmarEliminarIndicador(ind)
+            });
+            group.appendChild(btnDelete);
         }
 
         tdAcciones.appendChild(group);
@@ -5919,6 +5929,111 @@ async function toggleBloqueoIndicador(id, nuevoBloqueo) {
     }
 }
 
+async function confirmarEliminarIndicador(ind) {
+    if (!ind || !ind.id) return;
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    const esOficial = ind.tipo_valor === 'OFICIAL' || ind.metodo_obtencion === 'AUTOMATICA';
+    let confirmed = false;
+
+    if (esOficial) {
+        confirmed = await window.showConfirm(
+            `¿Estás seguro de que deseas eliminar el indicador OFICIAL "${ind.nombre}" (${ind.anio_referencia})?`,
+            {
+                title: 'Eliminar Indicador Oficial',
+                subtext: `⚠️ ADVERTENCIA CRÍTICA: Este es un indicador OFICIAL activo (${ind.tipo_valor}, obtención ${ind.metodo_obtencion}). Su eliminación dejará al sistema sin este valor para el ejercicio ${ind.anio_referencia}. Si no existe, los cálculos de pensión requerirán captura manual.`,
+                confirmText: 'Eliminar',
+                cancelText: 'Cancelar',
+                confirmClass: 'custom-modal-btn danger'
+            }
+        );
+    } else {
+        confirmed = await window.showConfirm(
+            `¿Estás seguro de que deseas eliminar el indicador "${ind.nombre}" (${ind.anio_referencia})?`,
+            {
+                title: 'Eliminar Indicador',
+                subtext: 'Esta acción removerá permanentemente el indicador y su historial de auditoría asociado de la base de datos.',
+                confirmText: 'Eliminar',
+                cancelText: 'Cancelar',
+                confirmClass: 'custom-modal-btn danger'
+            }
+        );
+    }
+
+    if (!confirmed) {
+        return; // Usuario canceló: no se modifica absolutamente nada
+    }
+
+    try {
+        const res = await fetch(`/api/admin/pensiones/indicadores/${ind.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok) {
+            if (window.showModal) {
+                window.showModal(data.message || `Indicador "${ind.nombre}" eliminado exitosamente.`);
+            }
+            await loadPensionesIndicadores();
+            await loadPensionesHistorial();
+        } else {
+            handleAdminError(res, data, 'Error al eliminar el indicador.');
+        }
+    } catch (err) {
+        console.error('Error in confirmarEliminarIndicador:', err);
+        if (window.showModal) window.showModal('Ocurrió un error al intentar eliminar el indicador.');
+    }
+}
+
+async function confirmarEliminarHistorial(h) {
+    if (!h || !h.id) return;
+
+    if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
+        if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
+        return;
+    }
+
+    const confirmed = await window.showConfirm(
+        `¿Deseas eliminar este registro de cambio histórico para "${h.indicador_nombre || h.codigo}"?`,
+        {
+            title: 'Eliminar Registro de Historial',
+            subtext: `Se eliminará la entrada puntual de auditoría del ${h.fecha_cambio || ''} (${h.tipo_valor || ''}: ${h.valor_anterior || '-'} -> ${h.valor_nuevo || '-'}). El indicador vigente en el catálogo NO será modificado.`,
+            confirmText: 'Eliminar',
+            cancelText: 'Cancelar',
+            confirmClass: 'custom-modal-btn danger'
+        }
+    );
+
+    if (!confirmed) {
+        return; // Usuario canceló: no se modifica absolutamente nada
+    }
+
+    try {
+        const res = await fetch(`/api/admin/pensiones/indicadores/historial/${h.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok) {
+            if (window.showModal) {
+                window.showModal(data.message || 'Registro de historial eliminado exitosamente.');
+            }
+            await loadPensionesHistorial();
+        } else {
+            handleAdminError(res, data, 'Error al eliminar el registro de historial.');
+        }
+    } catch (err) {
+        console.error('Error in confirmarEliminarHistorial:', err);
+        if (window.showModal) window.showModal('Ocurrió un error al intentar eliminar el registro de historial.');
+    }
+}
+
 function abrirModalSincronizarIndicadores() {
     if (window.userAdminPermissions && !window.userAdminPermissions.has('asesoria_pensiones.update')) {
         if (window.showModal) window.showModal(STANDARD_UNAUTHORIZED_MESSAGE);
@@ -6054,7 +6169,7 @@ async function loadPensionesHistorial() {
     const tbody = document.getElementById('admin-pensiones-historial-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #64748b; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando historial de cambios...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #64748b; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Cargando historial de cambios...</td></tr>';
 
     try {
         const res = await fetch('/api/admin/pensiones/historial?limit=100');
@@ -6068,9 +6183,11 @@ async function loadPensionesHistorial() {
 
         tbody.innerHTML = '';
         if (pensionesHistorialData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #64748b; padding: 24px;">No hay registros de cambios en el historial.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #64748b; padding: 24px;">No hay registros de cambios en el historial.</td></tr>';
             return;
         }
+
+        const canUpdate = window.userAdminPermissions && window.userAdminPermissions.has('asesoria_pensiones.update');
 
         pensionesHistorialData.forEach(h => {
             const tr = document.createElement('tr');
@@ -6093,11 +6210,33 @@ async function loadPensionesHistorial() {
                 </td>
                 <td style="text-align: center;">${renderPensionMetodoBadge(h.metodo_actualizacion)}</td>
             `;
+
+            // Columna de Acciones para Historial
+            const tdAcciones = document.createElement('td');
+            tdAcciones.className = 'admin-actions-cell';
+            tdAcciones.style.textAlign = 'center';
+
+            if (canUpdate) {
+                const group = createAdminActionsGroup();
+                const btnDeleteHist = createAdminActionButton({
+                    type: 'delete',
+                    icon: 'fas fa-trash-can',
+                    title: `Eliminar registro histórico #${h.id}`,
+                    srText: 'Eliminar',
+                    onClick: () => confirmarEliminarHistorial(h)
+                });
+                group.appendChild(btnDeleteHist);
+                tdAcciones.appendChild(group);
+            } else {
+                tdAcciones.innerHTML = '<span style="color: #94a3b8; font-size: 0.8rem;">-</span>';
+            }
+            tr.appendChild(tdAcciones);
+
             tbody.appendChild(tr);
         });
     } catch (err) {
         console.error('Error in loadPensionesHistorial:', err);
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #dc2626; padding: 20px;">Error al cargar historial.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #dc2626; padding: 20px;">Error al cargar historial.</td></tr>';
     }
 }
 
@@ -6374,6 +6513,8 @@ window.abrirModalDetalleIndicador = abrirModalDetalleIndicador;
 window.abrirModalEditarIndicador = abrirModalEditarIndicador;
 window.toggleEstadoIndicador = toggleEstadoIndicador;
 window.toggleBloqueoIndicador = toggleBloqueoIndicador;
+window.confirmarEliminarIndicador = confirmarEliminarIndicador;
+window.confirmarEliminarHistorial = confirmarEliminarHistorial;
 window.abrirModalSincronizarIndicadores = abrirModalSincronizarIndicadores;
 window.ejecutarSincronizacionIndicadores = ejecutarSincronizacionIndicadores;
 window.initPensionesAdmin = initPensionesAdmin;

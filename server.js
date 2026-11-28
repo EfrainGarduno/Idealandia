@@ -6370,6 +6370,82 @@ app.post('/api/admin/pensiones/indicadores/:id/revertir', requirePermission('ase
     }
 });
 
+app.delete('/api/admin/pensiones/indicadores/:id', requirePermission('asesoria_pensiones.update'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de indicador inválido.' });
+        }
+
+        const [rows] = await pool.query(
+            'SELECT id, codigo, nombre, anio_referencia, tipo_valor, metodo_obtencion FROM pensiones_indicadores WHERE id = ?',
+            [id]
+        );
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ error: 'Indicador no encontrado.' });
+        }
+
+        const ind = rows[0];
+
+        // Se elimina el indicador. Por integridad referencial, fk_hist_indicador tiene ON DELETE CASCADE.
+        // Aseguramos transacción para limpiar historial e indicador limpiamente.
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            await connection.query('DELETE FROM pensiones_indicadores_historial WHERE indicador_id = ?', [id]);
+            await connection.query('DELETE FROM pensiones_indicadores WHERE id = ?', [id]);
+            await connection.commit();
+        } catch (trxErr) {
+            await connection.rollback();
+            throw trxErr;
+        } finally {
+            connection.release();
+        }
+
+        // Invalidar caché en memoria para que no persistan valores obsoletos
+        invalidarCacheIndicadores();
+
+        res.json({
+            success: true,
+            message: `Indicador "${ind.nombre}" (${ind.anio_referencia}) eliminado exitosamente.`,
+            eliminado: ind
+        });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/pensiones/indicadores/:id:', error);
+        res.status(500).json({ error: 'Error al eliminar el indicador de pensiones.', detalle: error.message });
+    }
+});
+
+app.delete(['/api/admin/pensiones/indicadores/historial/:id', '/api/admin/pensiones/historial/:id'], requirePermission('asesoria_pensiones.update'), async (req, res) => {
+    try {
+        await ensurePensionesIndicadoresTables();
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de registro de historial inválido.' });
+        }
+
+        const [rows] = await pool.query(
+            'SELECT id, indicador_id, codigo, fecha_cambio FROM pensiones_indicadores_historial WHERE id = ?',
+            [id]
+        );
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ error: 'Registro de historial no encontrado.' });
+        }
+
+        await pool.query('DELETE FROM pensiones_indicadores_historial WHERE id = ?', [id]);
+
+        res.json({
+            success: true,
+            message: 'Registro de historial eliminado exitosamente.',
+            eliminado: rows[0]
+        });
+    } catch (error) {
+        console.error('Error in DELETE /api/admin/pensiones/indicadores/historial/:id:', error);
+        res.status(500).json({ error: 'Error al eliminar registro del historial.', detalle: error.message });
+    }
+});
+
 // =========================================================================
 // 4. APIs Administrativas para Contexto de Idealita (ai_contexto - FASE 1)
 // =========================================================================
