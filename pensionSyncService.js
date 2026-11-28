@@ -702,38 +702,6 @@ async function sincronizarIndicadores({
                 };
             }
 
-            // Idempotencia
-            const hayCambio = !valorActualEnBD || Math.abs(valorActualEnBD - inpcCandidato) >= 0.0001;
-
-            if (!hayCambio) {
-                const duracionTotal = Date.now() - inicioProceso;
-                await registrarTelemetriaSincronizacion(connection, {
-                    fuente: 'INEGI_BIE',
-                    indicadorCodigo: 'INPC_GENERAL',
-                    ejercicioFiscal: anioFiscal,
-                    estado: 'EXITO_SIN_CAMBIOS',
-                    valorAnterior: valorActualEnBD,
-                    valorCandidato: inpcCandidato,
-                    esDryRun: dryRun,
-                    detalles: `El indicador INPC en BD (${valorActualEnBD}) coincide exactamente con la fuente oficial INEGI (${inpcCandidato}). Observación de fuente: ${fechaObservacion}. Cero escrituras realizadas.`,
-                    duracionMs: duracionTotal,
-                    ipOrigen: ip,
-                    usuarioId
-                });
-
-                return {
-                    success: true,
-                    estado: 'EXITO_SIN_CAMBIOS',
-                    mensaje: `Indicador INPC verificado en fuente oficial: sin cambios respecto a la BD (${valorActualEnBD}).`,
-                    ejercicioFiscal: anioFiscal,
-                    fechaObservacionFuente: fechaObservacion,
-                    fechaVigenciaInicio,
-                    fechaVigenciaFin,
-                    valorVigente: valorActualEnBD,
-                    duracionMs: duracionTotal
-                };
-            }
-
             // Modo DRY-RUN
             if (dryRun) {
                 const duracionTotal = Date.now() - inicioProceso;
@@ -773,6 +741,40 @@ async function sincronizarIndicadores({
                             unidad: 'INDICE'
                         }
                     ],
+                    duracionMs: duracionTotal
+                };
+            }
+
+            // Idempotencia
+            const hayCambio = !valorActualEnBD || Math.abs(valorActualEnBD - inpcCandidato) >= 0.0001;
+
+            if (!hayCambio) {
+                const duracionTotal = Date.now() - inicioProceso;
+                await registrarTelemetriaSincronizacion(connection, {
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    ejercicioFiscal: anioFiscal,
+                    estado: 'EXITO_SIN_CAMBIOS',
+                    valorAnterior: valorActualEnBD,
+                    valorCandidato: inpcCandidato,
+                    esDryRun: dryRun,
+                    detalles: `El indicador INPC en BD (${valorActualEnBD}) coincide exactamente con la fuente oficial INEGI (${inpcCandidato}). Observación de fuente: ${fechaObservacion}. Cero escrituras realizadas.`,
+                    duracionMs: duracionTotal,
+                    ipOrigen: ip,
+                    usuarioId
+                });
+
+                return {
+                    success: true,
+                    estado: 'EXITO_SIN_CAMBIOS',
+                    fuente: 'INEGI_BIE',
+                    indicadorCodigo: 'INPC_GENERAL',
+                    mensaje: `Indicador INPC verificado en fuente oficial: sin cambios respecto a la BD (${valorActualEnBD}).`,
+                    ejercicioFiscal: anioFiscal,
+                    fechaObservacionFuente: fechaObservacion,
+                    fechaVigenciaInicio,
+                    fechaVigenciaFin,
+                    valorVigente: valorActualEnBD,
                     duracionMs: duracionTotal
                 };
             }
